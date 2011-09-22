@@ -1,0 +1,19 @@
+This is a simple webinterface to Homer capturing system.
+
+Works without joomla. 
+
+you need to install a new version of text2pcap:
+
+https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=5650
+
+and callflow:
+
+http://sourceforge.net/projects/callflow/
+
+After it, create a mysqldb (homer_users.sql)
+
+insert all your home nodes into homer_nodes table.
+
+All question and comments please send to alexandr.dubovikov@gmail.com
+
+
