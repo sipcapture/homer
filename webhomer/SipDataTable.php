@@ -556,7 +556,7 @@ class SipDataTable extends DataTable_DataTable
 
         /* check */
         foreach($search as $key=>$value) {
-              if($value == "" ||$value == 0 || $value == " " || is_null($value)) {              
+              if($value == "" ||$value == '0' || $value == " " || is_null($value)) {              
                   unset($search[$key]);
               }                
         }  
