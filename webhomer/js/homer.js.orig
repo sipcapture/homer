@@ -15,14 +15,6 @@ function showSearch() {
 }
 
 
-
-function setMethod(qmethod) {
-
-	meth = document.getElementById('method');
-        meth.value = qmethod;
-}
-
-
 function check_form() {
 
         from_time = document.getElementById('from_time').value;
@@ -80,87 +72,21 @@ function calculateDelta(ms) {
 	} 
 }
 
-function showMessage(id,table,tnode,location,contx) {
+function showMessage(id,table,tnode,location) {
 
-   var url = "homer.php?task=showmessage&id="+id+"&table="+table+"&tnode="+tnode+"&location="+location;
-   
-	if ( contx == "1" ) {
-			  newwindow = window.open(url,'popupWindow','toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,copyhistory=no,width=800,height=600,screenX=200,screenY=200,top=50,left=150')
-			  if (window.focus) {newwindow.focus()}
-	} else {
-			
-			var mflow = $('<div id="mflow"></div>')
-                        .load(url, '', function(response, status, xhr) {
-                        if (status == 'error') {
-                        var msg = "Sorry but there was an error: ";
-                        $(".content").html(msg + xhr.status + " " + xhr.statusText);
-                        }})
-                        .dialog({
-                                autoOpen: true,
-                                width: 400,
-                                height: 'auto',
-                                close: function(e, i) { $(this).remove(); },
-                                title: 'MSG ID: '+id
-                        })
-			.focus()
-		}
+  var url = "homer.php?task=showmessage&id="+id+"&table="+table+"&tnode="+tnode+"&location="+location;
+  newwindow = window.open(url,'popupWindow','toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,copyhistory=no,width=800,height=600,screenX=200,screenY=200,top=50,left=150')
+  if (window.focus) {newwindow.focus()}
+  
 }
 
-function popMessage(id) {
+function showCallFlow(id,table,tnode,location,unique, tag) {
 
-			var url = "utils.php?task=sipmessage&id="+id;
-			var posx = $('body').data('posx');
-			var posy = $('body').data('posy');
-
-			jQuery('<div id="'+id+'"></div>').appendTo( jQuery('body') );
-			$("#"+id)
-                        //var pflow = $('<div id="'+id+'"></div>')
-			.load(url, '', function(response, status, xhr) {
-                        if (status == 'error') {
-                        var msg = "Sorry but there was an error: ";
-                        $(".content").html(msg + xhr.status + " " + xhr.statusText);
-                        }})
-                        .dialog({
-                                autoOpen: true,
-				stack: true,
-                                width: 400,
-                                height: 'auto',
-				position: [posx + 40, posy -5],
-                                close: function(e, i) { $(this).remove(); },
-                                title: 'MSG ID: '+id
-                        })
-			.css('zIndex', -1)
-			.focus();
-						
-			document.getElementById(id).focus(); 
+  var url = "homer.php?task=showcallflow&id="+id+"&table="+table+"&tnode="+tnode+"&unique="+unique+"&location="+location+"&tag="+tag;
+  newwindow = window.open(url,'callFlow','toolbar=yes,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,copyhistory=no,width=900,height=700,screenX=200,screenY=200,top=50,left=150')
+  if (window.focus) {newwindow.focus()}
+      
 }
-
-
-function showCallFlow(id,table,tnode,location,unique, tag, callid, contx) {
-
-  if ( callid.match(/-0$/) )  { callid = callid.replace(/-0$/,""); }
-
-	  var url = "cflow.php?cid="+callid+"&cid2="+callid+"-0";
-
-			var cflow = $('<div id="cflow"></div>')
-                        .load(url, '', function(response, status, xhr) {
-                        if (status == 'error') {
-                        var msg = "Sorry but there was an error: ";
-                        $(".content").html(msg + xhr.status + " " + xhr.statusText);
-                        }})
-			.dialog({
-                                autoOpen: true,
-				stack: false,
-				width: 'auto',
-				position: [10, 80],
-				height: 'auto',
-				close: function(e, i) { $(this).remove(); },	
-                                title: 'Call Flow: '+callid
-                        })
-			.css('zIndex', -1)
-			.focus();			
-}
-
 
 
 function clear_complete_form() {
@@ -353,8 +279,5 @@ function mktime() {
  
     return Math.floor(d.getTime()/1000);
 }
-
-
-
 
 //-->

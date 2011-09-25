@@ -152,9 +152,8 @@ class DataTable_Request
   
   public function setHomer($homer)
   {
+    $homer = preg_replace('/\\\/', '', $homer);
     $this->homer = json_decode($homer);
-    /* BUG string to string */
-    $this->homer = json_decode($this->homer);
   }
 
   public function getHomer()

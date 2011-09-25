@@ -21,12 +21,14 @@ class HTML_adminhomer {
             <body>          
 
             <script type="text/javascript" src="js/homer.js"></script>
-            <script src="js/jquery-1.5.1.min.js" type="text/javascript"></script>
-            <script type="text/javascript" src="js/jquery-ui-1.8.14.custom.min.js"></script>
+            <!-- <script src="js/jquery-1.5.1.min.js" type="text/javascript"></script> -->
+            <script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
+            <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
 <?php
 
 if($header) {
 ?>         
+	<div id="newbg" class="newbg"><img src="images/bg.gif" width="100%" height="100%"></div>
 	<div id="banner"> 
 		<h1 class="logo"> 
 			<a href="homer.php" title="Homer Capture Server"><span>Homer</span></a> 
@@ -39,6 +41,10 @@ if($header) {
 				</li> 
 				<li <?php if($task=="advsearch") echo "class='selected'"; ?>><a href="homer.php?task=advsearch">Advanced Search</a> 
 				</li> 
+				
+				<li <?php if($task=="stats") echo "class='selected'"; ?>> <a href="homer.php?task=stats">Stats</a>
+                                </li>
+
 <?php if($level == 1):?>				
 				<li <?php if(!strncmp(admin,$task,5)) echo "class='selected'"; ?>> <a href="homer.php?task=adminoverview">Admin</a> 
 				</li> 
@@ -98,7 +104,7 @@ var section = "demos/dialog";
 		<script src="js/jquery.timeentry.js" type="text/javascript"></script>
 		<script src="js/jquery.mousewheel.js" type="text/javascript"></script>
 		<script src="js/jquery.timeentry-de.js" type="text/javascript"></script>
-		                           
+				                           
 	         <script type="text/javascript">
 	         
 	         	$.noConflict();
@@ -106,17 +112,33 @@ var section = "demos/dialog";
 	         	jQuery(document).ready( function($) {
 		                $('.timepicker1').timeEntry({show24Hours: true, showSeconds: true}); 
 		                $('.timepicker2').timeEntry({show24Hours: true, showSeconds: true}); 
+		                
+				$('#from_user').autocomplete({
+                                source: "utils.php?task=livesearch",
+                                minLength: 3,
+	                        });
+	                        
+        	                $('#to_user').autocomplete({
+                                source: "utils.php?task=livesearch",
+                                minLength: 3,
+                                select: function(event, ui) {
+                                        $('#to_user').val(ui.item.to_user);
+                                }
+                                });                                
 			});
+
 	        
-		</script>	                	        	        
+		</script>	                	    
+    	        
 
 <br>
 	<div class="wrapper">
 	<div id="results">
-	
+	<!-- extra formatting table -->
+	<table border=0 width="100%"><tr><td>
 	     <fieldset class="adminform">
              <legend>Call Details</legend>                                                                                                      		
-			<table class="bodystyle" cellspacing="1">
+			<table class="bodystyle" height="130">
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="ruri_user" title="B-Number in Request URI user part">RURI User (B-Number)</label>
@@ -163,23 +185,30 @@ var section = "demos/dialog";
 						<label for="callid" title="Callid">Call-ID</label>
 					</td>
 					<td>
-						<input type="text" name="callid" id="callid" class="textfieldstyle2" size="60" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
+						<input type="text" name="callid" id="callid" class="textfieldstyle" size="40" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
+						<input type="hidden" name="method" id="method" class="textfieldstyle" size="40" value="" />
 					</td>
 				</tr>
 			</table>	
-		</fieldset>	                		
+		</fieldset>
+
+		</td><td>
 
 		 <fieldset class="adminform">
                  <legend>Time/Date Parameters</legend>                 
-                 		<table class="bodystyle" cellspacing="1">						
+                 		<table class="bodystyle"  height="130">						
 							<tr>
 							
 								<td width="40%" class="paramlist_key"><label for="location" title=".">Location</label></td>
 								<td class="tablerow_two">
 								<?php
+								
+								    if(isset($search['location'])) $locarray = $search['location'];
+								    else $locarray = array();
+								    
 								    foreach ($nodes as $key=>$value) {
                                                                 ?>								
-								        <input type="checkbox" class="checkboxstyle" name="location[]" id="location" value="1" <?php if(in_array($key,$search['location'])) echo "checked";?>><?php echo $value;?>
+								        <input type="checkbox" class="checkboxstyle" name="location[]" id="location" value="1" <?php if(in_array($key,$locarray)) echo "checked";?>><?php echo $value;?>
                                                                 <?php
                                                                     }
                                                                 ?>
@@ -246,23 +275,75 @@ var section = "demos/dialog";
 						</table>					
 			</fieldset>
 
+			</td></tr><tr><td>
 			<fieldset class="adminform">			
-			<table class="bodystyle">
+		        <legend>Search</legend>
+			<table class="bodystyle" height="30">
 				<tr>
 					<td>
-						<br />
 						<input type="submit" value="Search" onClick="return check_form();">
 					</td>
 					<td>
-						<br />
 						<input type="button" value="Clear" onClick="clear_form();">
 					</td>
+					 </td>
+
+
+                                        </td>
+
 				</tr>
 			</table>
 			</fieldset>
-	</div>			
-	<br />
+			</td><td>
+			 <fieldset class="adminform">
+                        <legend>Network Status</legend>
+                        <table class="bodystyle" height="30">
+                                <tr>
+                                        <td>
+
+                                        </td>
+                                        <td>
+                	<?php
+			echo "Up ";
+			passthru("/usr/bin/uptime |  awk '{print $3, $4}'");
+			passthru('/sbin/ifconfig eth0|grep "RX bytes"');
+			?>
+                                        </td>
+                                </tr>
+                        </table>
+                        </fieldset>
+			</td></td>
+		</table>
+			
+
+
+	</div>
+	<div id="Modules"></div>
+
+<?php 
+
+	// Scan Modules directory and display
+	$submodules = array_filter(glob('modules/*'), 'is_dir');
+	$modcount = 0;
+	foreach( $submodules as $key => $value){
+?>
+	<script type="text/javascript">
+	jQuery(document).ready( function($) {
+
+		$('#Modules').append('<iframe id="stats<?php echo $modcount ?>" frameborder="0" scrolling="no" style="width:100%; height:315px;" />'); 
+		$('#stats<?php echo $modcount ?>').attr('src', '<?php echo $value ?>'); 
+
+		});
+        </script>
+<?php
+	$modcount++;
+	}
+
+?>
+
+
 	<span class="note">
+	<br />
 	</div>
 																														
 <?php
@@ -290,15 +371,19 @@ var section = "demos/dialog";
 		</script>	                	        	        
 
 <div class="wrapper">
+
+		 <!-- extra formatting table -->
+        	<table border=0 width="100%"><tr><td>
+		
 		<fieldset class="adminform">
 		<legend>User Details</legend>
-			<table class="bodystyle">			             
+			<table class="bodystyle" height="130">			             
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="ruri_user" title="B-Number in Request URI user part">RURI User (B-Number)</label>
 					</td>
 					<td>
-						<input type="text" name="ruri_user" id="ruri_user" class="textfieldstyle" size="40" value="<?php if(isset($search['ruri_user'])) echo $search['ruri_user']; ?>" />
+						<input type="text" name="ruri_user" id="ruri_user" class="textfieldstyle2" size="60" value="<?php if(isset($search['ruri_user'])) echo $search['ruri_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
@@ -306,7 +391,7 @@ var section = "demos/dialog";
 						<label for="to_user">To User (B-Number)</label>
 					</td>
 					<td>
-						<input type="text" name="to_user" id="to_user" class="textfieldstyle" size="40" value="<?php if(isset($search['to_user'])) echo $search['to_user']; ?>" />
+						<input type="text" name="to_user" id="to_user" class="textfieldstyle2" size="60" value="<?php if(isset($search['to_user'])) echo $search['to_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
@@ -314,7 +399,7 @@ var section = "demos/dialog";
 						<label for="from_user">From User (A-Number)</label>
 					</td>
 					<td>
-						<input type="text" name="from_user" id="from_user" class="textfieldstyle" size="40" value="<?php if(isset($search['from_user'])) echo $search['from_user']; ?>" />
+						<input type="text" name="from_user" id="from_user" class="textfieldstyle2" size="60" value="<?php if(isset($search['from_user'])) echo $search['from_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
@@ -322,7 +407,7 @@ var section = "demos/dialog";
 						<label for="pid_user" title="P-Asserted and P-Preffered">PID User (A-Number)</label>
 					</td>
 					<td>
-						<input type="text" name="pid_user" id="pid_user" class="textfieldstyle" size="40" value="<?php if(isset($search['pid_user'])) echo $search['pid_user']; ?>" />
+						<input type="text" name="pid_user" id="pid_user" class="textfieldstyle2" size="60" value="<?php if(isset($search['pid_user'])) echo $search['pid_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
@@ -330,7 +415,7 @@ var section = "demos/dialog";
 						<label for="contact_user" title="Contact header"">Contact User</label>
 					</td>
 					<td>
-						<input type="text" name="contact_user" id="contact_user" class="textfieldstyle" size="40" value="<?php if(isset($search['contact_user'])) echo $search['contact_user']; ?>" />
+						<input type="text" name="contact_user" id="contact_user" class="textfieldstyle2" size="60" value="<?php if(isset($search['contact_user'])) echo $search['contact_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
@@ -338,7 +423,7 @@ var section = "demos/dialog";
 						<label for="auth_user" title="Proxy-Auth, WWW-Auth">Auth User</label>
 					</td>
 					<td>
-						<input type="text" name="auth_user" id="auth_user" class="textfieldstyle" size="40" value="<?php if(isset($search['auth_user'])) echo $search['auth_user']; ?>" />
+						<input type="text" name="auth_user" id="auth_user" class="textfieldstyle2" size="60" value="<?php if(isset($search['auth_user'])) echo $search['auth_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
@@ -351,16 +436,18 @@ var section = "demos/dialog";
 				</tr>				
 			</table>
 		</fieldset>
-		
+
+		</td><td>
+
 		<fieldset class="adminform">
 		<legend>Call Details</legend>
-			<table class="bodystyle" cellspacing="1">
+			<table class="bodystyle" height="130">
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="callid" title="Callid">Call-ID</label>
 					</td>
 					<td>
-						<input type="text" name="callid" id="callid" class="textfieldstyle2" size="60" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
+						<input type="text" name="callid" id="callid" class="textfieldstyle" size="40" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
 					</td>
 				</tr>
 				<tr>
@@ -414,9 +501,11 @@ var section = "demos/dialog";
 			</table>
 		</fieldset>
 
+		</td></tr><tr><td>
+
 		<fieldset class="adminform">
 		<legend>Header Details</legend>
-			<table class="bodystyle" cellspacing="1">
+			<table class="bodystyle"  height="130">
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="ruri" title="RURI">RURI</label>
@@ -482,11 +571,13 @@ var section = "demos/dialog";
 					</td>
 				</tr>															
 			</table>
-		</fieldset>		
+		</fieldset>	
+
+		</td><td valign="top">	
 		                		
 		<fieldset class="adminform">
 		<legend>Time / Date Parameters</legend>
-			<table class="bodystyle">
+			<table class="bodystyle"  height="130">
 				<tr>
 					<td>
 						<table width="100%" class="paramlist bodystyle" cellspacing="1">
@@ -566,6 +657,8 @@ var section = "demos/dialog";
 			</table>
 		</fieldset>
 
+		</td></tr><tr><td>
+
 		<fieldset class="adminform">
 		<legend>Network Details</legend>
 			<table class="bodystyle" cellspacing="1">
@@ -576,8 +669,6 @@ var section = "demos/dialog";
 					<td>
 						<input type="text" name="source_ip" id="source_ip" class="textfieldstyle" size="40" value="<?php if(isset($search['source_ip'])) echo $search['source_ip']; ?>" />
 					</td>
-				</tr>
-				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="source_port" title="Source PORT">Source port</label>
 					</td>
@@ -592,10 +683,8 @@ var section = "demos/dialog";
 					<td>
 						<input type="text" name="destination_ip" id="destination_ip" class="textfieldstyle" size="40" value="<?php if(isset($search['destination_ip'])) echo $search['destination_ip']; ?>" />
 					</td>
-				</tr>
-				<tr>
 					<td width="150" class="tablerow_two">
-						<label for="destination port" title="Destination PORT">Destination port</label>
+						<label for="destination port" title="Destination PORT">Dest. port</label>
 					</td>
 					<td>
 						<input type="text" name="destination_port" id="destination_port" class="textfieldstyle2" size="5" value="<?php if(isset($search['destination_port'])) echo $search['destination_port']; ?>" />
@@ -608,8 +697,6 @@ var section = "demos/dialog";
 					<td>
 						<input type="text" name="contact_ip" id="contact_ip" class="textfieldstyle" size="40" value="<?php if(isset($search['contact_ip'])) echo $search['contact_ip']; ?>" />
 					</td>
-				</tr>
-				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="contact port" title="Contact PORT">Contact port</label>
 					</td>
@@ -624,8 +711,6 @@ var section = "demos/dialog";
 					<td>
 						<input type="text" name="originator_ip" id="originator_ip" class="textfieldstyle" size="40" value="<?php if(isset($search['originator_ip'])) echo $search['originator_ip']; ?>" />
 					</td>
-				</tr>
-				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="originator port" title="Originator PORT">Originator port</label>
 					</td>
@@ -656,6 +741,8 @@ var section = "demos/dialog";
 			</table>
 		</fieldset> 
 
+		</td><td valign="bottom">
+
 		<fieldset class="adminform">
 			<table class="bodystyle">
 				<tr>
@@ -670,6 +757,8 @@ var section = "demos/dialog";
 				</tr>
 			</table>
 				</fieldset>
+
+		</td></tr></table>
 																						<br />
 																												<span class="note">
 		
@@ -692,6 +781,14 @@ var section = "demos/dialog";
 
 	<script type="text/javascript" language="javascript" src="js/jquery.dataTables.js"></script>        
         <script type="text/javascript" src="js/jquery.Dialog.js"></script>
+
+	<script type="text/javascript">		
+	 	$(document).mousemove(function(e){
+                                        $('body').data('posx', e.pageX);
+                                        $('body').data('posy', e.pageY);
+                        });
+	</script>
+
 
  <table border="0" cellpadding="0" cellspacing="0" bgcolor="#eeeeee">
         <tr>
@@ -1020,12 +1117,47 @@ var section = "demos/dialog";
 <?php endif;?>
 
 
-                
+
 <?php
-	}
+        }
 
 
+        function displayStats() {
+?>
+
+<div class="wrapper">
+        <div id="Modules"></div>
+
+	<script type="text/javascript">
+        jQuery(document).ready( function($) {
+
+<?php
+
+        // Scan Modules directory and display
+        $submodules = array_filter(glob('modules/*'), 'is_dir');
+        $modcount = 0;
+        foreach( $submodules as $key => $value){
+?>
+
+                $('#Modules').append('<iframe id="stats<?php echo $modcount ?>" frameborder="0" scrolling="no" style="width:100%; height:315px;" />');
+                $('#stats<?php echo $modcount ?>').attr('src', '<?php echo $value ?>');
+
+
+<?php
+        $modcount++;
+        }
+
+?>
+                });
+        </script>
+	
+</div>
+
+<?php
+        }
 
 }
 
 ?>
+
+

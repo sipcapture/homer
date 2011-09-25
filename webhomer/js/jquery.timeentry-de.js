@@ -1,4 +1,4 @@
-﻿/* http://keith-wood.name/timeEntry.html
+/* http://keith-wood.name/timeEntry.html
    German initialisation for the jQuery time entry extension
    Written by Eyk Schulz (eyk.schulz@gmx.net)  */
 (function($) {

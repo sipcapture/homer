@@ -50,10 +50,12 @@ body {
 <form action="index.php" method="post">
 <table width="400" border="0" align="center" cellpadding="0" cellspacing="0"  class="login">
   <tr>
-    <td colspan="3" class="login"><strong>Web Homer access</strong></td>
+	<td colspan="3" class="login">
+		<img src="images/homerlogo.png" alt="Homer Web Access">
+	</td>
   </tr>
   <tr>
-    <td height="50" colspan="3" class="login">Please use your login and password to login</td>
+    <td height="50" colspan="3" class="login">Please use your Homer login and password</td>
   </tr>
   <tr>
     <td width="150" height="30" align="right">Login:</td>

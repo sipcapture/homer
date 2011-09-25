@@ -85,7 +85,9 @@ class SipResult
   
   public function getMethod()
   {
-      return "<a href=\"javascript:showMessage('".$this->id."','".$this->loctable."','".$this->tnode."','". implode(",",$this->location)."');\">".$this->method."</a>";
+      return "<a href=\"javascript:popMessage('".$this->id."');\">".$this->method."</a>";
+//      return "<a href=\"javascript:showMessage('".$this->id."','".$this->loctable."','".$this->tnode."','". implode(",",$this->location)."');\">".$this->method."</a>";
+//      return "<div class=\"spantrace\"><a href=\"javascript:showMessage('".$this->id."','".$this->loctable."','".$this->tnode."','". implode(",",$this->location)."');\">".$this->method."</a></div>";
       //return $this->method;
   }
 
@@ -143,7 +145,7 @@ class SipResult
   {
   
       return "<a alt='callflow' href=\"javascript:showCallFlow('".$this->id."','".$this->loctable."','".$this->tnode."','".
-              implode(',',$this->location)."','".$this->unique."', 1 );\">".$this->callid."</a>";
+              implode(',',$this->location)."','".$this->unique."', 1,'".$this->callid."');\">".$this->callid."</a>";
       //return $this->callid;
   }  
   

@@ -148,7 +148,7 @@ class SipSearchService implements ISipService
               $results = array_merge($results,$result);	      
 	}
 
-        usort($results, 'compare');
+        //usort($results, 'compare');
 
 	$sipresults = $this->hydrateResults($results, $location);
       
@@ -170,7 +170,7 @@ class SipSearchService implements ISipService
      $tt = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->date." ".$homer->from_time));
      $thour = date("H", strtotime($homer->date." ".$homer->to_time));
-                             
+
      $j=$thour+1;     
      
      $where = " AND (`date` >= '$ft' AND `date` <= '$tt' )";              
@@ -264,7 +264,7 @@ class SipSearchService implements ISipService
 
         }
 
-        usort($results, 'compare');
+        //usort($results, 'compare');
 
         $sipresults = $this->hydrateResults($results, $location);
 

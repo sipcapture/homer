@@ -33,7 +33,7 @@ class DataTable_Config
    * The default display length of the table
    * @var integer
    */
-  protected $displayLength           = 10;
+  protected $displayLength           = 25;
 
   /**
    * The AJAX source URL

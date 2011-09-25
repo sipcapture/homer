@@ -4,7 +4,7 @@
 
 
 .small {
-font-size: 11px!important;
+font-size: 12px!important;
 padding-right: 10px;
 }
 
@@ -15,7 +15,7 @@ padding-right: 10px;
 	background-color: #FF9;
 	padding-left: 5px;
 	/*height: 16px;*/
-	width: 330px;
+	/* width: 330px; */
 	border: 1px solid #999;
 }
 
@@ -24,10 +24,10 @@ padding-right: 10px;
 	font-family: Arial, Helvetica, sans-serif;
         font-size: 12px;
 	line-height: 15px;
-	background-color: #FF9;
+	background-color: #FFF;
 	padding-left: 5px;
 	height: 16px;
-	width: 180px;
+	 width: 180px; 
 	border: 1px solid #999;
 }
 
@@ -35,7 +35,7 @@ padding-right: 10px;
 	font-family: Arial, Helvetica, sans-serif;
 	font-size: 12px;
 	line-height: 15px;
-	background-color: #FF9;
+	background-color: #FFF;
 	padding-left: 5px;
 	height: 16px;
 	/*width: 180px;*/
@@ -46,19 +46,19 @@ padding-right: 10px;
 	font-family: Arial, Helvetica, sans-serif;
 	font-size: 12px;
 	line-height: 15px;
-	background-color: #FF9;
+	background-color: #FFF;
 	padding-left: 5px;
 	height: 16px;
 	/*width: 180px;*/
 	border: 1px solid #999;
-width:130px; float:left; clear:none; margin-left:49px; margin-top:-20px;
+	width:130px; float:left; clear:none; margin-left:49px; margin-top:-20px;
 }
 
 .dropdownstyle {
 	font-family: Arial, Helvetica, sans-serif;
 	font-size: 12px;
 	line-height: 15px;
-	background-color: #FF9;
+	background-color: #FFF;
 	padding-left: 5px;
 	height: 20px;
 	/*width: 180px;*/

@@ -32,6 +32,7 @@ $header = 1;
 if(strcmp($task, "search")== 0) $title="Search";
 else if(strcmp($task, "advsearch")==0) $title="Advanced Search";
 else if(strcmp($task, "result")==0) $title="Result";
+else if(strcmp($task, "stats")==0) $title="Stats";
 else if(strncmp($task, "admin", 5)==0) $title="Admin";
 else {
         $title="message";
@@ -61,6 +62,10 @@ switch ($task) {
 	        showSearchForm(0);
 		break;            	
 		
+	case 'stats':
+                showStats();
+                break;
+
 	case 'advsearch':
 	        showSearchForm(1);
 		break;            		
@@ -122,6 +127,7 @@ function logout() {
         
         $db->logout();        
 	header("Location: index.php\r\n");
+	echo "<script>location.href='index.php';</script>\n";
 	exit;
 }
 
@@ -320,36 +326,39 @@ function showCreateNode($type) {
 }
 
 function showMessage()  {
-	
-	global $mynodeshost, $db;
-	
-	$userid = $user->id;
-	
-	//$table = getVar('table', NULL, '', 'string');
-        $tnode = getVar('tnode', NULL, '', 'string');	        
-	$location_str = getVar('location', NULL, '', 'string');
-	$location = explode(",", $location_str);
 
-	$id = getVar('id', 0, '', 'int');
-	        
-        $node = sprintf("homer_node%02d.", $tnode);
+        global $mynodeshost, $db;
+	$myrows = array();
+
+        $userid = $user->id;
+
+        //$table = getVar('table', NULL, '', 'string');
+        $tnode = getVar('tnode', NULL, '', 'string');
+        $location_str = getVar('location', NULL, '', 'string');
+        $location = explode(",", $location_str);
+
+        $id = getVar('id', 0, '', 'int');
+
+        //$node = sprintf("homer_node%02d.", $tnode);
 
         $option = array(); //prevent problems
 
-        if($db->dbconnect_homer($mynodeshost[$tnode])) {
-        
-        	$query = "SELECT * "
+        if($db->dbconnect_homer("localhost")) {
+
+                $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
                         ."\n WHERE id=$id limit 1";
 
-        	$rows = $db->loadObjectList($query);	
+                $rows = $db->loadObjectList($query);
         }
-        
-	HTML_adminhomer::displayMessage(&$rows);		
+
+        HTML_adminhomer::displayMessage(&$rows);
+
 }
 
 
-function showCallFlow()  {
+
+function showCallFlow_deprecated()  {
 	
         global $mynodeshost, $db;
         
@@ -471,6 +480,13 @@ function getVar($name, $default, $request, $type) {
         else if(strcmp($type,"string") == 0) return strval($val);
         else return $val;
 } 
+
+function showStats() {
+
+        HTML_adminhomer::displayStats();
+
+}
+
 
 
 ?>

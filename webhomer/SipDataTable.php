@@ -560,8 +560,11 @@ class SipDataTable extends DataTable_DataTable
                   unset($search[$key]);
               }                
         }  
+
+        $json = json_encode($search);
+        //$json = preg_replace('/"(-?\d+\.?\d*)"/', '$1', $json);        
         
-        $html = "aoData.push( { 'name': 'homersearch', 'value': '".json_encode($search)."' } );\n";              
+        $html = "aoData.push( { 'name': 'homersearch', 'value': '".$json."' } );\n";              
         $html .= "aoData.push( { 'name': 'close', 'value': '1' } );\n";              
         return $html;
   }

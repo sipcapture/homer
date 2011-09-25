@@ -9,14 +9,33 @@ body {
 }
 
 
+#newbg {
+    position: absolute;
+    top: 0px; left: 0px;
+    width: 100%;
+//    background-image: url("../images/bg.gif");
+    background-repeat:no-repeat;
+    background-size: 150%;
+    height:100%;
+}
+
+fieldset {   
+  -moz-border-radius:5px;  
+  border-radius: 5px;  
+  -webkit-border-radius: 5px; //edit :D
+}
+
 #wrapper {
 	margin: 0 auto;
 	width: 956px;
 	position: relative;
-	/* 
-	background: url('/images/body_footer_bg.jpg') no-repeat center bottom;
-	padding-bottom: 365px;
-	 */
+	-moz-border-radius: 15px;
+	border-radius: 15px;
+	/*
+	background-image: url('../images/bg.gif') no-repeat center bottom;
+	padding-bottom: 365px; 
+	*/
+	
 }
 
 #banner {
@@ -93,7 +112,6 @@ TD{font-family: Arial; font-size: 8pt;}
 	font-size: 13px;
 	color: #000;
 }
-
 
 .search_simple,
 .query_simple
@@ -273,6 +291,9 @@ h1 {
 	padding-bottom: 20px;
 	padding-left: 10px;
 	border: 1px solid #666;
+	-moz-border-radius: 15px;
+        border-radius: 15px;
+
 }
 .wrapper .filter {
 	position: absolute;
@@ -334,14 +355,14 @@ h1.logo a span {
 	float: left;
 	width: 3px;
 	height: 25px;
-	background: url('/images/dock.png') no-repeat left top;
+	background: url('images/dock.png') no-repeat left top;
 }
 
 #dock .right {
 	float: left;
 	width: 3px;
 	height: 25px;
-	background: url('/images/dock.png') no-repeat right top;
+	background: url('images/dock.png') no-repeat right top;
 }
 
 #dock ul,
