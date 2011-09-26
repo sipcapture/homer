@@ -114,12 +114,12 @@ var section = "demos/dialog";
 		                $('.timepicker2').timeEntry({show24Hours: true, showSeconds: true}); 
 		                
 				$('#from_user').autocomplete({
-                                source: "utils.php?task=livesearch",
+                                source: "utils.php?task=livesearch&field=from_user",
                                 minLength: 3,
 	                        });
 	                        
         	                $('#to_user').autocomplete({
-                                source: "utils.php?task=livesearch",
+                                source: "utils.php?task=livesearch&field=to_user",
                                 minLength: 3,
                                 select: function(event, ui) {
                                         $('#to_user').val(ui.item.to_user);

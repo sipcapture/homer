@@ -83,9 +83,10 @@ function liveSearch() {
 	$searchterm = getVar('term', NULL, '', 'string');
 	$searchfield = getVar('field', NULL, '', 'string');
 
-	$return_arr = array();
-
+	if ($searchterm == NULL) {exit;}
 	if ($searchfield == NULL) {$searchfield = 'from_user';}
+
+	$return_arr = array();
 
         global $mynodeshost, $db;
 
@@ -93,7 +94,7 @@ function liveSearch() {
 
         if($db->dbconnect_homer("localhost")) {
 
-                $query = "SELECT distinct from_user "
+                $query = "SELECT distinct ".$searchfield
                         ."\n FROM ".HOMER_TABLE
                         ."\n WHERE ".$searchfield." like '%".$searchterm."%' limit 5";
 
@@ -104,15 +105,12 @@ function liveSearch() {
 	//print_r($rows);
 
 	foreach($rows as $row) {
-		//$row_array[$searchfield] =  $row->from_user;
-		//array_push($return_arr,$row_array);
-		array_push($return_arr, $row->from_user);
+		$result = $row->$searchfield;
+		if ( substr( $result, 0, 1 ) == "+" ) { $result = substr( $result, 1 ); }
+		array_push($return_arr, $result);
 	}
 
-	//array_push($return_arr, $row->from_user);
-	
 	echo json_encode($return_arr);
-
 
 }
 
