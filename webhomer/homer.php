@@ -468,19 +468,6 @@ function myLocalRedirect( $url='') {
         exit();
 }
 
-
-
-
-function getVar($name, $default, $request, $type) {
-
-        $val = $_REQUEST[$name];
-        if(!$val) $val = $default;
-        $type = strtoupper($type);                
-        if(strcmp($type,"int") == 0) intval($val);
-        else if(strcmp($type,"string") == 0) return strval($val);
-        else return $val;
-} 
-
 function showStats() {
 
         HTML_adminhomer::displayStats();

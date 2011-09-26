@@ -9,7 +9,7 @@
 
 // cflow.php
 
-if ($cid == NULL ) { exit; }
+//if ($cid == NULL ) { echo "No CID"; exit; }
 
 include("class.db.php");
 $db = new homer();
@@ -30,7 +30,7 @@ foreach($nodes as $node) {
         $mynodeshost[$node->id] = $node->host;
         $mynodesname[$node->id] = $node->name;
 }
-              
+
 $arrow_step=40;
 $host_step=200;
 
@@ -56,7 +56,7 @@ function arrow ( $image, $color, $x, $y, $d = -1)
 {
 
   global $arrow_step;
-  
+
   $values = array (
            $x,  $y ,
            $x + 5 * $d,  $y - 3 ,
@@ -80,41 +80,56 @@ if ($table == NULL) { $table="sip_capture"; }
 
 //$cid="1234567890";
 
+$cid = getVar('cid', NULL, 'get', 'string');
+$cid2 = getVar('cid2', NULL, 'get', 'string');
+
 //Make image
 $where = "callid = '".$cid."'";
 if(isset($cid2)) $where .= " OR callid='".$cid2."'";
 
 $localdata=array();
 
-//if($db->dbconnect_homer($mynodeshost[$tnode])) {              
+//if($db->dbconnect_homer($mynodeshost[$tnode])) {
 if(!$db->dbconnect_homer(NULL))
-{	
+{
     //No connect;
     exit;
 }
 
-$query="SELECT * FROM $table WHERE $where order by micro_ts limit 100;";
+
+if($db->dbconnect_homer(NULL)) {
+
+                $query = "SELECT * "
+                        ."\n FROM ".HOMER_TABLE
+                        ."\n WHERE ".$where." limit 100";
+		
+                $rows = $db->loadObjectList($query);
+        }
+
+
+//$query="SELECT * FROM $table WHERE $where order by micro_ts limit 100;";
 $rows = $db->loadObjectList($query);
 foreach($rows as $data) {
 
-  $localdata[] = $data;        
+  $localdata[] = $data;
   $hosts[$data->source_ip] = 1;
-  $hosts[$data->destination_ip] = 1; 
-  
+  $hosts[$data->destination_ip] = 1;
+
+
   //Check user agent and generate type of UAC
   //Better to make it in DB.
-  
+
  // SIP SWITCHES
 
- if(preg_match('/asterisk/i', $data->user_agent)) { 
+ if(preg_match('/asterisk/i', $data->user_agent)) {
      $uac[$data->source_ip] = "asterisk";
      $uac[$data->user_agent] = $data->user_agent;
  }
- else if(preg_match('/FreeSWITCH/i', $data->user_agent)) { 
+ else if(preg_match('/FreeSWITCH/i', $data->user_agent)) {
      $uac[$data->source_ip] = "freeswitch";
      $uac[$data->user_agent] = $data->user_agent;
  }
- else if(preg_match('/kamailio|openser|opensip|sip-router/i', $data->user_agent)) { 
+ else if(preg_match('/kamailio|openser|opensip|sip-router/i', $data->user_agent)) {
      $uac[$data->source_ip] = "openser";
      $uac[$data->user_agent] = $data->user_agent;
  }
@@ -129,11 +144,11 @@ foreach($rows as $data) {
 
  // SIP ENDPOINTS
 
- else if(preg_match('/x-lite|Bria|counter-path/i', $data->user_agent)) { 
+ else if(preg_match('/x-lite|Bria|counter-path/i', $data->user_agent)) {
      $uac[$data->source_ip] = "counterpath";
      $uac[$data->user_agent] = $data->user_agent;
  }
- else if(preg_match('/WG4k/i', $data->user_agent)) { 
+ else if(preg_match('/WG4k/i', $data->user_agent)) {
      $uac[$data->source_ip] = "worldgate";
      $uac[$data->user_agent] = $data->user_agent;
  }
@@ -158,7 +173,7 @@ foreach($rows as $data) {
 
 // Calculate size of image:
 
-$size_y = count($localdata) * $arrow_step +100; /* Y */
+$size_y = count($localdata) * $arrow_step + 100; /* Y */
 $size_x = count($hosts) *  $host_step - 10; /* X */
 
 $file=time().".png";
@@ -205,7 +220,6 @@ $color['darkred']  = imagecolorallocate($im, 0x90, 0x00, 0x00);
 $color['darkgray'] = imagecolorallocate($im, 0x90, 0x90, 0x90);
 $color['navy']     = imagecolorallocate($im, 0x00, 0x00, 0x80);
 $color['darknavy'] = imagecolorallocate($im, 0x00, 0x00, 0x50);
-                  
 
 imagefilledrectangle($im, 0, 0, $size_x, $size_y, $c1);
 
@@ -213,14 +227,13 @@ imagefilledrectangle($im, 0, 0, $size_x, $size_y, $c1);
 foreach($hosts as $key=>$value) {
 
       $COORD[$key] = $line_x1;
-      
       //Put Array
       // array_push($click,"50,180,200,205");
       if(isset($uac[$key]) && file_exists('./images/cflow/'.$uac[$key].".jpg")) {
          $ico = imagecreatefromjpeg('./images/cflow/'.$uac[$key].".jpg");
          imagecopymerge($im, $ico, $line_x1 - imagesx($ico)/2 , $line_y1 - (imagesy($ico) *1.5)  , 0, 0, imagesx($ico), imagesy($ico), 90);
 
-      }      
+      }
 
       imagelinethick($im, $line_x1, $line_y1, $line_x1, $line_y2, $color['gray2'], 1);
       //Put header!
