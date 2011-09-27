@@ -18,7 +18,7 @@ echo -e "[$cdate] - $cleanup_file_cnt file(s) found to be removed under $HOMER_T
 for cleanupfile in `find $HOMER_TMP_DIR -type f -mtime +$DAYS_TO_KEEP | xargs -i basename \{\}`; do
         rdate=`date '+%Y-%m-%d %H:%M:%S'`
         echo -e "[$rdate] - Deleting file: $cleanupfile"  >> $LOG_FILE
-        rm -r $HOMER_TMP_DIR/$cleanupfile 2>/dev/null
+        rm -f $HOMER_TMP_DIR/$cleanupfile 2>/dev/null
 done
 
 edate=`date '+%Y-%m-%d %H:%M:%S'`
