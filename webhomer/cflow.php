@@ -229,11 +229,11 @@ foreach($hosts as $key=>$value) {
       $COORD[$key] = $line_x1;
       //Put Array
       // array_push($click,"50,180,200,205");
-      
       if(!isset($uac[$key])) $uac[$key] = "sipgateway";      
       if(file_exists('./images/cflow/'.$uac[$key].".jpg")) {
          $ico = imagecreatefromjpeg('./images/cflow/'.$uac[$key].".jpg");
          imagecopymerge($im, $ico, $line_x1 - imagesx($ico)/2 , $line_y1 - (imagesy($ico) *1.5)  , 0, 0, imagesx($ico), imagesy($ico), 90);
+
       }
 
       imagelinethick($im, $line_x1, $line_y1, $line_x1, $line_y2, $color['gray2'], 1);
@@ -360,35 +360,40 @@ imagedestroy($im);
 <link href="styles/core_styles.css" rel="stylesheet" type="text/css" />
 <link href="styles/form.css" rel="stylesheet" type="text/css" />
 <link type="text/css" href="styles/jquery-ui-1.8.4.custom.css" rel="stylesheet" />
-
+<script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
+<script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
+<script src="js/jquery.zoomable.js" type="text/javascript"></script>                                                    
 <script language="javascript">
+$(document).ready(function(){
 
-function just_show(val) {
+      $('input:button').button();
 
-  //alert(val);
+      $('#image').zoomable();
 
+    });
 </script>
 </head>
 
-<map name='callflowmap'>
+<p>
 
+    <input type="button" value="+" onclick="$('#image').zoomable('zoomIn')" title="Zoom in" />
+    <input type="button" value="-" onclick="$('#image').zoomable('zoomOut')" title="Zoom out" />
+    <input type="button" value="Reset" onclick="$('#image').zoomable('reset')" />
+</p>
+<center>
+<div style="overflow:auto;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
+<img border='0' src='<?echo WEBPCAPLOC.$file?>' usemap='#map' id="image">
+<map name='map' id='map'>
 <?php
-
 foreach($click as $cds) {
      $cz = $cds[0].",".$cds[1].",".$cds[2].",".$cds[3];
      $messg = $cds[4];
-
-     //echo "<area shape='rect' href='javascript:just_show(\"".$messg."\")' coords='$cz'></area>\n";
-     //echo "<area shape='rect' href='javascript:showMessage(\"".$messg."\")' coords='$cz'></area>\n";
-     echo "<area shape='rect' href='javascript:popMessage(\"".$messg."\")' coords='$cz'></area>\n";
+     echo "<area shape='rect' href='javascript:popMessage(\"".$messg."\")' coords='$cz' alt='Area'></area>\n";
 }
-
 
 ?>
 </map>
-<center>
-<img border='0' src='<?echo WEBPCAPLOC.$file?>' usemap='#callflowmap'></img>
+</div>
 </center>
-
 </body>
 </html>
