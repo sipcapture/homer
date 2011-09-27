@@ -9,8 +9,6 @@
 
 // cflow.php
 
-//if ($cid == NULL ) { echo "No CID"; exit; }
-
 include("class.db.php");
 $db = new homer();
 
@@ -21,6 +19,9 @@ if($db->logincheck($_SESSION['loggedin'], "logon", "password", "useremail") == f
 }
 
 define(_HOMEREXEC, "1");
+
+/* Remove temp files older than 1 Day from PCAPDIR */
+// passthru('find '.PCAPDIR.' -type f -mtime +1 -exec rm {} \;');
 
 /* My Nodes */
 $mynodeshost = array();
