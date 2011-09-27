@@ -229,10 +229,11 @@ foreach($hosts as $key=>$value) {
       $COORD[$key] = $line_x1;
       //Put Array
       // array_push($click,"50,180,200,205");
-      if(isset($uac[$key]) && file_exists('./images/cflow/'.$uac[$key].".jpg")) {
+      
+      if(!isset($uac[$key])) $uac[$key] = "sipgateway";      
+      if(file_exists('./images/cflow/'.$uac[$key].".jpg")) {
          $ico = imagecreatefromjpeg('./images/cflow/'.$uac[$key].".jpg");
          imagecopymerge($im, $ico, $line_x1 - imagesx($ico)/2 , $line_y1 - (imagesy($ico) *1.5)  , 0, 0, imagesx($ico), imagesy($ico), 90);
-
       }
 
       imagelinethick($im, $line_x1, $line_y1, $line_x1, $line_y2, $color['gray2'], 1);
