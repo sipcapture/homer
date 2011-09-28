@@ -1,7 +1,12 @@
 <?php
 //start session
 session_start();
-include ("configuration.php");
+
+if(!file_exists("configuration.php"))
+  { die("Configuration not found. Please refer to the README file."); }
+else
+  { include ("configuration.php"); }
+
 class homer {
 	//database setup 
 
