@@ -20,8 +20,19 @@ if($db->logincheck($_SESSION['loggedin'], "logon", "password", "useremail") == f
 
 define(_HOMEREXEC, "1");
 
-/* Remove temp files older than 1 Day from PCAPDIR */
-// passthru('find '.PCAPDIR.' -type f -mtime +1 -exec rm {} \;');
+
+/* Check & Clear cflow image cache in PCAPDIR */
+$expiretime=86440; // default ttl 24h
+$fileTypes="*.png";
+foreach (glob( PCAPDIR . $fileTypes) as $tmpfile) {
+        if ( (time() - (filectime($tmpfile)) ) > ($expiretime)) 
+        {
+        // clear old files
+        unlink($tmpfile);
+        }
+}
+
+
 
 /* My Nodes */
 $mynodeshost = array();
@@ -382,7 +393,7 @@ $(document).ready(function(){
     <input type="button" value="Reset" onclick="$('#image').zoomable('reset')" />
 </p>
 <center>
-<div style="overflow:auto;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
+<div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
 <img border='0' src='<?echo WEBPCAPLOC.$file?>' usemap='#map' id="image">
 <map name='map' id='map'>
 <?php
