@@ -123,9 +123,10 @@ function popMessage(id) {
                         .dialog({
                                 autoOpen: true,
 				stack: true,
-                                width: 400,
+                                width: 500,
                                 height: 'auto',
 				position: [posx + 40, posy -5],
+				 open: function(e, i) { $(this).css({ overflow: 'hidden' }); },
                                 close: function(e, i) { $(this).remove(); },
                                 title: 'MSG ID: '+id
                         })
