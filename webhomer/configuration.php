@@ -31,5 +31,6 @@ define(TEXT2PCAP,"/usr/sbin/text2pcap");
 define(MERGECAP,"/usr/sbin/mergecap");
 define(CALLFLOW,"/usr/bin/callflow");
 define(COLORTAG, 0); /* color based on callid, fromtag */
+define(MODULES, 0); /* display modules in homepage flag */
 
 ?>

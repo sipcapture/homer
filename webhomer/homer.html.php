@@ -322,21 +322,25 @@ var section = "demos/dialog";
 
 <?php 
 
+	if (MODULES != 0) {
+
 	// Scan Modules directory and display
 	$submodules = array_filter(glob('modules/*'), 'is_dir');
 	$modcount = 0;
-	foreach( $submodules as $key => $value){
+	  foreach( $submodules as $key => $value){
 ?>
-	<script type="text/javascript">
-	jQuery(document).ready( function($) {
+	  <script type="text/javascript">
+	  jQuery(document).ready( function($) {
 
 		$('#Modules').append('<iframe id="stats<?php echo $modcount ?>" frameborder="0" scrolling="no" style="width:100%; height:315px;" />'); 
 		$('#stats<?php echo $modcount ?>').attr('src', '<?php echo $value ?>'); 
 
 		});
-        </script>
+          </script>
 <?php
-	$modcount++;
+	  $modcount++;
+	  }
+
 	}
 
 ?>
