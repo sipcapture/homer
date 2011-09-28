@@ -1,5 +1,5 @@
 CREATE TABLE `sip_capture` (
-  `id` int(20) NOT NULL AUTO_INCREMENT,
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
   `micro_ts` bigint(18) NOT NULL DEFAULT '0',
   `method` varchar(50) NOT NULL DEFAULT '',
