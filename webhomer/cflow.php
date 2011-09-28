@@ -21,7 +21,8 @@ if($db->logincheck($_SESSION['loggedin'], "logon", "password", "useremail") == f
 define(_HOMEREXEC, "1");
 
 
-/* Check & Clear cflow image cache in PCAPDIR */
+/* clear cflow image cache in PCAPDIR */
+ if (CFLOW_CLEANUP != 0) {
 $expiretime=86440; // default ttl 24h
 $fileTypes="*.png";
 foreach (glob( PCAPDIR . $fileTypes) as $tmpfile) {
@@ -30,8 +31,8 @@ foreach (glob( PCAPDIR . $fileTypes) as $tmpfile) {
         // clear old files
         unlink($tmpfile);
         }
+    }
 }
-
 
 
 /* My Nodes */

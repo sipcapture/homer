@@ -1,14 +1,22 @@
-This is a simple webinterface to Homer capturing system.
+WEBHOMER is a simple webinterface to Homer capturing system.
 
-Works without joomla. 
+It works without joomla, and requires php5.2, pecl/json
 
-you need to install a new version of text2pcap:
 
-https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=5650
+Before Using:
 
-After it, create a mysqldb (homer_users.sql)
+- install a new version of text2pcap using this patch: https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=5650
 
-insert all your home nodes into homer_nodes table.
+- create a mysqldb (homer_users.sql)
+
+- insert all your home nodes into homer_nodes table.
+
+- customize "configuration_example.php" and rename it to "configuration.php"
+
+- point your browser at WEBHOMER's url and login as: test@test.com/test123
+
+
+
 
 All question and comments please send to alexandr.dubovikov@gmail.com
 
