@@ -397,6 +397,9 @@ $(document).ready(function(){
     <input type="button" value="+" onclick="$('#image').zoomable('zoomIn')" title="Zoom in" />
     <input type="button" value="-" onclick="$('#image').zoomable('zoomOut')" title="Zoom out" />
     <input type="button" value="Reset" onclick="$('#image').zoomable('reset')" />
+    <input type="button" value="Save PNG" onclick="window.open('utils.php?task=saveit&cflow=<?echo $file?>');" />
+    <input type="button" value="Save PCAP" onclick="alert('disabled');" />
+
 </p>
 <center>
 <div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">

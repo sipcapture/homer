@@ -29,6 +29,10 @@ switch ($task) {
                 liveSearch();
                 break;
 
+	case 'saveit':
+                SaveCflow();
+                break;
+
 }
 
 function doTest() { 
@@ -114,6 +118,15 @@ function liveSearch() {
 
 }
 
+function SaveCflow() {
+
+	if ($_REQUEST['cflow'] != "") { 
+	header("Content-type: application/x-cflow-png");
+	header("Content-Disposition: attachment; filename=HOMER_CFLOW_".$_REQUEST['cflow']);
+	readfile(PCAPDIR.$_REQUEST['cflow']);
+	}
+
+}
 
 
 ?>
