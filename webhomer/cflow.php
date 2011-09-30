@@ -274,7 +274,7 @@ foreach($localdata as $data) {
   $stamp=($stamp * 1000000 + $data->micro_ts);
     
   $text=$stamp;
-  $tstamp=$data->date;
+  $tstamp =  date("H:i:s",$data->micro_ts / 1000000);
 
   $fromip = $data->source_ip;
   $fromport = $data->source_port;
