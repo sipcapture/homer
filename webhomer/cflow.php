@@ -274,6 +274,7 @@ foreach($localdata as $data) {
   $stamp=($stamp * 1000000 + $data->micro_ts);
     
   $text=$stamp;
+  $tstamp=$data->date;
 
   $fromip = $data->source_ip;
   $fromport = $data->source_port;
@@ -319,7 +320,11 @@ foreach($localdata as $data) {
   } else {  $msgcol = 'blue';}
 
      
-  imagettftext ( $im, $fontSize, 0,  $crd + 5, $arrow_y1 - 3, $color[$msgcol], $fontFace, $method_text);  
+  imagettftext ( $im, $fontSize, 0,  $crd + 5, $arrow_y1 - 3, $color[$msgcol], $fontFace, $method_text);
+  
+  // Add Timestamp
+  imagettftext ( $im, $fontSize-1, 0, $crd + 5, $arrow_y1 + 9, $color['gray3'], $fontFace, $tstamp);
+
 
   $cds = array();
   $cds[0] = $COORD[$fromip];
