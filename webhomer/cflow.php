@@ -274,7 +274,7 @@ foreach($localdata as $data) {
   $stamp=($stamp * 1000000 + $data->micro_ts);
     
   $text=$stamp;
-  $tstamp =  date("H:i:s",$data->micro_ts / 1000000);
+  $tstamp =  date("Y-m-d H:i:s",$data->micro_ts / 1000000);
 
   $fromip = $data->source_ip;
   $fromport = $data->source_port;
@@ -323,7 +323,7 @@ foreach($localdata as $data) {
   imagettftext ( $im, $fontSize, 0,  $crd + 5, $arrow_y1 - 3, $color[$msgcol], $fontFace, $method_text);
   
   // Add Timestamp
-  imagettftext ( $im, $fontSize-1, 0, $crd + 5, $arrow_y1 + 9, $color['gray3'], $fontFace, $tstamp);
+  imagettftext ( $im, $fontSize-1, 0, $crd + 5, $arrow_y1 + 9, $color['gray3'], $fontFace, "[".$tstamp."]");
 
 
   $cds = array();
