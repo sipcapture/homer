@@ -442,7 +442,7 @@ class SipDataTable extends DataTable_DataTable
 
     // set data table options
     $config->setClass("display")
-           ->setDisplayLength(10)
+           ->setDisplayLength(25)
            ->setIsPaginationEnabled(true)
            ->setIsLengthChangeEnabled(true)
            ->setIsFilterEnabled(true)
