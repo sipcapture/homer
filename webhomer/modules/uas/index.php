@@ -11,20 +11,45 @@ $dbname = HOMER_DB;
 
 $USE_UA = 0;
 
-// CODE START
-mysql_select_db($dbname);
-$queryUA = mysql_query("SELECT user_agent, count(user_agent) as count FROM sip_capture  WHERE (date > DATE_SUB( NOW(), INTERVAL 12 HOUR) ) GROUP BY user_agent");
+// determine cache status
+if (file_exists(PCAPDIR."homer_sipUAS.dat")) {
+        $expiretime=3600; // default ttl 1h
+        $fileTypes="homer_sipALL.dat";
+        foreach (glob( PCAPDIR . $fileTypes) as $tmpfile) {
+                if ( (time() - (filectime($tmpfile)) ) > ($expiretime))
+                { $cache = 0; } else { $cache = 1; }
+        }
+} else {  $cache = 0; }
 
-$rows = array();
+// check resulting status and do stuff
 
-$time = $date = date('H');
+if ($cache == 0 ) {
 
-// GET USER-AGENTS BREAKDOWN
-$row = mysql_fetch_assoc($queryUA);
-do{
-//$sipUA[] = '{ name: \''.$row['user_agent'].'\', y: '.$row['count'].'}';
-$sipUA[] = '{ name: \''.substr($row['user_agent'], 0, 40).'\', y: '.$row['count'].'}';
- } while($row = mysql_fetch_assoc($queryUA));
+// DB CODE 
+	mysql_select_db($dbname);
+	$queryUA = mysql_query("SELECT user_agent, count(user_agent) as count FROM sip_capture  WHERE (date > DATE_SUB( NOW(), INTERVAL 12 HOUR) ) GROUP BY user_agent");
+	
+	$rows = array();
+	
+	$time = $date = date('H');
+	
+	// GET USER-AGENTS BREAKDOWN
+	$row = mysql_fetch_assoc($queryUA);
+	do{
+	//$sipUA[] = '{ name: \''.$row['user_agent'].'\', y: '.$row['count'].'}';
+	$sipUA[] = '{ name: \''.substr($row['user_agent'], 0, 40).'\', y: '.$row['count'].'}';
+	 } while($row = mysql_fetch_assoc($queryUA));
+	file_put_contents(PCAPDIR."homer_sipUAS.dat",implode(",",$sipUA));
+
+	
+	} else {
+
+	
+	// use cached results
+	$cafile = file_get_contents(PCAPDIR."homer_sipUAS.dat");
+	$sipUA = explode(",",trim($cafile));
+	
+}
 
 ?>
 
