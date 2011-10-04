@@ -26,7 +26,7 @@ define(HOMER_TABLE, "sip_capture");
 */
 
 define(PCAPDIR,"/var/www/html/webhomer/tmp/");
-define(WEBPCAPLOC,"/webhomer2/tmp/");
+define(WEBPCAPLOC,"/webhomer/tmp/");
 define(TEXT2PCAP,"/usr/sbin/text2pcap");
 define(MERGECAP,"/usr/sbin/mergecap");
 define(COLORTAG, 0); /* color based on callid, fromtag */
