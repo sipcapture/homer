@@ -397,13 +397,13 @@ $(document).ready(function(){
     <input type="button" value="+" onclick="$('#image').zoomable('zoomIn')" title="Zoom in" />
     <input type="button" value="-" onclick="$('#image').zoomable('zoomOut')" title="Zoom out" />
     <input type="button" value="Reset" onclick="$('#image').zoomable('reset')" />
-    <input type="button" value="Save PNG" onclick="window.open('utils.php?task=saveit&cflow=<?echo $file?>');" />
+    <input type="button" value="Save PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');" />
     <input type="button" value="Save PCAP" onclick="alert('disabled');" />
 
 </p>
 <center>
 <div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
-<img border='0' src='<?echo WEBPCAPLOC.$file?>' usemap='#map' id="image">
+<img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image">
 <map name='map' id='map'>
 <?php
 foreach($click as $cds) {
