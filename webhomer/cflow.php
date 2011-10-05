@@ -117,6 +117,12 @@ if($db->dbconnect_homer(NULL)) {
                         ."\n WHERE ".$where." limit 100";
 		
                 $rows = $db->loadObjectList($query);
+                
+                $querytd = "SELECT TIMEDIFF(max(date),min(date)) as tot_dur "
+                        ."\n FROM ".HOMER_TABLE
+                        ."\n WHERE ".$where;
+                $totdurs = $db->loadObjectList($querytd);
+                $totdur = mysql_real_escape_string($totdurs[0]->tot_dur);
         }
 
 
@@ -401,6 +407,7 @@ $(document).ready(function(){
     <input type="button" value="Save PCAP" onclick="alert('disabled');" />
 
 </p>
+<?php echo "Total Duration: $totdur"; ?>
 <center>
 <div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
 <img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image">
