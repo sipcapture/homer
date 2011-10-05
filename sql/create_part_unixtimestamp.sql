@@ -1,5 +1,5 @@
 /* 
- * only for MYSQL >= 5.1.58
+ * only for MYSQL >= 5.1.43
 */
 
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
