@@ -1,3 +1,8 @@
+/* 
+ * only for MYSQL >= 5.1 && < 5.1.43
+ * http://dev.mysql.com/doc/refman/5.1/en/news-5-1-43.html
+*/
+
 CREATE TABLE `sip_capture` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
@@ -60,8 +65,4 @@ PARTITION p20110901 VALUES LESS THAN (734747) ENGINE = MyISAM,
 PARTITION p20110902 VALUES LESS THAN (734748) ENGINE = MyISAM,
 PARTITION pmax VALUES LESS THAN (MAXVALUE)
 );
-
-/* alter table homer_capture add partition (PARTITION p20110903 VALUES LESS THAN (734749) ENGINE = MyISAM); */
-/* if your mysql < 5.5 drop maxvalue partition */
-/* alter table sip_capture drop partition pmax; */
 
