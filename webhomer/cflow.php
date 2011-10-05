@@ -280,7 +280,8 @@ foreach($localdata as $data) {
   $stamp=($stamp * 1000000 + $data->micro_ts);
     
   $text=$stamp;
-  $tstamp =  date("Y-m-d H:i:s",$data->micro_ts / 1000000);
+  date_default_timezone_set(CFLOW_TIMEZONE);
+  $tstamp =  date("Y-m-d H:i:s T",$data->micro_ts / 1000000);
 
   $fromip = $data->source_ip;
   $fromport = $data->source_port;
