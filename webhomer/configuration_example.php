@@ -32,5 +32,6 @@ define(MERGECAP,"/usr/sbin/mergecap");
 define(COLORTAG, 0); /* color based on callid, fromtag */
 define(MODULES, 0); /* display modules in homepage flag */
 define(CFLOW_CLEANUP, 1); /* Automatic Cleanup of old Cflow images */
+define(CFLOW_TIMEZONE, "America/Los_Angeles"); /* Timezone that will display in Call Flow Ladder Diagram */
 
 ?>
