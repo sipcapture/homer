@@ -293,12 +293,12 @@ foreach($localdata as $data) {
   if($COORD[$fromip] > $COORD[$toip]) 
   {
         $crd = $COORD[$fromip] - $host_step + 10;
-        $d=1;
+        $d = -1;
   }
   else 
   {
       $crd = $COORD[$toip] - $host_step + 10;
-      $d = -1;
+      $d = 1;
   }
   
   $max_y = $arrow_y1;
