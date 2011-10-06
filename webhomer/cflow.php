@@ -291,14 +291,14 @@ foreach($localdata as $data) {
 
   //Direction
   if($COORD[$fromip] > $COORD[$toip]) 
-  {
-    $crd = $COORD[$toip] - $host_step + 10;      
-    $d = 1;
+  {    
+    $crd = $COORD[$fromip] - $host_step + 10;
+    $d = -1;
   }
   else 
   {
-    $crd = $COORD[$fromip] - $host_step + 10;
-    $d = -1;
+    $crd = $COORD[$toip] - $host_step + 10;          
+    $d = 1;
   }
    
   $max_y = $arrow_y1;
@@ -345,20 +345,20 @@ foreach($localdata as $data) {
   
   //Arrow
   imagelinethick($im, $COORD[$fromip], $arrow_y1, $COORD[$toip], $arrow_y1, $color['black'], 1);
-  arrow($im, $color['blue'], $COORD[$toip], $arrow_y1, $d);
+  arrow($im, $color['blue'], $COORD[$fromip], $arrow_y1, $d);
   
   //Port
   if($d == 1) { 
-       $tportx = $COORD[$toip] - 40;
-       $fportx = $COORD[$fromip] + 10;
-       $portf = $toport;
-       $portt = $fromport;
-  }
-  else {
        $tportx = $COORD[$toip] + 10;
        $fportx = $COORD[$fromip] - 40;    
        $portf = $fromport;
        $portt = $toport;
+  }
+  else {
+       $tportx = $COORD[$toip] - 40;
+       $fportx = $COORD[$fromip] + 10;
+       $portf = $toport;
+       $portt = $fromport;       
   }
     
   imagettftext ( $im, $fontSize, 0, $tportx, $arrow_y1 + 6, $color['gray3'], $fontFace, $portf);
