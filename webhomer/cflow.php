@@ -404,11 +404,10 @@ $(document).ready(function(){
     <input type="button" value="+" onclick="$('#image').zoomable('zoomIn')" title="Zoom in" />
     <input type="button" value="-" onclick="$('#image').zoomable('zoomOut')" title="Zoom out" />
     <input type="button" value="Reset" onclick="$('#image').zoomable('reset')" />
-    <input type="button" value="Save PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');" />
-    <input type="button" value="Save PCAP" onclick="alert('disabled');" />
-
+    <input type="button" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');" />
+    <input type="button" value="PCAP" onclick="alert('disabled');" />
+    <input type="button" value="Time Span: <?php echo $totdur ?>" />
 </p>
-<?php echo "Total Duration: $totdur"; ?>
 <center>
 <div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
 <img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image">
