@@ -291,16 +291,30 @@ foreach($localdata as $data) {
 
   //Direction
   if($COORD[$fromip] > $COORD[$toip]) 
-  {    
-    $crd = $COORD[$fromip] - $host_step + 10;
-    $d = -1;
+  {
+	 if (CFLOW_DIRECTION == 0 ) { 
+				        $crd = $COORD[$fromip] - $host_step + 10;
+					$d = 1; 
+
+				    } else { 
+
+				        $crd = $COORD[$fromip] - $host_step + 10;
+					$d = -1; 
+				    }
   }
   else 
   {
-    $crd = $COORD[$toip] - $host_step + 10;          
-    $d = 1;
+	 if (CFLOW_DIRECTION == 0 ) { 
+				        $crd = $COORD[$toip] - $host_step + 10;
+					$d = -1; 
+
+				    } else { 
+
+					$crd = $COORD[$toip] - $host_step + 10;
+					$d = 1; 
+				    }
   }
-   
+  
   $max_y = $arrow_y1;
       
   //print "HREN:  $crd, $arrow_y1<br>\n";
@@ -345,20 +359,36 @@ foreach($localdata as $data) {
   
   //Arrow
   imagelinethick($im, $COORD[$fromip], $arrow_y1, $COORD[$toip], $arrow_y1, $color['black'], 1);
+
+  if (CFLOW_DIRECTION == 0 ) {
+  arrow($im, $color['blue'], $COORD[$toip], $arrow_y1, $d);
+  			    } else {
   arrow($im, $color['blue'], $COORD[$fromip], $arrow_y1, $d);
-  
+
+			}
   //Port
   if($d == 1) { 
-       $tportx = $COORD[$toip] + 10;
-       $fportx = $COORD[$fromip] - 40;    
-       $portf = $fromport;
-       $portt = $toport;
+     if (CFLOW_DIRECTION == 0 ) {
+        $tportx = $COORD[$toip] - 40;
+        $fportx = $COORD[$fromip] + 10;
+	} else {
+	$tportx = $COORD[$toip] + 10;
+        $fportx = $COORD[$fromip] - 40;
+	}
+       $portf = $toport;
+       $portt = $fromport;
   }
   else {
-       $tportx = $COORD[$toip] - 40;
-       $fportx = $COORD[$fromip] + 10;
-       $portf = $toport;
-       $portt = $fromport;       
+     if (CFLOW_DIRECTION == 0 ) {
+	       $tportx = $COORD[$toip] + 10;
+	       $fportx = $COORD[$fromip] - 40;    
+	} else {
+	       $tportx = $COORD[$toip] - 40;
+               $fportx = $COORD[$fromip] + 10;
+	}
+	       $portf = $fromport;
+	       $portt = $toport;
+
   }
     
   imagettftext ( $im, $fontSize, 0, $tportx, $arrow_y1 + 6, $color['gray3'], $fontFace, $portf);
@@ -425,3 +455,4 @@ foreach($click as $cds) {
 </center>
 </body>
 </html>
+
