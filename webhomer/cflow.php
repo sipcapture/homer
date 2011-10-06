@@ -292,15 +292,15 @@ foreach($localdata as $data) {
   //Direction
   if($COORD[$fromip] > $COORD[$toip]) 
   {
-        $crd = $COORD[$fromip] - $host_step + 10;
-        $d = -1;
+    $crd = $COORD[$toip] - $host_step + 10;      
+    $d = 1;
   }
   else 
   {
-      $crd = $COORD[$toip] - $host_step + 10;
-      $d = 1;
+    $crd = $COORD[$fromip] - $host_step + 10;
+    $d = -1;
   }
-  
+   
   $max_y = $arrow_y1;
       
   //print "HREN:  $crd, $arrow_y1<br>\n";
