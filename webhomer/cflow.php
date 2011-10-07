@@ -292,13 +292,27 @@ foreach($localdata as $data) {
   //Direction
   if($COORD[$fromip] > $COORD[$toip]) 
   {
-        $crd = $COORD[$fromip] - $host_step + 10;
-        $d=1;
+	 if (CFLOW_DIRECTION == 0 ) { 
+				        $crd = $COORD[$fromip] - $host_step + 10;
+					$d = 1; 
+
+				    } else { 
+
+				        $crd = $COORD[$fromip] - $host_step + 10;
+					$d = -1; 
+				    }
   }
   else 
   {
-      $crd = $COORD[$toip] - $host_step + 10;
-      $d = -1;
+	 if (CFLOW_DIRECTION == 0 ) { 
+				        $crd = $COORD[$toip] - $host_step + 10;
+					$d = -1; 
+
+				    } else { 
+
+					$crd = $COORD[$toip] - $host_step + 10;
+					$d = 1; 
+				    }
   }
   
   $max_y = $arrow_y1;
@@ -345,20 +359,36 @@ foreach($localdata as $data) {
   
   //Arrow
   imagelinethick($im, $COORD[$fromip], $arrow_y1, $COORD[$toip], $arrow_y1, $color['black'], 1);
+
+  if (CFLOW_DIRECTION == 0 ) {
   arrow($im, $color['blue'], $COORD[$toip], $arrow_y1, $d);
-  
+  			    } else {
+  arrow($im, $color['blue'], $COORD[$fromip], $arrow_y1, $d);
+
+			}
   //Port
   if($d == 1) { 
-       $tportx = $COORD[$toip] - 40;
-       $fportx = $COORD[$fromip] + 10;
+     if (CFLOW_DIRECTION == 0 ) {
+        $tportx = $COORD[$toip] - 40;
+        $fportx = $COORD[$fromip] + 10;
+	} else {
+	$tportx = $COORD[$toip] + 10;
+        $fportx = $COORD[$fromip] - 40;
+	}
        $portf = $toport;
        $portt = $fromport;
   }
   else {
-       $tportx = $COORD[$toip] + 10;
-       $fportx = $COORD[$fromip] - 40;    
-       $portf = $fromport;
-       $portt = $toport;
+     if (CFLOW_DIRECTION == 0 ) {
+	       $tportx = $COORD[$toip] + 10;
+	       $fportx = $COORD[$fromip] - 40;    
+	} else {
+	       $tportx = $COORD[$toip] - 40;
+               $fportx = $COORD[$fromip] + 10;
+	}
+	       $portf = $fromport;
+	       $portt = $toport;
+
   }
     
   imagettftext ( $im, $fontSize, 0, $tportx, $arrow_y1 + 6, $color['gray3'], $fontFace, $portf);
@@ -400,13 +430,12 @@ $(document).ready(function(){
 </head>
 
 <p>
-
-    <input type="button" value="+" onclick="$('#image').zoomable('zoomIn')" title="Zoom in" />
-    <input type="button" value="-" onclick="$('#image').zoomable('zoomOut')" title="Zoom out" />
-    <input type="button" value="Reset" onclick="$('#image').zoomable('reset')" />
-    <input type="button" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');" />
-    <input type="button" value="PCAP" onclick="alert('disabled');" />
-    <input type="button" value="Time Span: <?php echo $totdur ?>" />
+    <input type="button" value="+" onclick="$('#image').zoomable('zoomIn')" title="Zoom in"  style="background: transparent;" />
+    <input type="button" value="-" onclick="$('#image').zoomable('zoomOut')" title="Zoom out"  style="background: transparent;" />
+    <input type="button" value="Reset" onclick="$('#image').zoomable('reset')"  style="background: transparent;" />
+    <input type="button" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');" style="background: transparent;" />
+    <input type="button" value="PCAP" onclick="window.open('pcap.php?task=cid=<?php echo $file?>');" style="background: transparent;"/>
+    <input type="button" value="Time Span: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
 </p>
 <center>
 <div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
@@ -421,7 +450,9 @@ foreach($click as $cds) {
 
 ?>
 </map>
+</center>
 </div>
 </center>
 </body>
 </html>
+
