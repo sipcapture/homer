@@ -260,7 +260,7 @@ foreach($rows as $row) {
 }
 
 
-$pcapfile="test.pcap";
+$pcapfile="HOMER_$cid.pcap";
 $fsize=strlen($buf);;
 header("Content-type: application/octet-stream");
 header("Content-Disposition: filename=\"".$pcapfile."\"");
