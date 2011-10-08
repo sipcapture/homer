@@ -17,6 +17,7 @@ body {
     background-repeat:no-repeat;
     background-size: 150%;
     height:100%;
+    z-Index: -1;
 }
 
 fieldset {   
