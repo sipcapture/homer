@@ -224,7 +224,7 @@ foreach($rows as $row) {
 
 	//Calculate UDP checksum
 	$pseudo = pack("nnnna*", $udp_hdr->src_port,$udp_hdr->dst_port, $udp_hdr->length, $udp_hdr->checksum, $data);
-	$udp_hdr->checksum = &checksum($udp_packet);
+	$udp_hdr->checksum = &checksum($pseudo);
 
 	//IPHEADER
 
