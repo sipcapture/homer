@@ -165,7 +165,7 @@ foreach($rows as $row) {
 	//Pcap record
 	$pcaprec_hdr = new pcaprec_hdr();
 	$pcaprec_hdr->ts_sec = intval($row->micro_ts / 1000000);  //4
-	$pcaprec_hdr->ts_usec = $row->micro_ts % 1000000; //4
+  $pcaprec_hdr->ts_usec = $row->micro_ts - ($pcaprec_hdr->ts_sec*1000000); //4   
 	$pcaprec_hdr->incl_len = $size->total; //4
 	$pcaprec_hdr->orig_len = $size->total; //4
 
