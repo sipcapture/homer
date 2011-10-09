@@ -281,7 +281,15 @@ foreach($localdata as $data) {
     
   $text=$stamp;
   date_default_timezone_set(CFLOW_TIMEZONE);
-  $tstamp =  date("Y-m-d H:i:s T",$data->micro_ts / 1000000);
+  //$tstamp =  date("Y-m-d H:i:s T",$data->micro_ts / 1000000);
+  $timestamp = floor($data->micro_ts / 1000000);
+  $tsms = round( ($data->micro_ts / 1000 ) - ($timestamp * 1000));
+
+  //$tstamp =  date("Y-m-d H:i:s.".$tsms." T",$data->micro_ts / 1000000);
+  $timestamp = floor($data->micro_ts / 1000000);
+  $milliseconds = round( $data->micro_ts  - ($timestamp * 1000000) );
+  $tstamp =  date("Y-m-d H:i:s.".$milliseconds." T",$data->micro_ts / 1000000);
+
 
   $fromip = $data->source_ip;
   $fromport = $data->source_port;
