@@ -27,8 +27,6 @@ define(HOMER_TABLE, "sip_capture");
 
 define(PCAPDIR,"/var/www/html/webhomer/tmp/");
 define(WEBPCAPLOC,"/webhomer/tmp/");
-define(TEXT2PCAP,"/usr/sbin/text2pcap");
-define(MERGECAP,"/usr/sbin/mergecap");
 define(COLORTAG, 0); /* color based on callid, fromtag */
 define(MODULES, 0); /* display modules in homepage flag */
 define(CFLOW_CLEANUP, 1); /* Automatic Cleanup of old Cflow images */
