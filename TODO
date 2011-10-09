@@ -1,3 +1,5 @@
 1. Replace callflow [COMPLETED]
 2. Export to PCAP file on select [IN PROGRESS]
-3. Fix partitioning index
+3. Callflow in search criterea.
+4. Statistic must use separate tables.
+5. Fix partitioning index
