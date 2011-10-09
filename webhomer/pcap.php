@@ -6,7 +6,7 @@
  *
 */
 
-// cflow.php
+// pcap.php
 
 include("class.db.php");
 $db = new homer();
@@ -44,7 +44,6 @@ class ethernet_header {
 	public $type;	// 16 bit 
 }
 
-// ipv4 packet - 20 bytes
 class ipv4_packet {
 	public $ver_len;	// 4 bits
 	public $tos;		// 8 bits
@@ -59,7 +58,6 @@ class ipv4_packet {
 	public $options;
 }
 
-// udp packet - 8 bytes
 class udp_header {
        public $src_port; //16 bits
        public $dst_port;  //16 bits
@@ -67,42 +65,12 @@ class udp_header {
        public $checksum;  //16 bits
 }
 
-// tcp header - 20 bytes (min)
-class tcp_header {
-	// for pseudo header
-	public $src;	// 32 bits
-	public $dest;	// 32 bits
-	//
-	public $src_port;
-	public $dest_port;
-	public $seq;
-	public $ack;
-	public $data_offset;
-	// Flags
-	public $flags;	
-	public $fcwr;
-	public $fece;
-	public $furg;
-	public $fack;
-	public $fpsh;
-	public $frst;
-	public $fsyn;
-	public $ffin;
-	//
-	public $window;
-	public $checksum;
-	public $checksum_calc;
-	public $urg;
-	public $options;
-	public $data = '';
-}
-
 class size_hdr {
       public $ethernet=14;
       public $ip = 20;
       public $ip6 = 20;
       public $udp = 8;
-      public $tcp = 8;
+      public $tcp = 20;
       public $data = 0;
       public $total = 0;
 }
@@ -121,8 +89,6 @@ function checksum($data)
 
 $size = new size_hdr();
 
-
-
 //Write PCAP HEADER 
 $pcaphdr = new pcap_hdr();
 $pcaphdr->magic = 2712847316;
@@ -133,13 +99,11 @@ $pcaphdr->sigfigs = 0;
 $pcaphdr->snaplen = 102400;
 $pcaphdr->network = 1;
 
-#$fp = fopen('/tmp/data.pcap', 'w');
 $buf="";
 $pcap_packet = pack("lssllll", $pcaphdr->magic, $pcaphdr->version_major, 
             $pcaphdr->version_minor, $pcaphdr->thiszone, 
             $pcaphdr->sigfigs, $pcaphdr->snaplen, $pcaphdr->network);
 
-#fputs($fp,$pcap_packet,strlen($pcap_packet));
 $buf=$pcap_packet;
 
 //Ethernet header
@@ -208,18 +172,16 @@ foreach($rows as $row) {
 	$pcaprec_packet = pack("llll", $pcaprec_hdr->ts_sec, $pcaprec_hdr->ts_usec, 
                        $pcaprec_hdr->incl_len, $pcaprec_hdr->orig_len);
 
-	#fputs($fp,$pcaprec_packet, strlen($pcaprec_packet));
 	$buf.=$pcaprec_packet;
 
 	//ethernet header
-	#fputs($fp,$ethernet, strlen($ethernet));
 	$buf.=$ethernet;
 
 	//UDP
 	$udp_hdr = new udp_header();
 	$udp_hdr->src_port = $row->source_port;
 	$udp_hdr->dst_port = $row->destination_port;
-	$udp_hdr->length = $size->udp; 
+	$udp_hdr->length = $size->udp + $size->data; 
 	$udp_hdr->checksum = 0;
 
 	//Calculate UDP checksum
@@ -254,8 +216,7 @@ foreach($rows as $row) {
         	    $ipv4_hdr->fl_fr, $ipv4_hdr->ttl,$ipv4_hdr->proto,$ipv4_hdr->checksum, $ipv4_hdr->src_ip, $ipv4_hdr->dst_ip,
 	            $udp_hdr->src_port,$udp_hdr->dst_port, $udp_hdr->length, $udp_hdr->checksum, $data);
 
-	//IP/UDP and DATA header
-	#fputs($fp, $pkt, strlen($pkt));
+	//IP/UDP and DATA header	
 	$buf.=$pkt;
 }
 
@@ -265,10 +226,10 @@ $fsize=strlen($buf);;
 header("Content-type: application/octet-stream");
 header("Content-Disposition: filename=\"".$pcapfile."\"");
 header("Content-length: $fsize");
-header("Cache-control: private"); //use this to open files directly
+header("Cache-control: private"); 
 echo $buf;
 exit;
-#fclose($fp);
+
 
 
 
