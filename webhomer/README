@@ -1,11 +1,9 @@
 WEBHOMER is a simple webinterface to Homer capturing system.
 
-It works without joomla, and requires php5.2, pecl/json
+It requires php5.2, pecl/json, php-gd extensions
 
 
 Before Using:
-
-- install a new version of text2pcap using this patch: https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=5650
 
 - create a mysqldb (homer_users.sql)
 
@@ -18,6 +16,6 @@ Before Using:
 
 
 
-All question and comments please send to alexandr.dubovikov@gmail.com
+All question and comments please send to alexandr.dubovikov@gmail.com or create an issue/ticket
 
 
