@@ -17,12 +17,6 @@ define(HOMER_DB, "homer_db");
 define(HOMER_TABLE, "sip_capture");
 
 /* Settings 
-*  Be shure, that you have the last version of text2pcap
-*  text2pcap shall support -4 -6 IP headers
-*
-*  Text2pcap: https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=5650
-*  Callflow: http://sourceforge.net/projects/callflow/
-*
 */
 
 define(PCAPDIR,"/var/www/html/webhomer/tmp/");
