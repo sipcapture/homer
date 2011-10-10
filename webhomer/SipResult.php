@@ -70,8 +70,8 @@ class SipResult
   {
       //Corellation for 3000 nanoseconds
       //if($row->tnode == 2) (int) $row->micro_ts - (int) 4000;
-      $seconds = $this->micro_ts / 1000000;                                                                                      
-      $ms = $this->micro_ts % 1000000;                                                                                      
+      $seconds = intval($this->micro_ts / 1000000);  //4
+      $ms = $this->micro_ts - ($seconds*1000000); //4      
       //return date("H:i:s", strtotime($this->date));  
       return date("H:i:s", $seconds).".".$ms;
       //return $this->date;
