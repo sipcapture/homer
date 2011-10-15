@@ -86,6 +86,18 @@ function liveSearch() {
 
 	$searchterm = getVar('term', NULL, '', 'string');
 	$searchfield = getVar('field', NULL, '', 'string');
+  	// timedate limit
+        $search['date'] = $timeparam->date = getVar('date', '', '', 'string');
+        $search['from_time'] = $timeparam->from_time = getVar('from_time', NULL, '', 'string');
+        $search['to_time'] = $timeparam->to_time = getVar('to_time', NULL, '', 'string');
+
+        $ft = date("Y-m-d H:i:s", strtotime($timeparam->date." ".$timeparam->from_time));
+        $tt = date("Y-m-d H:i:s", strtotime($timeparam->date." ".$timeparam->to_time));
+        $fhour = date("H", strtotime($timeparam->date." ".$timeparam->from_time));
+        $thour = date("H", strtotime($timeparam->date." ".$timeparam->to_time));
+        $j=$thour+1;
+
+        $where = "(`date` >= '$ft' AND `date` <= '$tt' )";
 
 	if ($searchterm == NULL) {exit;}
 	if ($searchfield == NULL) {$searchfield = 'from_user';}
@@ -100,7 +112,7 @@ function liveSearch() {
 
                 $query = "SELECT distinct ".$searchfield
                         ."\n FROM ".HOMER_TABLE
-                        ."\n WHERE ".$searchfield." like '%".$searchterm."%' limit 5";
+                        ."\n WHERE ".$searchfield." like '%".$searchterm."%' and ".$where." limit 5";
 
                 $rows = $db->loadObjectList($query);
         }

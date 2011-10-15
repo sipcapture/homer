@@ -114,12 +114,12 @@ var section = "demos/dialog";
 		                $('.timepicker2').timeEntry({show24Hours: true, showSeconds: true}); 
 		                
 				$('#from_user').autocomplete({
-                                source: "utils.php?task=livesearch&field=from_user",
+                                source: "utils.php?task=livesearch&field=from_user&date="+$('#date').val()+"&from_time="+$('#from_time').val()+"&to_time="+$('#to_time').val(),
                                 minLength: 3,
 	                        });
 	                        
         	                $('#to_user').autocomplete({
-                                source: "utils.php?task=livesearch&field=to_user",
+                                source: "utils.php?task=livesearch&field=to_user&date="+$('#date').val()+"&from_time="+$('#from_time').val()+"&to_time="+$('#to_time').val(),
                                 minLength: 3,
                                 select: function(event, ui) {
                                         $('#to_user').val(ui.item.to_user);
