@@ -98,7 +98,7 @@ $cid2 = getVar('cid2', NULL, 'get', 'string');
 
 //Make image
 $where = "( callid = '".$cid."'";
-if(isset($cid2)) { $where .= " OR callid='".$cid2."')"; } else {  $where .= ") ";} ;
+if(isset($cid2)) { $where .= " OR callid='".$cid2."')"; } else {  $where .= ") ";} 
 
 //Crop Search Parameters, if any
         $flow_date = getVar('date', NULL, 'get', 'string');
@@ -109,7 +109,7 @@ if(isset($cid2)) { $where .= " OR callid='".$cid2."')"; } else {  $where .= ") "
         if (isset($flow_date, $flow_from_time, $flow_to_time))
         {
         	$ft = date("Y-m-d H:i:s", strtotime($flow_date." ".$flow_from_time));
-		if (isset($flow_to_date) { $flow_date = $flow_to_date; } 
+		if (isset($flow_to_date)) { $flow_date = $flow_to_date; } 
         	$tt = date("Y-m-d H:i:s", strtotime($flow_date." ".$flow_to_time));
         	$timewhere = "(`date` >= '$ft' AND `date` <= '$tt' )";
 	   // Hook to query
