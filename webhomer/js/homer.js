@@ -137,11 +137,15 @@ function popMessage(id) {
 }
 
 
-function showCallFlow(id,table,tnode,location,unique, tag, callid, contx) {
+function showCallFlow(id,table,tnode,location,unique, tag, callid, date, ft, tt) {
 
   if ( callid.match(/-0$/) )  { callid = callid.replace(/-0$/,""); }
 
 	  var url = "cflow.php?cid="+callid+"&cid2="+callid+"-0";
+
+	  if (date != undefined) {
+            url += "&date="+date+"&from_time="+ft+"&to_time="+tt;
+          }
 
 			var cflow = $('<div id="cflow"></div>')
                         .load(url, '', function(response, status, xhr) {
