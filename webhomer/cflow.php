@@ -457,7 +457,14 @@ $(document).ready(function(){
     <input type="button" value="Reset" onclick="$('#image').zoomable('reset')"  style="background: transparent;" />
     <input type="button" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');" style="background: transparent;" />
     <input type="button" value="PCAP" onclick="window.open('pcap.php?cid=<?php echo $cid; if(isset($cid2)) echo "&cid2=".$cid2; ?>');" style="background: transparent;"/>
+
+<?php  if (isset($flow_date)) { ?>
+    <input type="button" value="Partial: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
+    <input type="button" value="FULL" style="opacity: 1; background: transparent;" onclick="javascript:showCallFlow('','','','','',1,'<?php echo $cid ?>');"/>
+<?php } else {  ?>
     <input type="button" value="Time Span: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
+<?php   }       ?>
+
 </p>
 <center>
 <div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
