@@ -145,8 +145,9 @@ class SipResult
   {
 
    $search = json_decode($_SESSION['homersearch']);
+   $searchdate = date("Y-m-d", strtotime($search->date));
       return "<a alt='callflow' href=\"javascript:showCallFlow('".$this->id."','".$this->loctable."','".$this->tnode."','".
-              implode(',',$this->location)."','".$this->unique."', 1,'".$this->callid."','".$search->date."','".$search->from_time."','".$search->to_time."');\">".$this->callid."</a>";
+              implode(',',$this->location)."','".$this->unique."', 1,'".$this->callid."','".$searchdate."','".$search->from_time."','".$search->to_time."');\">".$this->callid."</a>";
       //return $this->callid;
   }  
   
