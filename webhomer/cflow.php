@@ -435,8 +435,10 @@ imagedestroy($im);
 <link href="styles/core_styles.css" rel="stylesheet" type="text/css" />
 <link href="styles/form.css" rel="stylesheet" type="text/css" />
 <link type="text/css" href="styles/jquery-ui-1.8.4.custom.css" rel="stylesheet" />
+<!--
 <script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
 <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
+-->
 <script src="js/jquery.zoomable.js" type="text/javascript"></script>                                                    
 <script language="javascript">
 $(document).ready(function(){
