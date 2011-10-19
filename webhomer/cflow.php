@@ -459,8 +459,8 @@ $(document).ready(function(){
     <input type="button" value="PCAP" onclick="window.open('pcap.php?cid=<?php echo $cid; if(isset($cid2)) echo "&cid2=".$cid2; ?>');" style="background: transparent;"/>
 
 <?php  if (isset($flow_date)) { ?>
-    <input type="button" value="Partial: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
-    <input type="button" value="FULL" style="opacity: 1; background: transparent;" onclick="javascript:showCallFlow('','','','','',1,'<?php echo $cid ?>');"/>
+    <input type="button" value="Time Span: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
+    <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().load('cflow.php?cid=<?php echo $cid ?>&cid2=<?php echo $cid ?>-0');"/>
 <?php } else {  ?>
     <input type="button" value="Time Span: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
 <?php   }       ?>
