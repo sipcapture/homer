@@ -1,11 +1,11 @@
 
-#define VERSION "0.6"
+#define VERSION "0.7"
 #define DEFAULT_CONFIG "/usr/local/etc/captagent/captagent.conf"
 #define DEFAULT_PIDFILE  "/var/run/captagent.pid"
 #define DEFAULT_PORT "5060"
 
 /* filter to extract SIP packets */
-char filter_expr[255];
+char filter_expr[1024];
 
 /* Ethernet / IP / UDP header IPv4 */
 const int udp_payload_offset = 14+20+8;

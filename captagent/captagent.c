@@ -232,7 +232,7 @@ error:
 
 void usage(int8_t e) {
     printf("usage: captagent <-mvhn> <-d dev> <-s host> <-p port>\n"
-           "             <-P pid file> <-r port|portrange> <-c config file>\n"
+           "             <-P pid file> <-r port|portrange> <-f filter file>\n"
            "   -h  is help/usage\n"
            "   -v  is version information\n"
            "   -m  is don't go into promiscuous mode\n"
@@ -242,6 +242,7 @@ void usage(int8_t e) {
            "   -p  is use specified port of capture server\n"
            "   -r  is open specified capturing port or portrange instead of the default (%s)\n"
            "   -P  is open specified pid file instead of the default (%s)\n"
+           "   -f  is the file with specific pcap filter\n"
            "", DEFAULT_PORT, DEFAULT_PIDFILE);
 	exit(e);
 }
@@ -337,12 +338,16 @@ int main(int argc,char **argv)
         struct addrinfo *ai, hints[1] = {{ 0 }};
         char *dev=NULL, *portrange=DEFAULT_PORT, *capt_host = NULL;
         char *capt_port = NULL, *usedev = NULL;
+        char* filter_file;
+	char filter_string[800] = {0};      
+        FILE *filter_stream;  
 	uint16_t snaplen = 65535, promisc = 1, to = 100;
 	pid_t creator_pid = (pid_t) -1;
 
 	creator_pid = getpid();
+
 	
-	while((c=getopt(argc, argv, "mvhnp:s:d:c:P:r:"))!=EOF) {
+	while((c=getopt(argc, argv, "mvhnp:s:d:c:P:r:f:"))!=EOF) {
                 switch(c) {
                         case 'd':
                                         usedev = optarg;
@@ -372,6 +377,10 @@ int main(int argc,char **argv)
                         case 'P':
                                         pid_file = optarg;
                                         break;
+
+                        case 'f':
+                                        filter_file = optarg;
+                                        break;                                        
 	                default:
                                         abort();
                 }
@@ -387,6 +396,15 @@ int main(int argc,char **argv)
         if (!dev) {
             perror(errbuf);
             exit(-1);
+        }
+
+        if(filter_file!=0) {
+		filter_stream = fopen(filter_file, "r");
+		if (!filter_stream  || !fgets(filter_string, sizeof(filter_string)-1, filter_stream)){
+			fprintf(stderr, "Can't get filter from %s (%s)\n", filter_file, strerror(errno));
+			exit(1);
+		}		
+		fclose(filter_stream);
         }
 
 	if(daemonize(nofork) != 0){
@@ -428,7 +446,7 @@ int main(int argc,char **argv)
         }
 
         /* create filter string */
-        snprintf(filter_expr, 255, "udp port%s %s and not dst host %s", strchr(portrange,'-') ? "range": "" , portrange, capt_host);
+        snprintf(filter_expr, 1024, "udp port%s %s and not dst host %s %s", strchr(portrange,'-') ? "range": "" , portrange, capt_host, filter_string);
 
         /* compile filter expression (global constant, see above) */
         if (pcap_compile(sniffer, &filter, filter_expr, 0, 0) == -1) {
