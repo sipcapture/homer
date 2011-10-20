@@ -74,7 +74,7 @@ class SipSearchService implements ISipService
 
      $location = $homer->location;
 
-     $skip_keys = array('location','max_records','date', 'from_time', 'to_time');
+     $skip_keys = array('location','max_records','date', 'from_time', 'to_time', 'unique');
      $ft = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->from_time));
      $tt = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->date." ".$homer->from_time));
@@ -89,7 +89,7 @@ class SipSearchService implements ISipService
       $s=0;
      foreach($homer as $key=>$value) {
 
-	if(in_array($key, $skip_keys)) continue;
+	   if(in_array($key, $skip_keys)) continue;
 
 	if(!isset($callwhere)) $callwhere = "(";
 	if($key == "callid" && $callid_aleg) $callwhere.=" (";
@@ -165,7 +165,7 @@ class SipSearchService implements ISipService
 
      $location = $homer->location;
 
-     $skip_keys = array('location','max_records','date', 'from_time', 'to_time');
+     $skip_keys = array('location','max_records','date', 'from_time', 'to_time','unique');
      $ft = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->from_time));
      $tt = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->date." ".$homer->from_time));
