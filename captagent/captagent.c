@@ -61,6 +61,7 @@
 int sock;
 char* pid_file = DEFAULT_PIDFILE; 
 int captid = 0;
+int hepversion = 1;
 
 /* Callback function that is passed to pcap_loop() */ 
 void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *packet) 
@@ -72,6 +73,7 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
         struct udphdr *udph;
         void* buffer;
         struct hep_hdr hdr;
+        struct hep_timehdr hep_time;
         struct hep_iphdr hep_ipheader;
         unsigned int len=0, iphdr_len=0, buflen=0, ipversion;
         struct timeval tvb;
@@ -174,22 +176,24 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
         udph = (struct udphdr*)(packet + iphdr_len);              
 
 	/* Version && proto */
-        hdr.hp_v = 1;
+        hdr.hp_v = hepversion;
         hdr.hp_p = IPPROTO_UDP;	
         hdr.hp_sport = udph->uh_sport; /* destination port */
         hdr.hp_dport = udph->uh_dport; /* source port */
 
-#ifdef USE_HEP2
-        hdr.hp_v = 2;
-	hdr.tv_sec = tvb.tv_sec;          
-	hdr.tv_usec = tvb.tv_usec;
-	hdr.captid = captid;
-#endif
-
         hdr.hp_l = len + sizeof(struct hep_hdr);
         /* COMPLETE LEN */
+        len += sizeof(struct hep_hdr);
 	len += pkthdr->len;
-
+	
+	
+	if(hepversion == 2) {
+	        len += sizeof(struct hep_timehdr);
+        	hep_time.tv_sec = tvb.tv_sec;          
+        	hep_time.tv_usec = tvb.tv_usec;
+        	hep_time.captid = captid;	
+        }
+	
         /*buffer for ethernet frame*/
         buffer = (void*)malloc(len);
         if (buffer==0){
@@ -200,8 +204,7 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
         /* copy hep_hdr */
         memcpy((void*) buffer, &hdr, sizeof(struct hep_hdr));
         buflen = sizeof(struct hep_hdr);
-                
-                
+                                
         switch (ipversion) {
         
                 case ETH_P_IP:
@@ -225,6 +228,13 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
                         break;
 #endif /* USE_IPV6 */                        
         }
+        
+        /* Version 2 has timestamp, captnode ID */
+        if(hepversion == 2) {
+        	/* TIMING  */
+        	memcpy((void*)buffer + buflen, &hep_time, sizeof(struct hep_timehdr));
+                buflen += sizeof(struct hep_timehdr);        	
+        }        
 
 	/* PAYLOAD */
 	iphdr_len +=sizeof(struct udphdr);
@@ -247,7 +257,7 @@ error:
 void usage(int8_t e) {
     printf("usage: captagent <-mvhnc> <-d dev> <-s host> <-p port>\n"
            "             <-P pid file> <-r port|portrange> <-f filter file>\n"
-           "             <-i 102>\n"
+           "             <-i 102> <-H 1|2>\n"
            "   -h  is help/usage\n"
            "   -v  is version information\n"
            "   -m  is don't go into promiscuous mode\n"
@@ -259,7 +269,8 @@ void usage(int8_t e) {
            "   -P  is open specified pid file instead of the default (%s)\n"
            "   -f  is the file with specific pcap filter\n"
            "   -c  is checkout\n"
-           "   -i  is capture identifity. Must be a 32-bit number\n"
+           "   -i  is capture identifity. Must be a 16-bit number\n"
+           "   -H  is HEP protocol version [1|2]. By default we use HEP version 1\n"
            "", DEFAULT_PORT, DEFAULT_PIDFILE);
 	exit(e);
 }
@@ -364,7 +375,7 @@ int main(int argc,char **argv)
 	creator_pid = getpid();
 
 	
-	while((c=getopt(argc, argv, "mvhncp:s:d:c:P:r:f:i:"))!=EOF) {
+	while((c=getopt(argc, argv, "mvhncp:s:d:c:P:r:f:i:H:"))!=EOF) {
                 switch(c) {
                         case 'd':
                                         usedev = optarg;
@@ -408,6 +419,9 @@ int main(int argc,char **argv)
                         case 'i':
                                         captid = atoi(optarg);
                                         break;             
+                        case 'H':
+                                        hepversion = atoi(optarg);
+                                        break;                                                     
 	                default:
                                         abort();
                 }
@@ -423,6 +437,11 @@ int main(int argc,char **argv)
         if (!dev) {
             perror(errbuf);
             exit(-1);
+        }
+
+        if(hepversion != 1 && hepversion != 2) {
+            fprintf(stderr,"unsupported HEP version. Must be 1 or 2, but you have defined as [%i]!\n", hepversion);
+            return 1;
         }
 
         if(filter_file!=0) {
@@ -488,11 +507,8 @@ int main(int argc,char **argv)
         }
         
         if(checkout) {
-                fprintf(stdout,"Version     : [%s]", VERSION);
-#ifdef USE_HEP2
-                fprintf(stdout, "[HEP2 is enabled]");
-#endif                                                       
-                fprintf(stdout,"\nDevice      : [%s]\n", dev);
+                fprintf(stdout,"Version     : [%s]\n", VERSION);
+                fprintf(stdout,"Device      : [%s]\n", dev);
                 fprintf(stdout,"Port range  : [%s]\n", portrange);
                 fprintf(stdout,"Capture host: [%s]\n", capt_host);
                 fprintf(stdout,"Capture port: [%s]\n", capt_port);
@@ -501,6 +517,7 @@ int main(int argc,char **argv)
                 fprintf(stdout,"Fork        : [%i]\n", nofork);
                 fprintf(stdout,"Promisc     : [%i]\n", promisc);
                 fprintf(stdout,"Capture ID  : [%i]\n", captid);
+                fprintf(stdout,"HEP version : [%i]\n", hepversion);
                 fprintf(stdout,"Filter      : [%s]\n", filter_expr);
                 return 0;
         }        
