@@ -153,7 +153,7 @@ class SipSearchService implements ISipService
           //only unique
           if($unique) {
                     foreach($result as $key=>$row) {
-                           if(isset($message[$row[md5sum]]) && $message[$row[md5sum]] != $row[node]) unset($result[$key]);
+                           if(isset($message[$row[md5sum]])) unset($result[$key]);
                            else $message[$row[md5sum]] = $row[node];                          
                     }
           }        
@@ -280,7 +280,7 @@ class SipSearchService implements ISipService
               // Check if we must show up only UNIQ messages. No duplicate!
               if($unique) {
                     foreach($result as $key=>$row) {
-                           if(isset($message[$row[md5sum]]) && $message[$row[md5sum]] != $row[node]) unset($result[$key]);
+                           if(isset($message[$row[md5sum]])) unset($result[$key]);
                            else $message[$row[md5sum]] = $row[node];
                     }
               }
