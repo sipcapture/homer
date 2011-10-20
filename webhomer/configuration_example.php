@@ -25,5 +25,6 @@ define(COLORTAG, 0); /* color based on callid, fromtag */
 define(MODULES, 0); /* display modules in homepage flag */
 define(CFLOW_CLEANUP, 1); /* Automatic Cleanup of old Cflow images */
 define(CFLOW_TIMEZONE, "Europe/Berlin"); /* Timezone that will display in Call Flow Ladder Diagram */
+define(AUTOCOMPLETE, 0); /* Enable/Disable Autocomplete search function */
 
 ?>
