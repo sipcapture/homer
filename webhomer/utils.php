@@ -84,6 +84,8 @@ function sipMessage() {
 
 function liveSearch() {
 
+  if (AUTOCOMPLETE != 0) {
+
 	$searchterm = getVar('term', NULL, '', 'string');
 	$searchfield = getVar('field', NULL, '', 'string');
   	// timedate limit
@@ -128,6 +130,7 @@ function liveSearch() {
 
 	echo json_encode($return_arr);
 
+   }
 }
 
 function SaveCflow() {
