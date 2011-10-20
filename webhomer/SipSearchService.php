@@ -133,11 +133,15 @@ class SipSearchService implements ISipService
     } else {
 
 	$results = array();
-        $datasort = array();
+  $datasort = array();
+  $message = array();
+
+  $tnode = "'".$value."' as tnode";
+  if($unique) $tnode .= ", MD5(msg) as md5sum";
 
 	foreach($location as $value) {
 	
-              $query = "SELECT *,'".$value."' as tnode "
+              $query = "SELECT *,".$tnode
                 ."\n FROM ".HOMER_TABLE 
                 ."\n WHERE ". $where
                 ."\n ORDER BY {$sort} {$sortDirection} "
@@ -146,20 +150,19 @@ class SipSearchService implements ISipService
 	        $statement = $this->connection->query($query);
 	        $result = $statement->fetchAll();
           // Check if we must show up only UNIQ messages. No duplicate!
+          //only unique
           if($unique) {
-                foreach($result as $key=>$row) {
-                     $md5sum = md5($row->msg);
-                     if(isset($message[$md5sum]) && $message[$md5sum] != $row->tnode) unset($result[$key]);
-                     else $message[$md5sum] = $row->tnode;
-                }
-          }
-         
+                    foreach($result as $key=>$row) {
+                           if(isset($message[$row[md5sum]]) && $message[$row[md5sum]] != $row[tnode]) unset($result[$key]);
+                           else $message[$row[md5sum]] = $row[tnode];                          
+                    }
+          }        
           $results = array_merge($results,$result);	      
 	}
 
         //usort($results, 'compare');
 
-	$sipresults = $this->hydrateResults($results, $location);
+	    $sipresults = $this->hydrateResults($results, $location);
       
       return $sipresults;
     }
@@ -258,10 +261,14 @@ class SipSearchService implements ISipService
 
       $results = array();
       $datasort = array();
+      $message = array();
 
+      $tnode = "'".$value."' as tnode";
+      if($unique) $tnode .= ", MD5(msg) as md5sum";
+      
       foreach($location as $value) {
 
-              $query = "SELECT *,'".$value."' as tnode "
+              $query = "SELECT *,".$tnode
                                 ."\n FROM ".HOMER_TABLE
                                 ."\n WHERE ({$whereSql}) ". $where
                                 ."\n ORDER BY {$sort} {$sortDirection} "
@@ -272,12 +279,11 @@ class SipSearchService implements ISipService
               $result = $statement->fetchAll();
               // Check if we must show up only UNIQ messages. No duplicate!
               if($unique) {
-                foreach($result as $key=>$row) {
-                     $md5sum = md5($row->msg);
-                     if(isset($message[$md5sum]) && $message[$md5sum] != $row->tnode) unset($result[$key]);
-                     else $message[$md5sum] = $row->tnode;
-                }
-              }              
+                    foreach($result as $key=>$row) {
+                           if(isset($message[$row[md5sum]]) && $message[$row[md5sum]] != $row[tnode]) unset($result[$key]);
+                           else $message[$row[md5sum]] = $row[tnode];
+                    }
+              }
               $results = array_merge($results,$result);
         }
 
