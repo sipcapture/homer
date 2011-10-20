@@ -217,7 +217,7 @@ $path=PCAPDIR.$file;
 $im = imagecreatetruecolor($size_x, $size_y);
 
 //Set Font
-$fontFace = 'slc.ttf';
+$fontFace = './slc.ttf';
 $fontSize = '8';
 
 //Temp BGCOLOR (center of c-finder)
