@@ -79,6 +79,7 @@ class SipSearchService implements ISipService
      $tt = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->date." ".$homer->from_time));
      $thour = date("H", strtotime($homer->date." ".$homer->to_time));
+     $unique = $homer->unique;
                              
      $j=$thour+1;     
      
@@ -91,10 +92,10 @@ class SipSearchService implements ISipService
 
 	   if(in_array($key, $skip_keys)) continue;
 
-	if(!isset($callwhere)) $callwhere = "(";
-	if($key == "callid" && $callid_aleg) $callwhere.=" (";
+	   if(!isset($callwhere)) $callwhere = "(";
+	   if($key == "callid" && $callid_aleg) $callwhere.=" (";
 
-	$eqlike = preg_match("/%/", $value) ? " like " : " = ";
+	   $eqlike = preg_match("/%/", $value) ? " like " : " = ";
 
         //$key = mysql_real_escape_string($key);
         $key = "`".$key."`";
@@ -104,9 +105,8 @@ class SipSearchService implements ISipService
         if($s == 1) $callwhere.=" AND ";
 
         $callwhere.= $key.$eqlike.$value;
-	if($key == "callid" && $callid_aleg) $callwhere.= " OR callid_aleg ".$eqlike.$value.") ";
-
-	$s = 1;
+	      if($key == "callid" && $callid_aleg) $callwhere.= " OR callid_aleg ".$eqlike.$value.") ";
+        $s = 1;
     }
                    
     if(isset($callwhere)) $where .= " AND ".$callwhere.")";
@@ -143,9 +143,18 @@ class SipSearchService implements ISipService
                 ."\n ORDER BY {$sort} {$sortDirection} "
                 ."\n limit {$offset}, {$num}";				
 
-	      $statement = $this->connection->query($query);
-	      $result = $statement->fetchAll();
-              $results = array_merge($results,$result);	      
+	        $statement = $this->connection->query($query);
+	        $result = $statement->fetchAll();
+          // Check if we must show up only UNIQ messages. No duplicate!
+          if($unique) {
+                foreach($result as $key=>$row) {
+                     $md5sum = md5($row->msg);
+                     if(isset($message[$md5sum]) && $message[$md5sum] != $row->tnode) unset($result[$key]);
+                     else $message[$md5sum] = $row->tnode;
+                }
+          }
+         
+          $results = array_merge($results,$result);	      
 	}
 
         //usort($results, 'compare');
@@ -170,6 +179,7 @@ class SipSearchService implements ISipService
      $tt = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->date." ".$homer->from_time));
      $thour = date("H", strtotime($homer->date." ".$homer->to_time));
+     $unique = $homer->unique;
 
      $j=$thour+1;     
      
@@ -260,8 +270,15 @@ class SipSearchService implements ISipService
 
               $statement = $this->connection->query($query);
               $result = $statement->fetchAll();
+              // Check if we must show up only UNIQ messages. No duplicate!
+              if($unique) {
+                foreach($result as $key=>$row) {
+                     $md5sum = md5($row->msg);
+                     if(isset($message[$md5sum]) && $message[$md5sum] != $row->tnode) unset($result[$key]);
+                     else $message[$md5sum] = $row->tnode;
+                }
+              }              
               $results = array_merge($results,$result);
-
         }
 
         //usort($results, 'compare');
