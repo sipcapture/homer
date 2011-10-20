@@ -52,13 +52,15 @@
 #include <getopt.h>
 #include <unistd.h>         
 #include <signal.h>
+#include <time.h>
+
 
 #include "captagent.h"
 
 /* sender socket */
 int sock;
 char* pid_file = DEFAULT_PIDFILE; 
-
+int captid = 0;
 
 /* Callback function that is passed to pcap_loop() */ 
 void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *packet) 
@@ -72,6 +74,8 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
         struct hep_hdr hdr;
         struct hep_iphdr hep_ipheader;
         unsigned int len=0, iphdr_len=0, buflen=0, ipversion;
+        struct timeval tvb;
+        struct timezone tz;
         
 #ifdef USE_IPV6
         struct hep_ip6hdr hep_ip6header;        
@@ -89,6 +93,8 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
         if (pkthdr->len < udp_payload_offset) return;
 
         ethernet = (struct ethhdr *) (packet);
+
+        gettimeofday( &tvb, &tz );
                 
         switch ((ipversion=ntohs(ethernet->h_proto))) {        
 
@@ -172,6 +178,14 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
         hdr.hp_p = IPPROTO_UDP;	
         hdr.hp_sport = udph->uh_sport; /* destination port */
         hdr.hp_dport = udph->uh_dport; /* source port */
+
+#ifdef USE_HEP2
+        hdr.hp_v = 2;
+	hdr.tv_sec = tvb.tv_sec;          
+	hdr.tv_usec = tvb.tv_usec;
+	hdr.captid = captid;
+#endif
+
         hdr.hp_l = len + sizeof(struct hep_hdr);
         /* COMPLETE LEN */
 	len += pkthdr->len;
@@ -233,6 +247,7 @@ error:
 void usage(int8_t e) {
     printf("usage: captagent <-mvhnc> <-d dev> <-s host> <-p port>\n"
            "             <-P pid file> <-r port|portrange> <-f filter file>\n"
+           "             <-i 102>\n"
            "   -h  is help/usage\n"
            "   -v  is version information\n"
            "   -m  is don't go into promiscuous mode\n"
@@ -244,6 +259,7 @@ void usage(int8_t e) {
            "   -P  is open specified pid file instead of the default (%s)\n"
            "   -f  is the file with specific pcap filter\n"
            "   -c  is checkout\n"
+           "   -i  is capture identifity. Must be a 32-bit number\n"
            "", DEFAULT_PORT, DEFAULT_PIDFILE);
 	exit(e);
 }
@@ -348,7 +364,7 @@ int main(int argc,char **argv)
 	creator_pid = getpid();
 
 	
-	while((c=getopt(argc, argv, "mvhncp:s:d:c:P:r:f:"))!=EOF) {
+	while((c=getopt(argc, argv, "mvhncp:s:d:c:P:r:f:i:"))!=EOF) {
                 switch(c) {
                         case 'd':
                                         usedev = optarg;
@@ -377,6 +393,9 @@ int main(int argc,char **argv)
                                         break;
                         case 'v':
                                         printf("version: %s\n", VERSION);
+#ifdef USE_HEP2
+                                        printf("HEP2 is enabled\n");
+#endif                                        
 					exit(0);
                                         break;
                         case 'P':
@@ -385,7 +404,10 @@ int main(int argc,char **argv)
 
                         case 'f':
                                         filter_file = optarg;
-                                        break;                                        
+                                        break;             
+                        case 'i':
+                                        captid = atoi(optarg);
+                                        break;             
 	                default:
                                         abort();
                 }
@@ -466,7 +488,11 @@ int main(int argc,char **argv)
         }
         
         if(checkout) {
-                fprintf(stdout,"Device      : [%s]\n", dev);
+                fprintf(stdout,"Version     : [%s]", VERSION);
+#ifdef USE_HEP2
+                fprintf(stdout, "[HEP2 is enabled]");
+#endif                                                       
+                fprintf(stdout,"\nDevice      : [%s]\n", dev);
                 fprintf(stdout,"Port range  : [%s]\n", portrange);
                 fprintf(stdout,"Capture host: [%s]\n", capt_host);
                 fprintf(stdout,"Capture port: [%s]\n", capt_port);
@@ -474,6 +500,7 @@ int main(int argc,char **argv)
                 fprintf(stdout,"Filter file : [%s]\n", filter_file);
                 fprintf(stdout,"Fork        : [%i]\n", nofork);
                 fprintf(stdout,"Promisc     : [%i]\n", promisc);
+                fprintf(stdout,"Capture ID  : [%i]\n", captid);
                 fprintf(stdout,"Filter      : [%s]\n", filter_expr);
                 return 0;
         }        

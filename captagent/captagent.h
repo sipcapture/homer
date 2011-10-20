@@ -1,8 +1,9 @@
 
-#define VERSION "0.8.1"
+#define VERSION "0.8.2"
 #define DEFAULT_CONFIG "/usr/local/etc/captagent/captagent.conf"
 #define DEFAULT_PIDFILE  "/var/run/captagent.pid"
 #define DEFAULT_PORT "5060"
+#undef USE_HEP2
 
 /* filter to extract SIP packets */
 char filter_expr[1024];
@@ -18,6 +19,11 @@ struct hep_hdr{
     u_int8_t hp_p;            /* protocol */
     u_int16_t hp_sport;       /* source port */
     u_int16_t hp_dport;       /* destination port */
+#ifdef USE_HEP2
+    u_int32_t tv_sec;	      /* seconds */
+    u_int32_t tv_usec;	      /* useconds */ 
+    u_int8_t captid;	      /* Capture ID node */
+#endif    
 };
 
 struct hep_iphdr{

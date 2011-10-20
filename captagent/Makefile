@@ -1,6 +1,7 @@
 #
 # makefile
 #
+# -DUSE_HEP2 - activate HEP2 version
 
 CC=cc 
 
