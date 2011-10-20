@@ -231,7 +231,7 @@ error:
 }
 
 void usage(int8_t e) {
-    printf("usage: captagent <-mvhn> <-d dev> <-s host> <-p port>\n"
+    printf("usage: captagent <-mvhnc> <-d dev> <-s host> <-p port>\n"
            "             <-P pid file> <-r port|portrange> <-f filter file>\n"
            "   -h  is help/usage\n"
            "   -v  is version information\n"
@@ -243,6 +243,7 @@ void usage(int8_t e) {
            "   -r  is open specified capturing port or portrange instead of the default (%s)\n"
            "   -P  is open specified pid file instead of the default (%s)\n"
            "   -f  is the file with specific pcap filter\n"
+           "   -c  is checkout\n"
            "", DEFAULT_PORT, DEFAULT_PIDFILE);
 	exit(e);
 }
@@ -331,7 +332,7 @@ error:
 
 int main(int argc,char **argv)
 {
-        int mode, c, nofork=0;
+        int mode, c, nofork=0, checkout=0;
         char errbuf[PCAP_ERRBUF_SIZE];
         pcap_t *sniffer;
         struct bpf_program filter;
@@ -347,7 +348,7 @@ int main(int argc,char **argv)
 	creator_pid = getpid();
 
 	
-	while((c=getopt(argc, argv, "mvhnp:s:d:c:P:r:f:"))!=EOF) {
+	while((c=getopt(argc, argv, "mvhncp:s:d:c:P:r:f:"))!=EOF) {
                 switch(c) {
                         case 'd':
                                         usedev = optarg;
@@ -367,6 +368,10 @@ int main(int argc,char **argv)
                         case 'n':
                                         nofork=1;
                                         break;                                        
+                        case 'c':
+                                        checkout=1;
+                                        nofork=1;
+                                        break;                                                                                
                         case 'm':
 					promisc = 0;
                                         break;
@@ -456,10 +461,22 @@ int main(int argc,char **argv)
 
         /* install filter on sniffer session */
         if (pcap_setfilter(sniffer, &filter)) {
-                fprintf(stderr,"Failed to install filter: %s\n", pcap_geterr(sniffer));
-                
+                fprintf(stderr,"Failed to install filter: %s\n", pcap_geterr(sniffer));                
                 return 7;
         }
+        
+        if(checkout) {
+                fprintf(stdout,"Device      : [%s]\n", dev);
+                fprintf(stdout,"Port range  : [%s]\n", portrange);
+                fprintf(stdout,"Capture host: [%s]\n", capt_host);
+                fprintf(stdout,"Capture port: [%s]\n", capt_port);
+                fprintf(stdout,"Pid file    : [%s]\n", pid_file);
+                fprintf(stdout,"Filter file : [%s]\n", filter_file);
+                fprintf(stdout,"Fork        : [%i]\n", nofork);
+                fprintf(stdout,"Promisc     : [%i]\n", promisc);
+                fprintf(stdout,"Filter      : [%s]\n", filter_expr);
+                return 0;
+        }        
 
         /* install packet handler for sniffer session */
         while (pcap_loop(sniffer, 0, (pcap_handler)callback, 0));

@@ -1,5 +1,5 @@
 
-#define VERSION "0.7"
+#define VERSION "0.8.1"
 #define DEFAULT_CONFIG "/usr/local/etc/captagent/captagent.conf"
 #define DEFAULT_PIDFILE  "/var/run/captagent.pid"
 #define DEFAULT_PORT "5060"
