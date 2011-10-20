@@ -130,7 +130,7 @@ if($db->dbconnect_homer(NULL)) {
 
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
-                        ."\n WHERE ".$where." limit 100";
+                        ."\n WHERE ".$where." order by micros_ts ASC limit 100";
 		
                 $rows = $db->loadObjectList($query);
                 
