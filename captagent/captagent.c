@@ -366,7 +366,7 @@ int main(int argc,char **argv)
         struct addrinfo *ai, hints[1] = {{ 0 }};
         char *dev=NULL, *portrange=DEFAULT_PORT, *capt_host = NULL;
         char *capt_port = NULL, *usedev = NULL;
-        char* filter_file;
+        char* filter_file = NULL;
 	char filter_string[800] = {0};      
         FILE *filter_stream;  
 	uint16_t snaplen = 65535, promisc = 1, to = 100;
