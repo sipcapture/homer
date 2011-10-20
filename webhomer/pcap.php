@@ -123,12 +123,25 @@ if ($table == NULL) { $table="sip_capture"; }
 
 //$cid="1234567890";
 
+// Get Variables
 $cid = getVar('cid', NULL, 'get', 'string');
 $cid2 = getVar('cid2', NULL, 'get', 'string');
+$from_user = getVar('from_user', NULL, 'get', 'string');
+$to_user = getVar('to_user', NULL, 'get', 'string');
+$limit = getVar('limit', NULL, 'get', 'string');
 
-//Make image
-$where = "( callid = '".$cid."'";
-if(isset($cid2)) { $where .= " OR callid='".$cid2."')"; } else {  $where .= ") ";}
+// Build Search Query
+if(isset($cid)) {
+         $where = "( callid = '".$cid."'";
+         if(isset($cid2)) { $where .= " OR callid='".$cid2."')"; } else {  $where .= ") ";}
+} else if(isset($from_user)) {
+         $where = "( from_user = '".$from_user."'";
+         if(isset($to_user)) { $where .= " OR to_user='".$to_user."')"; } else {  $where .= ") ";}
+} else if(isset($to_user)) {
+         $where = "( to_user = '".$to_user."')";
+}
+
+if(!isset($limit)) { $limit = 100; }
 
         // Get time & date if available
         $flow_date = getVar('date', NULL, 'get', 'string');
@@ -159,7 +172,7 @@ if($db->dbconnect_homer(NULL)) {
 
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
-                        ."\n WHERE ".$where." order by micro_ts ASC limit 100";
+                        ."\n WHERE ".$where." order by micro_ts ASC limit ".$limit;
 
                 $rows = $db->loadObjectList($query);
         }
