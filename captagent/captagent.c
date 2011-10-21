@@ -238,6 +238,10 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
 
 	/* PAYLOAD */
 	iphdr_len +=sizeof(struct udphdr);
+        
+        /* Prevent loop HEP to HEP */
+        if(((int)((char *)(packet + iphdr_len))[0]) == 69) return;
+        
         memcpy((void *)(buffer + buflen) , (void*)(packet + iphdr_len), (pkthdr->len - iphdr_len));
         buflen +=(pkthdr->len - iphdr_len);
                 
