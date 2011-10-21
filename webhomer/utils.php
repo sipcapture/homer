@@ -110,7 +110,7 @@ function liveSearch() {
 
         $option = array(); //prevent problems
 
-        if($db->dbconnect_homer("localhost")) {
+        if($db->dbconnect_homer(HOMER_HOST)) {
 
                 $query = "SELECT distinct ".$searchfield
                         ."\n FROM ".HOMER_TABLE
