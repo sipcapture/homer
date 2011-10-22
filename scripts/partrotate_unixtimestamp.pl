@@ -20,11 +20,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-
 use DBI;
 
-$table = "sip_capture";
-$dbname = "homer_db";
+$version = "0.2.1";
+$mysql_table = "sip_capture";
+$mysql_dbname = "homer_db";
 $mysql_user = "mysql_login";
 $mysql_password = "mysql_password";
 $mysql_host = "localhost";
@@ -37,20 +37,19 @@ $partstep = 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes
 $partstep=0 if(!defined $stepsvalues[$partstep]);
 #Mystep
 $mystep = $stepsvalues[$partstep];
-#If Daily
-if($mystep == 86400) { $coof=7; }
-else{ $coof=86400/$mystep; }
+#Coof
+$coof=int(86400/$mystep);
 
 #How much partitions
 $maxparts*=$coof;
 $newparts*=$coof;
 
-my $db = DBI->connect("DBI:mysql:$dbname:$mysql_host:3306", $mysql_user, $mysql_password);
+my $db = DBI->connect("DBI:mysql:$mysql_dbname:$mysql_host:3306", $mysql_user, $mysql_password);
 
 #$db->{PrintError} = 0;
 
 my $sth = $db->do("
-CREATE TABLE IF NOT EXISTS `".$table."` (
+CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
   `micro_ts` bigint(18) NOT NULL DEFAULT '0',
@@ -113,7 +112,7 @@ my ($curtstamp) = $sth->fetchrow_array();
 $curtstamp+=0; 
 
 my $query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.PARTITIONS"
-            ."\n WHERE TABLE_NAME='".$table."' AND TABLE_SCHEMA='".$dbname."'";
+            ."\n WHERE TABLE_NAME='".$mysql_table."' AND TABLE_SCHEMA='".$mysql_dbname."'";
 $sth = $db->prepare($query);
 $sth->execute();
 my ($partcount) = $sth->fetchrow_array();
@@ -121,8 +120,8 @@ my ($partcount) = $sth->fetchrow_array();
 while($partcount > ($maxparts + $newparts)) {
 
     $query = "SELECT PARTITION_NAME, MIN(PARTITION_DESCRIPTION)"
-             ."\n FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME='".$table."'"
-             ."\n AND TABLE_SCHEMA='".$dbname."';";
+             ."\n FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME='".$mysql_table."'"
+             ."\n AND TABLE_SCHEMA='".$mysql_dbname."';";
 
     $sth = $db->prepare($query);
     $sth->execute();
@@ -136,7 +135,7 @@ while($partcount > ($maxparts + $newparts)) {
     }
            
     #Delete
-    $query = "ALTER TABLE ".$table." DROP PARTITION ".$minpart;
+    $query = "ALTER TABLE ".$mysql_table." DROP PARTITION ".$minpart;
     $db->do($query);
     if (!$db->{Executed}) {
            print "Couldn't drop partition: $minpart\n";
@@ -158,8 +157,8 @@ for(my $i=0; $i<$newparts; $i++) {
     my $newpartname = sprintf("p%04d%02d%02d%02d",($year+=1900),(++$mon),$mday,$hour);    
     
     $query = "SELECT COUNT(*) "
-             ."\n FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME='".$table."'"
-             ."\n AND TABLE_SCHEMA='".$dbname."' AND PARTITION_NAME='".$newpartname."'"
+             ."\n FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME='".$mysql_table."'"
+             ."\n AND TABLE_SCHEMA='".$mysql_dbname."' AND PARTITION_NAME='".$newpartname."'"
              ."\n AND PARTITION_DESCRIPTION = '".$curtstamp."'";
              
     $sth = $db->prepare($query);
@@ -170,7 +169,7 @@ for(my $i=0; $i<$newparts; $i++) {
     if(!$exist) {
 
 	# Fix MAXVALUE. Thanks Dorn B. <djbinter@gmail.com> for report and fix.
-        $query = "ALTER TABLE ".$table." REORGANIZE PARTITION pmax INTO (PARTITION ".$newpartname
+        $query = "ALTER TABLE ".$mysql_table." REORGANIZE PARTITION pmax INTO (PARTITION ".$newpartname
                                 ."\n VALUES LESS THAN (".$curtstamp.") ENGINE = MyISAM, PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = MyISAM)";  
 
         $db->do($query);
