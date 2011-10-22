@@ -25,6 +25,9 @@ use DBI;
 
 $table = "sip_capture";
 $dbname = "homer_db";
+$mysql_user = "mysql_login";
+$mysql_password = "mysql_password";
+$mysql_host = "localhost";
 $maxparts = 6; #6 days
 $newparts = 1; #new partitions for 1 day. Script must start daily!
 @stepsvalues = (86400, 3600, 1800, 900); 
@@ -42,7 +45,7 @@ else{ $coof=86400/$mystep; }
 $maxparts*=$coof;
 $newparts*=$coof;
 
-my $db = DBI->connect("DBI:mysql:$dbname:localhost:3306", "mysql_login", "mysql_password");
+my $db = DBI->connect("DBI:mysql:$dbname:$mysql_host:3306", $mysql_user, $mysql_password);
 
 #$db->{PrintError} = 0;
 
