@@ -29,7 +29,7 @@ $mysql_user = "mysql_login";
 $mysql_password = "mysql_password";
 $mysql_host = "localhost";
 $maxparts = 6; #6 days
-$newparts = 1; #new partitions for 1 day. Script must start daily!
+$newparts = 2; #new partitions for 2 days. Anyway, start this script daily!
 @stepsvalues = (86400, 3600, 1800, 900); 
 $partstep = 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes 
 
