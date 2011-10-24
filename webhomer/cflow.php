@@ -98,7 +98,8 @@ $cid2 = getVar('cid2', NULL, 'get', 'string');
 
 //Make image
 $where = "( callid = '".$cid."'";
-if(isset($cid2)) { $where .= " OR callid='".$cid2."')"; } else {  $where .= ") ";} 
+if(BLEGCID == "x-cid") $where .= " OR callid_aleg='".$cid."'";
+else if(isset($cid2)) { $where .= " OR callid='".$cid2."')"; } else {  $where .= ") ";} 
 
 //Crop Search Parameters, if any
         $flow_date = getVar('date', NULL, 'get', 'string');
