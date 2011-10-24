@@ -192,27 +192,31 @@ abstract class DataTable_DataTable
   {
     $rows = array();
 
-    foreach($result->getData() as $object){
+    $mydata = $result->getData();
 
-      $row = array();
+    if(count($mydata)) {
+        foreach($mydata as $object){
 
-      foreach($this->config->getColumns() as $column){
-        $row[] = $this->getDataForColumn($object, $column);
-      }
+          $row = array();
+          foreach($this->config->getColumns() as $column){
+            $row[] = $this->getDataForColumn($object, $column);
+          }
 
-      $rows[] = $row;
+          $rows[] = $row;
+        }
     }
 
     $data = array(
-			'iTotalRecords' => $result->getNumTotalResults(),
-			'iTotalDisplayRecords' => !is_null($result->getNumFilteredResults()) ? 
+                        'iTotalRecords' => $result->getNumTotalResults(),
+                        'iTotalDisplayRecords' => !is_null($result->getNumFilteredResults()) ?
                                         $result->getNumFilteredResults() : $result->getNumTotalResults(),
-			'aaData' => $rows,
-			'sEcho' => $this->request->getEcho(),		
+                        'aaData' => $rows,
+                        'sEcho' => $this->request->getEcho(),
     );
 
     return json_encode($data);
   }
+
 
   /**
    * Get the data for for a column from the given data object row
