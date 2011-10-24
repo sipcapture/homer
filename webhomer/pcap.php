@@ -133,7 +133,9 @@ $limit = getVar('limit', NULL, 'get', 'string');
 // Build Search Query
 if(isset($cid)) {
          $where = "( callid = '".$cid."'";
-         if(isset($cid2)) { $where .= " OR callid='".$cid2."')"; } else {  $where .= ") ";}
+         if(BLEGCID == "x-cid") $where .= " OR callid_aleg='".$cid."')";
+         else if(isset($cid2))  $where .= " OR callid='".$cid2."')"; 
+         else $where .= ") ";
 } else if(isset($from_user)) {
          $where = "( from_user = '".$from_user."'";
          if(isset($to_user)) { $where .= " OR to_user='".$to_user."')"; } else {  $where .= ") ";}
