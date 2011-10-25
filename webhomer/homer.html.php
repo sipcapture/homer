@@ -41,10 +41,10 @@ if($header) {
 				</li> 
 				<li <?php if($task=="advsearch") echo "class='selected'"; ?>><a href="homer.php?task=advsearch">Advanced Search</a> 
 				</li> 
-				
+<?php if (MODULES == 1):?>				
 				<li <?php if($task=="stats") echo "class='selected'"; ?>> <a href="homer.php?task=stats">Stats</a>
                                 </li>
-
+<?php endif;?>
 <?php if($level == 1):?>				
 				<li <?php if(!strncmp(admin,$task,5)) echo "class='selected'"; ?>> <a href="homer.php?task=adminoverview">Admin</a> 
 				</li> 
