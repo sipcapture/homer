@@ -1,4 +1,3 @@
-
 Homer capturing agent.
 
 The agent will duplicate all SIP messages in HEP to the Homer capture server.
@@ -27,10 +26,13 @@ usage: captagent <-mvhn> <-d dev> <-s host> <-p port>
    -p  is use specified port of capture server
    -r  is open specified capturing port or portrange instead of the default (5060)
    -P  is open specified pid file instead of the default (/var/run/captagent.pid)
-   -f  is the file with specific pcap filter
+   -f  is the file with specific pcap filter       
+   -c  is checkout
+   -i  is capture identifity. Must be a 16-bit number
+   -H  is HEP protocol version [1|2]. By default we use HEP version 1
 
 
 #Tipp:
 -p the port number where your capture server listen on.
 -r normaly it's 5060, but you can use ports range 5060-5090 too.
--s this param can be or IP address or domain name.
+-s this param can be an IP or FQDN
