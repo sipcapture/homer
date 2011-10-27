@@ -28,6 +28,8 @@ $mysql_dbname = "homer_db";
 $mysql_user = "homer_user";
 $mysql_password = "homer_password";
 $mysql_host = "localhost";
+$statsmethod = "stats_method";
+$statsuseragent = "stats_useragent";
 $step = 300; # for 5 minutes statistic. Script must start each 5 minutes 
 #Crontab:
 #*/5 * * * * statistic.pl 2>&1 > /dev/null
@@ -55,7 +57,7 @@ $asr = 0;
 ##############################################################################################
 $all = loadResult("SELECT COUNT(*) ".$mainquery);
 
-insertStat("stats_method","method='ALL',total='".$all."'");
+insertStat($statsmethod,"method='ALL',total='".$all."'");
 
 ##################################   INVITE ########################################################
 #ALL INVITES
@@ -80,7 +82,7 @@ if($totalinvites > 0) {
 
 $value="method='INVITE',total='".$invites."',auth='".$auth."',completed='"
     .$answered."',uncompleted='".$unanswered."',rejected='".$bad486."',asr='".$asr."',ner='".$ner."'";
-insertStat("stats_method",$value);
+insertStat($statsmethod,$value);
 
 ##################################  REGISTERED ########################################################
 #ALL REGISTRATION
@@ -89,7 +91,7 @@ $registers = loadResult("SELECT COUNT(*) ".$mainquery." AND method = 'REGISTER'"
 $regiserauth = loadResult("SELECT COUNT(*) ".$mainquery." AND method = '401' AND cseq like '% REGISTER'");
 #REGISTERED! for expire =0 will be also calculate as registered. Bad idea but no chance :-/
 $registered = loadResult("SELECT COUNT(*) ".$mainquery." AND method='200' AND cseq like '% REGISTER'");
-insertStat("stats_method","method='REGISTER',total='".$registers."',auth='".$regiserauth."',completed='".$registered."'");
+insertStat($statsmethod,"method='REGISTER',total='".$registers."',auth='".$regiserauth."',completed='".$registered."'");
 
 #USER AGENT
 #REGISTRATION
@@ -98,7 +100,7 @@ $sth = $db->prepare($query);
 $sth->execute();
 while ( @row = $sth->fetchrow_array ) {
     $myuas = $db->quote($row[0]);
-    insertStat("stats_useragent","method='REGISTER',useragent=".$myuas.",total=".$row[1]);
+    insertStat($statsuseragent,"method='REGISTER',useragent=".$myuas.",total=".$row[1]);
 }
 
 #INVITES
@@ -107,7 +109,7 @@ $sth = $db->prepare($query);
 $sth->execute();
 while ( @row = $sth->fetchrow_array ) {
     $myuas = $db->quote($row[0]);
-    insertStat("stats_useragent","method='INVITE',useragent=".$myuas.",total=".$row[1]);
+    insertStat($statsuseragent,"method='INVITE',useragent=".$myuas.",total=".$row[1]);
 }
 
 sub loadResult() {
