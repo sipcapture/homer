@@ -30,7 +30,8 @@ $mysql_password = "homer_password";
 $mysql_host = "localhost";
 $statsmethod = "stats_method";
 $statsuseragent = "stats_useragent";
-$step = 300; # for 5 minutes statistic. Script must start each 5 minutes 
+$keepdays = 100; #How long statistic must be keeped in DB
+$step = 300; # in seconds! for 5 minutes statistic. Script must start each 5 minutes 
 #Crontab:
 #*/5 * * * * statistic.pl 2>&1 > /dev/null
 
@@ -112,6 +113,9 @@ while ( @row = $sth->fetchrow_array ) {
     insertStat($statsuseragent,"method='INVITE',useragent=".$myuas.",total=".$row[1]);
 }
 
+#Time for CLEAR OLD records;
+clearOldData() if($nowtime[2] == 0 && $nowtime[1] == 0) ;
+
 sub loadResult() {
     my $query = shift;
     $sth = $db->prepare($query);
@@ -128,3 +132,15 @@ sub insertStat() {
     $sth2->execute();
     return 1;
 }
+
+sub clearOldData() {
+  $query = "DELETE FROM ".$statsmethod." WHERE `from_date` < UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$keepdays." DAY)";
+  $sth = $db->prepare($query);
+  $sth->execute();
+
+  $query = "DELETE FROM ".$statsuseragent." WHERE `from_date` < UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$keepdays." DAY)";
+  $sth = $db->prepare($query);
+  $sth->execute();
+}
+
+
