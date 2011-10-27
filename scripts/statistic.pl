@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# statistics.pl - perl script for mySQL partition rotation
+# statistics.pl - perl script for Homer statistic
 #
 # Copyright (C) 2011 Alexandr Dubovikov (QSC AG) (alexandr.dubovikov@gmail.com)
 #
