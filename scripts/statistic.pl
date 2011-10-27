@@ -74,8 +74,8 @@ $bad486 = loadResult("SELECT COUNT(*) ".$mainquery." AND method IN ('486','487',
 $unanswered = $totalinvites - $answered;
 
 if($totalinvites > 0) {
-  $ner = sprintf( "%.0f", ($answered+$bad486)/($totalinvites*100));
-  $asr = sprintf( "%.0f", ($answered)/($totalinvites*100));
+  $ner = sprintf( "%.0f", ($answered+$bad486)/$totalinvites*100);
+  $asr = sprintf( "%.0f", $answered/$totalinvites*100);
 }
 
 $value="method='INVITE',total='".$invites."',auth='".$auth."',completed='"
