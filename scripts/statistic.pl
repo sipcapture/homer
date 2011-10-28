@@ -54,11 +54,13 @@ $ner = 0;
 $asr = 0;
 
 #statistic
-#Total PACKETS
+#ALL AND CURRENT PACKETS. ALL = ALL MESSAGES IN DB. CURRENT = MESSAGES IN THIS INTERVALL
 ##############################################################################################
-$all = loadResult("SELECT COUNT(*) ".$mainquery);
+$all = loadResult("SELECT COUNT(*) FROM ".$mysql_table);
+insertStat("stats_method","method='ALL',total='".$all."'");
 
-insertStat($statsmethod,"method='ALL',total='".$all."'");
+$current = loadResult("SELECT COUNT(*) ".$mainquery);
+insertStat("stats_method","method='CURRENT',total='".$current."'");
 
 ##################################   INVITE ########################################################
 #ALL INVITES
