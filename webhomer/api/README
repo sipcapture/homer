@@ -32,6 +32,10 @@ stat-total:	Returns Total Packet Counter
 		REST: (tbd)
 		api/api.php?task=statscount&method=ALL
 
+stat-measure:	Returns ASR/NER for current sampling cycle
+		REST: (tbd)
+		api/api.php?task=statscount&method=ALL&measure=1
+
 stat-current:	Returns Counter for current sampling cycle
 		REST: (tbd)
 		api/api.php?task=statscount&method=CURRENT&hours=

@@ -278,6 +278,7 @@ function getStatsCount() {
 	//Set our variables
 	$method = ($_GET['method']);
 	$hours = ($_GET['hours']);
+	$measure = ($_GET['measure']);
 	if(!isset($method)||$method!="INVITE" && $method!="REGISTER" && $method!="CURRENT") {
                 $method =  "ALL";
         }
@@ -307,9 +308,15 @@ function getStatsCount() {
                    ."AND method='".$method."' AND total !=0 order by id";
 
 	 } else if ($method == "ALL") {
-        $query = "SELECT from_date,total from stats_method "
-                   ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
-                   ."AND method='".$method."' AND total !=0 order by id DESC limit 1";
+	 if(!isset($measure)) {
+        	   $query = "SELECT from_date,total from stats_method "
+                	   ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
+                	   ."AND method='".$method."' AND total !=0 order by id DESC limit 1";
+		} else {
+		   $query = "SELECT min(from_date),max(to_date),avg(asr),avg(ner) from stats_method "
+                           ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
+                           ."AND method='INVITE' AND total !=0 order by id DESC";
+		}
 	}
 
                 $rows = $db->loadObjectList($query);
