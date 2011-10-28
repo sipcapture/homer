@@ -1,7 +1,7 @@
 1. Replace callflow [COMPLETED]
 2. Export to PCAP file on select [IN PROGRESS... 80%]
 3. Callflow in search criterea [COMPLETED]
-4. Statistic must use separate tables.[IN PROGRESS... 90%]
+4. Statistic must use separate tables.[COMPLETED]
 5. Fix partitioning index [COMPLETED]
 6. Extend API to access new Statistics [COMPLETED]
 7. External AUTH modules: LDAP(AD)/RADIUS [IN PROGRESS... 2%]
