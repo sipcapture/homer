@@ -4,3 +4,5 @@
 4. Statistic must use separate tables.[IN PROGRESS... 60%]
 5. Fix partitioning index [COMPLETED]
 6. Extend API to access new Statistics [IN PROGRESS... 20%]
+7. External AUTH modules: LDAP(AD)/RADIUS [IN PROGRESS... 2%]
+8. Alarm module. E-Mails,SIP or XMPP messages to ADMIN [IN PROGRESS... 0%]
