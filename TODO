@@ -1,5 +1,6 @@
 1. Replace callflow [COMPLETED]
-2. Export to PCAP file on select [IN PROGRESS 80%]
-3. Callflow in search criterea.[UNKNOWN STATUS]
+2. Export to PCAP file on select [IN PROGRESS... 80%]
+3. Callflow in search criterea [IN PROGRESS... 99%]
 4. Statistic must use separate tables.[IN PROGRESS... 60%]
 5. Fix partitioning index [COMPLETED]
+6. Extend API to access new Statistics [IN PROGRESS... 20%]
