@@ -94,7 +94,7 @@ $(document).ready(function() {
     <input type="button" value="Toggle details" onclick="$('#sipdetails').toggle(400);"  style="opacity: 1; background: transparent;"/>
 
 </p>
-<div id="sipdetails" style:>
+<div id="sipdetails" style="display: none;">
              <table border="0" cellspacing="2" cellpadding="2"  class="bodystyle">
 <?php
                         foreach ($row as $key=>$value) {
