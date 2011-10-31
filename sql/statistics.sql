@@ -33,4 +33,4 @@ CREATE TABLE IF NOT EXISTS `stats_useragent` (
   KEY `method` (`method`),
   KEY `total` (`total`),
   UNIQUE KEY `datemethodua` (`date`,`method`,`useragent`)
-) ENGINE=MyISAM DEFAULT 
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
