@@ -78,6 +78,10 @@ $bad486 = loadResult("SELECT COUNT(*) ".$mainquery." AND method IN ('486','487',
 #UNSANSWERED
 $unanswered = $totalinvites - $answered;
 
+#fix for retransmitions
+if($unanswered < 0) { $unanswered = 0; }
+if($answered > $totalinvites) $answered=$totalinvites;
+
 if($totalinvites > 0) {
   $ner = sprintf( "%.0f", ($answered+$bad486)/$totalinvites*100);
   $asr = sprintf( "%.0f", $answered/$totalinvites*100);
