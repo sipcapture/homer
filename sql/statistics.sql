@@ -1,4 +1,4 @@
-DROP TABLE stats_method;
+DROP TABLE IF EXISTS stats_method;
 CREATE TABLE IF NOT EXISTS `stats_method` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `from_date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS `stats_method` (
   KEY `uncompleted` (`uncompleted`)
 ) ENGINE=MyISAM AUTO_INCREMENT=0 DEFAULT CHARSET=latin1;
 
-DROP TABLE stats_useragent;
+DROP TABLE IF EXISTS stats_useragent;
 CREATE TABLE IF NOT EXISTS `stats_useragent` (
 `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `from_date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
