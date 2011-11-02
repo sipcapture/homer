@@ -42,7 +42,7 @@ define(AUTOCOMPLETE, 0);  /* Enables autocomplete in FROM & TO fiels- WARNING: d
 
 /* BLEG DETECTION */
 define(BLEGDETECT, 1); /* always detect BLEG leg in CFLOW/PCAP*/
-define(BLEGCID, "-0"); /* Lorenzo's style */
+define(BLEGCID, "x-cid"); /* default Homer style */
 
 /* Database: mysql */
 define(DATABASE,"mysql");
