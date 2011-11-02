@@ -22,7 +22,7 @@ define(HOMER_TABLE, "sip_capture");
 
 define(PCAPDIR,"/var/www/webhomer/tmp/");
 define(WEBPCAPLOC,"/webhomer/tmp/");
-define(APILOC,"/webhomer3/api/");
+define(APILOC,"/webhomer/api/");
 define(COLORTAG, 0); /* color based on callid, fromtag */
 define(DAYNIGHT, 1); /* day/night based theme, 0=day, 1=rotate, 3=night */
 
