@@ -1,4 +1,31 @@
 <?php
+/*
+ * HOMER Web Interface
+ * Homer's SipResult class
+ *
+ * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * The Initial Developers of the Original Code are
+ *
+ * Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+*/
 
 class SipResult
 {
@@ -145,10 +172,13 @@ class SipResult
   {
 
    $search = json_decode($_SESSION['homersearch']);
-   $searchdate = date("Y-m-d", strtotime($search->date));
-      return "<a alt='callflow' href=\"javascript:showCallFlow('".$this->id."','".$this->loctable."','".$this->tnode."','".
-              implode(',',$this->location)."','".$this->unique."', 1,'".$this->callid."','".$searchdate."','".$search->from_time."','".$search->to_time."');\">".$this->callid."</a>";
-      //return $this->callid;
+   //$ft = date("Y-m-d H:i:s", strtotime($search->from_date." ".$search->from_time) );
+   //$tt = date("Y-m-d H:i:s", strtotime($search->to_date." ".$search->to_time) );
+   $fd = date("Y-m-d", strtotime($search->from_date));
+   $td = date("Y-m-d", strtotime($search->to_date));   
+   return "<a alt='callflow' href=\"javascript:showCallFlow('".$this->id."','".$this->loctable."','".$this->tnode."','".
+   implode(',',$this->location)."','".$this->unique."', 1,'".$this->callid."', '".$fd."','".$td."','".$search->from_time."', '".$search->to_time."',".$search->b2b.");\">".$this->callid."</a>";
+   //return $this->callid;
   }  
   
   public function getCallIdTag()

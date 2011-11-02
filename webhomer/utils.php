@@ -1,17 +1,36 @@
 <?php
 /*
- *        Homer's Utils Box
+ * HOMER Web Interface
+ * Homer's Utils Box
+ *  
+ * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * The Initial Developers of the Original Code are
+ *
+ * Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
 */
 
-include("class.db.php");
-$db = new homer();
+define(_HOMEREXEC, "1");
 
-if($db->logincheck($_SESSION['loggedin'], "logon", "password", "useremail") == false){
-        //do something if NOT logged in. For example, redirect to login page or display message.
-        header("Location: index.php\r\n");
-        exit;
-}
+/* MAIN CLASS modules */
+include("class/index.php");
 
 $task =  getVar('task', 'search', 'post', 'string');
 
@@ -33,6 +52,13 @@ switch ($task) {
                 SaveCflow();
                 break;
 
+        case 'sipsend':
+                phpSip();
+                break;
+
+	case 'reconfig':
+                // reConf();
+                break;
 }
 
 function doTest() { 
@@ -77,24 +103,27 @@ function sipMessage() {
         $msgbody = preg_replace('/'.$row->via_1_branch.'/', "<font color='green'><b>$row->via_1_branch</b></font>", $msgbody);
         $msgbody = preg_replace('/'.$row->callid.'/', "<font color='blue'><b>$row->callid</b></font>", $msgbody);
         $msgbody = preg_replace('/'.$row->from_tag.'/', "<font color='red'><b>$row->from_tag</b></font>", $msgbody);
-        
+        $msgbody = "<br><font size=-2>".$msgbody."</font>";
         unset($row->msg);
 
+	$winid = rand(1111, 9999)."pop";
 ?>
 
 <script type="text/javascript">
 $(document).ready(function() {
-  $('#sipdetails').hide();
-  $('input:button').button();
+  // var mytitle = $(this).find('span.ui-dialog-title').text();
+  $('#sipdetails<?php echo $winid; ?>').hide();
+  $('input:button').button;
+  $(this).parent().height('auto');
+  // $(this).find('span.ui-dialog-title').append( $(this).find('#xbuttons') );
   return false;
 });
 </script>
 <p>
-    <input type="button" value="Toggle message" onclick="$('#sipmsg').toggle(400);"  style="background: transparent;" />
-    <input type="button" value="Toggle details" onclick="$('#sipdetails').toggle(400);"  style="opacity: 1; background: transparent;"/>
-
+    <input type="button" value="+/- Message" onclick="$('#sipmsg<?php echo $winid; ?>').toggle(400);"  style="background: transparent;" class="ui-button ui-widget ui-state-default ui-corner-all"/>
+    <input type="button" value="+/- Details" onclick="$('#sipdetails<?php echo $winid; ?>').toggle(400);"  style="opacity: 1; background: transparent;" class="ui-button ui-widget ui-state-default ui-corner-all"/>
 </p>
-<div id="sipdetails" style="display: none;">
+<div id="sipdetails<?php echo $winid; ?>" style="display: none;">
              <table border="0" cellspacing="2" cellpadding="2"  class="bodystyle">
 <?php
                         foreach ($row as $key=>$value) {
@@ -117,7 +146,7 @@ $(document).ready(function() {
 ?>
              </table>
 </div>
-<div id='sipmsg'>
+<div id='sipmsg<?php echo $winid; ?>'>
         <?php echo $msgbody;?>
 </div>
 <?php
@@ -131,14 +160,16 @@ function liveSearch() {
 	$searchfield = getVar('field', NULL, '', 'string');
   	// timedate limit
         $search['date'] = $timeparam->date = getVar('date', '', '', 'string');
+        $search['from_date'] = $timeparam->date = getVar('from_date', '', '', 'string');
+        $search['to_date'] = $timeparam->date = getVar('to_date', '', '', 'string');
         $search['from_time'] = $timeparam->from_time = getVar('from_time', NULL, '', 'string');
         $search['to_time'] = $timeparam->to_time = getVar('to_time', NULL, '', 'string');
 
-        $ft = date("Y-m-d H:i:s", strtotime($timeparam->date." ".$timeparam->from_time));
-        $tt = date("Y-m-d H:i:s", strtotime($timeparam->date." ".$timeparam->to_time));
-        $fhour = date("H", strtotime($timeparam->date." ".$timeparam->from_time));
-        $thour = date("H", strtotime($timeparam->date." ".$timeparam->to_time));
-        $j=$thour+1;
+        $ft = date("Y-m-d H:i:s", strtotime($timeparam->from_date." ".$timeparam->from_time));
+        $tt = date("Y-m-d H:i:s", strtotime($timeparam->to_date." ".$timeparam->to_time));
+	//        $fhour = date("H", strtotime($timeparam->date." ".$timeparam->from_time));
+	//        $thour = date("H", strtotime($timeparam->date." ".$timeparam->to_time));
+	//        $j=$thour+1;
 
         $where = "(`date` >= '$ft' AND `date` <= '$tt' )";
 
@@ -181,6 +212,54 @@ function SaveCflow() {
 	header("Content-Disposition: attachment; filename=HOMER_CFLOW_".$_REQUEST['cflow']);
 	readfile(PCAPDIR.$_REQUEST['cflow']);
 	}
+
+}
+
+function phpSip() {
+        require_once('php-sip/PhpSIP.class.php');
+        $phpsip_to = getVar('to', NULL, '', 'string');
+        $phpsip_from = getVar('from', NULL, '', 'string');
+        $phpsip_prox = getVar('proxy', NULL, '', 'string');
+        $phpsip_meth = getVar('method', NULL, '', 'string');
+        $phpsip_head = getVar('head', NULL, '', 'string');
+        echo "FROM: ".$phpsip_from."<br>TO: ".$phpsip_to."<br>VIA ".$phpsip_prox."<br>METHOD: ".$phpsip_meth
+	."<br>HEAD: ".$phpsip_head."<br>";
+        echo "<br>";
+        /* Sends test message */
+        try
+        {
+          $api = new PhpSIP();
+          $api->setProxy('sipx.qxip.net:5060');
+          $api->addHeader('X-Capture: '.$phpsip_head);
+          $api->setMethod(''.$phpsip_meth);
+          $api->setFrom("sip:".$phpsip_from);
+          $api->setUri("sip:".$phpsip_to);
+          $api->setUserAgent('HOMER/Php-Sip');
+          $res = $api->send();
+
+          echo "SIP response: $res\n";
+
+        } catch (Exception $e) {
+
+          echo $e;
+        }
+}
+
+function reConf() {
+
+	$var_from = getVar('from', NULL, '', 'string');
+	$var_to = getVar('to', NULL, '', 'string');
+	$cfile = "configuration.php";
+	if (isset($var_from)) {
+	$file = @file_get_contents($cfile);
+	if($file) {
+	    if (strstr($file,$var_from)) {
+	    $file = str_replace($var_from, $var_to, $file);
+	    	//print $file;
+		file_put_contents($cfile,$file);
+		} else { echo "string not found"; }
+	} else { echo "no file"; }
+	} else { echo "no vars"; }
 
 }
 

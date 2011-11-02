@@ -1,3 +1,32 @@
+/*
+ * HOMER Web Interface
+ * Homer's JS Core
+ *
+ * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * The Initial Developers of the Original Code are
+ *
+ * Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+*/
+
+
 <!--
 
 function saveCancel() {
@@ -25,14 +54,20 @@ function setMethod(qmethod) {
 
 function check_form() {
 
+	regexpr = /(\d{2})-(\d{2})-(\d{4})/g;
+	dateFromArray = regexpr.exec(document.getElementById('from_date').value); 
+	regexpr = /(\d{2})-(\d{2})-(\d{4})/g;
+	dateToArray = regexpr.exec(document.getElementById('to_date').value); 
+
+	from_date = dateFromArray[2] + '/' +dateFromArray[1] + '/' +dateFromArray[3];
+	to_date = dateToArray[2] + '/' +dateToArray[1] + '/' +dateToArray[3];
+	
         from_time = document.getElementById('from_time').value;
         to_time = document.getElementById('to_time').value;
+        var dtStart = new Date(from_date + " " + from_time);
+        var dtEnd = new Date(to_date + " " + to_time);
 
-        var dtStart = new Date("1/1/2011 " + from_time);
-        var dtEnd = new Date("1/1/2011 " + to_time);
-        difference_in_milliseconds = dtEnd - dtStart;
-
-        if (difference_in_milliseconds < 0) {
+        if ((dtEnd - dtStart) < 0) {
                 document.getElementById('to_time').focus();
                 alert("End time is before start time!");
                 return false;
@@ -80,30 +115,37 @@ function calculateDelta(ms) {
 	} 
 }
 
-function showMessage(id,table,tnode,location,contx) {
+function sipSendForm() {
 
-   var url = "homer.php?task=showmessage&id="+id+"&table="+table+"&tnode="+tnode+"&location="+location;
+	var phpsip_to = $('#phpsip_to').val();var phpsip_from = $('#phpsip_from').val();var phpsip_prox = $('#phpsip_prox').val();
+	var phpsip_meth = $('#phpsip_meth').val();var phpsip_head = $('#phpsip_head').val();
+
+	adminAction('sipsend', 'to='+phpsip_to+'&from='+phpsip_from+'&proxy='+phpsip_prox+'&method='+phpsip_meth+'&head='+phpsip_head);
+}
+
+function adminAction(task, action) {
+
+   var url = "utils.php?task="+task+"&"+action;
    
-	if ( contx == "1" ) {
-			  newwindow = window.open(url,'popupWindow','toolbar=no,location=no,directories=no,status=no,menubar=no,scrollbars=yes,resizable=yes,copyhistory=no,width=800,height=600,screenX=200,screenY=200,top=50,left=150')
-			  if (window.focus) {newwindow.focus()}
-	} else {
-			
-			var mflow = $('<div id="mflow"></div>')
+			var popup = $('<div id="popup"></div>')
                         .load(url, '', function(response, status, xhr) {
                         if (status == 'error') {
                         var msg = "Sorry but there was an error: ";
                         $(".content").html(msg + xhr.status + " " + xhr.statusText);
                         }})
-                        .dialog({
+			.dialog({
                                 autoOpen: true,
-                                width: 400,
-                                height: 'auto',
-                                close: function(e, i) { $(this).remove(); },
-                                title: 'MSG ID: '+id
+				stack: false,
+				width: 'auto',
+				position: [10, 80],
+				height: 'auto',
+				open: function(e, i) {  $(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); },	
+				close: function(e, i) { $(this).remove(); },	
+                                title: 'Result: '
                         })
-			.focus()
-		}
+			.css('zIndex', -1)
+			.focus();			
+
 }
 
 function popMessage(id) {
@@ -122,30 +164,76 @@ function popMessage(id) {
                         }})
                         .dialog({
                                 autoOpen: true,
+				autoResize: true, 
 				stack: true,
                                 width: 500,
+                                // height: 300,
+				minHeight: 350, 
                                 height: 'auto',
 				position: [posx + 40, posy -5],
-				 open: function(e, i) { $(this).css({ overflow: 'hidden' }); },
+				open: function(e, i) { 
+					$(this).css({ overflow: 'hidden' }); 
+					$(this).css({ height: 'auto' }); 
+				},
+				open: function(e, i) {  $(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); },	
                                 close: function(e, i) { $(this).remove(); },
                                 title: 'MSG ID: '+id
                         })
 			.css('zIndex', -1)
 			.focus();
+
+						
+			document.getElementById(id).focus(); 
+}
+
+function popAny(url) {
+
+			//var url = "utils.php?task=sipmessage&id="+id;
+			var posx = $('body').data('posx');
+			var posy = $('body').data('posy');
+			var id = (new Date()).getTime();
+			jQuery('<div id="'+id+'"></div>').appendTo( jQuery('body') );
+			$("#"+id)
+                        //var pflow = $('<div id="'+id+'"></div>')
+			.load(url, '', function(response, status, xhr) {
+                        if (status == 'error') {
+                        var msg = "Sorry but there was an error: ";
+                        $(".content").html(msg + xhr.status + " " + xhr.statusText);
+                        }})
+                        .dialog({
+                                autoOpen: true,
+				stack: true,
+                                width: 500,
+                                height: 'auto',
+				position: [posx + 40, posy -5],
+				open: function(e, i) { 
+					$(this).css({ overflow: 'hidden' }); 
+				},
+				open: function(e, i) {  $(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); },	
+                                close: function(e, i) { $(this).remove(); },
+                                title: 'PopAny: '
+                        })
+			.css('zIndex', -1)
+			.focus();
+
 						
 			document.getElementById(id).focus(); 
 }
 
 
-function showCallFlow(id,table,tnode,location,unique, tag, callid, date, ft, tt) {
+function showCallFlow(id,table,tnode,location,unique,tag,callid,fdate,tdate, ft, tt, td, b2b) {
 
   if ( callid.match(/-0$/) )  { callid = callid.replace(/-0$/,""); }
 
-	  var url = "cflow.php?cid="+callid+"&cid2="+callid+"-0";
+	  var url = "cflow.php?cid="+callid;
 
-	  if (date != undefined) {
-            url += "&date="+date+"&from_time="+ft+"&to_time="+tt;
-          }
+	  if (fdate != undefined) {
+		  url += "&from_time="+ft+"&to_time="+tt;
+		  url += "&from_date="+fdate+"&to_date="+tdate;
+	  }
+	  url += "&callid_aleg="+b2b;
+			var posx = $('body').data('posx');
+                        var posy = $('body').data('posy');
 
 			var cflow = $('<div id="cflow"></div>')
                         .load(url, '', function(response, status, xhr) {
@@ -155,11 +243,17 @@ function showCallFlow(id,table,tnode,location,unique, tag, callid, date, ft, tt)
                         }})
 			.dialog({
                                 autoOpen: true,
+                                autoResize: true,
 				stack: false,
 				width: 'auto',
-				position: [10, 80],
+				position: [posx-300, posy-80],
 				height: 'auto',
+				minHeight: 300,
 				close: function(e, i) { $(this).remove(); },	
+				open: function(e, i) {  
+					$(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); 
+					$(this).css({ height: 'auto' });
+				},	
                                 title: 'Call Flow: '+callid
                         })
 			.css('zIndex', -1)

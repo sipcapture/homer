@@ -1,21 +1,36 @@
 <?php
-
 /*
- *        App: Homer's PCAP generator
- *        Author: Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * HOMER Web Interface
+ * Homer's PCAP generator Class
+ *
+ * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * The Initial Developers of the Original Code are
+ *
+ * Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
 */
 
-// pcap.php
+define(_HOMEREXEC, "1");
 
-include("class.db.php");
-$db = new homer();
-
-if($db->logincheck($_SESSION['loggedin'], "logon", "password", "useremail") == false){
-        //do something if NOT logged in. For example, redirect to login page or display message.
-        header("Location: index.php\r\n");
-        exit;
-}
+/* MAIN CLASS modules */
+include("class/index.php");
 
 define(_HOMEREXEC, "1");
 
@@ -125,40 +140,54 @@ if ($table == NULL) { $table="sip_capture"; }
 
 // Get Variables
 $cid = getVar('cid', NULL, 'get', 'string');
-$cid2 = getVar('cid2', NULL, 'get', 'string');
+$b2b = getVar('b2b', NULL, 'get', 'string');
 $from_user = getVar('from_user', NULL, 'get', 'string');
 $to_user = getVar('to_user', NULL, 'get', 'string');
 $limit = getVar('limit', NULL, 'get', 'string');
+// Get time & date if available
+$flow_from_date = getVar('from_date', NULL, 'get', 'string');
+$flow_to_date = getVar('to_date', NULL, 'get', 'string');
+$flow_from_time = getVar('from_time', NULL, 'get', 'string');
+$flow_to_time = getVar('to_time', NULL, 'get', 'string');
+
+if(BLEGDETECT == 1) $b2b = 1;
+
+if (isset($flow_to_date, $flow_from_time, $flow_to_time))
+{
+	$ft = date("Y-m-d H:i:s", strtotime($flow_from_date." ".$flow_from_time));
+	$tt = date("Y-m-d H:i:s", strtotime($flow_to_date." ".$flow_to_time));
+	$where = "( `date` BETWEEN '$ft' AND '$tt' )";
+}
+
+/* Prevent break SQL */
+if(isset($where)) $where.=" AND ";
 
 // Build Search Query
 if(isset($cid)) {
-         $where = "( callid = '".$cid."'";
-         if(BLEGCID == "x-cid") $where .= " OR callid_aleg='".$cid."')";
-         else if(isset($cid2))  $where .= " OR callid='".$cid2."')"; 
-         else $where .= ") ";
+
+	/* CID */
+	$where .= "( callid = '".$cid."'";
+	/* Detect second B-LEG ID */
+	if($b2b) {
+	    if(BLEGCID == "x-cid") {
+        	  $query = "SELECT callid FROM ".HOMER_TABLE." WHERE ".$where." AND callid_aleg='".$cid."'";
+	          $cid_aleg = $db->loadResult($query);
+	    }
+	    else if (BLEGCID == "-0") $cid_aleg = $cid.BLEGCID;
+	    else $cid_aleg = $cid;
+
+	    $where .= " OR callid='".$cid.BLEGCID."'";
+	}
+	$where .= ") ";
+	         
 } else if(isset($from_user)) {
-         $where = "( from_user = '".$from_user."'";
+         $where .= "( from_user = '".$from_user."'";
          if(isset($to_user)) { $where .= " OR to_user='".$to_user."')"; } else {  $where .= ") ";}
 } else if(isset($to_user)) {
-         $where = "( to_user = '".$to_user."')";
+         $where .= "( to_user = '".$to_user."')";
 }
 
 if(!isset($limit)) { $limit = 100; }
-
-        // Get time & date if available
-        $flow_date = getVar('date', NULL, 'get', 'string');
-        $flow_from_time = getVar('from_time', NULL, 'get', 'string');
-        $flow_to_time = getVar('to_time', NULL, 'get', 'string');
-        $flow_to_date = getVar('to_date', NULL, 'get', 'string');
-
-        if (isset($flow_date, $flow_from_time, $flow_to_time))
-        {
-        $ft = date("Y-m-d H:i:s", strtotime($flow_date." ".$flow_from_time));
-        if (isset($flow_to_date)) { $flow_date = $flow_to_date; }
-        $tt = date("Y-m-d H:i:s", strtotime($flow_date." ".$flow_to_time));
-        $timewhere = "( `date` >= '$ft' AND `date` <= '$tt' )";
-        $where .= " AND ".$timewhere;
-        }
 
 $localdata=array();
 
@@ -170,15 +199,10 @@ if(!$db->dbconnect_homer(NULL))
 }
 
 
-if($db->dbconnect_homer(NULL)) {
-
-                $query = "SELECT * "
-                        ."\n FROM ".HOMER_TABLE
-                        ."\n WHERE ".$where." order by micro_ts ASC limit ".$limit;
-
-                $rows = $db->loadObjectList($query);
-        }
-
+$query = "SELECT * "
+	."\n FROM ".HOMER_TABLE
+        ."\n WHERE ".$where." order by micro_ts ASC limit ".$limit;
+$rows = $db->loadObjectList($query);
 
 //$query="SELECT * FROM $table WHERE $where order by micro_ts limit 100;";
 $rows = $db->loadObjectList($query);
@@ -195,7 +219,7 @@ foreach($rows as $row) {
 	//Pcap record
 	$pcaprec_hdr = new pcaprec_hdr();
 	$pcaprec_hdr->ts_sec = intval($row->micro_ts / 1000000);  //4
-  $pcaprec_hdr->ts_usec = $row->micro_ts - ($pcaprec_hdr->ts_sec*1000000); //4   
+	$pcaprec_hdr->ts_usec = $row->micro_ts - ($pcaprec_hdr->ts_sec*1000000); //4   
 	$pcaprec_hdr->incl_len = $size->total; //4
 	$pcaprec_hdr->orig_len = $size->total; //4
 

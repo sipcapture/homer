@@ -11,13 +11,13 @@ body {
 
 #newbg {
     position: absolute;
-    top: 0px; left: 0px;
-    width: 100%;
+    top: -5px; left: 0px;
+    width: 99%;
+    z-index: -1;
 //    background-image: url("../images/bg.gif");
     background-repeat:no-repeat;
     background-size: 150%;
-    height:100%;
-    z-Index: -1;
+    height:99%;
 }
 
 fieldset {   
@@ -85,6 +85,7 @@ fieldset {
 
 #results {
 	width: 960px;
+
 }
 
 /*=========search, edit and new buttons on top of results form==============*/
@@ -285,6 +286,7 @@ h1 {
 .wrapper {
 	background-color: #FFF;
 	width: 960px;
+		opacity: 0.8;
 	margin-left: -490px;
 	position: absolute;
 	left: 50%;
@@ -316,6 +318,7 @@ h1 {
 	padding-left: 2px;
 	border: 1px solid #999;
 }
+
 
 /* (c) JqueryUI */
 
@@ -356,14 +359,12 @@ h1.logo a span {
 	float: left;
 	width: 3px;
 	height: 25px;
-	background: url('images/dock.png') no-repeat left top;
 }
 
 #dock .right {
 	float: left;
 	width: 3px;
 	height: 25px;
-	background: url('images/dock.png') no-repeat right top;
 }
 
 #dock ul,
@@ -463,13 +464,5 @@ h1.logo a span {
 }
 
 
-#dialog_link {padding: .4em 1em .4em 20px;text-decoration: none;position: relative;}
-#dialog_link span.ui-icon {margin: 0 5px 0 0;position: absolute;left: .2em;top: 50%;margin-top: -8px;}
-ul#icons {margin: 0; padding: 0;}
-ul#icons li {margin: 2px; position: relative; padding: 4px 0; cursor: pointer; float: left;  list-style: none;}
-ul#icons span.ui-icon {float: left; margin: 0 4px;}
 
-table.display tr.row_selected td {
-        background-color: #606060;
-}
-
+#ui-datepicker-div { display:none }

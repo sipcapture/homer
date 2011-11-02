@@ -50,10 +50,14 @@ $.inlineEdit = function(urls, options){
 	var initialValues = {};
 	var editableFields = false;
 	var linkClicked = false;
+	var dropdownClicked = false;
+
+	var adminGroup=new Array("Admin","Manager","User","Guest");
+
 	
-	if ($('.editableSingle, .editableMulti').length > 0) {
-		var simpleMode = $('.editableSingle, .editableMulti')[0].tagName.toLowerCase() != 'td';
-		options.colors.standard = $('.editableSingle, .editableMulti').eq(0).css('color');
+	if ($('.editableSingle, .editableMulti, .editableDropDown').length > 0) {
+		var simpleMode = $('.editableSingle, .editableMulti, .editableDropDown')[0].tagName.toLowerCase() != 'td';
+		options.colors.standard = $('.editableSingle, .editableMulti, .editableDropDown').eq(0).css('color');
 	}
 	
 	$('.editableSingle').click(function(){
@@ -62,17 +66,22 @@ $.inlineEdit = function(urls, options){
 			return;
 		}
 		
+		if (dropdownClicked) return;
+
 		if (!editableFields || $('.editField').length < editableFields) {
 			var value = options.filterElementValue($(this));
 			saveInitialValue($(this));
 			$(this).addClass('isEditing').css('color', options.colors.standard).stop();
+
+			dropdownClicked=true;	
 			
 			if ($('.editFieldFirst').length == 0) {
 				editableFields = $(this).siblings('.editableSingle, .editableMulti').length + 1;
-				$(this).html('<div class="editFieldWrapper"><input type="text" value="' + value + '" class="editField editFieldFirst" /></div>');
+				$(this).html('<div class="editFieldWrapper"><input size="12" type="text" value="' + value + '" class="editField editFieldFirst" /></div>');
 				
-				if (!simpleMode) {                       
-				   $(this).siblings('.editableSingle, .editableMulti').click();
+				if (!simpleMode) {
+				// force simplemode for reduced space                       
+				//   $(this).siblings('.editableSingle, .editableMulti').click();
 				} else {
 					editableFields = 1;
 				}
@@ -81,28 +90,74 @@ $.inlineEdit = function(urls, options){
 					$('.editFieldFirst').focus();
 				});
 			} else {
-				$(this).html('<div class="editFieldWrapper"><input type="text" value="' + value + '" class="editField" /></div>');
+				$(this).html('<div class="editFieldWrapper"><input  size="12" type="text" value="' + value + '" class="editField" /></div>');
 			}
 		}
 	});
 	
+	$('.editableDropDown').click(function(){
+		if (linkClicked) {
+			linkClicked = false;
+			return;
+		}
+
+		if (dropdownClicked) return;
+		
+		if (!editableFields || $('.editField').length < editableFields) {
+			var value = options.filterElementValue($(this));
+			saveInitialValue($(this));
+			$(this).addClass('isEditing').css('color', options.colors.standard).stop();
+
+			dropdownClicked=true;
+			
+			if ($('.editFieldFirst').length == 0) {
+				editableFields = $(this).siblings('.editableSingle, .editableMulti, .editableDropDown').length + 1;
+				var list="";
+
+				$.each(['Admin','Manager','User','Guest'], function(i, val) {
+			            list += '<option' + ( val === value ? ' selected="selected"':'' ) + '>' + val + '</option>';
+			        });
+
+				$(this).html('<div class="editFieldWrapper"><select class="editField editFieldFirst">'+list+'</select></div>');
+				
+				if (!simpleMode) {
+				// force simplemode for reduced space                       
+				//   $(this).siblings('.editableSingle, .editableMulti, .editableDropDown').click();
+				} else {
+					editableFields = 1;
+				}
+				
+				addSaveControllers(function(){
+					$('.editFieldFirst').focus();
+				});
+			} else {
+				$(this).html('<div class="editFieldWrapper"><input  size="12" type="text" value="' + value + '" class="editField" /></div>');
+			}
+		}
+	});
+
+
 	$('.editableMulti').click(function(){
 		if (linkClicked) {
 			linkClicked = false;
 			return false;
 		}
+
+		if (dropdownClicked) return;
 		
 		if (!editableFields || $('.editField').length < editableFields) {
 			var value = options.filterElementValue($(this));
 			saveInitialValue($(this));
 			$(this).addClass('isEditing').css('color', options.colors.standard).stop();
 			
+			dropdownClicked=true;
+			
 			if ($('.editFieldFirst').length == 0) {
-				editableFields = $(this).siblings('.editableSingle, .editableMulti').length + 1;
+				editableFields = $(this).siblings('.editableSingle, .editableMulti, .editableDropDown').length + 1;
 				$(this).html('<div class="editFieldWrapper"><textarea class="editField editFieldFirst">' + value + '</textarea></div>');
 				
 				if (!simpleMode) {                       
-				   $(this).siblings('.editableSingle, .editableMulti').click();
+				   $(this).siblings('.editableSingle, .editableMulti, .editableDropDown').click();
 				}
 				
 				addSaveControllers(function(){
@@ -114,21 +169,24 @@ $.inlineEdit = function(urls, options){
 		}
 	});
 	
-	$('.editableSingle a, .editableMulti a').click(function(){
+	$('.editableSingle a, .editableMulti a, .editableDropDown a').click(function(){
 		linkClicked = true;
 	});
 	
 	function addSaveControllers(callback)
 	{
-		if ($('.editFieldWrapper:last').parent().hasClass('removable')) {
-			$('.editFieldWrapper:last').append('<div class="editFieldSaveControllers"><button class="input">Save</button>' +
-				', <a href="javascript:;" class="editFieldRemove">Remove</a> or ' +
-				'<a href="javascript:;" class="editFieldCancel">Cancel</a></div>');
+		if ($('.editFieldWrapper:first').parent().hasClass('removable')) {
+			$('.editFieldWrapper:first').append(
+				'<div class="editFieldSaveControllers" style="align: left;">' +
+				'<a href="javascript:;" class="editFieldSave">[Save]</a><br>' +
+				'<a href="javascript:;" class="editFieldRemove">[Remove]</a> ' +
+				'<a href="javascript:;" class="editFieldCancel">[Cancel]</a></div>');
 		} else {
-			$('.editFieldWrapper:last').append('<div class="editFieldSaveControllers"><button>Save</button> or ' +
-				'<a href="javascript:;" class="editFieldCancel">Cancel</a></div>');
+			$('.editFieldWrapper:first').append('<div class="editFieldSaveControllers">'+
+				'<a href="javascript:;" class="editFieldSave">[Save]</a> ' +
+				'<a href="javascript:;" class="editFieldCancel">[Cancel]</a></div>');
 		}
-		$('.editFieldSaveControllers > button').click(editSave);
+		$('.editFieldSaveControllers > a.editFieldSave').click(editSave);
 		$('.editFieldSaveControllers > a.editFieldCancel').click(editCancel);
 		$('.editFieldSaveControllers > a.editFieldRemove').click(editRemove);
 		$('input.editField').keydown(function(e){
@@ -152,9 +210,10 @@ $.inlineEdit = function(urls, options){
 	function editCancel(e)
 	{
 		linkClicked = typeof(e) != 'undefined';   // If e is set, call comes from mouse click
-		
+		dropdownClicked = false;
+
 		$('.editField').each(function(){
-			var $td = $(this).parents('.editableSingle, .editableMulti');
+			var $td = $(this).parents('.editableSingle, .editableMulti, .editableDropDown');
 			removeEditField($td, getInitialValue($td), false);
 		});
 	}
@@ -162,6 +221,7 @@ $.inlineEdit = function(urls, options){
 	function editRemove()
 	{
 		linkClicked = true;
+                dropdownClicked = false;
 		
 		if (!confirm('Are you sure that you want to remove this?')) {
 			return false;
@@ -169,7 +229,7 @@ $.inlineEdit = function(urls, options){
 		
 		$('.editFieldSaveControllers > button, .editField').attr('disabled', 'disabled').html('Removing...');
 		
-		var $td = $('.editField').eq(0).parents('.editableSingle, .editableMulti');
+		var $td = $('.editField').eq(0).parents('.editableSingle, .editableMulti, .editableDropDown');
 		var url = editableUrls.remove;
 		var id = options.getId($td);
 		
@@ -178,15 +238,18 @@ $.inlineEdit = function(urls, options){
 			type: 'GET',
 			success: function(msg){
 				$('.editField').each(function(){
-					var $td = $(this).parents('.editableSingle, .editableMulti');
+					var $td = $(this).parents('.editableSingle, .editableMulti, .editableDropDown');
 					
 					if (msg == 1) {
 						if (options.animate) {
 							$td.slideUp(500, function(){
-								$(this).remove();
+								$(this).parent().remove();
+								//$(this).remove();
+
 							});
 						} else {
-							$td.remove();
+							$td.parent().remove();
+							//$td.remove();
 						}
 					} else {
 						removeEditField($td, getInitialValue($td), false, options.colors.error);
@@ -200,7 +263,8 @@ $.inlineEdit = function(urls, options){
 			},
 			error: function(){
 				$('.editField').each(function(){
-					var $td = $(this).parents('.editableSingle, .editableMulti');
+					var $td = $(this).parents('.editableSingle, .editableMulti, .editableDropDown');
+					//$td.remove();
 					removeEditField($td, getInitialValue($td), false, options.colors.error);
 				});
 			}
@@ -209,6 +273,9 @@ $.inlineEdit = function(urls, options){
 	
 	function removeEditField($td, value, animateColor, fromColor)
 	{
+		dropdownClicked=false;
+		linkClicked = true;
+
 		var f = function(){
 			$td.html(value).removeClass('isEditing');
 			if (animateColor) {
@@ -227,6 +294,7 @@ $.inlineEdit = function(urls, options){
 			$td.children('.editFieldWrapper').hide();
 			f();
 		}
+
 	}
 	
 	function saveInitialValue($td)
@@ -245,8 +313,8 @@ $.inlineEdit = function(urls, options){
 	{
 		var id;
 		$.each($td.attr('class').split(' '), function(index, name){
-			if (name.match(/^id[0-9]*$/)) {
-				id = name.match(/^id([0-9]*)$/)[1];
+			if (name.match(/^id(.*)[0-9]*$/)) {
+				id = name.match(/^id(.*[0-9]*)$/)[1];
 				return false;
 			}
 		});
@@ -269,13 +337,15 @@ $.inlineEdit = function(urls, options){
 	{
 		$('.editFieldSaveControllers > button, .editField').attr('disabled', 'disabled');
 		$('.editField').each(function(){
-			var $td = $(this).parents('.editableSingle, .editableMulti');
+			var $td = $(this).parents('.editableSingle, .editableMulti, .editableDropDown');
 			var typeAndUrl = getTypeAndUrl($td);
 			var url = typeAndUrl.url;   // Get save URL
 			var id = options.getId($td);
 			var value = $(this).val();
 			var color = options.colors.standard;
 			
+			console.log($td)
+
 			$.ajax({
 				url: url + id,
 				data: {data: value},

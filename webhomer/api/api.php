@@ -1,18 +1,44 @@
 <?php
-
 /*
- *        Homer's API Hooks v0.1 by lmangani@qxip.net
+ * HOMER Web Interface
+ * Homer's REST API (Json) v0.1
+ *
+ * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * The Initial Developers of the Original Code are
+ *
+ * Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
 */
 
-include("api.db.php");
-$db = new homer();
+/* MAIN CLASS modules */
+define(_HOMEREXEC, 1);
 
-// if($db->logincheck($_SESSION['loggedin'], "logon", "password", "useremail") == false){
-//         //do something if NOT logged in. For example, redirect to login page or display message.
-//         header("Location: index.php\r\n");
-//         exit;
-// }
+/* NO AUTH for local calls */
+if($_SERVER["SERVER_ADDR"] == $_SERVER["REMOTE_ADDR"]) define(SKIPAUTH, 1);
+/* END */ 
+
+set_include_path('../');
+
+include_once("../class/index.php");
+
+date_default_timezone_set(CFLOW_TIMEZONE);
 
 $task=($_GET['task']);
 
@@ -293,14 +319,27 @@ function getStatsCount() {
 	// Methods & According Response Formats/Vars
 
 	if ($method == "INVITE") {
-	$query = "SELECT from_date,total,asr,ner from stats_method "
+		if(!isset($measure)) {
+		$query = "SELECT from_date,total,asr,ner from stats_method "
 		   ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
 		   ."AND method='".$method."' AND total !=0 order by id";
-
-	} else if ($method == "REGISTER") {
-	$query = "SELECT from_date,total,auth,completed,uncompleted from stats_method "
+		} else {
+		$query = "SELECT from_date,avg(total),avg(asr),avg(ner),avg(completed),avg(uncompleted) from stats_method "
                    ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
                    ."AND method='".$method."' AND total !=0 order by id";
+		}
+
+	} else if ($method == "REGISTER") {
+
+		 if(!isset($measure)) {
+		$query = "SELECT from_date,total,auth,completed,uncompleted from stats_method "
+                   ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
+                   ."AND method='".$method."' AND total !=0 order by id";
+		} else {
+		$query = "SELECT from_date,avg(total),avg(auth),avg(completed),avg(uncompleted) from stats_method "
+                   ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
+                   ."AND method='".$method."' AND total !=0 order by id";
+		}
 
 	} else if ($method == "CURRENT") {
         $query = "SELECT from_date,total from stats_method "
@@ -313,7 +352,7 @@ function getStatsCount() {
                 	   ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
                 	   ."AND method='".$method."' AND total !=0 order by id DESC limit 1";
 		} else {
-		   $query = "SELECT min(from_date),max(to_date),avg(asr),avg(ner) from stats_method "
+		   $query = "SELECT min(from_date),max(to_date),avg(asr),avg(ner),avg(total),avg(completed) from stats_method "
                            ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
                            ."AND method='INVITE' AND total !=0 order by id DESC";
 		}

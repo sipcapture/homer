@@ -40,7 +40,7 @@ class DataTable_Config
    * @var string
    */
   protected $ajaxSource;
-  protected $isProcessingEnabled     = true;
+  protected $isProcessingEnabled     = false;
   protected $isServerSideEnabled     = false;
   protected $isPaginationEnabled     = false;
   protected $isLengthChangeEnabled   = false;
@@ -60,8 +60,8 @@ class DataTable_Config
   protected $languageConfig;
   protected $loadingHtml             = '<p>loading data</p>';
   protected $cookieDuration          = 7200;
-  protected $isSaveStateEnabled      = false;
-  protected $cookiePrefix;
+  protected $isSaveStateEnabled      = true;
+  protected $cookiePrefix	     = homerdata_;
 //  protected $stripClasses            = array('odd', 'even',);
   protected $stripClasses		= array();
 

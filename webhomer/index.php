@@ -1,12 +1,42 @@
 <?php
-//instantiate if needed
-include("class.db.php");
-$log = new homer();
-$log->encrypt = true; //set encryption
+/*
+ * HOMER Web Interface
+ * Homer's index.php
+ *
+ * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * The Initial Developers of the Original Code are
+ *
+ * Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+*/
+
+define(_HOMEREXEC, 1);
+define(SKIPAUTH, 1);
+
+/* MAIN CLASS modules */
+include("class/index.php");
+
 if($_REQUEST['action'] == "login"){
-	if($log->login("logon", $_REQUEST['username'], $_REQUEST['password']) == true){
+	if($auth->login($_REQUEST['username'], $_REQUEST['password']) == true){
 		//do something on successful login	
-		header("Location: homer.php\n\n");
+		header("Location: homer.php?component=search\n\n");
 		exit;
 	}else{
 		//do something on FAILED login	
@@ -47,6 +77,15 @@ body {
 </head>
 
 <body>
+<script language="javascript">
+<!--
+if (navigator.appName == "Microsoft Internet Explorer") {
+        alert('WARNING: IE is NOT supported!');
+}
+// -->
+</script>
+
+
 <form action="index.php" method="post">
 <table width="400" border="0" align="center" cellpadding="0" cellspacing="0"  class="login">
   <tr>

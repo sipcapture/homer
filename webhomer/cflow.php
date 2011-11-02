@@ -1,25 +1,37 @@
 <?php
-
 /*
- *        App: Homer's Own CallFlow 
- *        Author: Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * HOMER Web Interface
+ * Homer's cflow.php
+ *
+ * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * The Initial Developers of the Original Code are
+ *
+ * Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
 */
 
 
-// cflow.php
-
-include("class.db.php");
-$db = new homer();
-
-if($db->logincheck($_SESSION['loggedin'], "logon", "password", "useremail") == false){
-        //do something if NOT logged in. For example, redirect to login page or display message.
-        header("Location: index.php\r\n");
-        exit;
-}
-
 define(_HOMEREXEC, "1");
 
+/* MAIN CLASS modules */
+include("class/index.php");
 
 /* clear cflow image cache in PCAPDIR */
  if (CFLOW_CLEANUP != 0) {
@@ -34,7 +46,6 @@ foreach (glob( PCAPDIR . $fileTypes) as $tmpfile) {
     }
 }
 
-
 /* My Nodes */
 $mynodeshost = array();
 $mynodesname = array();
@@ -43,6 +54,8 @@ foreach($nodes as $node) {
         $mynodeshost[$node->id] = $node->host;
         $mynodesname[$node->id] = $node->name;
 }
+
+$aliases = $db->getAliases();
 
 $arrow_step=40;
 $host_step=200;
@@ -88,35 +101,45 @@ function arrow ( $image, $color, $x, $y, $d = -1)
 $tnode=1;
 $option = array(); //prevent problems
 
-// Check if Table is set
-if ($table == NULL) { $table="sip_capture"; }
-
 //$cid="1234567890";
 
+//callid_aleg
 $cid = getVar('cid', NULL, 'get', 'string');
-$cid2 = getVar('cid2', NULL, 'get', 'string');
-
-//Make image
-$where = "( callid = '".$cid."'";
-if(BLEGCID == "x-cid") $where .= " OR callid_aleg='".$cid."')";
-else if(isset($cid2)) $where .= " OR callid='".$cid2."')";
-else  $where .= ") ";
+$b2b = getVar('b2b', NULL, 'get', 'string');
+if(BLEGDETECT == 1) $b2b =1;
 
 //Crop Search Parameters, if any
-        $flow_date = getVar('date', NULL, 'get', 'string');
-        $flow_from_time = getVar('from_time', NULL, 'get', 'string');
-        $flow_to_time = getVar('to_time', NULL, 'get', 'string');
-        $flow_to_date = getVar('to_date', NULL, 'get', 'string');
+$flow_from_date = getVar('from_date', NULL, 'get', 'string');
+$flow_from_time = getVar('from_time', NULL, 'get', 'string');
+$flow_to_time = getVar('to_time', NULL, 'get', 'string');
+$flow_to_date = getVar('to_date', NULL, 'get', 'string');
 
-        if (isset($flow_date, $flow_from_time, $flow_to_time))
-        {
-        	$ft = date("Y-m-d H:i:s", strtotime($flow_date." ".$flow_from_time));
-		if (isset($flow_to_date)) { $flow_date = $flow_to_date; } 
-        	$tt = date("Y-m-d H:i:s", strtotime($flow_date." ".$flow_to_time));
-        	$timewhere = "(`date` >= '$ft' AND `date` <= '$tt' )";
-	   // Hook to query
-           $where .= " AND ".$timewhere;
-        }
+if (isset($flow_from_date, $flow_from_time, $flow_to_time, $flow_to_date))
+{
+  $ft = date("Y-m-d H:i:s", strtotime($flow_from_date." ".$flow_from_time));
+  $tt = date("Y-m-d H:i:s", strtotime($flow_to_date." ".$flow_to_time));
+  $where = "(`date` BETWEEN '$ft' AND '$tt' )";
+}
+
+/* Prevent break SQL */
+if(isset($where)) $where.=" AND ";
+
+/* CID */
+$where.="( callid = '".$cid."'";
+/* Detect second B-LEG ID */
+if($b2b) {
+    if(BLEGCID == "x-cid") {
+          $query = "SELECT callid FROM ".HOMER_TABLE
+                  ."\n WHERE ".$where." AND callid_aleg='".$cid."'";
+          $cid_aleg = $db->loadResult($query);    
+    }
+    else if (BLEGCID == "-0") $cid_aleg = $cid.BLEGCID;    
+    else $cid_aleg = $cid;
+  
+    $where .= " OR callid='".$cid.BLEGCID."'";
+}
+$where .= ") ";
+
 
 $localdata=array();
 
@@ -128,30 +151,33 @@ if(!$db->dbconnect_homer(NULL))
 }
 
 
-if($db->dbconnect_homer(NULL)) {
 
-                $query = "SELECT * "
-                        ."\n FROM ".HOMER_TABLE
-                        ."\n WHERE ".$where." order by micro_ts ASC limit 100";
-		
-                $rows = $db->loadObjectList($query);
+$query = "SELECT * "
+          ."\n FROM ".HOMER_TABLE
+          ."\n WHERE ".$where." order by micro_ts ASC limit 100";
+
+$rows = $db->loadObjectList($query);
                 
-                $querytd = "SELECT TIMEDIFF(max(date),min(date)) as tot_dur "
-                        ."\n FROM ".HOMER_TABLE
-                        ."\n WHERE ".$where;
-                $totdurs = $db->loadObjectList($querytd);
-                $totdur = mysql_real_escape_string($totdurs[0]->tot_dur);
-        }
-
+$querytd = "SELECT TIMEDIFF(max(date),min(date)) as tot_dur "
+          ."\n FROM ".HOMER_TABLE
+          ."\n WHERE ".$where;
+$totdurs = $db->loadObjectList($querytd);
+$totdur = mysql_real_escape_string($totdurs[0]->tot_dur);
 
 //$query="SELECT * FROM $table WHERE $where order by micro_ts limit 100;";
 $rows = $db->loadObjectList($query);
 foreach($rows as $data) {
+  
+  /* LOCAL RESOLV */
+  foreach($aliases as $alias) {
+            if($alias->host == $data->source_ip) $data->source_ip = $alias->name;
+            if($alias->host == $data->destination_ip) $data->destination_ip = $alias->name;
+  }
 
-  $localdata[] = $data;
+  $localdata[] = $data;  
+  
   $hosts[$data->source_ip] = 1;
   $hosts[$data->destination_ip] = 1;
-
 
   //Check user agent and generate type of UAC
   //Better to make it in DB.
@@ -202,9 +228,7 @@ foreach($rows as $data) {
       $uac[$data->source_ip] = "sipgateway";
       $uac[$data->user_agent] = $data->user_agent;
  }
- //debug
- //$uac[$data->source_ip] = "snom";
- //       print_r($uac);
+ 
 
 }
 
@@ -431,13 +455,14 @@ imagepng($im, $path);
 imagedestroy($im);
 //<area href=' vocal-bad-ack2.cap' coords='50,62,900,85'></area>
 //<area href='test' coords='40,80,200,65'></area>
+$winid = rand(1111, 9999);
 ?>
 <html>
 <head>
-<!--
 <link href="styles/core_styles.css" rel="stylesheet" type="text/css" />
 <link href="styles/form.css" rel="stylesheet" type="text/css" />
 <link type="text/css" href="styles/jquery-ui-1.8.4.custom.css" rel="stylesheet" />
+<!--
 <script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
 <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
 -->
@@ -447,22 +472,26 @@ $(document).ready(function(){
 
       $('input:button').button();
 
-      $('#image').zoomable();
+      $('#image<?php echo $winid; ?>').zoomable();
+
+//      $(this).find('a.ui-dialog-titlebar-close').parent().append( $('#ybuttons') );
+
+// Style buttons
+//$('#s2').input({ icons: { primary: "ui-icon-locked" } });
 
     });
 </script>
 </head>
 
-<p>
-    <input type="button" value="+" onclick="$('#image').zoomable('zoomIn')" title="Zoom in"  style="background: transparent;" />
-    <input type="button" value="-" onclick="$('#image').zoomable('zoomOut')" title="Zoom out"  style="background: transparent;" />
-    <input type="button" value="Reset" onclick="$('#image').zoomable('reset')"  style="background: transparent;" />
-    <input type="button" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');" style="background: transparent;" />
-    <input type="button" value="PCAP" onclick="window.open('pcap.php?cid=<?php echo $cid; if(isset($cid2)) echo "&cid2=".$cid2; ?>');" style="background: transparent;"/>
-
+<p id="ybuttons" align="center" style="margin-right: 20;">
+    <input id="z1" type="button" value="+" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomIn')" title="Zoom in"  style="background: transparent;" />
+    <input id="z2" type="button" value="-" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomOut')" title="Zoom out"  style="background: transparent;" />
+    <input id="r1" type="button" value="Reset" onclick="$('#image<?php echo $winid; ?>').zoomable();$('#image<?php echo $winid; ?>').width('<?php echo $size_x;?>').height('<?php echo $size_y;?>');"  style="background: transparent;" />
+    <input id="s1" type="button" class="ui-state-default ui-corner-all" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');"  style="background: transparent;"  />
+    <input id="s2" type="button" value="PCAP" onclick="window.open('pcap.php?cid=<?php echo $cid;?>&b2b=<?php echo $b2b; ?>');" style="background: transparent;"/>
 <?php  if (isset($flow_date)) { ?>
     <input type="button" value="Time Span: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
-    <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().load('cflow.php?cid=<?php echo $cid ?>&cid2=<?php echo $cid ?>-0');"/>
+    <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().load('cflow.php?cid=<?php echo $cid ?>&b2b=<?php echo $b2b ?>');"/>
 <?php } else {  ?>
     <input type="button" value="Time Span: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
 <?php   }       ?>
@@ -470,7 +499,7 @@ $(document).ready(function(){
 </p>
 <center>
 <div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
-<img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image">
+<img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image<?php echo $winid; ?>">
 <map name='map' id='map'>
 <?php
 foreach($click as $cds) {

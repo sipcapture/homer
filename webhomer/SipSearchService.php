@@ -1,4 +1,31 @@
 <?php
+/*
+ * HOMER Web Interface
+ * Homer's SIP Search Service class
+ *
+ * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * The Initial Developers of the Original Code are
+ *
+ * Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+ * Lorenzo Mangani <lorenzo.mangani@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ *
+*/
 
 include_once('ISipService.php');
 include_once('SipResult.php');
@@ -68,45 +95,53 @@ class SipSearchService implements ISipService
   }
 
 
-  public function getAll($offset, $num, $sort, $sortDirection = 'asc', $isCount = false, $homer)
+  public function getAll($offset, $num, $sort, $sortDirection = 'desc', $isCount = false, $homer)
   {
-    $sort = $this->propertyToColumnMapping[$sort];
+
+     global $db;
+    
+     $sort = $this->propertyToColumnMapping[$sort];
 
      $location = $homer->location;
 
-     $skip_keys = array('location','max_records','date', 'from_time', 'to_time', 'unique');
-     $ft = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->from_time));
-     $tt = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->to_time));
-     $fhour = date("H", strtotime($homer->date." ".$homer->from_time));
-     $thour = date("H", strtotime($homer->date." ".$homer->to_time));
+     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time', 'unique','b2b');
+     $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
+     $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
+     $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));
+     $thour = date("H", strtotime($homer->to_date." ".$homer->to_time));
      $unique = $homer->unique;
-                             
+     $b2b = $homer->b2b;
+           
+     /*Always ON */
+     if(BLEGDETECT == 1) $b2b=1;
+
      $j=$thour+1;     
      
-     $where = "(`date` >= '$ft' AND `date` <= '$tt' )";              
+     $where = "(`date` BETWEEN '$ft' AND '$tt' )";              
 
      $max_records = (int) ($homer->max_records/count($location));
      
-      $s=0;
+     $s=0;
      foreach($homer as $key=>$value) {
 
 	   if(in_array($key, $skip_keys)) continue;
 
 	   if(!isset($callwhere)) $callwhere = "(";
-	   if($key == "callid" && $callid_aleg) $callwhere.=" (";
+	   if($key == "callid" && $b2b ) $callwhere.=" (";
 
 	   $eqlike = preg_match("/%/", $value) ? " like " : " = ";
+           $mkey = "`".$key."`";
+           $mvalue = "'".$value."'";
+           if($s == 1) $callwhere.=" AND ";
+           $callwhere.= $mkey.$eqlike.$mvalue;
 
-        //$key = mysql_real_escape_string($key);
-        $key = "`".$key."`";
-        //$value = "'".mysql_real_escape_string($value)."'";
-        $value = "'".$value."'";
+	   if($key == "callid" && $b2b) {
+                if(BLEGCID == "x-cid") $callwhere .= "OR callid_aleg ".$eqlike.$mvalue;
+                else if(BLEGCID == "-0") $callwhere .= " OR callid ".$eqlike."'".$value.BLEGCID."'";
+                $callwhere .= ") ";
+           }
 
-        if($s == 1) $callwhere.=" AND ";
-
-        $callwhere.= $key.$eqlike.$value;
-	      if($key == "callid" && $callid_aleg) $callwhere.= " OR callid_aleg ".$eqlike.$value.") ";
-        $s = 1;
+           $s = 1;
     }
                    
     if(isset($callwhere)) $where .= " AND ".$callwhere.")";
@@ -121,7 +156,7 @@ class SipSearchService implements ISipService
               $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ". $where;
-			
+	
 	      $statement = $this->connection->query($query);
 	      $result = $statement->fetch();
 	      
@@ -162,7 +197,9 @@ class SipSearchService implements ISipService
 
         //usort($results, 'compare');
 
-	    $sipresults = $this->hydrateResults($results, $location);
+        //Get aliases (hosts)
+        $hosts = $db->getAliases();
+	$sipresults = $this->hydrateResults($results, $location, $hosts);
       
       return $sipresults;
     }
@@ -173,20 +210,28 @@ class SipSearchService implements ISipService
 
   public function searchAll($search, $columns, $offset, $num, $sort, $sortDirection = 'asc', $isCount = false, $homer, $searchtColumns, $parent)
   {
-    $whereSqlParts = array();
+
+     global $db;
+     
+     $whereSqlParts = array();
 
      $location = $homer->location;
+     
 
-     $skip_keys = array('location','max_records','date', 'from_time', 'to_time','unique');
-     $ft = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->from_time));
-     $tt = date("Y-m-d H:i:s", strtotime($homer->date." ".$homer->to_time));
-     $fhour = date("H", strtotime($homer->date." ".$homer->from_time));
-     $thour = date("H", strtotime($homer->date." ".$homer->to_time));
+     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time','unique','b2b');
+     $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
+     $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
+     $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));
+     $thour = date("H", strtotime($homer->to_date." ".$homer->to_time));
      $unique = $homer->unique;
+     $b2b = $homer->b2b;
+
+     /*Always ON */
+     if(BLEGDETECT == 1) $b2b=1;
 
      $j=$thour+1;     
      
-     $where = " AND (`date` >= '$ft' AND `date` <= '$tt' )";              
+     $where = " AND (`date` BETWEEN '$ft' AND '$tt' )";              
 
      $max_records = (int) ($homer->max_records/count($location));
      
@@ -194,27 +239,24 @@ class SipSearchService implements ISipService
      foreach($homer as $key=>$value) {
 
 	if(in_array($key, $skip_keys)) continue;
-
 	if(!isset($callwhere)) $callwhere = "(";
-	if($key == "callid" && $callid_aleg) $callwhere.=" (";
-
+	if($key == "callid" && $b2b) $callwhere.=" (";
 	$eqlike = preg_match("/%/", $value) ? " like " : " = ";
-
-        //$key = mysql_real_escape_string($key);
-        $key = "`".$key."`";
-        //$value = "'".mysql_real_escape_string($value)."'";
-        $value = "'".$value."'";
-
+        $mkey = "`".$key."`";
+        $mvalue = "'".$value."'";
         if($s == 1) $callwhere.=" AND ";
+        $callwhere.= $mkey.$eqlike.$mvalue;
 
-        $callwhere.= $key.$eqlike.$value;
-	if($key == "callid" && $callid_aleg) $callwhere.= " OR callid_aleg ".$eqlike.$value.") ";
+        if($key == "callid" && $b2b) {
+                if(BLEGCID == "x-cid") $callwhere .= "OR callid_aleg ".$eqlike.$mvalue;
+                else if(BLEGCID == "-0") $callwhere .= " OR callid ".$eqlike."'".$value.BLEGCID."'";
+                $callwhere .= ") ";
+        }
 
 	$s = 1;
     }
-                   
+                       
     if(isset($callwhere)) $where .= " AND ".$callwhere.")";
-
     if(empty($searchtColumns)) {    
         foreach($columns as $column){
           // get db column name
@@ -289,7 +331,9 @@ class SipSearchService implements ISipService
 
         //usort($results, 'compare');
 
-        $sipresults = $this->hydrateResults($results, $location);
+        //Get aliases (hosts)
+        $hosts = $db->getAliases();                   
+        $sipresults = $this->hydrateResults($results, $location, $hosts);
 
       return $sipresults;
     }
@@ -299,11 +343,22 @@ class SipSearchService implements ISipService
    * Hydrate a db result set into an array of SipResult objects
    * 
    */
-  protected function hydrateResults($results, $location)
+  protected function hydrateResults($results, $location, $hosts)
   {
+
+    //print_r($hosts);
     $browsers = array();    
 	// convert result set into array of SipResult objects
     foreach($results as $result){
+    
+      foreach($hosts as $host) {
+            if($host->host == $result["source_ip"]) {
+                  $result["source_ip"] = $host->name;
+            }            
+            if($host->host == $result["destination_ip"]) {
+                  $result["destination_ip"] = $host->name;
+            }            
+      }
     
       $sipresults[] = new SipResult($result, $location);
     }

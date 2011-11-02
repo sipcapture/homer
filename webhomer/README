@@ -1,21 +1,65 @@
-WEBHOMER is a simple webinterface to Homer capturing system.
+--------------- RC FLAG -----------------
 
-It requires php5.2, pecl/json, php-gd extensions
+WEBHOMER3 is a modular interface for HOMER/SIPCapture
+
+This release is a DEVELOPMENT PREVIEW! Do not redistribute or share
+
+--------------- RC FLAG -----------------
+
+Requirements:
+
+	- PHP 5.2+ (w/ pecl/json, php-gd) 
+	- MySQL 5.1+
+	- Apache2 (w/ rewrite enabled for API)
+	- HOMER/SIPCAPTURE (latest git)
+
+Setup/Upgrade:
+
+	- create homer_statistics db (statistics.sql)
+        - schedule cronjob for stat collection every 5 minutes, add db auth (statistic.pl)
+	- Copy webhomer3 in your webfolder and carry your existing configuration.php
+	- For production, create a symlink from old webhomer/ to webhomer3/ for config continuity
+	- For testing, webhomer3 can run in parallel with other/older webhomer versions
+
+Setup/New Users:
+
+	- create homer_users db (homer_users.sql)
+	- insert all your home nodes into homer_nodes table (see HOWTO)
+	- create homer_statistics db (statistics.sql)
+	- schedule cronjob for stat collection every 5 minutes, add db auth (statistic.pl)
+	- customize "configuration_example.php" and rename it to "configuration.php"
+	- point your browser at WEBHOMER's url and login as: test@test.com/test123
+	
+----------------------------------------
+
+New Features:
+
+	- [New] Drag & Drop UI with inline elements & cookie positioning prefs
+	- [New] Time & Date controls with graph/zoom selection & interaction
+	- [New] Statistics with separate tables and Search integration (click & search)
+	- [New] Improved Admin section with user levels and service overview
+	- [New] Toolbox page with SIP Message & PCAP generator & Looking-Glass Widgets
+	- [New] API functions for widget development and integration with other tools
+	- [New] Extensible Alarm Class for notifications dispatching
+	- [New] Extensible Authentication Class supporting Internal, LDAP, Radius
+
+Usage Notes:
+
+	- All searches are obeying the time/date parameters set in search page
+	  IE: Autosearch, Search, Call-Flow
+
+Notes:
+
+	- IE is unsupported (until someone who wants it provides time/patches)
+	- UI Glitches? Clear browser cookies (top right TRASH icon) and try again
 
 
-Before Using:
+------------ BUGS & FEEDBACK  --------------
 
-- create a mysqldb (homer_users.sql)
+* For bug reports and feedback on this PRE-RELEASE email: lorenzo.mangani@gmail.com, alexandr.dubovikov@gmail.com
+* For general assistance requests please create a ticket (http://code.google.com/p/homer/issues)
 
-- insert all your home nodes into homer_nodes table.
-
-- customize "configuration_example.php" and rename it to "configuration.php"
-
-- point your browser at WEBHOMER's url and login as: test@test.com/test123
-
-
-
-
-All question and comments please send to alexandr.dubovikov@gmail.com or create an issue/ticket
+- Visit us at http://sipcapture.org 
+- Follow updates on twitter @sipcapture
 
 
