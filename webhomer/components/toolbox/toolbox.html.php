@@ -164,6 +164,7 @@ class HTML_ToolBox {
          }
 ?>
 
+<!-- 
 	<li class="widget color-red" id="widget-auth">
                 <div class="widget-head"><h3>Auth Fail</h3></div>
                 <div class="widget-content">
@@ -192,7 +193,7 @@ class HTML_ToolBox {
 		<div id="live401"></div><br>
  		</div>
 	</li>
-
+-->
 
 	</ul>
 
