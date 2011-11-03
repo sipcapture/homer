@@ -58,8 +58,7 @@ class HTML_Admin {
 			categorypassword: 'adminajax.php?type=password&categoryId=',			
 			categoryuseremail: 'adminajax.php?type=useremail&categoryId=',
 			categoryuserlevel: 'adminajax.php?type=userlevel&categoryId=',			
-			remove: 'adminajax.php?type=remove&categoryId=',
-	
+			remove: 'adminajax.php?type=remove&categoryId='
 		}, {
 	
 			animate: false,
