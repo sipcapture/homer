@@ -41,43 +41,15 @@ class HTML_ToolBox {
 	<script type="text/javascript" src="js/cookie.jquery.js"></script>
 	<script type="text/javascript" src="js/inettuts3.js"></script> 
         <script type="text/javascript" src="js/jquery.Dialog.js"></script>
-        <script type="text/javascript" src="js/jquery.inlineEdit.js"></script>
- 	<script src="js/jquery.timeentry.js" type="text/javascript"></script>
+    	<script src="js/jquery.timeentry.js" type="text/javascript"></script>
         <script type="text/javascript">
             $(function(){
-
-		$('#from_date').datepicker({ dateFormat: 'dd-mm-yy' });
-		$('#to_date').datepicker({ dateFormat: 'dd-mm-yy' });
-	 	$('.timepicker1').timeEntry({show24Hours: true, showSeconds: true});
+              $('#from_date').datepicker({ dateFormat: 'dd-mm-yy' });
+		          $('#to_date').datepicker({ dateFormat: 'dd-mm-yy' });
+	 	         $('.timepicker1').timeEntry({show24Hours: true, showSeconds: true});
             	$('.timepicker2').timeEntry({show24Hours: true, showSeconds: true});
-	
-		 iNettuts.init();
 
-
-                $.inlineEdit({
-			categoryhost: 'adminajax.php?type=host&categoryId=',			
-			categoryname: 'adminajax.php?type=name&categoryId=',
-			categorystatus: 'adminajax.php?type=status&categoryId=',
-			categorypassword: 'adminajax.php?type=password&categoryId=',			
-			categoryuseremail: 'adminajax.php?type=useremail&categoryId=',
-			categoryuserlevel: 'adminajax.php?type=userlevel&categoryId=',			
-			remove: 'adminajax.php?type=remove&categoryId=',
-	
-		}, {
-	
-			animate: false,	
-			filterElementValue: function($o){
-                                return $o.html();
-			},
-	
-			afterSave: function(o){
-				if (o.type == 'category2name') {
-					$('.category2name.id' + o.id).prepend('$');
-			}
-		}	            
-                });
-            });
-        
+             iNettuts.init();
         </script>
         <style type="text/css"> 
 		#data td {
