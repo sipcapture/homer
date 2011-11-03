@@ -57,6 +57,10 @@ class HTML_search {
 				$('#from_user').autocomplete({
                                 source: "utils.php?task=livesearch&field=from_user&from_date="+$('#from_date').val()+"&to_date="+$('#to_date').val()+"&from_time="+$('#from_time').val()+"&to_time="+$('#to_time').val(),
                                 minLength: 3,
+                                select: function(event, ui) {
+                                        $('#from_user').val(ui.item.from_user);
+                                }
+
 	                        });
 	                        
         	                $('#to_user').autocomplete({
