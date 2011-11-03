@@ -52,6 +52,8 @@ class HTML_Statistic {
         jQuery(document).ready( function($) {
 
 <?php
+	 if (isset($_SERVER['HTTP_USER_AGENT']) &&
+                (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') == true)) { exit; }
 
         // Scan Modules directory and display
         $submodules = array_filter(glob('modules/*'), 'is_dir');

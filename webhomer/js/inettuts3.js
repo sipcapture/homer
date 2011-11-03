@@ -32,6 +32,7 @@ var iNettuts = {
     },
 
     init : function () {
+	 	if (navigator.appName == "Microsoft Internet Explorer") { document.getElementById('column1').style.display = 'none'; }
 	//alert(JSON.stringify(this));
 	this.sortWidgets();
         this.attachStylesheet('styles/inettuts.js.css');
