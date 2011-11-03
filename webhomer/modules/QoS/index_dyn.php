@@ -40,6 +40,34 @@ echo '<script type="text/javascript" src="js/highstock.js"></script>';
 //include('configuration.php');
 $hours = STAT_RANGE;
 
+?>
+
+
+
+		<!-- <script type="text/javascript" src="../stats/js/modules/exporting.js"></script> -->
+		<div id="chart5" style="float: left; min-width: 150px; width: 49%; min-height: 200px;"></div>
+		<div id="chart4" style="float: right; min-width: 150px; width: 49%; min-height: 100px;"></div>
+		<div id="chart6" style="float: right; min-width: 150px; width: 49%; min-height: 100px;"></div>
+		<div id="control-stats">
+                <select id="timer-stats"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
+                        <option value="0">0</option>
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="15">15</option>
+                </select>
+                <button id="refresh-stats" style="width: 60; border: 0; background: #fff;  float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>
+            	</div>
+
+<script type="text/javascript">
+
+$ = jQuery;
+
+$('#refresh-stats').click(function() {
+
+$('#live-stats').html('');
+
+<?php
+
 $uri = "http://".$_SERVER['SERVER_NAME'].APILOC;
 
 $request = $uri."api.php?task=statscount&method=INVITE&measure=1&hours=".$hours;
@@ -72,90 +100,6 @@ foreach($response as $entry){
 ?>
 
 
-		<!-- <script type="text/javascript" src="../stats/js/modules/exporting.js"></script> -->
-		<div id="chart5" style="float: left; min-width: 150px; width: 49%; min-height: 200px;"></div>
-		<div id="chart4" style="float: right; min-width: 150px; width: 49%; min-height: 100px;"></div>
-		<div id="chart6" style="float: right; min-width: 150px; width: 49%; min-height: 100px;"></div>
-		<div id="control-stats">
-                <select id="timer-stats"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
-                        <option value="0">0</option>
-                        <option value="5">5</option>
-                        <option value="10">10</option>
-                        <option value="15">15</option>
-                </select>
-                <button id="refresh-stats" style="width: 60; border: 0; background: #fff;  float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>
-            	</div>
-
-<script type="text/javascript">
-
-$ = jQuery;
-
-$('#refresh-stats').click(function() {
-
-$('#live-stats').html('');
-// ASR
-var chart4 = new Highcharts.Chart({
-      chart: {
-         renderTo: 'chart4',
-         backgroundColor: 'transparent',
-         defaultSeriesType: 'bar'
-      },
-      title: {
-//         text: 'Last <?php echo $hours; ?>h',
-	text: 'A.S.R.',
-	style: { 
-         font: 'bold 9px Verdana, sans-serif'
-      	}
-      },
-      xAxis: {
-
-         categories: [' '],
-         title: {
-            text:  '',
-         }
-      },
-      yAxis: {
-         min: 0,
-	 max: 100,
-         title: {
-            text: '',
-//            align: 'high'
-         }
-      },
-      tooltip: {
-         formatter: function() {
-            return ''+
-                this.series.name +': '+ this.y +'';
-         }
-      },
-      plotOptions: {
-         bar: {
-            dataLabels: {
-               enabled: false
-            }
-         }
-      },
-      legend: {
-         layout: 'vertical',
-         align: 'right',
-         verticalAlign: 'bottom',
-         x: -100,
-         y: 100,
-         floating: true,
-         borderWidth: 1,
-         backgroundColor: '#ffffff',
-         shadow: true
-      },
-      credits: {
-         enabled: false
-      },
-           series: [{
-         name: 'ASR',
-	 color: '<?php echo $colASR; ?>',
-           data: [ <?php echo join($sipASR, ', '); ?> ]
-      }]
-   });
-
 // NER
 var chart6 = new Highcharts.Chart({
       chart: {
@@ -175,7 +119,7 @@ var chart6 = new Highcharts.Chart({
 
          categories: [' '],
          title: {
-            text:  '',
+            text:  null,
          }
       },
       yAxis: {
@@ -183,7 +127,6 @@ var chart6 = new Highcharts.Chart({
 	 max: 100,
          title: {
             text: '',
-//            align: 'high'
          }
       },
       tooltip: {
@@ -202,7 +145,7 @@ var chart6 = new Highcharts.Chart({
       legend: {
          layout: 'vertical',
          align: 'right',
-         verticalAlign: 'bottom',
+         verticalAlign: 'top',
          x: -100,
          y: 100,
          floating: true,
@@ -219,6 +162,70 @@ var chart6 = new Highcharts.Chart({
          data: [ <?php echo join($sipNER, ', '); ?> ]
       }]
    });
+
+// ASR
+var chart4 = new Highcharts.Chart({
+      chart: {
+         renderTo: 'chart4',
+         backgroundColor: 'transparent',
+         defaultSeriesType: 'bar'
+      },
+      title: {
+//         text: 'Last <?php echo $hours; ?>h',
+	text: 'A.S.R.',
+	style: {
+         font: 'bold 9px Verdana, sans-serif'
+        }
+
+      },
+      xAxis: {
+
+         categories: [' '],
+         title: {
+            text:  null,
+         }
+      },
+      yAxis: {
+         min: 0,
+	 max: 100,
+         title: {
+            text: '',
+         }
+      },
+      tooltip: {
+         formatter: function() {
+            return ''+
+                this.series.name +': '+ this.y +'';
+         }
+      },
+      plotOptions: {
+         bar: {
+            dataLabels: {
+               enabled: false
+            }
+         }
+      },
+      legend: {
+         layout: 'vertical',
+         align: 'right',
+         verticalAlign: 'top',
+         x: -100,
+         y: 100,
+         floating: true,
+         borderWidth: 1,
+         backgroundColor: '#ffffff',
+         shadow: true
+      },
+      credits: {
+         enabled: false
+      },
+           series: [{
+         name: 'ASR',
+	 color: '<?php echo $colASR; ?>',
+         data: [ <?php echo join($sipASR, ', '); ?> ]
+      }]
+   });
+
 
 // CALLS
 var chart5 = new Highcharts.Chart({

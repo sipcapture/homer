@@ -39,6 +39,27 @@ date_default_timezone_set(CFLOW_TIMEZONE);
 $offset = STAT_OFFSET;
 $xhours = STAT_RANGE;
 
+?>
+
+
+		<div id="chart1" style="min-width: 380px; width: 99%; margin-left: 1px; float: left; height: 200px"></div>
+		<div id="control-graph">
+                <select id="timer-graph"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
+                        <option value="0">0</option>
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="15">15</option>
+                </select>
+                <button id="refresh-graph" style="width: 60; border: 0; background: #fff; float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>
+            </div>
+
+<script type="text/javascript">
+
+$ = jQuery;
+
+$('#refresh-graph').click(function(){
+
+<?php
 
 $uri = "http://".$_SERVER['SERVER_NAME'].APILOC;
 
@@ -97,22 +118,6 @@ foreach($response as $entry){
 
 ?>
 
-		<div id="chart1" style="min-width: 380px; width: 95%; margin-left: 1px; float: left; height: 200px"></div>
-		<div id="control-graph">
-                <select id="timer-graph"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
-                        <option value="0">0</option>
-                        <option value="5">5</option>
-                        <option value="10">10</option>
-                        <option value="15">15</option>
-                </select>
-                <button id="refresh-graph" style="width: 60; border: 0; background: #fff; float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>
-            </div>
-
-<script type="text/javascript">
-
-$ = jQuery;
-
-$('#refresh-graph').click(function(){
 
 var chart1 = new Highcharts.Chart({
 
