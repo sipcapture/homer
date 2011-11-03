@@ -11,8 +11,12 @@ $header =  getVar('component', 0, '', 'int');
 $components = array("search" => 3, "toolbox" => 3, "statistic" =>3, "admin" => 1);          
 
 /* Disable stats changing security level */
-if(MODULES==0) $components["statistic"]=0;
-  
+if(detectIE()) {
+  $components["statistic"]=0;
+  define("IERROR",1);
+}
+else define("IERROR",0);
+
 #Extra Security check
 $security = 0;
 foreach($components as $key=>$value) {
