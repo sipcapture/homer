@@ -37,8 +37,7 @@ class HTML_mainhtml {
         <html xmlns="http://www.w3.org/1999/xhtml">
             <head>
             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-            <title>Web Homer - <?php echo $status;?> </title>
-            <script type="text/javascript">var IER=<?php echo IERROR;?>;</script>
+            <title>Web Homer - <?php echo $status;?> </title>            
             <link href="styles/core_styles.css" rel="stylesheet" type="text/css" />
             <link href="styles/form.css" rel="stylesheet" type="text/css" />
             <link href="styles/jquery.timeentry.css" rel="stylesheet" type="text/css" />            
@@ -48,7 +47,7 @@ class HTML_mainhtml {
             </head>
             
             <body>          
-
+            <script type="text/javascript">var IER=<?php echo IERROR;?>;</script>
             <script type="text/javascript" src="js/homer.js"></script>
             <script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
             <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
