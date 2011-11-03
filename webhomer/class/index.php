@@ -71,4 +71,12 @@ function getVar($name, $default, $request, $type) {
         else return $val;
 }
 
+function detectIE()
+{
+    if (isset($_SERVER['HTTP_USER_AGENT']) && preg_match("/(MSIE|Internet Explorer)/", $_SERVER['HTTP_USER_AGENT']))
+        return true;
+    else
+        return false;
+}
+
 ?>
