@@ -38,14 +38,13 @@ class HTML_mainhtml {
             <head>
             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
             <title>Web Homer - <?php echo $status;?> </title>
+            <script type="text/javascript">var IER=<?php echo IERROR;?>;</script>
             <link href="styles/core_styles.css" rel="stylesheet" type="text/css" />
             <link href="styles/form.css" rel="stylesheet" type="text/css" />
             <link href="styles/jquery.timeentry.css" rel="stylesheet" type="text/css" />            
             <link type="text/css" href="styles/jquery-ui-1.8.4.custom.css" rel="stylesheet" />	
-
             <link type="text/css" href="styles/inettuts.css" rel="stylesheet" />
-            <link type="text/css" href="styles/inettuts.js.css" rel="stylesheet" />
-            
+            <link type="text/css" href="styles/inettuts.js.css" rel="stylesheet" />            
             </head>
             
             <body>          
