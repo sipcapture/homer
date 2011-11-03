@@ -310,7 +310,7 @@ class HTML_search {
 	 }
 
 ?>
-
+<!--
 	 <li class="widget color-green" id="alarms-widget">
                 <div class="widget-head">
                     <h3>Server Health</h3>
@@ -378,6 +378,7 @@ class HTML_search {
  
               </div>
             </li>
+-->
 
         </ul>
 <!-- END OF BASE COLUMN -->
