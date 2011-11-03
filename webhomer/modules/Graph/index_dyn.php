@@ -288,7 +288,7 @@ var chart1 = new Highcharts.Chart({
             point: {
                events: {
                   click: function() {
-		      if(event.xAxis) {
+		     // if(event) {
 			   var included = <?php echo $included; ?>;
 			if(included==0) {
                         var a = new Date(this.x);
@@ -329,7 +329,7 @@ var chart1 = new Highcharts.Chart({
 			 document.getElementById('cseq').value = "";
 			 }
 			}
-		     }
+		    // }
 
                   }
                }
@@ -403,12 +403,13 @@ $('#timer-graph').change(function () { clearInterval(refresh_graph); setTT(this.
                                 }, timerx );
                                 }
 							}
-function pad(number) {
-     return (number < 10 ? '0' : '') + number;
-}  
 
 
 });
+
+function pad(number) {
+     return (number < 10 ? '0' : '') + number;
+}  
 
 
 </script>		
