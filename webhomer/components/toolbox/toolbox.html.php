@@ -77,7 +77,7 @@ class HTML_ToolBox {
 		<br>
 
 <!--
-            <li class="widget color-orange" id="widget-call">  
+            <li class="widget color-orange" id="widget-call<?php echo NOCLOSE;?>">  
                 <div class="widget-head">
                     <h3>Kill-Vicious</h3>
                 </div>
@@ -121,7 +121,7 @@ class HTML_ToolBox {
         $modcount = 0;
           foreach( $submodules as $key => $value){
 ?>
-           <li class="widget color-yellow" id="dyn-widget<?php echo $key ?>">
+           <li class="widget color-yellow" id="dyn-widget<?php echo $key ?><?php echo NOCLOSE;?>">
                 <div class="widget-head">
                     <h3><?php echo $value ?></h3>
                 </div>
@@ -137,7 +137,7 @@ class HTML_ToolBox {
 ?>
 
 <!-- 
-	<li class="widget color-red" id="widget-auth">
+	<li class="widget color-red" id="widget-auth<?php echo NOCLOSE;?>">
                 <div class="widget-head"><h3>Auth Fail</h3></div>
                 <div class="widget-content">
 		<script type="text/javascript">
@@ -173,7 +173,7 @@ class HTML_ToolBox {
 
         <ul id="column2" class="column" >
 
-  	<li class="widget color-green" id="widget-last">
+  	<li class="widget color-green" id="widget-last<?php echo NOCLOSE;?>">
                 <div class="widget-head"><h3>Last SIP</h3></div>
                 <div class="widget-content">
                 <div id="live"></div><br>
@@ -231,7 +231,7 @@ class HTML_ToolBox {
 
 <!-- last 5 calls via API -->
 
-        <li class="widget color-green" id="widget-calls">
+        <li class="widget color-green" id="widget-calls<?php echo NOCLOSE;?>">
                 <div class="widget-head"><h3>Last Calls</h3></div>
                 <div class="widget-content">
                 <div id="livecalls"></div><br>
@@ -302,7 +302,7 @@ class HTML_ToolBox {
                       $tt = date("H:i:s");
         ?>
 
-            <li class="widget color-blue" id="widget-pcap">  
+            <li class="widget color-blue" id="widget-pcap<?php echo NOCLOSE;?>">  
                 <div class="widget-head">
                     <h3>PCAP Factory</h3>
                 </div>
@@ -359,7 +359,7 @@ class HTML_ToolBox {
                    </div>
             </li>
 
-	    <li class="widget color-blue" id="widget-sipsend">
+	    <li class="widget color-blue" id="widget-sipsend<?php echo NOCLOSE;?>">
                 <div class="widget-head">
                     <h3>SIP Factory</h3>
                 </div>
