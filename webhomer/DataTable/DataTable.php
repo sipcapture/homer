@@ -409,6 +409,9 @@ abstract class DataTable_DataTable
                                     this.className = 'search_init';                                    
                                     this.value = asInitVals[$('tfoot input').index(this)];
                                 }
+				else {
+                                  {$this->getTableId()}.fnFilterClear();
+                                }
                                 } );	                                                 
                                 
 				$('#{$this->getTableId()} tbody').click(function(event) {

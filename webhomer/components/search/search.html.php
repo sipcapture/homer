@@ -608,7 +608,7 @@ class HTML_search {
                         @import "styles/demo_table_jui.css";
             </style>            
 
-	<script type="text/javascript" language="javascript" src="js/jquery.dataTables.js"></script>        
+	<script type="text/javascript" language="javascript" src="js/jquery.dataTables.min.js"></script>        
         <script type="text/javascript" src="js/jquery.Dialog.js"></script>
 
 	<script type="text/javascript">		
@@ -644,6 +644,17 @@ class HTML_search {
 		var bVis = oTable.fnSettings().aoColumns[iCol].bVisible;
 		oTable.fnSetColumnVis( iCol, bVis ? false : true );
 	}
+
+        $.fn.dataTableExt.oApi.fnFilterClear  = function ( oSettings ) {
+                /* Remove global filter */
+                oSettings.oPreviousSearch.sSearch = "";
+                if ( typeof oSettings.aanFeatures.f != 'undefined' ) {
+                        var n = oSettings.aanFeatures.f;
+                        for ( var i=0, iLen=n.length ; i<iLen ; i++ ) { $('input', n[i]).val( '' ); }
+                }
+                for ( var i=0, iLen=oSettings.aoPreSearchCols.length ; i<iLen ; i++ ) { oSettings.aoPreSearchCols[i].sSearch = ""; }
+                oSettings.oApi._fnReDraw( oSettings );
+        }
         
         </script>
 
