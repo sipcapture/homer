@@ -272,6 +272,7 @@ function getStatsUA() {
 	//Set our variables
 	$method = ($_GET['method']);
 	$hours = ($_GET['hours']);
+	$limit = ($_GET['limit']);
 	if(!isset($method)) {
                 $method =  "INVITE";
         }
@@ -286,6 +287,7 @@ function getStatsUA() {
 	$query = "SELECT useragent, sum(total) as count from stats_useragent "
 		   ."where `from_date` > UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$hours." HOUR) "
 		   ."AND method='".$method."' group by useragent order by count DESC";
+	if($limit) {$query .= " limit ".$limit; }
 
                 $rows = $db->loadObjectList($query);
         }
