@@ -656,8 +656,12 @@ class SipDataTable extends DataTable_DataTable
     return "
             function( sSource, aoData, fnCallback ) {
                     {$this->getSearchData()}                    
-                    $.getJSON( sSource, aoData, function (json) { 
-                              fnCallback(json)
+                    $.ajax( {
+                            'dataType': 'json',
+                            'type': '".AJAXTYPE."',
+                            'url': sSource,
+                            'data': aoData,
+                            'success': fnCallback
                     } );
             }
     ";
