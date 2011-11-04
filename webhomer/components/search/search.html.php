@@ -118,7 +118,7 @@ class HTML_search {
         
         <ul id="column1" class="column">
 			
-            <li class="widget color-blue" id="widget-header<?php echo NOCLOSE;?>">  
+            <li class="widget color-blue collapsed" id="widget-header">  
                 <div class="widget-head">
                     <h3>Header Details</h3>
                 </div>
@@ -200,7 +200,7 @@ class HTML_search {
 			</table><br>
                 </div>
             </li>
-	 <li class="widget color-blue" id="widget-network<?php echo NOCLOSE;?>">
+	 <li class="widget color-blue collapsed" id="widget-network">
                 <div class="widget-head">
                     <h3>Network Filter</h3>
                 </div>
@@ -299,7 +299,7 @@ class HTML_search {
 	$modcount = 0;
 	  foreach( $submodules as $key => $value){
 ?>
-	   <li class="widget color-yellow" id="dyn-widget<?php echo $key ?><?php echo NOCLOSE;?>">
+	   <li class="widget color-yellow collapsed" id="dyn-widget<?php echo $key ?>">
                 <div class="widget-head">
                     <h3><?php echo $value ?></h3>
                 </div>
@@ -315,7 +315,7 @@ class HTML_search {
 
 ?>
 <!--
-	 <li class="widget color-green" id="alarms-widget<?php echo NOCLOSE;?>">
+	 <li class="widget color-green collapsed" id="alarms-widget">
                 <div class="widget-head">
                     <h3>Server Health</h3>
                 </div>
@@ -389,7 +389,7 @@ class HTML_search {
 
         <ul id="column2" class="column">
 			
-            <li class="widget color-blue" id="Widget-user<?php echo NOCLOSE;?>">
+            <li class="widget color-blue" id="Widget-user">
                 <div class="widget-head">
                     <h3>User Details</h3>
                 </div>
@@ -448,7 +448,7 @@ class HTML_search {
 				</div>
             </li>
 			
-            <li class="widget color-blue" id="widget-call<?php echo NOCLOSE;?>">  
+            <li class="widget color-blue" id="widget-call">  
                 <div class="widget-head">
                     <h3>Call Details</h3>
                 </div>
@@ -481,7 +481,7 @@ class HTML_search {
         <ul id="column3" class="column">
 			
 			
-            <li class="widget color-orange" id="widget-time<?php echo NOCLOSE;?>">  
+            <li class="widget color-orange" id="widget-time">  
                 <div class="widget-head">
                     <h3>Time & Date</h3>
                 </div>

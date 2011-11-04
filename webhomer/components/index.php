@@ -14,13 +14,8 @@ $components = array("search" => 3, "toolbox" => 3, "statistic" =>3, "admin" => 1
 if(detectIE()) {
   $components["statistic"]=0;
   define("IERROR",1);
-  /* if IE disable close button */
-  define(NOCLOSE,"-noclose");
 }
-else {
-    define("IERROR",0);
-    define(NOCLOSE,"");
-}
+else define("IERROR",0);
 
 #Extra Security check
 $security = 0;

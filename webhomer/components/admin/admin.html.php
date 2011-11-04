@@ -130,7 +130,7 @@ class HTML_Admin {
 		$columns = $rows[0];		
     	    	    
 ?>	
-      	    <li class="widget color-orange" id="widget-admin<?php echo $count;?><?php echo NOCLOSE;?>">
+      	    <li class="widget color-orange collapsed" id="widget-admin<?php echo $count;?>">
         	    <div class="widget-head">
 	                    <h3><?php echo $header; ?></h3>
         	        </div>
@@ -189,7 +189,7 @@ class HTML_Admin {
 
 	<!-- about widget -->
 
-	<li class="widget color-blue" id="widget-about<?php echo NOCLOSE;?>">
+	<li class="widget color-blue" id="widget-about">
                 <div class="widget-head"><h3>About</h3></div>
                 <div class="widget-content">
 
@@ -274,7 +274,7 @@ class HTML_Admin {
 	<ul id="column3" class="column">
 
 
-		 <li class="widget color-green" id="widget-alarms<?php echo NOCLOSE;?>">
+		 <li class="widget color-green" id="widget-alarms">
                 <div class="widget-head">
                     <h3>Server Health</h3>
                 </div>

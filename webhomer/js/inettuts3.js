@@ -63,6 +63,7 @@ var iNettuts = {
                     /* STOP event bubbling */
                     e.stopPropagation();    
                 }).click(function () {
+                        $(this).parents(settings.widgetSelector).addClass('collapsed');
                         $(this).parent().parent().appendTo("#column1");
 			iNettuts.savePreferences();                       
                         return false;
@@ -142,6 +143,7 @@ var iNettuts = {
                 $(this).parent().css({width:''});
             } else {
             //    $(settings.columns).sortable('disable');
+                $(this).parents(settings.widgetSelector).removeClass('collapsed');
             }
         });
 
@@ -188,7 +190,7 @@ var iNettuts = {
                 /* Title of widget (replaced used characters) */
                  cookieString += $('h3:eq(0)',this).text().replace(/\|/g,'[-PIPE-]').replace(/,/g,'[-COMMA-]') + ',';
                 /* Collapsed/not collapsed widget? : */
-               //  cookieString += $(settings.contentSelector,this).css('display') === 'none' ? 'collapsed' : 'not-collapsed';
+                 cookieString += $(settings.contentSelector,this).css('display') === 'none' ? 'collapsed' : 'not-collapsed';
             });
         });
         $.cookie(settings.saveToCookie,cookieString,{
@@ -219,24 +221,24 @@ var iNettuts = {
                 if(!this.length) {return;}
                 var thisWidgetData = this.split(',');
 
-                // var thisWidgetData = this.split(','),
-                //    clonedWidget = $('#' + thisWidgetData[0]),
-                //    colorStylePattern = /\bcolor-[\w]{1,}\b/,
-                //    thisWidgetColorClass = $(clonedWidget).attr('class').match(colorStylePattern);
+                var thisWidgetData = this.split(','),
+                    clonedWidget = $('#' + thisWidgetData[0]),
+                    colorStylePattern = /\bcolor-[\w]{1,}\b/,
+                    thisWidgetColorClass = $(clonedWidget).attr('class').match(colorStylePattern);
                 
                 /* Add/Replace new colour class: */
-                // if (thisWidgetColorClass) {
+                //if (thisWidgetColorClass) {
                 //     $(clonedWidget).removeClass(thisWidgetColorClass[0]).addClass(thisWidgetData[1]);
-                // }
+                //}
                 
                 /* Add/replace new title (Bring back reserved characters): */
-                // $(clonedWidget).find('h3:eq(0)').html(thisWidgetData[2].replace(/\[-PIPE-\]/g,'|').replace(/\[-COMMA-\]/g,','));
+                //$(clonedWidget).find('h3:eq(0)').html(thisWidgetData[2].replace(/\[-PIPE-\]/g,'|').replace(/\[-COMMA-\]/g,','));
                 
                 /* Modify collapsed state if needed: */
-                // if(thisWidgetData[3]==='collapsed') {
-                //     /* Set CSS styles so widget is in COLLAPSED state */
-                //     $(clonedWidget).addClass('collapsed');
-                // }
+                if(thisWidgetData[3]==='collapsed') {
+                     /* Set CSS styles so widget is in COLLAPSED state */
+                     $(clonedWidget).addClass('collapsed');
+                }
 	
 		if (thisColumn[0].id.toString() != 'Column1') {
                 $('#' + thisWidgetData[0]).appendTo(thisColumn);
