@@ -130,6 +130,12 @@ jQuery(document).ready(function() {
                          { position: 'right' }
                       ],
 
+		legend: {
+                position: "nw",
+		margin: 10,
+                backgroundOpacity: 1
+                },
+
 		 grid: {
                 borderWidth: 0
                 }
