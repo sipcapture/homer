@@ -208,6 +208,8 @@ var iNettuts = {
         var cookie = $.cookie(settings.saveToCookie);
         if(!settings.saveToCookie||!cookie) {
             /* skip */
+            /* Collapsed all widgets. IE fix */
+            $('#column1').children('li').addClass('collapsed');
              return;
         }
         
@@ -240,7 +242,7 @@ var iNettuts = {
                      $(clonedWidget).addClass('collapsed');
                 }
 	
-		if (thisColumn[0].id.toString() != 'Column1') {
+		if (thisColumn[0].id.toString() != 'column1') {
                 $('#' + thisWidgetData[0]).appendTo(thisColumn);
 		}
                 // $('#' + thisWidgetData[0]).remove();

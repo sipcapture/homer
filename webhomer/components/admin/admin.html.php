@@ -130,7 +130,7 @@ class HTML_Admin {
 		$columns = $rows[0];		
     	    	    
 ?>	
-      	    <li class="widget color-orange collapsed" id="widget-admin<?php echo $count;?>">
+      	    <li class="widget color-orange" id="widget-admin<?php echo $type;?>">
         	    <div class="widget-head">
 	                    <h3><?php echo $header; ?></h3>
         	        </div>

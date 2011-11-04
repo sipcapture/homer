@@ -78,7 +78,7 @@ class HTML_ToolBox {
 		<br>
 
 <!--
-            <li class="widget color-orange collapsed" id="widget-call">  
+            <li class="widget color-orange" id="widget-call">  
                 <div class="widget-head">
                     <h3>Kill-Vicious</h3>
                 </div>
@@ -122,7 +122,7 @@ class HTML_ToolBox {
         $modcount = 0;
           foreach( $submodules as $key => $value){
 ?>
-           <li class="widget color-yellow collapsed" id="dyn-widget<?php echo $key ?>">
+           <li class="widget color-yellow" id="dyn-widget<?php echo $key ?>">
                 <div class="widget-head">
                     <h3><?php echo $value ?></h3>
                 </div>
@@ -138,7 +138,7 @@ class HTML_ToolBox {
 ?>
 
 <!-- 
-	<li class="widget color-red collapsed" id="widget-auth">
+	<li class="widget color-red" id="widget-auth">
                 <div class="widget-head"><h3>Auth Fail</h3></div>
                 <div class="widget-content">
 		<script type="text/javascript">
