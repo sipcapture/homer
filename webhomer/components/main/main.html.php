@@ -112,9 +112,9 @@ class HTML_mainhtml {
 <?php if($component == "search" && $task == "result"):?>			    
                             <li class="ui-state-default ui-corner-all" id="setupheader" title="Show Columns"><span class="ui-icon ui-icon-wrench"></span></li>
                             <li class="ui-state-default ui-corner-all" onClick="javascript:showSearch();" title="Field Search"><span class="ui-icon ui-icon-search"></span></li>
-<?php endif; ?>			                    
-			    <a href='javascript:new function(){var c=document.cookie.split(";");for(var i=0;i<c.length;i++){var e=c[i].indexOf("=");var n=e>-1?c[i].substr(0,e):c[i];document.cookie=n+"=;expires=Thu, 01 Jan 1970 00:00:00 GMT";}}();window.location = "homer.php";'><li class="ui-state-default ui-corner-all" title="Clear UI / Cookies"><span class="ui-icon ui-icon-trash"></span></li></a>
-                            </ul>
+<?php endif; ?>	 
+                            <li class="ui-state-default ui-corner-all" onClick='javascript:new function(){var c=document.cookie.split(";");for(var i=0;i<c.length;i++){var e=c[i].indexOf("=");var n=e>-1?c[i].substr(0,e):c[i];document.cookie=n+"=;expires=Thu, 01 Jan 1970 00:00:00 GMT";}}();window.location = "homer.php";' title="Clear UI / Cookies"><span class="ui-icon ui-icon-trash"></span></li>                            
+			                      </ul>
 			<div class="right"></div> 
 		</div> 
 	</div> 
