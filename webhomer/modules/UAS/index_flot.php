@@ -54,7 +54,7 @@ $(document).ready(function() {
 <?php
 
 $uri = "http://".$_SERVER['SERVER_NAME'].APILOC;
-$request = $uri."api.php?task=statsua&limit=12";
+$request = $uri."api.php?task=statsua&limit=11";
 $jsondata = file_get_contents($request);
 $response = json_decode($jsondata, true);
 //print_r( $response);
@@ -79,7 +79,7 @@ $.plot($("#chart2"), uas1,
             }
         },
         legend: {
-            show: false
+            show: true
         }
 });
 
