@@ -48,7 +48,6 @@ class HTML_search {
 	
 	         	jQuery(document).ready( function($) {
 
-				iNettuts.init();
 
 		                $('.timepicker1').timeEntry({show24Hours: true, showSeconds: true}); 
 		                $('.timepicker2').timeEntry({show24Hours: true, showSeconds: true}); 
@@ -98,6 +97,7 @@ class HTML_search {
 
                                  });
 
+				iNettuts.init();
 
 			});
 
