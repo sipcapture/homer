@@ -68,11 +68,12 @@ foreach($response as $entry){
 
 ?>
 		<div id="trap" style="width: 99%;">
-		<div id="chart5" style="float: left; min-width: 100px; width: 32%; min-height: 220px;"></div>
-	        <div id="chart4" style="float: left; min-width: 100px; width: 32%; min-height: 220px;"></div>
-	        <div id="chart6" style="float: left; min-width: 100px; width: 32%; min-height: 220px;"></div>
+		<div id="chart5" style="min-width: 120px; width: 33%; margin-left: 1px; float: left; height: 220px;"></div>
+	        <div id="chart4" style="min-width: 120px; width: 33%; margin-left: 1px; float: left; height: 220px;"></div>
+	        <div id="chart6" style="min-width: 120px; width: 33%; margin-left: 1px; float: left; height: 220px;"></div>
 		</div>
-
+ 
+<div id="chart7" style="min-width: 380px; width: 99%; margin-left: 1px; float: center; height: 220px"></div>
 
 <script type="text/javascript">
 
@@ -89,14 +90,14 @@ var cko1 = [ [1, <?php echo join($callKO, ', ');?>] ];
 var rok1 = [ [0, <?php echo join($regOK, ', ');?>] ];
 var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
 
+
   $.plot($("#chart5"),
                 [
                 { data: asr1, label: "ASR",  bars: { show: true } },
                 { data: ner1, label: "NER",  bars: { show: true } },
                 ],
            {
-               yaxes: [  { position: 'left' }
-                      ],
+               yaxes: [  { position: 'left' }                      ],
 		xaxes: [ { ticks: 0 } ],
 
 	 legend: {
@@ -112,8 +113,7 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
                 { data: cko1, label: "Failed",  bars: { show: true }, color: '#ccc' },
                 ],
            {
-               yaxes: [  { position: 'left' }
-                      ],
+               yaxes: [  { position: 'left' }                    ],
 		xaxes: [ { ticks: 0 } ],
 
 	 legend: {
@@ -129,8 +129,7 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
                 { data: rko1, label: "Failed",  bars: { show: true }, color: '#ccc' },
                 ],
            {
-               yaxes: [  { position: 'left' }
-                      ],
+               yaxes: [  { position: 'left' }                    ],
                 xaxes: [ { ticks: 0 } ],
 
 	 legend: {
