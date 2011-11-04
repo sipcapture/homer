@@ -25,6 +25,7 @@ define(WEBPCAPLOC,"/webhomer/tmp/");
 define(APILOC,"/webhomer/api/");
 define(COLORTAG, 0); /* color based on callid, fromtag */
 define(DAYNIGHT, 1); /* day/night based theme, 0=day, 1=rotate, 3=night */
+define(CHARTER, 1); /* 1: Highcharts, 2: */
 define(AJAXTYPE,"POST"); /* AJAX request type can be POST or GET */
 
 
