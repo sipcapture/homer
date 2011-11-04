@@ -39,7 +39,6 @@ class HTML_search {
 		<script src="js/jquery.timeentry.js" type="text/javascript"></script>
 		<script src="js/jquery.mousewheel.js" type="text/javascript"></script>
 		<script src="js/jquery.timeentry-de.js" type="text/javascript"></script>
-		 <script type="text/javascript" src="js/highstock.js"></script>
   	    	<script type="text/javascript" src="js/cookie.jquery.js"></script>
 		<script type="text/javascript" src="js/inettuts3.js?<?php echo time(); ?>"></script>
 	
@@ -293,6 +292,16 @@ class HTML_search {
 <?php 
 	// dynamic modules
 	if (MODULES != 0 && IERROR != 1) {
+	
+	// Set chart engine
+                if (CHARTER == 2) {
+                        $chart="flot";
+                        echo "<script type=\"text/javascript\" src=\"js/jquery.flot.js\"></script>";
+                        echo "<script type=\"text/javascript\" src=\"js/jquery.flot.pie.js\"></script>";
+                } else {
+                        $chart="dyn";
+                        echo "<script type=\"text/javascript\" src=\"js/highstock.js\"></script>";
+                }
 
 	// Scan Modules directory and display
 	$submodules = array_filter(glob('modules/*'), 'is_dir');
@@ -304,7 +313,7 @@ class HTML_search {
                     <h3><?php echo $value ?></h3>
                 </div>
                 <div class="widget-content">
-                <?php include($value."/index_dyn.php"); ?>
+                <?php include($value."/index_".$chart.".php"); ?>
                                 </div>
             </li>
 <?php

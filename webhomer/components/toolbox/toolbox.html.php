@@ -115,7 +115,16 @@ class HTML_ToolBox {
 <?php
         // dynamic modules
         if (MODULES != 0 && IERROR != 1) {
-	echo "<script type=\"text/javascript\" src=\"js/highstock.js\"></script>";
+
+	// Set chart engine
+                if (CHARTER == 2) {
+                        $chart="flot";
+                        echo "<script type=\"text/javascript\" src=\"js/jquery.flot.js\"></script>";
+                        echo "<script type=\"text/javascript\" src=\"js/jquery.flot.pie.js\"></script>";
+                } else {
+                        $chart="dyn";
+                        echo "<script type=\"text/javascript\" src=\"js/highstock.js\"></script>";
+                }
 
         // Scan Modules directory and display
         $submodules = array_filter(glob('modules/*'), 'is_dir');
@@ -127,7 +136,7 @@ class HTML_ToolBox {
                     <h3><?php echo $value ?></h3>
                 </div>
                 <div class="widget-content">
-                <?php include($value."/index_dyn.php"); ?>
+                <?php include($value."/index_".$chart.".php"); ?>
                                 </div>
             </li>
 <?php

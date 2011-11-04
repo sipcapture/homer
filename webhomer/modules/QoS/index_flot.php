@@ -31,7 +31,6 @@ $API = APILOC;
 if ($API == 'APILOC') {
 $included = 1;
 include('../../configuration.php');
-	echo '<script type="text/javascript" src="js/jquery.flot.js"></script>';
 } else { $included = 0; }
 
 
@@ -68,20 +67,18 @@ foreach($response as $entry){
 
 
 ?>
-
-		<script type="text/javascript" src="js/jquery.flot.js"></script>
-
-		<div id="chart5" style="float: left; min-width: 100px; width: 33%; min-height: 220;"></div>
-	        <div id="chart4" style="float: left; min-width: 100px; width: 33%; min-height: 220;"></div>
-	        <div id="chart6" style="float: left; min-width: 100px; width: 33%; min-height: 220;"></div>
-
+		<div id="trap" style="width: 99%;">
+		<div id="chart5" style="float: left; min-width: 100px; width: 32%; min-height: 220px;"></div>
+	        <div id="chart4" style="float: left; min-width: 100px; width: 32%; min-height: 220px;"></div>
+	        <div id="chart6" style="float: left; min-width: 100px; width: 32%; min-height: 220px;"></div>
+		</div>
 
 
 <script type="text/javascript">
 
 $ = jQuery;
 
-jQuery(document).ready(function() {
+$(document).ready(function() {
 
 var asr1 = [ [0, <?php echo join($sipASR, ', ');?>] ];
 var ner1 = [ [1, <?php echo join($sipNER, ', ');?>] ];
@@ -98,8 +95,7 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
                 { data: ner1, label: "NER",  bars: { show: true } },
                 ],
            {
-               yaxes: [  { position: 'left' },
-                         { position: 'right' }
+               yaxes: [  { position: 'left' }
                       ],
 		xaxes: [ { ticks: 0 } ],
 
@@ -113,11 +109,10 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
    $.plot($("#chart4"),
                 [
                 { data: cok1, label: "Calls",  bars: { show: true } },
-                { data: cko1, label: "Calls Fail",  bars: { show: true }, color: '#ccc' },
+                { data: cko1, label: "Failed",  bars: { show: true }, color: '#ccc' },
                 ],
            {
-               yaxes: [  { position: 'left' },
-                         { position: 'right' }
+               yaxes: [  { position: 'left' }
                       ],
 		xaxes: [ { ticks: 0 } ],
 
@@ -131,11 +126,10 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
    $.plot($("#chart6"),
                 [ 
                 { data: rok1, label: "Register", bars: { show: true } },
-                { data: rko1, label: "Register Fail",  bars: { show: true }, color: '#ccc' },
+                { data: rko1, label: "Failed",  bars: { show: true }, color: '#ccc' },
                 ],
            {
-               yaxes: [  { position: 'left' },
-                         { position: 'right' }
+               yaxes: [  { position: 'left' }
                       ],
                 xaxes: [ { ticks: 0 } ],
 

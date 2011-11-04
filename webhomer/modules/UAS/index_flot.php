@@ -31,7 +31,6 @@ $API = APILOC;
 if ($API == 'APILOC') {
 $included = 1;
 include('../../configuration.php');
-// echo '<script type="text/javascript" src="js/jquery.flot.js"></script>';
 } else { $included = 0; }
 
 
@@ -41,9 +40,6 @@ $xhours = STAT_RANGE;
 
 ?>
 
-		<script type="text/javascript" src="js/jquery.flot.js"></script>
-		<script type="text/javascript" src="js/jquery.flot.pie.js"></script>
-
 		<div id="chart2" style="min-width: 380px; width: 99%; margin-left: 1px; float: center; height: 220px"></div>
 
 
@@ -52,7 +48,7 @@ $xhours = STAT_RANGE;
 
 $ = jQuery;
 
-jQuery(document).ready(function() {
+$(document).ready(function() {
 
 
 <?php

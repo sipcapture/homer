@@ -47,6 +47,16 @@ class HTML_Statistic {
 
 
         <div id="Modules"></div><br>
+<?php
+        if ( CHARTER == 2 ) {
+                $chart="flot";
+                 echo "<script type=\"text/javascript\" src=\"js/jquery.flot.js\"></script>";
+                 echo "<script type=\"text/javascript\" src=\"js/jquery.flot.pie.js\"></script>";
+        } else {
+                $chart = "dyn";
+        }
+
+?>
 
 	<script type="text/javascript">
         jQuery(document).ready( function($) {
@@ -62,7 +72,7 @@ class HTML_Statistic {
 ?>
 
                 $('#Modules').append('<div id="stats<?php echo $modcount ?>" style="width:95%;height: auto;overflow: auto;" />');
-                $('#stats<?php echo $modcount ?>').load('<?php echo $value ?>/index_dyn.php');
+                $('#stats<?php echo $modcount ?>').load('<?php echo $value ?>/index_<?php echo $chart ?>.php');
 
 
 <?php
