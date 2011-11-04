@@ -37,6 +37,7 @@ class HTML_mainhtml {
         <html xmlns="http://www.w3.org/1999/xhtml">
             <head>
             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
             <title>Web Homer - <?php echo $status;?> </title>            
             <link href="styles/core_styles.css" rel="stylesheet" type="text/css" />
             <link href="styles/form.css" rel="stylesheet" type="text/css" />
