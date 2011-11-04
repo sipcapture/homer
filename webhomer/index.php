@@ -77,14 +77,6 @@ body {
 </head>
 
 <body>
-<script language="javascript">
-<!--
-if (navigator.appName == "Microsoft Internet Explorer") {
-        alert('WARNING: IE is NOT supported!');
-}
-// -->
-</script>
-
 
 <form action="index.php" method="post">
 <table width="400" border="0" align="center" cellpadding="0" cellspacing="0"  class="login">
