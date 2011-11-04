@@ -50,6 +50,7 @@ class HTML_ToolBox {
             	$('.timepicker2').timeEntry({show24Hours: true, showSeconds: true});
 
              iNettuts.init();
+             });
         </script>
         <style type="text/css"> 
 		#data td {
