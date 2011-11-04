@@ -25,6 +25,8 @@ define(WEBPCAPLOC,"/webhomer/tmp/");
 define(APILOC,"/webhomer/api/");
 define(COLORTAG, 0); /* color based on callid, fromtag */
 define(DAYNIGHT, 1); /* day/night based theme, 0=day, 1=rotate, 3=night */
+define(AJAXTYPE,"POST"); /* AJAX request type can be POST or GET */
+
 
 /* CFLOW Options */
 define(CFLOW_CLEANUP, 1); /* Automatic Cleanup of old Cflow images */
