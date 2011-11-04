@@ -487,7 +487,7 @@ $(document).ready(function(){
     <input id="z1" type="button" value="+" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomIn')" title="Zoom in"  style="background: transparent;" />
     <input id="z2" type="button" value="-" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomOut')" title="Zoom out"  style="background: transparent;" />
     <input id="r1" type="button" value="Reset" onclick="$('#image<?php echo $winid; ?>').zoomable();$('#image<?php echo $winid; ?>').width('<?php echo $size_x;?>').height('<?php echo $size_y;?>');"  style="background: transparent;" />
-    <input id="s1" type="button" class="ui-state-default ui-corner-all" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');"  style="background: transparent;"  />
+<!--    <input id="s1" type="button" class="ui-state-default ui-corner-all" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');"  style="background: transparent;"  /> -->
     <input id="s2" type="button" value="PCAP" onclick="window.open('pcap.php?cid=<?php echo $cid;?>&b2b=<?php echo $b2b; ?>');" style="background: transparent;"/>
 <?php  if (isset($flow_from_date)) { ?>
     <input type="button" value="Time Span: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
