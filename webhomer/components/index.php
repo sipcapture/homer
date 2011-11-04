@@ -12,7 +12,7 @@ $components = array("search" => 3, "toolbox" => 3, "statistic" =>3, "admin" => 1
 
 /* Disable stats changing security level */
 if(detectIE()) {
-  $components["statistic"]=0;
+  //$components["statistic"]=0;
   define("IERROR",1);
 }
 else define("IERROR",0);
