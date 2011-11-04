@@ -243,16 +243,17 @@ function showCallFlow(id,table,tnode,location,unique,tag,callid,fdate,tdate, ft,
                         }})
 			.dialog({
                                 autoOpen: true,
-                                autoResize: true,
+                                // autoResize: true,
 				stack: false,
 				width: 'auto',
 				position: [posx-300, posy-80],
-				height: 'auto',
+				// height: 'auto',
+				height: 500,
 				minHeight: 300,
 				close: function(e, i) { $(this).remove(); },	
 				open: function(e, i) {  
 					$(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); 
-					$(this).css({ height: 'auto' });
+				//	$(this).css({ height: 'auto' });
 				},	
                                 title: 'Call Flow: '+callid
                         })
