@@ -547,7 +547,7 @@ class HTML_search {
             </li>
 
 
-            <li class="widget color-white" id="widget-search">  
+            <li class="widget color-white" id="widget-search-noclose">  
                 <div class="widget-head">
                     <h3>Search Submit</h3>
                 </div>

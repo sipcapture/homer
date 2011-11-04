@@ -1,10 +1,4 @@
 /*
- * NETTUTS Nuts v3 by Nobody
- * Patches: 	- coexist in a nested enviroment
- * 		- iconify to a dumb column
- *		- initialized from host script
- * 		- IE skipping stones
- * 
  * NETTUTS Nuts v3 by Nobody Else - Patched to coexist in a nested enviroment and iconify to a dumb column, starts from host
  * Based on NETTUTS v2 Script by James Padolsey 
  * @requires jQuery($), jQuery UI & sortable/draggable UI modules & jQuery COOKIE plugin
@@ -38,14 +32,11 @@ var iNettuts = {
     },
 
     init : function () {
-	// alert(IER);
-	// 	if (navigator.appName == "Microsoft Internet Explorer") { document.getElementById('column1').style.display = 'none'; }
 	//alert(JSON.stringify(this));
 	this.sortWidgets();
         this.attachStylesheet('styles/inettuts.js.css');
         this.addWidgetControls();
         this.makeSortable();
-	if(IER==1) { this.getIE(); };
 	//var page = this.getGET()["component"];
 
     },
@@ -66,18 +57,17 @@ var iNettuts = {
         $(settings.widgetSelector, $(settings.columns)).each(function () {
             var thisWidgetSettings = iNettuts.getWidgetSettings(this.id);
             if (thisWidgetSettings.removable) {
-		//alert(parent.id);
-		 if (this.id != 'widget-search') {
-			if (IER==0) { 
-		 		$('<a href="#" class="remove">CLOSE</a>').mousedown(function (e) {
-                 		   /* STOP event bubbling */
-                 		   e.stopPropagation();    
-                		}).click(function () {
-                	        $(this).parent().parent().appendTo("#column1");
-				iNettuts.savePreferences();                       
-                	        return false;
-                		}).appendTo($(settings.handleSelector, this));
-			}
+		 if (this.id.indexOf("-noclose") == -1) {
+		//if ( /search/.test(this.id) == false ) { 
+		 $('<a href="#" class="remove">CLOSE</a>').mousedown(function (e) {
+                    /* STOP event bubbling */
+                    e.stopPropagation();    
+                }).click(function () {
+                        $(this).parent().parent().appendTo("#column1");
+			iNettuts.savePreferences();                       
+                        return false;
+                }).appendTo($(settings.handleSelector, this));
+
 		}
             }
             
@@ -198,7 +188,7 @@ var iNettuts = {
                 /* Title of widget (replaced used characters) */
                  cookieString += $('h3:eq(0)',this).text().replace(/\|/g,'[-PIPE-]').replace(/,/g,'[-COMMA-]') + ',';
                 /* Collapsed/not collapsed widget? : */
-                 cookieString += $(settings.contentSelector,this).css('display') === 'none' ? 'collapsed' : 'not-collapsed';
+               //  cookieString += $(settings.contentSelector,this).css('display') === 'none' ? 'collapsed' : 'not-collapsed';
             });
         });
         $.cookie(settings.saveToCookie,cookieString,{
@@ -207,24 +197,6 @@ var iNettuts = {
         });
     },
     
-    getIE : function () {
-	 var iNettuts = this,
-            $ = this.jQuery,
-            settings = this.settings;
-	    $(settings.columns).each(function(i){
-	    	//alert(this.id);
-               var childata = $('#column1').children();
-	       // var tocol=2;
-	       $.each(childata, function(){
-			$('#'+this.id).appendTo('#column2');
-					// $tocol++;
-					// if (tocol=4){var tocol=2;}
-		});
-		
-	    });
-
-    },
-
     sortWidgets : function () {
         var iNettuts = this,
             $ = this.jQuery,
@@ -236,11 +208,6 @@ var iNettuts = {
             /* skip */
              return;
         }
-	if(IER==1) {
-            /* skip */
-             return;
-        }
-
         
         /* For each column */
         $(settings.columns).each(function(i){
@@ -273,7 +240,7 @@ var iNettuts = {
 	
 		if (thisColumn[0].id.toString() != 'Column1') {
                 $('#' + thisWidgetData[0]).appendTo(thisColumn);
-		} 
+		}
                 // $('#' + thisWidgetData[0]).remove();
                 // $(thisColumn).append(clonedWidget);
 
