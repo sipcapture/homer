@@ -129,6 +129,11 @@ jQuery(document).ready(function() {
                yaxes: [  { position: 'left' },
                          { position: 'right' }
                       ],
+
+		 grid: {
+                borderWidth: 0
+                }
+
            });
 
 });

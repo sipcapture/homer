@@ -103,8 +103,11 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
 	 legend: {
                 position: "sw",
                 backgroundOpacity: 1
-                }
+                },
 
+	 grid: { 
+  		borderWidth: 0 
+		} 
            });
 
    $.plot($("#chart4"),
@@ -119,7 +122,11 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
 	 legend: {
                 position: "sw",
                 backgroundOpacity: 1
+                },
+	  grid: {
+                borderWidth: 0
                 }
+
 
            });
 
@@ -135,7 +142,11 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
 	 legend: {
     		position: "sw",
     		backgroundOpacity: 1
-  		}
+  		},
+	  grid: {
+                borderWidth: 0
+                }
+
 
            });
 
