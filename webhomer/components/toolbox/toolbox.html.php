@@ -27,14 +27,12 @@
  *
 */
 
-?>
-
-<?php 
 
 class HTML_ToolBox {
 
 
 	function displayToolBox() {
+
 ?>
 
 <!--    </form> -->
@@ -43,15 +41,18 @@ class HTML_ToolBox {
         <script type="text/javascript" src="js/jquery.Dialog.js"></script>
     	<script src="js/jquery.timeentry.js" type="text/javascript"></script>
         <script type="text/javascript">
-            $(function(){
+	$(function()
+                        {
+             $(document).ready(function(){
               $('#from_date').datepicker({ dateFormat: 'dd-mm-yy' });
 		          $('#to_date').datepicker({ dateFormat: 'dd-mm-yy' });
 	 	         $('.timepicker1').timeEntry({show24Hours: true, showSeconds: true});
             	$('.timepicker2').timeEntry({show24Hours: true, showSeconds: true});
-
-             iNettuts.init();
+             	iNettuts.init();
              });
+        });
         </script>
+
         <style type="text/css"> 
 		#data td {
 			width: 150px;
@@ -72,13 +73,12 @@ class HTML_ToolBox {
         
 <!- admin mod start -->
   <div id="columns">
-	<center>
 
         <ul id="column1" class="column" style="width: 11%;">
 		<br>
 
 <!--
-            <li class="widget color-orange" id="widget-call">  
+            <li class="widget color-orange" id="widget-call<?php echo NOCLOSE;?>">  
                 <div class="widget-head">
                     <h3>Kill-Vicious</h3>
                 </div>
@@ -115,29 +115,28 @@ class HTML_ToolBox {
 <?php
         // dynamic modules
         if (MODULES != 0 && IERROR != 1) {
-
-	// Set chart engine
+		// Set chart engine
                 if (CHARTER == 2) {
-                        $chart="flot";
-                        echo "<script type=\"text/javascript\" src=\"js/jquery.flot.js\"></script>";
-                        echo "<script type=\"text/javascript\" src=\"js/jquery.flot.pie.js\"></script>";
-                } else {
-                        $chart="dyn";
-                        echo "<script type=\"text/javascript\" src=\"js/highstock.js\"></script>";
-                }
+			$chart="flot";
+			echo "<script type=\"text/javascript\" src=\"js/jquery.flot.js\"></script>";
+			echo "<script type=\"text/javascript\" src=\"js/jquery.flot.pie.js\"></script>";
+		} else {
+			$chart="dyn";
+			echo "<script type=\"text/javascript\" src=\"js/highstock.js\"></script>";
+		}
 
         // Scan Modules directory and display
         $submodules = array_filter(glob('modules/*'), 'is_dir');
         $modcount = 0;
           foreach( $submodules as $key => $value){
 ?>
-           <li class="widget color-yellow" id="dyn-widget<?php echo $key ?>">
+           <li class="widget color-yellow" id="dyn-widget<?php echo $key; ?><?php echo NOCLOSE;?>">
                 <div class="widget-head">
-                    <h3><?php echo $value ?></h3>
+                    <h3><?php echo $value; ?></h3>
                 </div>
                 <div class="widget-content">
                 <?php include($value."/index_".$chart.".php"); ?>
-                                </div>
+                </div>
             </li>
 <?php
           $modcount++;
@@ -147,7 +146,7 @@ class HTML_ToolBox {
 ?>
 
 <!-- 
-	<li class="widget color-red" id="widget-auth">
+	<li class="widget color-red" id="widget-auth<?php echo NOCLOSE;?>">
                 <div class="widget-head"><h3>Auth Fail</h3></div>
                 <div class="widget-content">
 		<script type="text/javascript">
@@ -183,7 +182,7 @@ class HTML_ToolBox {
 
         <ul id="column2" class="column" >
 
-  	<li class="widget color-green" id="widget-last">
+  	<li class="widget color-green" id="widget-last<?php echo NOCLOSE;?>">
                 <div class="widget-head"><h3>Last SIP</h3></div>
                 <div class="widget-content">
                 <div id="live"></div><br>
@@ -241,7 +240,7 @@ class HTML_ToolBox {
 
 <!-- last 5 calls via API -->
 
-        <li class="widget color-green" id="widget-calls">
+        <li class="widget color-green" id="widget-calls<?php echo NOCLOSE;?>">
                 <div class="widget-head"><h3>Last Calls</h3></div>
                 <div class="widget-content">
                 <div id="livecalls"></div><br>
@@ -312,7 +311,7 @@ class HTML_ToolBox {
                       $tt = date("H:i:s");
         ?>
 
-            <li class="widget color-blue" id="widget-pcap">  
+            <li class="widget color-blue" id="widget-pcap<?php echo NOCLOSE;?>">  
                 <div class="widget-head">
                     <h3>PCAP Factory</h3>
                 </div>
@@ -369,7 +368,7 @@ class HTML_ToolBox {
                    </div>
             </li>
 
-	    <li class="widget color-blue" id="widget-sipsend">
+	    <li class="widget color-blue" id="widget-sipsend<?php echo NOCLOSE;?>">
                 <div class="widget-head">
                     <h3>SIP Factory</h3>
                 </div>
