@@ -113,7 +113,7 @@ class HTML_ToolBox {
 -->
 <?php
         // dynamic modules
-        if (MODULES != 0) {
+        if (MODULES != 0 && IERROR != 1) {
 	echo "<script type=\"text/javascript\" src=\"js/highstock.js\"></script>";
 
         // Scan Modules directory and display

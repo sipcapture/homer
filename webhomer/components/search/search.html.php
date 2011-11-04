@@ -292,7 +292,7 @@ class HTML_search {
 
 <?php 
 	// dynamic modules
-	if (MODULES != 0) {
+	if (MODULES != 0 && IERROR != 1) {
 
 	// Scan Modules directory and display
 	$submodules = array_filter(glob('modules/*'), 'is_dir');
