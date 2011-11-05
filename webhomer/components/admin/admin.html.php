@@ -193,12 +193,10 @@ class HTML_Admin {
                 <div class="widget-head"><h3>About</h3></div>
                 <div class="widget-content">
 
-		<br><h1>webHomer3</h1>
-		All rights reserved
-		<br><br>
-		Please use latest <a href="http://homer.googlecode.com" target="_blank">GIT</a> and Donate if you can<br>
-		<a href="http://sipcapture.org" target="_blank">http://sipcapture.org</a> or <a href="mailto:support@sipcapture.org">support@sipcapture.org</a>
-		<br><br><br>
+		<br><h1><font size=+2>webHomer</font> 3.0 RC</h1>
+		<br>
+		Please use latest <a href="http://homer.googlecode.com" target="_blank">GIT Code</a> or visit <a href="http://sipcapture.org" target="_blank">http://sipcapture.org</a>
+		<br><br><hr><br>
 <!--
  		</div>
 	</li>
@@ -209,58 +207,26 @@ class HTML_Admin {
                 <div class="widget-content">
 -->
 	<table border="0" id="prefs" cellspacing="0" width="95%" style="background: transparent;">
-	<tr>
-	<td width="50%">
-	Autocomplete Fields
-	</td><td>
-<?php
-	if (AUTOCOMPLETE != 0) {
-	echo "<button id='sw_autocomplete' style='width:50;' class='ui-button ui-widget ui-corner-all' disabled>ON</button>";
-	} else {
-	echo "<button id='sw_autocomplete' style='width:50;' class='ui-button ui-widget ui-corner-all' disabled>OFF</button>";
-	}
-?>
-	</td></tr></tr>
-	<td width="150">
-        Statistic Modules
-        </td><td>
-<?php
-	if (MODULES != 0) { 
-	echo "<button id='sw_autocomplete' style='width: 50; background: transparent;' class='ui-button ui-widget ui-corner-all' disabled>ON</button>";
-	} else { 
-	echo "<button id='sw_autocomplete' style='width: 50; background: transparent;' class='ui-button ui-widget ui-corner-all' disabled>OFF</button>";
-	}
-?>
+   
 
-	</td></tr></tr>
-        <td width="150">
-        Auto Clean Temporary Files
-        </td><td>
-<?php
-        if (CFLOW_CLEANUP != 0) { 
-	echo "<button id='sw_autocomplete' style='width: 50; background: transparent;' class='ui-button ui-widget ui-corner-all' disabled>ON</button>";
-	} else { 
-	echo "<button id='sw_autocomplete' style='width: 50; background: transparent;' class='ui-button ui-widget ui-corner-all' disabled>OFF</button>";
-	}
-?>
-  	</td></tr></tr>
-        <td width="150">
-        Detect BLEG leg in CFLOW
-        </td><td>
 
 <?php
-        if (BLEGDETECT != 0) {
-        echo "<button id='sw_bleg' style='width: 50; background: transparent;' class='ui-button ui-widget ui-corner-all' disabled>ON</button>";
-        } else {
-        echo "<button id='sw_bleg' style='width: 50; background: transparent;' class='ui-button ui-widget ui-corner-all' disabled>OFF</button>";
+$userdef = get_defined_constants(true);
+        foreach($userdef['user'] as $key => $value){
+	if(!preg_match("/HOMER_|__|_HOMER|RADIUS_|DB|USER|IERROR|PW/", "$key")){
+        echo '<tr><td width="150">'.$key.'</td><td>';
+	echo '<button class="ui-state-default ui-button ui-widget ui-corner-all" style="width:200px;" disabled>';
+	if ($value != '0') {echo $value;} else {echo "<i>default</i>";}
+	echo "</button>";
+	echo '</td></tr>';
+	}
         }
 ?>
 
 
 
-
-	</td></tr></table><br>
-		</div>
+	</table><br>
+	</div>
 	</li>
 
 	</ul>
