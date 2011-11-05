@@ -80,9 +80,9 @@ foreach($response as $entry){
 	if ($qdat['avg(ner)'] >= 80) {$colNER="#8dc140"; } else if($qdat['avg(ner)'] >=50) {$colNER="#fdc140";} else {$colNER='#8d0100';}
   	$sipASR[] = ' '.$qdat['avg(asr)'].', ';
         $sipNER[] = ' '.$qdat['avg(ner)'].', ';
-        $callTOT[] = ' '.$qdat['avg(total)'].' ';
-        $callOK[] = ' '.$qdat['avg(completed)'].' ';
-        $callKO[] = ' '.$qdat['avg(uncompleted)'].' ';
+        $callTOT[] = ' '.$qdat['sum(total)'].' ';
+        $callOK[] = ' '.$qdat['sum(completed)'].' ';
+        $callKO[] = ' '.$qdat['sum(uncompleted)'].' ';
         }
 }
 
@@ -92,8 +92,8 @@ $response = json_decode($jsondata, true);
 //print_r( $response);
 foreach($response as $entry){
         foreach($entry as $qdat){
-        $regOK[] = ' '.$qdat['avg(completed)'].' ';
-        $regKO[] = ' '.$qdat['avg(uncompleted)'].' ';
+        $regOK[] = ' '.$qdat['sum(completed)'].' ';
+        $regKO[] = ' '.$qdat['sum(uncompleted)'].' ';
         }
 }
 

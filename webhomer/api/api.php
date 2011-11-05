@@ -1,7 +1,7 @@
 <?php
 /*
  * HOMER Web Interface
- * Homer's REST API (Json) v0.1
+ * Homer's REST API (Json) v0.1.2
  *
  * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
  * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
@@ -326,7 +326,7 @@ function getStatsCount() {
 		   ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
 		   ."AND method='".$method."' AND total !=0 order by id";
 		} else {
-		$query = "SELECT from_date,avg(total),avg(asr),avg(ner),avg(completed),avg(uncompleted) from stats_method "
+		$query = "SELECT from_date,sum(total),avg(asr),avg(ner),sum(completed),sum(uncompleted) from stats_method "
                    ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
                    ."AND method='".$method."' AND total !=0 order by id";
 		}
@@ -338,7 +338,7 @@ function getStatsCount() {
                    ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
                    ."AND method='".$method."' AND total !=0 order by id";
 		} else {
-		$query = "SELECT from_date,avg(total),avg(auth),avg(completed),avg(uncompleted) from stats_method "
+		$query = "SELECT from_date,avg(total),avg(auth),sum(completed),sum(uncompleted) from stats_method "
                    ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
                    ."AND method='".$method."' AND total !=0 order by id";
 		}
