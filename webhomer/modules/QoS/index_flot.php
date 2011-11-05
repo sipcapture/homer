@@ -68,9 +68,9 @@ foreach($response as $entry){
 
 ?>
 		<div id="trap" style="width: 99%;">
-		<div id="chart5" style="min-width: 120px; width: 33%; margin-left: 1px; float: left; height: 220px;"></div>
-	        <div id="chart4" style="min-width: 120px; width: 33%; margin-left: 1px; float: left; height: 220px;"></div>
-	        <div id="chart6" style="min-width: 120px; width: 33%; margin-left: 1px; float: left; height: 220px;"></div>
+		<div id="chart5" style="min-width: 100px; width: 32%; margin-left: 1px; float: left; height: 220px;"></div>
+		<div id="chart4" style="min-width: 100px; width: 32%; margin-left: 1px; float: left; height: 220px;"></div>
+	        <div id="chart6" style="min-width: 100px; width: 32%; margin-left: 1px; float: left; height: 220px;"></div>
 		</div>
  
 <div id="chart7" style="min-width: 380px; width: 99%; margin-left: 1px; float: center; height: 220px"></div>
@@ -93,8 +93,8 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
 
   $.plot($("#chart5"),
                 [
-                { data: asr1, label: "ASR",  bars: { show: true } },
-                { data: ner1, label: "NER",  bars: { show: true } },
+                { data: asr1, label: "ASR",  bars: { show: true }, color: '#0cacfc' },
+                { data: ner1, label: "NER",  bars: { show: true }, color: '#0363f3' },
                 ],
            {
                yaxes: [  { position: 'left' }                      ],
@@ -112,8 +112,8 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
 
    $.plot($("#chart4"),
                 [
-                { data: cok1, label: "Calls",  bars: { show: true } },
-                { data: cko1, label: "Failed",  bars: { show: true }, color: '#ccc' },
+                { data: cok1, label: "Calls",  bars: { show: true }, color: 'rgb(30, 180, 20)' },
+                { data: cko1, label: "Failed",  bars: { show: true }, color: 'rgb(200,20,30)' },
                 ],
            {
                yaxes: [  { position: 'left' }                    ],
@@ -132,8 +132,8 @@ var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
 
    $.plot($("#chart6"),
                 [ 
-                { data: rok1, label: "Register", bars: { show: true } },
-                { data: rko1, label: "Failed",  bars: { show: true }, color: '#ccc' },
+                { data: rok1, label: "Register", bars: { show: true }, color: 'rgb(30, 80, 20)' },
+                { data: rko1, label: "Failed",  bars: { show: true }, color: 'rgb(100, 10, 30)' },
                 ],
            {
                yaxes: [  { position: 'left' }                    ],

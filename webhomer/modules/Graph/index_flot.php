@@ -63,6 +63,7 @@ foreach($response as $entry){
         foreach($entry as $data){
 	$newtime = (strtotime($data['from_date']." ".$offset));
         $secondes[] = '['.$newtime.'000, '.$data['total'].']';
+        $asr[] = '['.$newtime.'000, '.$data['asr'].']';
         }
 }
 
@@ -116,13 +117,17 @@ jQuery(document).ready(function() {
  var d1 = [<?php echo join($secondes, ', ');?>];
  var d2 = [<?php echo join($sip100, ', ');?>];
  var d3 = [<?php echo join($sip401, ', ');?>];
+ var allp = "<?php echo $sipTOT ?>";
+ var asr = [<?php echo join($asr, ', ');?>];
 
 
 	$.plot($("#chart1"), 
 		[ 
 		{ data: d2, label: "Packets", lines: { show: true, fill: true } },
              	{ data: d1, label: "Calls", yaxis: 2 }, 
-             	{ data: d3, label: "AuthFail", yaxis: 2,  bars: { show: true } }
+             	{ data: d3, label: "AuthFail", yaxis: 2,  bars: { show: true } },
+             	{ data: asr, label: "ASR", yaxis: 1,  lines: { show: true, steps: true }, 
+		  color: "rgb(30, 180, 20)", threshold: { below: 60, color: "rgb(200, 20, 30)" } },
 		],
            { 
                xaxes: [ { mode: 'time' } ],
@@ -141,6 +146,8 @@ jQuery(document).ready(function() {
                 }
 
            });
+
+     $('#chart1').append('<div style="position:absolute;left:40%;top:10px;color:#666;font-size:small">Captured Frames: '+allp+'</div>');
 
 });
 
