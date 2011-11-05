@@ -242,7 +242,7 @@ var iNettuts = {
                      $(clonedWidget).addClass('collapsed');
                 }
 	
-		if (thisColumn[0].id.toString() != 'column1') {
+		if (thisColumn[0].id.toString() != 'Column1') {
                 $('#' + thisWidgetData[0]).appendTo(thisColumn);
 		}
                 // $('#' + thisWidgetData[0]).remove();
