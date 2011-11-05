@@ -16,6 +16,9 @@ define(HOMER_PW, "homer_password");
 define(HOMER_DB, "homer_db");
 define(HOMER_TABLE, "sip_capture");
 
+  
+  define(CONFIGVERSION, "1.0.0"); /* Please ALWAYS include CONFIGVERSION */
+
 /* webHomer Settings 
 *  Adjust to reflect your system preferences
 */
