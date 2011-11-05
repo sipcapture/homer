@@ -86,7 +86,7 @@ foreach($response as $entry){
         }
 }
 
-$request = $uri."api.php?task=statscount&method=REGISTRATION&measure=1&hours=".$hours;
+$request = $uri."api.php?task=statscount&method=REGISTER&measure=1&hours=".$hours;
 $jsondata = file_get_contents($request);
 $response = json_decode($jsondata, true);
 //print_r( $response);
