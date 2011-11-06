@@ -483,7 +483,7 @@ $(document).ready(function(){
 </script>
 </head>
 
-<div id="ybuttons" align="center" style="margin-right: 5%; width: 95%;">
+<div id="ybuttons" align="center" style="margin-right: 5%; width: 100%;">
     <input id="z1" type="button" value="+" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomIn')" title="Zoom in"  style="background: transparent;" />
     <input id="z2" type="button" value="-" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomOut')" title="Zoom out"  style="background: transparent;" />
     <input id="r1" type="button" value="Reset" onclick="$('#image<?php echo $winid; ?>').zoomable();$('#image<?php echo $winid; ?>').width('<?php echo $size_x;?>').height('<?php echo $size_y;?>');"  style="background: transparent;" />
