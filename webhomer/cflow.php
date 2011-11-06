@@ -483,7 +483,7 @@ $(document).ready(function(){
 </script>
 </head>
 
-<p id="ybuttons" align="center" style="margin-right: 20;">
+<div id="ybuttons" align="center" style="margin-right: 5%; width: 95%;">
     <input id="z1" type="button" value="+" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomIn')" title="Zoom in"  style="background: transparent;" />
     <input id="z2" type="button" value="-" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomOut')" title="Zoom out"  style="background: transparent;" />
     <input id="r1" type="button" value="Reset" onclick="$('#image<?php echo $winid; ?>').zoomable();$('#image<?php echo $winid; ?>').width('<?php echo $size_x;?>').height('<?php echo $size_y;?>');"  style="background: transparent;" />
@@ -496,7 +496,7 @@ $(document).ready(function(){
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
 <?php   }       ?>
 
-</p>
+</div>
 <center>
 <div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
 <img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image<?php echo $winid; ?>">
