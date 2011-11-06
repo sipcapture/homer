@@ -124,7 +124,7 @@ jQuery(document).ready(function() {
 	$.plot($("#chart1"), 
 		[ 
 		{ data: d2, label: "Packets", lines: { show: true, fill: true } },
-             	{ data: d1, label: "Calls", yaxis: 2 }, 
+             	{ data: d1, label: "Calls", yaxis: 2, lines: {show: true}, points: { show: true } }, 
              	{ data: d3, label: "AuthFail", yaxis: 2,  bars: { show: true } },
              	{ data: asr, label: "ASR", yaxis: 1,  lines: { show: true, steps: true }, 
 		  color: "rgb(30, 180, 20)", threshold: { below: 60, color: "rgb(200, 20, 30)" } },
@@ -134,7 +134,6 @@ jQuery(document).ready(function() {
                yaxes: [  { position: 'left' },
                          { position: 'right' }
                       ],
-
 		legend: {
                 position: "nw",
 		margin: 10,
@@ -142,10 +141,33 @@ jQuery(document).ready(function() {
                 },
 
 		 grid: {
-                borderWidth: 0
+                borderWidth: 0,
+		clickable: true
                 }
 
            });
+
+     $('#chart1').bind("plotclick", function (event, pos, item) {
+	if (item) {
+	   if (document.getElementById('from_time')) {
+            //$("#clickdata").text("You clicked point " + item.dataIndex + " in " + item.series.label + ".");
+		var a = new Date(item.datapoint[0]-160000);
+		var b = new Date(item.datapoint[0]+360000);
+                var from_date = pad(a.getDate())+'-'+(a.getMonth()+1)+'-'+a.getFullYear();
+                var to_date = pad(b.getDate())+'-'+(b.getMonth()+1)+'-'+b.getFullYear();
+		var from_time = pad(a.getUTCHours())+':'+pad(a.getUTCMinutes())+':'+pad(a.getUTCSeconds());
+		var to_time = pad(b.getUTCHours())+':'+pad(b.getUTCMinutes())+':'+pad(b.getUTCSeconds());
+		// Set from/to Time based on graph click
+                document.getElementById('from_time').value = from_time;
+                document.getElementById('to_time').value = to_time;
+                // set date
+                document.getElementById('from_date').value = from_date;
+                document.getElementById('to_date').value = to_date;
+		//alert(date+' '+time+' to:'+to_time);
+	   }
+		
+        }
+     });
 
      $('#chart1').append('<div style="position:absolute;left:40%;top:10px;color:#666;font-size:small">Captured Frames: '+allp+'</div>');
 
