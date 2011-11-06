@@ -211,6 +211,19 @@ class HTML_Admin {
 
 
 <?php
+
+// Check for new definitions in configuration_example
+if (NOCHECK != 1) {
+$rconf  = file_get_contents("configuration.php", true);
+$econf  = file_get_contents("configuration_example.php", true);
+$defi = substr_count($econf, 'define(');
+$defq = substr_count($rconf, 'define(');
+        if ($defi != $defq) {
+        // echo "<script>alert('Missing Definitions: ".($defi-$defq)."');</script>";
+        echo "<b>WARNING: Parameters missing! [ ".($defi-$defq)." ]</b><br>Check 'configuration_example.php'<br><br><hr><br>";
+        }
+ }
+// Print subset
 $userdef = get_defined_constants(true);
         foreach($userdef['user'] as $key => $value){
 	if(!preg_match("/HOMER_|__|_HOMER|RADIUS_|DB|USER|IERROR|PW/", "$key")){
