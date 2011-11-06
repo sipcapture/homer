@@ -73,6 +73,8 @@ class HTML_search {
 				$('#from_date').datepicker({ dateFormat: 'dd-mm-yy' });
 				$('#to_date').datepicker({dateFormat: 'dd-mm-yy'});
 
+				iNettuts.init();
+
 				 // Simple Search Filters - NOT FOR RELEASE
                                     $('#filters_a').change(function() {
                                         // var x = $(this).find('option:selected').text();
@@ -96,8 +98,6 @@ class HTML_search {
                                                 }
 
                                  });
-
-				iNettuts.init();
 
 			});
 
