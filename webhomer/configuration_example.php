@@ -17,7 +17,7 @@ define(HOMER_DB, "homer_db");
 define(HOMER_TABLE, "sip_capture");
 
   
-define(CONFIGVERSION, "1.0.0"); /* Please ALWAYS include CONFIGVERSION */
+define(CONFIGVERSION, "1.0.1"); /* Please ALWAYS include CONFIGVERSION */
 
 /* webHomer Settings 
 *  Adjust to reflect your system preferences
@@ -36,6 +36,8 @@ define(AJAXTYPE,"POST"); /* AJAX request type can be POST or GET */
 define(CFLOW_CLEANUP, 1); /* Automatic Cleanup of old Cflow images */
 define(CFLOW_TIMEZONE, "Europe/Amsterdam"); /* Timezone that will display in Call Flow Ladder Diagram */
 define(CFLOW_DIRECTION, 0); /* Callflow Direction */
+define(CFLOW_COOF, 1);   /* IMAGE size coof. The value can be float */
+
 
 /* Modules Options */
 define(MODULES, 0);  /* Set to 1 Enable Statistic Modules */
