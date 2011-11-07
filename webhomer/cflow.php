@@ -57,8 +57,8 @@ foreach($nodes as $node) {
 
 $aliases = $db->getAliases();
 
-$arrow_step=40*CFLOW_COOF;
-$host_step=200*CFLOW_COOF;
+$arrow_step=40*CFLOW_FACTOR;
+$host_step=200*CFLOW_FACTOR;
 
 function imagelinethick($image, $x1, $y1, $x2, $y2, $color, $thick = 1)
 {
@@ -85,9 +85,9 @@ function arrow ( $image, $color, $x, $y, $d = -1)
 
   $values = array (
            $x,  $y ,
-           $x + 5*CFLOW_COOF * $d,  $y - 3*CFLOW_COOF ,
-           $x + 3*CFLOW_COOF * $d,  $y ,
-           $x + 5*CFLOW_COOF * $d,  $y + 3*CFLOW_COOF
+           $x + 5*CFLOW_FACTOR * $d,  $y - 3*CFLOW_FACTOR ,
+           $x + 3*CFLOW_FACTOR * $d,  $y ,
+           $x + 5*CFLOW_FACTOR * $d,  $y + 3*CFLOW_FACTOR
            );
 
   $y+=$arrow_step;
@@ -234,8 +234,8 @@ foreach($rows as $data) {
 
 // Calculate size of image:
 
-$size_y = count($localdata) * $arrow_step + 100*CFLOW_COOF; /* Y */
-$size_x = count($hosts) *  $host_step - 10*CFLOW_COOF; /* X */
+$size_y = count($localdata) * $arrow_step + 100*CFLOW_FACTOR; /* Y */
+$size_x = count($hosts) *  $host_step - 10*CFLOW_FACTOR; /* X */
 
 $file=time().".png";
 $path=PCAPDIR.$file;
@@ -244,22 +244,22 @@ $im = imagecreatetruecolor($size_x, $size_y);
 
 //Set Font
 $fontFace = './slc.ttf';
-$fontSize = 8*CFLOW_COOF;
+$fontSize = 8*CFLOW_FACTOR;
 
 //Temp BGCOLOR (center of c-finder)
 $bg[0] = 255;
 $bg[1] = 255;
 $bg[2] = 255;
 
-$line_x1=50*CFLOW_COOF;
-$line_y1=90*CFLOW_COOF;
-$line_x2=30*CFLOW_COOF;
-$line_y2 = $size_y - 5*CFLOW_COOF;
+$line_x1=50*CFLOW_FACTOR;
+$line_y1=90*CFLOW_FACTOR;
+$line_x2=30*CFLOW_FACTOR;
+$line_y2 = $size_y - 5*CFLOW_FACTOR;
 
-$arrow_x1=40*CFLOW_COOF;
-$arrow_y1=120*CFLOW_COOF;
-$arrow_x2=20*CFLOW_COOF;
-$arrow_y2=60*CFLOW_COOF;
+$arrow_x1=40*CFLOW_FACTOR;
+$arrow_y1=120*CFLOW_FACTOR;
+$arrow_x2=20*CFLOW_FACTOR;
+$arrow_y2=60*CFLOW_FACTOR;
 
 $d=-1;
 
@@ -297,9 +297,9 @@ foreach($hosts as $key=>$value) {
 
       }
 
-      imagelinethick($im, $line_x1, $line_y1, $line_x1, $line_y2, $color['gray2'], 2*CFLOW_COOF);
+      imagelinethick($im, $line_x1, $line_y1, $line_x1, $line_y2, $color['gray2'], 2*CFLOW_FACTOR);
       //Put header!
-      imagettftext ( $im, $fontSize, 0, $line_x1  - (strlen($key) * 3*CFLOW_COOF), $line_y1 - 10, $color['darknavy'], $fontFace, $key);
+      imagettftext ( $im, $fontSize, 0, $line_x1  - (strlen($key) * 3*CFLOW_FACTOR), $line_y1 - 10, $color['darknavy'], $fontFace, $key);
 
       if($line_x1 > $max_x) $max_x = $line_x1;
 
@@ -307,8 +307,8 @@ foreach($hosts as $key=>$value) {
 }
 
 //Vertical line
-imagelinethick($im, 0, $line_y1, $line_x1 - $host_step + 60*CFLOW_COOF, $line_y1, $color['black'], 1*CFLOW_COOF);
-imagelinethick($im, 0, $line_y2, $line_x1 - $host_step + 60*CFLOW_COOF, $line_y2, $color['black'], 1*CFLOW_COOF);
+imagelinethick($im, 0, $line_y1, $line_x1 - $host_step + 60*CFLOW_FACTOR, $line_y1, $color['black'], 1*CFLOW_FACTOR);
+imagelinethick($im, 0, $line_y2, $line_x1 - $host_step + 60*CFLOW_FACTOR, $line_y2, $color['black'], 1*CFLOW_FACTOR);
 
 foreach($localdata as $data) {
 
@@ -364,7 +364,7 @@ foreach($localdata as $data) {
   $max_y = $arrow_y1;
       
   //print "HREN:  $crd, $arrow_y1<br>\n";
-  $vv=$crd+40*CFLOW_COOF;
+  $vv=$crd+40*CFLOW_FACTOR;
  
   $method_text = $data->method." ".$data->reply_reason;
   if(strlen($method_text) > 15) $method_text = substr($data->method." ".$data->reply_reason, 0, 22)."...";
@@ -387,10 +387,10 @@ foreach($localdata as $data) {
   } else {  $msgcol = 'blue';}
 
      
-  imagettftext ( $im, $fontSize, 0,  $crd + 5, $arrow_y1 - 3*CFLOW_COOF, $color[$msgcol], $fontFace, $method_text);
+  imagettftext ( $im, $fontSize, 0,  $crd + 5, $arrow_y1 - 3*CFLOW_FACTOR, $color[$msgcol], $fontFace, $method_text);
   
   // Add Timestamp
-  imagettftext ( $im, $fontSize-1, 0, $crd + 5, $arrow_y1 + 9*CFLOW_COOF, $color['gray3'], $fontFace, "[".$tstamp."]");
+  imagettftext ( $im, $fontSize-1, 0, $crd + 5, $arrow_y1 + 9*CFLOW_FACTOR, $color['gray3'], $fontFace, "[".$tstamp."]");
 
 
   $cds = array();
@@ -404,7 +404,7 @@ foreach($localdata as $data) {
   $click[] = $cds;
   
   //Arrow
-  imagelinethick($im, $COORD[$fromip], $arrow_y1, $COORD[$toip], $arrow_y1, $color['black'], 1*CFLOW_COOF);
+  imagelinethick($im, $COORD[$fromip], $arrow_y1, $COORD[$toip], $arrow_y1, $color['black'], 1*CFLOW_FACTOR);
 
   if (CFLOW_DIRECTION == 0 ) {
   arrow($im, $color['blue'], $COORD[$toip], $arrow_y1, $d);
@@ -415,22 +415,22 @@ foreach($localdata as $data) {
   //Port
   if($d == 1) { 
      if (CFLOW_DIRECTION == 0 ) {
-        $tportx = $COORD[$toip] - 40*CFLOW_COOF;
-        $fportx = $COORD[$fromip] + 10*CFLOW_COOF;
+        $tportx = $COORD[$toip] - 40*CFLOW_FACTOR;
+        $fportx = $COORD[$fromip] + 10*CFLOW_FACTOR;
 	} else {
-	$tportx = $COORD[$toip] + 10*CFLOW_COOF;
-        $fportx = $COORD[$fromip] - 40*CFLOW_COOF;
+	$tportx = $COORD[$toip] + 10*CFLOW_FACTOR;
+        $fportx = $COORD[$fromip] - 40*CFLOW_FACTOR;
 	}
        $portf = $toport;
        $portt = $fromport;
   }
   else {
      if (CFLOW_DIRECTION == 0 ) {
-	       $tportx = $COORD[$toip] + 10*CFLOW_COOF;
-	       $fportx = $COORD[$fromip] - 40*CFLOW_COOF;    
+	       $tportx = $COORD[$toip] + 10*CFLOW_FACTOR;
+	       $fportx = $COORD[$fromip] - 40*CFLOW_FACTOR;    
 	} else {
-	       $tportx = $COORD[$toip] - 40*CFLOW_COOF;
-               $fportx = $COORD[$fromip] + 10*CFLOW_COOF;
+	       $tportx = $COORD[$toip] - 40*CFLOW_FACTOR;
+               $fportx = $COORD[$fromip] + 10*CFLOW_FACTOR;
 	}
 	       $portf = $fromport;
 	       $portt = $toport;
