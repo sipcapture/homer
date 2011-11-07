@@ -565,10 +565,10 @@ class HTML_search {
 				<tr>
 					<td>           </td>
 					<td>
-						<input type="submit" size="30" value="Search Homer" onClick="return check_form();">
+						<input type="submit" size="30" value="Search Homer" onClick="return check_form();" class="ui-button ui-widget ui-state-default ui-corner-all">
 					</td>
 					<td>
-						<input type="button" size="30" value="Clear All" onClick="return iNettuts.killForm('homer');">
+						<input type="button" size="30" value="Clear All" onClick="return iNettuts.killForm('homer');" class="ui-button ui-widget ui-state-default ui-corner-all">
 					</td>
 					  <td>&nbsp; &nbsp; &nbsp; &nbsp; </td>
                                          <td>
