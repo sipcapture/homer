@@ -340,7 +340,7 @@ class HTML_ToolBox {
                                                 <label for="pcap_session" title="pcap_session">MATCH:</label>
                                         </td>
 					 <td>
-                                                <select name="pcap_match" id="pcap_match" value="" />
+                                                <select name="pcap_match" id="pcap_match" value="" class="ui-select ui-widget ui-state-default ui-corner-all" />
                                                   <option value="cid" selected>Session-ID</option>
                                                   <option value="from_user">From User</option>
                                                   <option value="to_user">To User</option>
@@ -414,7 +414,7 @@ class HTML_ToolBox {
 				<tr>
 					<td>	</td>
                                          <td>
-                                                <select name="phpsip_meth" id="phpsip_meth" value="" />
+                                                <select name="phpsip_meth" id="phpsip_meth" value="" class="ui-select ui-widget ui-state-default ui-corner-all"  />
                                                   <option value="OPTIONS">OPTIONS</option>
                                                   <option value="INVITE">INVITE</option>
                                                 </select>
