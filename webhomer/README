@@ -15,6 +15,7 @@ Requirements:
 
 Setup/Upgrade:
 
+	- update "configuration.php" with any new parameters from "configuration_example.php"
 	- create homer_statistics db (statistics.sql)
         - schedule cronjob for stat collection every 5 minutes, add db auth (statistic.pl)
 	- Copy webhomer3 in your webfolder and carry your existing configuration.php
@@ -36,21 +37,21 @@ New Features:
 
 	- [New] Drag & Drop UI with inline elements & cookie positioning prefs
 	- [New] Time & Date controls with graph/zoom selection & interaction
-	- [New] Statistics with separate tables and Search integration (click & search)
-	- [New] Improved Admin section with user levels and service overview
+	- [New] Statistics (Highcharts OR Flot) with search integration (click & select) 
+	- [New] Improved Admin section with user levels, settings and service overview
 	- [New] Toolbox page with SIP Message & PCAP generator & Looking-Glass Widgets
 	- [New] API functions for widget development and integration with other tools
-	- [New] Extensible Alarm Class for notifications dispatching
+	- [New] Extensible Alarm Class for notifications and alert dispatching
 	- [New] Extensible Authentication Class supporting Internal, LDAP, Radius
+   - [New] IE7/8/9 Support Implemented
 
 Usage Notes:
 
 	- All searches are obeying the time/date parameters set in search page
-	  IE: Autosearch, Search, Call-Flow
+	  (Example: Autosearch, Search, Call-Flow)
 
 Notes:
 
-	- IE is unsupported (until someone who wants it provides time/patches)
 	- UI Glitches? Clear browser cookies (top right TRASH icon) and try again
 
 
