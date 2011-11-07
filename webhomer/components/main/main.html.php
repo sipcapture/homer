@@ -45,15 +45,15 @@ class HTML_mainhtml {
             <link type="text/css" href="styles/jquery-ui-1.8.4.custom.css" rel="stylesheet" />	
             <link type="text/css" href="styles/inettuts.css" rel="stylesheet" />
             <link type="text/css" href="styles/inettuts.js.css" rel="stylesheet" />            
+
             </head>
             
             <body>          
             <script type="text/javascript">var IER=<?php echo IERROR;?>;</script>
             <script type="text/javascript" src="js/homer.js"></script>
+            <!--[if lte IE 8]><script language="javascript" type="text/javascript" src="js/excanvas.min.js"></script><![endif]-->                
             <script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
             <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
-
-
 <?php
 
       }

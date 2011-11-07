@@ -83,8 +83,7 @@ $.plot($("#chart2"), uas1,
 	    labelFormatter: function(label, series) {
    		 // series is the series object for the label
    		 return ' ' + label.slice(0,30) + ' ('+Math.round(series.percent)+'%)';
-  		},
-
+  		}
         }
 });
 

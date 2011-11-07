@@ -127,27 +127,16 @@ jQuery(document).ready(function() {
              	{ data: d1, label: "Calls", yaxis: 2, lines: {show: true}, points: { show: true } }, 
              	{ data: d3, label: "AuthFail", yaxis: 2,  bars: { show: true } },
              	{ data: asr, label: "ASR", yaxis: 1,  lines: { show: true, steps: true }, 
-		  color: "rgb(30, 180, 20)", threshold: { below: 60, color: "rgb(200, 20, 30)" } },
+		  color: "rgb(30, 180, 20)", threshold: { below: 60, color: "rgb(200, 20, 30)" } }
 		],
            { 
                xaxes: [ { mode: 'time' } ],
-               yaxes: [  { position: 'left' },
-                         { position: 'right' }
-                      ],
-		legend: {
-                position: "nw",
-		margin: 10,
-                backgroundOpacity: 1
-                },
-
-		 grid: {
-                borderWidth: 0,
-		clickable: true
-                }
-
+               yaxes: [ { position: 'left' }, { position: 'right' }],
+  	       legend: [{ position: "nw", margin: 10, backgroundOpacity: 1 }],
+  	       grid: { borderWidth: 0, clickable: true }
            });
 
-     $('#chart1').bind("plotclick", function (event, pos, item) {
+    $('#chart1').bind("plotclick", function (event, pos, item) {
 	if (item) {
 	   if (document.getElementById('from_time')) {
             //$("#clickdata").text("You clicked point " + item.dataIndex + " in " + item.series.label + ".");
@@ -170,6 +159,7 @@ jQuery(document).ready(function() {
      });
 
      $('#chart1').append('<div style="position:absolute;left:40%;top:10px;color:#666;font-size:small">Captured Frames: '+allp+'</div>');
+
 
 });
 
