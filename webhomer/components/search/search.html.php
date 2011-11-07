@@ -572,7 +572,7 @@ class HTML_search {
 					</td>
 					  <td>&nbsp; &nbsp; &nbsp; &nbsp; </td>
                                          <td>
-                                                <select name="filters_a" id="filters_a" value="" />
+                                                <select name="filters_a" id="filters_a" value="" class="ui-select ui-widget ui-state-default ui-corner-all"  />
                                                   <option value="" ></option>
                                                   <option value="INVITE" <?php if(($search['cseq']) == "%INVITE" ) echo 'selected="selected"'; ?> >Calls</option>
                                                   <option value="REGISTER" <?php if(($search['cseq']) == "%REGISTER" ) echo 'selected="selected"'; ?> >Registrations</option>
