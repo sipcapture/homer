@@ -265,7 +265,7 @@ class HTML_search {
 				<tr>
 					<td width="40%" class="paramlist_key"><label for="proto" title=".">Proto</label></td>
 						<td class="tablerow_two">
-							<select name="proto" id="proto" class="dropdownstyle">
+							<select name="proto" id="proto" class="ui-select ui-widget ui-state-default ui-corner-all" >
 							        <option value="1" >TCP</option>
 								<option value="2" selected="selected">UDP</option>
 								<option value="3" >TLS/SSL</option>
@@ -276,7 +276,7 @@ class HTML_search {
 				<tr>
 					<td width="40%" class="paramlist_key"><label for="family" title=".">Family</label></td>
 						<td class="tablerow_two">
-							<select name="family" id="family" class="dropdownstyle">
+							<select name="family" id="family" class="ui-select ui-widget ui-state-default ui-corner-all" >
 								<option value="1" selected="selected">IPv4</option>
 								<option value="2" >IPv6</option>
 							</select>
