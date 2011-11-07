@@ -2,8 +2,6 @@
 
 WEBHOMER3 is a modular interface for HOMER/SIPCapture
 
-This release is a RELEASE CANDIDATE! Your feedback is welcome!
-
 --------------- RC FLAG -----------------
 
 Requirements:
@@ -43,7 +41,8 @@ New Features:
 	- [New] API functions for widget development and integration with other tools
 	- [New] Extensible Alarm Class for notifications and alert dispatching
 	- [New] Extensible Authentication Class supporting Internal, LDAP, Radius
-   - [New] IE7/8/9 Support Implemented
+	- [New] IE7/8/9 Support Implemented
+	- [New] Custom Size for Call Flow Image
 
 Usage Notes:
 
@@ -57,7 +56,7 @@ Notes:
 
 ------------ BUGS & FEEDBACK  --------------
 
-* For bug reports and feedback on this PRE-RELEASE email: lorenzo.mangani@gmail.com, alexandr.dubovikov@gmail.com
+* For bug reports and feedback on this RELEASE email: lorenzo.mangani@gmail.com, alexandr.dubovikov@gmail.com
 * For general assistance requests please create a ticket (http://code.google.com/p/homer/issues)
 
 - Visit us at http://sipcapture.org 

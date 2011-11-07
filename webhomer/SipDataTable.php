@@ -572,7 +572,7 @@ class SipDataTable extends DataTable_DataTable
    */
   public function getTableId()
   {
-    return 'demoTable';
+    return 'SIPTable';
   }
 
 

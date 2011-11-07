@@ -649,7 +649,7 @@ class HTML_search {
                 
         function fnShowHide( iCol ) {
 		/* Get the DataTables object again - this is not a recreation, just a get of the object */
-		var oTable = $('#demoTable').dataTable();	
+		var oTable = $('#SIPTable').dataTable();	
 		var bVis = oTable.fnSettings().aoColumns[iCol].bVisible;
 		oTable.fnSetColumnVis( iCol, bVis ? false : true );
 	}
