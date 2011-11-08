@@ -8,7 +8,8 @@ $userlevel =  $_SESSION['userlevel'];
 $header =  getVar('component', 0, '', 'int');
 
 /* SECURITY LEVEL: 1 - Admin, 2 - Manager, 3 - User, 4 - Guest*/
-$components = array("search" => 3, "toolbox" => 3, "statistic" =>3, "admin" => 1);          
+ 
+$components = array("search" => ACCESS_SEARCH, "toolbox" => ACCESS_TOOLBOX, "statistic" =>ACCESS_STATS, "admin" => ACCESS_ADMIN);
 
 /* Disable stats changing security level */
 if(detectIE()) {
