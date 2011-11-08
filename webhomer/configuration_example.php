@@ -17,7 +17,7 @@ define(HOMER_DB, "homer_db");
 define(HOMER_TABLE, "sip_capture");
 
   
-define(CONFIGVERSION, "1.0.2"); /* Please ALWAYS include CONFIGVERSION */
+define(CONFIGVERSION, "1.0.3"); /* Please ALWAYS include CONFIGVERSION */
 
 /* webHomer Settings 
 *  Adjust to reflect your system preferences
@@ -65,5 +65,10 @@ define(ALARM_TOEMAIL,"admin@example.com");
 /* configuration check */
 define(NOCHECK, 0); /* set to 1, dont check config */
 
+/* ACCESS LEVEL 3 - Users, 2 - Manager, 1 - Admin, 0 - nobody */
+define(ACCESS_SEARCH, 3); /* SEARCH FOR ALL:*/
+define(ACCESS_TOOLBOX, 1); /* TOLBOX FOR ADMIN */
+define(ACCESS_STATS, 3); /* SEARCH FOR ALL */
+define(ACCESS_ADMIN, 1); /* SEARCH FOR ALL */
 
 ?>
