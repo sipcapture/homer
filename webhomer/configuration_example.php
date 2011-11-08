@@ -1,5 +1,8 @@
 <?php
 
+define(CONFIG_VERSION, "1.0.3"); /* Please ALWAYS include CONFIGVERSION */
+define(WEBHOMER_VERSION, "3.0.1"); /* Please ALWAYS include CONFIGVERSION */
+
 /* Access db of homer */
 define(HOST, "localhost");
 define(USER, "root");
@@ -15,9 +18,6 @@ define(HOMER_USER, "homer_user");
 define(HOMER_PW, "homer_password");
 define(HOMER_DB, "homer_db");
 define(HOMER_TABLE, "sip_capture");
-
-  
-define(CONFIGVERSION, "1.0.3"); /* Please ALWAYS include CONFIGVERSION */
 
 /* webHomer Settings 
 *  Adjust to reflect your system preferences
