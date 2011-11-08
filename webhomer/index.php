@@ -78,7 +78,7 @@ body {
 
 <body>
 
-<?php if(CONFIGVERSION != "1.0.2") echo "<h2><font color='red'>Your CONFIG FILE is outdate.</font></h2"; ?>
+<?php if(CONFIGVERSION != "1.0.3") echo "<h2><font color='red'>Your CONFIG FILE is outdate.</font></h2"; ?>
 
 <form action="index.php" method="post">
 <table width="400" border="0" align="center" cellpadding="0" cellspacing="0"  class="login">
