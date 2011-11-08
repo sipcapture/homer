@@ -150,6 +150,13 @@ $flow_to_date = getVar('to_date', NULL, 'get', 'string');
 $flow_from_time = getVar('from_time', NULL, 'get', 'string');
 $flow_to_time = getVar('to_time', NULL, 'get', 'string');
 
+//if($db->dbconnect_homer($mynodeshost[$tnode])) {
+if(!$db->dbconnect_homer(NULL))
+{
+    //No connect;
+    exit;
+}
+
 if(BLEGDETECT == 1) $b2b = 1;
 
 if (isset($flow_to_date, $flow_from_time, $flow_to_time))
@@ -190,13 +197,6 @@ if(isset($cid)) {
 if(!isset($limit)) { $limit = 100; }
 
 $localdata=array();
-
-//if($db->dbconnect_homer($mynodeshost[$tnode])) {
-if(!$db->dbconnect_homer(NULL))
-{
-    //No connect;
-    exit;
-}
 
 
 $query = "SELECT * "
@@ -258,8 +258,8 @@ foreach($rows as $row) {
 	$ipv4_hdr->ttl = 30;
 	$ipv4_hdr->proto = 17;
 	$ipv4_hdr->checksum = 0;
-	$ipv4_hdr->src_ip = sprintf("%u", ip2long($row->source_ip));
-	$ipv4_hdr->dst_ip = sprintf("%u", ip2long($row->destination_ip));
+	$ipv4_hdr->src_ip = ip2long($row->source_ip);
+	$ipv4_hdr->dst_ip = ip2long($row->destination_ip);
 
 	$pseudo = pack('H2H2nnH4C2nNN', $ipv4_hdr->ver_len,$ipv4_hdr->tos,$ipv4_hdr->total_len, $ipv4_hdr->ident,
 	            $ipv4_hdr->fl_fr, $ipv4_hdr->ttl,$ipv4_hdr->proto,$ipv4_hdr->checksum, $ipv4_hdr->src_ip, $ipv4_hdr->dst_ip);
@@ -283,8 +283,5 @@ header("Content-length: $fsize");
 header("Cache-control: private"); 
 echo $buf;
 exit;
-
-
-
 
 ?>
