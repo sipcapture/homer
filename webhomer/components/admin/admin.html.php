@@ -193,7 +193,7 @@ class HTML_Admin {
                 <div class="widget-head"><h3>About</h3></div>
                 <div class="widget-content">
 
-		<br><h1><font size=+2>webHomer</font> 3.0 Release </h1>
+		<br><h1><font size=+2>webHomer</font> <?php echo WEBHOMER_VERSION;?> </h1>
 		<br>
 		Please use latest <a href="http://homer.googlecode.com" target="_blank">GIT Code</a> or visit <a href="http://sipcapture.org" target="_blank">http://sipcapture.org</a>
 		<br><br><hr><br>
