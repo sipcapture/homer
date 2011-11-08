@@ -208,9 +208,13 @@ function getSearch() {
 	$field = ($_GET['field']);
 	$value = ($_GET['value']);
 	$limit = ($_GET['limit']);
+	$hours = ($_GET['hours']);
 	
 	if(!isset($limit)) {
                 $limit = 10;
+        }
+	if(!isset($hours)) {
+                $hours = 2;
         }
 
 	$setdate=setDate();
@@ -224,6 +228,7 @@ function getSearch() {
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
                         ."\n WHERE ".$field." = '".$value."' "
+			."\n AND ( `date` > UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$hours." HOUR) )"
 			."\n ORDER BY id DESC"
 			." limit ".$limit;
 

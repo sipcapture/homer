@@ -25,8 +25,8 @@ last: 		Returns last X SIP messages
 
 search: 	Returns matching SIP messages
 		REST: /api/search/[FIELD]/[VALUE]
-		Equivalent:	api.php?task=search&field=&value=&limit=
-		Example:	/api/search/method/401&limit=2
+		Equivalent:	api.php?task=search&field=&value=&limit=&hours=
+		Example:	/api/search/method/401&limit=2&hours=6
 
 stat-total:	Returns Total Packet Counter
 		REST: (tbd)
