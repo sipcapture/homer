@@ -1,7 +1,7 @@
 <?php
 /*
  * HOMER Web Interface
- * Homer's homer.php
+ * Homer's index.php
  *
  * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
  * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
@@ -53,6 +53,8 @@ class HomerMain {
 
            HTML_mainhtml::displayBackground($bglogo);
 
+           /* For login we do nothing */
+           if($component == "login") return;
                   
            /* Check userlevel */   
            foreach($components as $key=>$value) {             

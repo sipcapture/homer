@@ -189,7 +189,7 @@ class Component {
                   $password = getVar('password', NULL, '', 'string');
                   $level = getVar('level', 1, '', 'int');	                         		
                   $db->qry("INSERT into homer_logon set useremail='?', password='?', userlevel='?'", $email, md5($password), $level);
-                  $this->myLocalRedirect("homer.php?component={$component}");
+                  $this->myLocalRedirect("index.php?component={$component}");
                   exit;	
           }
 
@@ -206,7 +206,7 @@ class Component {
                   $table = $type == 1 ? "homer_nodes" : "homer_hosts";	                      
 	                         		
                   $db->qry("INSERT into $table set host='?', name='?', status='?'", $host, $name, $status);
-                  $this->myLocalRedirect("homer.php?component={$component}");
+                  $this->myLocalRedirect("index.php?component={$component}");
                   exit;	
          }
           

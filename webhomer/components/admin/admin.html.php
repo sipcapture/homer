@@ -319,7 +319,7 @@ $userdef = get_defined_constants(true);
 <div id="createuser-form" title="Create new user"> 
 	<p class="validateTips">All form fields are required.</p> 
  	<br>
-	<form action="homer.php" name="createuser" id="createuser">
+	<form action="index.php" name="createuser" id="createuser">
 	<fieldset> 		
 		<label for="email">Email/ID &nbsp;</label> 
 		<input type="text" name="email" id="email" value="" class="text ui-widget-content ui-corner-all" /><br> 
@@ -340,7 +340,7 @@ $userdef = get_defined_constants(true);
 </div> 
 
 <div id="createhost-form" title="Create new host alias"> 
-	<form action="homer.php" name="createhost" id="createhost">
+	<form action="index.php" name="createhost" id="createhost">
 	<fieldset> 		
 		<label for="email">Host</label> 
 		<input type="text" name="host" id="host" value="" class="text ui-widget-content ui-corner-all" /><br> 
@@ -356,7 +356,7 @@ $userdef = get_defined_constants(true);
 </div> 
 
 <div id="createnode-form" title="Create new node"> 
-	<form action="homer.php" name="createnode" id="createnode">
+	<form action="index.php" name="createnode" id="createnode">
 	<fieldset> 		
 		<label for="email">Host</label> 
 		<input type="text" name="host" id="host" value="" class="text ui-widget-content ui-corner-all" /> <br>

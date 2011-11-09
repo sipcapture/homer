@@ -70,7 +70,7 @@ class HTML_mainhtml {
 ?>
 	<div id="banner"> 
 		<h1 class="logo"> 
-			<a href="homer.php" title="Homer Capture Server"><span>Homer</span></a> 
+			<a href="index.php" title="Homer Capture Server"><span>Homer</span></a> 
 		</h1> 		
 		<div id="dock" class="ui-corner-all"> 
 			<div class="left"></div> 
@@ -81,14 +81,14 @@ class HTML_mainhtml {
                                 echo "<li ";
                                 if($key == $selected) echo "class='selected'";
                                 echo ">";
-                                echo "<a href='homer.php?component=".$key."'>".$value."</a>";
+                                echo "<a href='index.php?component=".$key."'>".$value."</a>";
                                 echo "</li>";
                             
                             }
 ?>
 				<li style="padding-left: 12px;"> 
 					<div style="background: #555; width: 1px; height: 24px; position: absolute; left: 0px;"></div> 
-					<a href="homer.php?task=logout">Logout</a> 
+					<a href="index.php?task=logout">Logout</a> 
 				</li> 
 
 				<li <?php if($task!="off") echo "class='selected'"; ?>>
@@ -114,7 +114,7 @@ class HTML_mainhtml {
                             <li class="ui-state-default ui-corner-all" style="cursor:pointer;" onClick="javascript:showSearch();" title="Field Search"><span class="ui-icon ui-icon-search"></span></li>
                             <li class="ui-state-default ui-corner-all" style="cursor:pointer;" onClick="javascript:$('#SIPTable').dataTable().fnFilterClear();" title="Clear Local Filter"><span class="ui-icon ui-icon-cancel"></span></li>
 <?php endif; ?>	 
-                            <li class="ui-state-default ui-corner-all" style="cursor:pointer;" onClick='javascript:new function(){var c=document.cookie.split(";");for(var i=0;i<c.length;i++){var e=c[i].indexOf("=");var n=e>-1?c[i].substr(0,e):c[i];document.cookie=n+"=;expires=Thu, 01 Jan 1970 00:00:00 GMT";}}();window.location = "homer.php";' title="Clear UI / Cookies"><span class="ui-icon ui-icon-trash"></span></li>                            
+                            <li class="ui-state-default ui-corner-all" style="cursor:pointer;" onClick='javascript:new function(){var c=document.cookie.split(";");for(var i=0;i<c.length;i++){var e=c[i].indexOf("=");var n=e>-1?c[i].substr(0,e):c[i];document.cookie=n+"=;expires=Thu, 01 Jan 1970 00:00:00 GMT";}}();window.location = "index.php";' title="Clear UI / Cookies"><span class="ui-icon ui-icon-trash"></span></li>                            
 			                      </ul>
 			<div class="right"></div> 
 		</div> 
@@ -130,7 +130,7 @@ class HTML_mainhtml {
       }
 
       function displayFormOpen() {
-             echo '<form action="homer.php" method="POST" name="homer" id="homer">';
+             echo '<form action="index.php" method="POST" name="homer" id="homer">';
        }
 
       function displayFormClose($component) {

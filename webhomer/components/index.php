@@ -2,32 +2,6 @@
 
 defined( '_HOMEREXEC' ) or die( 'Restricted access' );
 
-$task = getVar('task', NULL, '', 'string');
-$component = getVar('component', 'search', '', 'string');
-$userlevel =  $_SESSION['userlevel'];
-$header =  getVar('component', 0, '', 'int');
-
-/* SECURITY LEVEL: 1 - Admin, 2 - Manager, 3 - User, 4 - Guest*/
- 
-$components = array("search" => ACCESS_SEARCH, "toolbox" => ACCESS_TOOLBOX, "statistic" =>ACCESS_STATS, "admin" => ACCESS_ADMIN);
-
-/* Disable stats changing security level */
-if(detectIE()) {
-  //$components["statistic"]=0;
-  define("IERROR",1);
-}
-else define("IERROR",0);
-
-#Extra Security check
-$security = 0;
-foreach($components as $key=>$value) {
-	
-	if($key == $component) {
-		if($userlevel <= $value) $security = 1;
-		break;
-	}    
-}
-
 if($security == 0 ) {
 	echo "You don't have permissions to execute this component";
         exit;

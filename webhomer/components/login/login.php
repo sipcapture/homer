@@ -1,7 +1,7 @@
 <?php
 /*
  * HOMER Web Interface
- * Homer's homer.php
+ * Homer's index.php
  *
  * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
  * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
@@ -27,12 +27,21 @@
  *
 */
 
-define(_HOMEREXEC, "1");
+define(_HOMEREXEC, 1);
+define(SKIPAUTH, 1);
 
-/* MAIN CLASSES */
-include("class/index.php");
+require_once ('login.html.php');
 
-/* COMPONENTS */
-include("components/index.php");
-                        
-?>
+class Component {
+
+       function executeComponent () {
+           global $auth, $task;
+
+           if($task == "do") {                      
+             	   //do something on FAILED login
+             	   echo "<font color='red'>Bad Passwort!</font>";
+	   }
+	   
+           HTML_login::displayLoginForm();
+	}
+}

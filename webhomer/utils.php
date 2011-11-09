@@ -92,7 +92,7 @@ function sipMessage() {
 
         // HTML_adminhomer::displayMessage(&$rows);
 
-        // bypass homer.php and parse message body here
+        // bypass index.php and parse message body here
 
 	      $row = $rows[0];
 	      $msgbody = $row->msg;

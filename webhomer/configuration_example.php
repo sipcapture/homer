@@ -1,7 +1,7 @@
 <?php
 
 define(CONFIG_VERSION, "1.0.3"); /* Please ALWAYS include CONFIGVERSION */
-define(WEBHOMER_VERSION, "3.0.1"); /* WEBHOMER VERSION */
+define(WEBHOMER_VERSION, "3.1.0"); /* WEBHOMER VERSION */
 
 /* Access db of homer */
 define(HOST, "localhost");

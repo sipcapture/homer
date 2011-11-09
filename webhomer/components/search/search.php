@@ -1,7 +1,7 @@
 <?php
 /*
  * HOMER Web Interface
- * Homer's homer.php
+ * Homer's search.php
  *
  * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
  * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
