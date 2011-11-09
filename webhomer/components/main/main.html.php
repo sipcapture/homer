@@ -55,11 +55,11 @@ class HTML_mainhtml {
             <script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
             <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
             <script type="text/javascript" src="js/jquery.tools.min.js"></script>
-            <script type="text/javascript"> 
-		jQuery(document).ready( function($) { 
-			$("[title]").tooltip({ position: "center left",offset: [40, 10], effect: "fade"});
+	    <script type="text/javascript">
+                jQuery(document).ready( function($) {
+                  $("[title]").tooltip({ offset: [90, 10], effect: "slide"});
                 });
-            </script>            
+            </script>
 <?php
 
       }
