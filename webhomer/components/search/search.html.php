@@ -506,7 +506,7 @@ class HTML_search {
 								    else $locarray = array();
 								    foreach ($nodes as $key=>$value) {
                                                                 ?>								
-								        <input type="checkbox" class="checkboxstyle2" name="location[]" id="location" value="1" <?php if(in_array($key,$locarray)) echo "checked"; ?>><?php echo $value;?>
+								        <input type="checkbox" class="checkboxstyle2" name="location[]" id="location" value="<?php echo $key?>" <?php if(in_array($key,$locarray)) echo "checked"; ?>><?php echo $value;?>
                                                                 <?php
                                                                     }
                                                                 ?>
