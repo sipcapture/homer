@@ -54,7 +54,7 @@ class HomerAuthentication extends Authentication {
 			$p=$this->pass_column;		
 			$l=$this->user_level;							
 			if($row->$u !="" && $row->$p !=""){
-				$_SESSION['loggedin'] = $row->$p;
+				$_SESSION['loggedin'] = $row->$u;
 				$_SESSION['userlevel'] = $row->$l;
 				return true;	
 			}else{

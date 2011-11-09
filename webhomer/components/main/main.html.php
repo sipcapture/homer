@@ -54,6 +54,12 @@ class HTML_mainhtml {
             <!--[if lte IE 8]><script language="javascript" type="text/javascript" src="js/excanvas.min.js"></script><![endif]-->                
             <script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
             <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
+            <script type="text/javascript" src="js/jquery.tools.min.js"></script>
+            <script type="text/javascript"> 
+		jQuery(document).ready( function($) { 
+			$("[title]").tooltip({ position: "center left",offset: [40, 10], effect: "fade"});
+                });
+            </script>            
 <?php
 
       }
@@ -88,7 +94,7 @@ class HTML_mainhtml {
 ?>
 				<li style="padding-left: 12px;"> 
 					<div style="background: #555; width: 1px; height: 24px; position: absolute; left: 0px;"></div> 
-					<a href="index.php?task=logout">Logout</a> 
+					<a href="index.php?task=logout" title="You logged as: <?php echo $_SESSION['loggedin'];?>">Logout</a> 
 				</li> 
 
 				<li <?php if($task!="off") echo "class='selected'"; ?>>

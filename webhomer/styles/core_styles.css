@@ -466,3 +466,18 @@ h1.logo a span {
 
 
 #ui-datepicker-div { display:none }
+
+.tooltip {
+        background-color:#000;
+        border:1px solid #fff;
+        padding:10px 15px;
+        width:200px;
+        display:none;
+        color:#fff;
+        text-align:left;
+        font-size:12px;
+
+        /* outline radius for mozilla/firefox only */
+        -moz-box-shadow:0 0 10px #000;
+        -webkit-box-shadow:0 0 10px #000;
+}
