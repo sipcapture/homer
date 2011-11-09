@@ -49,8 +49,8 @@ define(RESULTS_ORDER, "asc");
 define(AUTOCOMPLETE, 0);  /* Enables autocomplete in FROM & TO fiels- WARNING: db intensive */
 
 /* BLEG DETECTION */
-define(BLEGDETECT, 1); /* always detect BLEG leg in CFLOW/PCAP*/
-define(BLEGCID, "x-cid"); /* default Homer style */
+define(BLEGDETECT, 0); /* always detect BLEG leg in CFLOW/PCAP*/
+define(BLEGCID, "x-cid"); /* default Homer style. If you want use it, please add INDEX for callid_aleg */
 
 /* Database: mysql */
 define(DATABASE,"mysql");
