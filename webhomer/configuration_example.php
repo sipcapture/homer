@@ -50,7 +50,7 @@ define(AUTOCOMPLETE, 0);  /* Enables autocomplete in FROM & TO fiels- WARNING: d
 
 /* BLEG DETECTION */
 define(BLEGDETECT, 0); /* always detect BLEG leg in CFLOW/PCAP*/
-define(BLEGCID, "x-cid"); /* default Homer style. If you want use it, please add INDEX for callid_aleg */
+define(BLEGCID, "x-cid"); /* default Homer style.*/
 
 /* Database: mysql */
 define(DATABASE,"mysql");
