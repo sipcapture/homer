@@ -318,7 +318,7 @@ class HTML_ToolBox {
                 <div class="widget-content"><br>
                    <table class="bodystyle" cellspacing="1"  height="150" width="95%" >
 			 	<tr>
-				        <td width="150" class="tablerow_two paramlist_key"><label for="date" title=".">From Date</label></td>
+				        <td width="150" class="tablerow_two paramlist_key"><label for="date" title="From this date">From Date</label></td>
 				        <td class="tablerow_two">
 				        <input size="11" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo date("d-m-Y");?> ">
 				        &nbsp;-&nbsp;
@@ -326,7 +326,7 @@ class HTML_ToolBox {
 				        </td>
 				        </tr>
 				        <tr>
-				        <td width="40%" class="tablerow_two paramlist_key"><label for="time" title=".">To Date</label></td>
+				        <td width="40%" class="tablerow_two paramlist_key"><label for="time" title="Up to this date">To Date</label></td>
 				        <td class="tablerow_two">
 				        <input size="11" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("d-m-Y");?> ">
 				        &nbsp;-&nbsp;
@@ -337,7 +337,7 @@ class HTML_ToolBox {
 					</tr>
 					<tr>
                                         <td width="150" class="tablerow_two">
-                                                <label for="pcap_session" title="pcap_session">MATCH:</label>
+                                                <label for="pcap_session" title="PCAP Session">MATCH:</label>
                                         </td>
 					 <td>
                                                 <select name="pcap_match" id="pcap_match" value="" class="ui-select ui-widget ui-state-default ui-corner-all" />
@@ -377,7 +377,7 @@ class HTML_ToolBox {
 
                                 <tr>
                                         <td width="150" class="tablerow_two">
-                                                <label for="phpsip_from" title="From">From</label>
+                                                <label for="phpsip_from" title="From URI">From</label>
                                         </td>
                                         <td>
                                                 <input type="text" name="phpsip_from" id="phpsip_from" class="textfieldstyle2" size="40" value="user@domain.com" />
@@ -386,7 +386,7 @@ class HTML_ToolBox {
                                 </tr>
                                 <tr>
                                         <td width="150" class="tablerow_two">
-                                                <label for="phpsip_to" title="to">To</label>
+                                                <label for="phpsip_to" title="To URI">To</label>
                                         </td>
                                         <td>
                                                 <input type="text" name="phpsip_to" id="phpsip_to" class="textfieldstyle2" size="40" value="user@domain.com" />
@@ -395,7 +395,7 @@ class HTML_ToolBox {
                                 </tr>
                                 <tr>
                                         <td width="150" class="tablerow_two">
-                                                <label for="phpsip_from" title="From">Proxy/Gateway</label>
+                                                <label for="phpsip_from" title="Proxy URI">Proxy/Gateway</label>
                                         </td>
                                         <td>
                                                 <input type="text" name="phpsip_prox" id="phpsip_prox" class="textfieldstyle2" size="40" value="proxy.domain.com:5060" />
@@ -404,7 +404,7 @@ class HTML_ToolBox {
                                 </tr>
                                 <tr>
                                         <td width="150" class="tablerow_two">
-                                                <label for="phpsip_from" title="From">Header Data</label>
+                                                <label for="phpsip_from" title="Extra HEADER data">Header Data</label>
                                         </td>
                                         <td>
                                                 <input type="text" name="phpsip_head" id="phpsip_head" class="textfieldstyle2" size="40" placeholder="Optional" />

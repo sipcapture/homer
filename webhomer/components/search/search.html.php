@@ -406,7 +406,15 @@ class HTML_search {
                    <table class="bodystyle" cellspacing="1"  height="135">
 				<tr>
 					<td width="150" class="tablerow_two">
-						<label for="from_user">From User *</label>
+						<label for="ruri_user" title="B-Number in Request URI user part">RURI User *</label>
+					</td>
+					<td>
+						<input type="text" name="ruri_user" id="ruri_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['ruri_user'])) echo $search['ruri_user']; ?>"  x-webkit-speech />
+					</td>
+				</tr>                   
+				<tr>
+					<td width="150" class="tablerow_two">
+						<label for="from_user" title="Userpart in From URI">From User</label>
 					</td>
 					<td>
 						<input type="text" name="from_user" id="from_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['from_user'])) echo $search['from_user']; ?>" x-webkit-speech />
@@ -414,7 +422,7 @@ class HTML_search {
 				</tr>
 				<tr>
 					<td width="150" class="tablerow_two">
-						<label for="to_user">To User *</label>
+						<label for="to_user" title="Userpart in To URI">To User</label>
 					</td>
 					<td>
 						<input type="text" name="to_user" id="to_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['to_user'])) echo $search['to_user']; ?>" x-webkit-speech />
@@ -426,14 +434,6 @@ class HTML_search {
 					</td>
 					<td>
 						<input type="text" name="pid_user" id="pid_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['pid_user'])) echo $search['pid_user']; ?>"  x-webkit-speech />
-					</td>
-				</tr>
-				<tr>
-					<td width="150" class="tablerow_two">
-						<label for="ruri_user" title="B-Number in Request URI user part">RURI User</label>
-					</td>
-					<td>
-						<input type="text" name="ruri_user" id="ruri_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['ruri_user'])) echo $search['ruri_user']; ?>"  x-webkit-speech />
 					</td>
 				</tr>
 				<tr>
@@ -498,7 +498,7 @@ class HTML_search {
                     <table class="bodystyle" cellspacing="1" height="135">						
 							<tr>
 							
-								<td width="40%" class="paramlist_key"><label for="location" title=".">Location</label></td>
+								<td width="40%" class="paramlist_key"><label for="location" title="Homer Node">Location</label></td>
 								<td class="tablerow_two">
 								<?php
 
@@ -519,7 +519,7 @@ class HTML_search {
 							
 							?>
 							<tr>
-								<td width="20%" class="paramlist_key"><label for="date" title=".">From Date</label></td>
+								<td width="20%" class="paramlist_key"><label for="date" title="Searching from this date">From Date</label></td>
 								<td class="tablerow_two">
 									<input size="10" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo date("d-m-Y");?> ">
 								&nbsp;-&nbsp;
@@ -528,7 +528,7 @@ class HTML_search {
 								</td>
 							</tr>
 							<tr>
-								<td width="40%" class="paramlist_key"><label for="time" title=".">To Date</label></td>
+								<td width="40%" class="paramlist_key"><label for="time" title="Searching up to this date">To Date</label></td>
 								<td class="tablerow_two">
                                                                       <input size="10" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("d-m-Y");?> ">
                                                                       &nbsp;-&nbsp;
