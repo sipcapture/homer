@@ -29,6 +29,6 @@ define(APILOC,"/webhomer/api/");
 
 /* INCLUDE preferences */
 
-include("class/preferences.php");
+include("preferences.php");
 
 ?>
