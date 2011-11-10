@@ -1,8 +1,9 @@
 <?php
 
-define(CONFIG_VERSION, "1.0.3"); /* Please ALWAYS include CONFIGVERSION */
-define(WEBHOMER_VERSION, "3.1.0"); /* WEBHOMER VERSION */
+define(CONFIG_VERSION, "1.0.4"); /* Please ALWAYS include CONFIGVERSION */
+define(WEBHOMER_VERSION, "3.1.1"); /* WEBHOMER VERSION */
 
+/*********************************************************************************/
 /* Access db of homer */
 define(HOST, "localhost");
 define(USER, "root");
@@ -18,6 +19,8 @@ define(HOMER_USER, "homer_user");
 define(HOMER_PW, "homer_password");
 define(HOMER_DB, "homer_db");
 define(HOMER_TABLE, "sip_capture");
+
+/*********************************************************************************/
 
 /* webHomer Settings 
 *  Adjust to reflect your system preferences
@@ -37,7 +40,8 @@ define(CFLOW_CLEANUP, 1); /* Automatic Cleanup of old Cflow images */
 define(CFLOW_TIMEZONE, "Europe/Amsterdam"); /* Timezone that will display in Call Flow Ladder Diagram */
 define(CFLOW_DIRECTION, 0); /* Callflow Direction */
 define(CFLOW_FACTOR, 1);   /* IMAGE size factor. The value can be float */
-
+define(CFLOW_POPUP,1); /* Modal type: 1, Browser popup: 2 */
+define(MESSAGE_POPUP,1); /* Modal type: 1, Browser popup: 2 */
 
 /* Modules Options */
 define(MODULES, 0);  /* Set to 1 Enable Statistic Modules */

@@ -71,9 +71,10 @@ function doTest() {
 
 function sipMessage() {
 
-	      $id = getVar('id', 0, '', 'int');
+	$id = getVar('id', 0, '', 'int');
+	$popuptype = getVar('popuptype', 1, '', 'int');
 
-	      global $mynodeshost, $db;
+	global $mynodeshost, $db;
 
         $protos = array("UDP","TCP","TLS","SCTP");
         $family = array("IPv4", "IPv6");
@@ -109,6 +110,14 @@ function sipMessage() {
 	$winid = rand(1111, 9999)."pop";
 ?>
 
+<?php if($popuptype == 2): ?>
+<link href="styles/core_styles.css" rel="stylesheet" type="text/css" />
+<link href="styles/form.css" rel="stylesheet" type="text/css" />
+<link type="text/css" href="styles/jquery-ui-1.8.4.custom.css" rel="stylesheet" />
+<script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
+<script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
+<?php endif; ?>
+
 <script type="text/javascript">
 $(document).ready(function() {
   // var mytitle = $(this).find('span.ui-dialog-title').text();
@@ -119,6 +128,7 @@ $(document).ready(function() {
   return false;
 });
 </script>
+<title>Message <?php echo $id;?></title>
 <p>
     <input type="button" value="+/- Message" onclick="$('#sipmsg<?php echo $winid; ?>').toggle(400);"  style="background: transparent;" class="ui-button ui-widget ui-state-default ui-corner-all"/>
     <input type="button" value="+/- Details" onclick="$('#sipdetails<?php echo $winid; ?>').toggle(400);"  style="opacity: 1; background: transparent;" class="ui-button ui-widget ui-state-default ui-corner-all"/>

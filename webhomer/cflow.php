@@ -105,7 +105,8 @@ $option = array(); //prevent problems
 
 //callid_aleg
 $cid = getVar('cid', NULL, 'get', 'string');
-$b2b = getVar('b2b', NULL, 'get', 'string');
+$b2b = getVar('b2b', 0, 'get', 'int');
+$popuptype = getVar('popuptype', 1, 'get', 'int');
 if(BLEGDETECT == 1) $b2b =1;
 
 //Crop Search Parameters, if any
@@ -150,14 +151,17 @@ if(!$db->dbconnect_homer(NULL))
     exit;
 }
 
-
-
 $query = "SELECT * "
           ."\n FROM ".HOMER_TABLE
           ."\n WHERE ".$where." order by micro_ts ASC limit 100";
 
 $rows = $db->loadObjectList($query);
-                
+
+if(count($rows)==0) {
+    echo "No data found!";
+    exit;
+}
+
 $querytd = "SELECT TIMEDIFF(max(date),min(date)) as tot_dur "
           ."\n FROM ".HOMER_TABLE
           ."\n WHERE ".$where;
@@ -462,10 +466,13 @@ $winid = rand(1111, 9999);
 <link href="styles/core_styles.css" rel="stylesheet" type="text/css" />
 <link href="styles/form.css" rel="stylesheet" type="text/css" />
 <link type="text/css" href="styles/jquery-ui-1.8.4.custom.css" rel="stylesheet" />
-<!--
+
+<?php if($popuptype == 2): ?>
+<script src="js/homer.js" type="text/javascript"></script>
 <script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
 <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
--->
+<?php endif; ?>
+<title>CallFlow <?php echo $cid;?></title>
 <script src="js/jquery.zoomable.js" type="text/javascript"></script>                                                    
 <script language="javascript">
 $(document).ready(function(){
@@ -502,10 +509,14 @@ $(document).ready(function(){
 <img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image<?php echo $winid; ?>">
 <map name='map' id='map'>
 <?php
+
+if(!defined('MESSAGE_POPUP')) $popuptype = 1;
+else $popuptype = MESSAGE_POPUP;
+
 foreach($click as $cds) {
      $cz = $cds[0].",".$cds[1].",".$cds[2].",".$cds[3];
      $messg = $cds[4];
-     echo "<area shape='rect' href='javascript:popMessage(\"".$messg."\")' coords='$cz' alt='Area'></area>\n";
+     echo "<area shape='rect' href='javascript:popMessage2(\"".$messg."\",".$popuptype.")' coords='$cz' alt='Area'></area>\n";
 }
 
 ?>

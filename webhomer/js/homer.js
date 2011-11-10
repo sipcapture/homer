@@ -261,6 +261,106 @@ function showCallFlow(id,table,tnode,location,unique,tag,callid,fdate,tdate, ft,
 			.focus();			
 }
 
+function showCallFlow2(type, callid, url) {
+
+
+		var posx = $('body').data('posx');
+                var posy = $('body').data('posy');
+		
+		if(type == 1) {
+			var cflow = $('<div id="cflow"></div>').load(url, '', function(response, status, xhr) {
+	             	   if (status == 'error') { 
+					var msg = "Sorry but there was an error: ";
+		        	        $(".content").html(msg + xhr.status + " " + xhr.statusText);
+		                }}).dialog({
+	        	        	autoOpen: true,
+        	        	        // autoResize: true,
+					stack: false,
+					width: 'auto',
+					position: [posx-300, posy-80],
+					// height: 'auto',
+					height: 500,
+					minHeight: 300,
+					close: function(e, i) { $(this).remove(); },	
+					open: function(e, i) {  
+					$(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); 
+					//	$(this).css({ height: 'auto' });
+					},	
+	        	                title: 'Call Flow: '+callid
+				}).css('zIndex', -1).focus();	
+		}
+		else {
+		
+			settings = { height:600, width:600, toolbar:0, scrollbars:1, status:0, 
+				resizable:1, left:0, top:0, center:1, location:0, menubar:0
+			};
+
+			if (settings.center == 1){
+				settings.top = (screen.height-(settings.height + 110))/2;
+				settings.left = (screen.width-settings.width)/2;
+			}
+		
+			parameters = "location=" + settings.location + ",menubar=" + settings.menubar + ",height=" + settings.height + ",width=" + settings.width + ",toolbar=" + settings.toolbar + ",scrollbars=" + settings.scrollbars  + ",status=" + settings.status + ",resizable=" + settings.resizable + ",left=" + settings.left  + ",screenX=" + settings.left + ",top=" + settings.top  + ",screenY=" + settings.top;
+			var name = 'Call Flow: '+callid;
+			winObj = window.open(url, name, parameters);
+			
+			winObj.focus();			
+		}
+}
+
+function popMessage2(id, type) {
+
+			var url = "utils.php?task=sipmessage&id="+id+"&popuptype="+type;
+			var posx = $('body').data('posx');
+			var posy = $('body').data('posy');
+			
+			if(type == 1) {
+				jQuery('<div id="'+id+'"></div>').appendTo( jQuery('body') );
+				$("#"+id)
+                	        //var pflow = $('<div id="'+id+'"></div>')
+				.load(url, '', function(response, status, xhr) {
+	                        if (status == 'error') {
+        	                var msg = "Sorry but there was an error: ";
+                	        $(".content").html(msg + xhr.status + " " + xhr.statusText);
+	                        }})
+        	                .dialog({
+                	                autoOpen: true,
+					autoResize: true, 
+					stack: true,
+	                                width: 500,
+        	                        // height: 300,
+					minHeight: 350, 
+                        	        height: 'auto',
+					position: [posx + 40, posy -5],
+					open: function(e, i) { 
+						$(this).css({ overflow: 'hidden' }); 
+						$(this).css({ height: 'auto' }); 
+					},
+					open: function(e, i) {  $(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); },	
+        	                        close: function(e, i) { $(this).remove(); },
+                	                title: 'MSG ID: '+id
+                        	}).css('zIndex', -1).focus();						
+				document.getElementById(id).focus(); 
+			}
+			else {
+		
+				settings = { height:300, width:500, toolbar:0, scrollbars:1, status:0, 
+					resizable:1, left:[posy -5], top:[posx + 40], center:0, location:0, menubar:0
+				};
+
+				if (settings.center == 1){
+					settings.top = (screen.height-(settings.height + 110))/2;
+					settings.left = (screen.width-settings.width)/2;
+				}
+			
+				parameters = "location=" + settings.location + ",menubar=" + settings.menubar + ",height=" + settings.height + ",width=" + settings.width + ",toolbar=" + settings.toolbar + ",scrollbars=" + settings.scrollbars  + ",status=" + settings.status + ",resizable=" + settings.resizable + ",left=" + settings.left  + ",screenX=" + settings.left + ",top=" + settings.top  + ",screenY=" + settings.top;		
+				var name = 'Call ID: '+id;
+				winObj = window.open(url, name, parameters);			
+				winObj.focus();			
+			}
+}
+
+
 
 
 function clear_complete_form() {

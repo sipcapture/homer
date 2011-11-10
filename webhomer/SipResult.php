@@ -112,7 +112,11 @@ class SipResult
   
   public function getMethod()
   {
-      return "<a href=\"javascript:popMessage('".$this->id."');\">".$this->method."</a>";
+  
+      if(!defined('MESSAGE_POPUP')) $popuptype = 1;
+      else $popuptype = MESSAGE_POPUP;
+            
+      return "<a href=\"javascript:popMessage2('".$this->id."', $popuptype);\">".$this->method."</a>";
 //      return "<a href=\"javascript:showMessage('".$this->id."','".$this->loctable."','".$this->tnode."','". implode(",",$this->location)."');\">".$this->method."</a>";
 //      return "<div class=\"spantrace\"><a href=\"javascript:showMessage('".$this->id."','".$this->loctable."','".$this->tnode."','". implode(",",$this->location)."');\">".$this->method."</a></div>";
       //return $this->method;
@@ -172,13 +176,17 @@ class SipResult
   {
 
    $search = json_decode($_SESSION['homersearch']);
-   //$ft = date("Y-m-d H:i:s", strtotime($search->from_date." ".$search->from_time) );
-   //$tt = date("Y-m-d H:i:s", strtotime($search->to_date." ".$search->to_time) );
+   if(!defined('CFLOW_POPUP')) $popuptype = 1;
+   else $popuptype = CFLOW_POPUP;
+      
    $fd = date("Y-m-d", strtotime($search->from_date));
    $td = date("Y-m-d", strtotime($search->to_date));   
-   return "<a alt='callflow' href=\"javascript:showCallFlow('".$this->id."','".$this->loctable."','".$this->tnode."','".
-   implode(',',$this->location)."','".$this->unique."', 1,'".$this->callid."', '".$fd."','".$td."','".$search->from_time."', '".$search->to_time."',".$search->b2b.");\">".$this->callid."</a>";
-   //return $this->callid;
+   $url = "cflow.php?cid=".$this->callid;
+   $url .= "&from_time=".$search->from_time."&to_time=".$search->to_time."&from_date=".$fd."&to_date=".$td;
+   $url .= "&callid_aleg=".$search->b2b."&popuptype=".$popuptype;
+   
+   return "<a alt='callflow' href=\"javascript:showCallFlow2($popuptype, '".$this->callid."','".$url."');\">".$this->callid."</a>";
+
   }  
   
   public function getCallIdTag()

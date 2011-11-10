@@ -205,7 +205,7 @@ class HTML_ToolBox {
                         	{
 				var ddt = indata.date.split(" ");
                         	var div_data =
-              			"<p align=left>"+ddt[1]+" <a href=javascript:popMessage('"+indata.id+"');>"+indata.method+
+              			"<p align=left>"+ddt[1]+" <a href=javascript:popMessage2('"+indata.id+"',<?php echo MESSAGE_POPUP;?>);>"+indata.method+
                         	"</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
                         	$(div_data).appendTo("#live");
                         	});
@@ -266,7 +266,7 @@ class HTML_ToolBox {
                         {
 			var ddt = indata.date.split(" ");
                         var div_data =
-                        "<p align=left>"+ddt[1]+" <a href=javascript:popMessage('"+indata.id+"');>"+indata.method+
+                        "<p align=left>"+ddt[1]+" <a href=javascript:popMessage2('"+indata.id+"',<?php echo MESSAGE_POPUP;?>);>"+indata.method+
                         "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
                         $(div_data).appendTo("#livecalls");
                         });
