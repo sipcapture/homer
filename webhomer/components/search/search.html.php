@@ -298,6 +298,7 @@ class HTML_search {
                         $chart="flot";
                         echo "<script type=\"text/javascript\" src=\"js/jquery.flot.js\"></script>";
                         echo "<script type=\"text/javascript\" src=\"js/jquery.flot.pie.js\"></script>";
+			echo "<script type=\"text/javascript\" src=\"js/jquery.threshold.pie.js\"></script>";
                 } else {
                         $chart="dyn";
                         echo "<script type=\"text/javascript\" src=\"js/highstock.js\"></script>";
