@@ -129,6 +129,7 @@ $(document).ready(function() {
 });
 </script>
 <title>Message <?php echo $id;?></title>
+<div style="margin-left: 15px">
 <p>
     <input type="button" value="+/- Message" onclick="$('#sipmsg<?php echo $winid; ?>').toggle(400);"  style="background: transparent;" class="ui-button ui-widget ui-state-default ui-corner-all"/>
     <input type="button" value="+/- Details" onclick="$('#sipdetails<?php echo $winid; ?>').toggle(400);"  style="opacity: 1; background: transparent;" class="ui-button ui-widget ui-state-default ui-corner-all"/>
@@ -158,6 +159,7 @@ $(document).ready(function() {
 </div>
 <div id='sipmsg<?php echo $winid; ?>'>
         <?php echo $msgbody;?>
+</div>
 </div>
 <?php
 }
