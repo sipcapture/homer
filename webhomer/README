@@ -14,6 +14,7 @@ Requirements:
 Setup/Upgrade:
 
 	- update "configuration.php" with any new parameters from "configuration_example.php"
+	- update "preferences.php" with any new parameters from "preferences_example.php"
 	- create homer_statistics db (statistics.sql)
         - schedule cronjob for stat collection every 5 minutes, add db auth (statistic.pl)
 	- Copy webhomer3 in your webfolder and carry your existing configuration.php
