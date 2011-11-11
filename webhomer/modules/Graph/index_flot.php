@@ -75,7 +75,7 @@ $response = json_decode($jsondata, true);
 foreach($response as $entry){
         foreach($entry as $data){
 	$newtime = (strtotime($data['from_date']." ".$offset));
-	$auth = $data['auth']; $pass = $data['completed']; $failed = ($auth - $pass);
+	$auth = $data['auth']; $pass = $data['completed']; $failed = ( $pass / $auth );
 		if ($failed >= 0) {
                 	$sip401[] = '['.$newtime.'000, '.$failed.']';
                 } else { 
@@ -125,7 +125,7 @@ jQuery(document).ready(function() {
 		[ 
 		{ data: d2, label: "Packets", lines: { show: true, fill: true } },
              	{ data: d1, label: "Calls", yaxis: 2, lines: {show: true}, points: { show: true } }, 
-             	{ data: d3, label: "AuthFail", yaxis: 2,  bars: { show: true } },
+             	{ data: d3, label: "AuthFail", yaxis: 1,  bars: { show: true } },
              	{ data: asr, label: "ASR", yaxis: 1,  lines: { show: true, steps: true }, 
 		  color: "rgb(30, 180, 20)", threshold: { below: 60, color: "rgb(200, 20, 30)" } }
 		],

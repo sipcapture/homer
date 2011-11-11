@@ -52,7 +52,7 @@ class HTML_Statistic {
                 $chart="flot";
                  echo "<script type=\"text/javascript\" src=\"js/jquery.flot.js\"></script>";
                  echo "<script type=\"text/javascript\" src=\"js/jquery.flot.pie.js\"></script>";
-                 echo "<script type=\"text/javascript\" src=\"js/jquery.threshold.pie.js\"></script>";
+                 echo "<script type=\"text/javascript\" src=\"js/jquery.threshold.js\"></script>";
         } else {
                 $chart = "dyn";
         }
