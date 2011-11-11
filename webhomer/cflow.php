@@ -404,6 +404,8 @@ foreach($localdata as $data) {
   $cds[3] = $arrow_y1-10;
   //$cds[4] = nl2br(addslashes($data->msg));
   $cds[4] = nl2br(addslashes($data->id));
+  $cds[5] = $data->date;
+
   
   $click[] = $cds;
   
@@ -516,7 +518,14 @@ else $popuptype = MESSAGE_POPUP;
 foreach($click as $cds) {
      $cz = $cds[0].",".$cds[1].",".$cds[2].",".$cds[3];
      $messg = $cds[4];
-     echo "<area shape='rect' href='javascript:popMessage2(\"".$messg."\",".$popuptype.")' coords='$cz' alt='Area'></area>\n";
+
+     $fd = date("Y-m-d", strtotime($cds[5]));
+     $ft = date("H:i:s", strtotime($cds[5]));
+
+     $url = "utils.php?task=sipmessage&id=".$messg."&popuptype=".$popuptype;
+     $url .= "&from_time=".$ft."&from_date=".$fd;
+
+     echo "<area shape='rect' href='javascript:popMessage2(".$popuptype.",\"".$messg."\",\"".$url."\")' coords='$cz' alt='Area'></area>\n";
 }
 
 ?>
