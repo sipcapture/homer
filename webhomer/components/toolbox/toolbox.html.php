@@ -196,23 +196,27 @@ class HTML_ToolBox {
 		</select>
 		<button id="refresh-last" style="width: 60; border: 0; background: #fff;  float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>  
 		</div><br>
-                <script type="text/javascript">
-		 $('#refresh-last').click(function()
+           <script type="text/javascript">
+                  $('#refresh-last').click(function()
+                    {
+                    $.getJSON("api/api.php?task=last&limit=5",function(data)
+                    {
+                    $('#live').html('');
+                    $.each(data.last, function(i,indata)
                           {
-                          $.getJSON("api/api.php?task=last&limit=5",function(data)
-                          {
-                          $('#live').html('');
-                          $.each(data.last, function(i,indata)
-                        	{
-				var ddt = indata.date.split(" ");
-                        	var div_data =
-              			"<p align=left>"+ddt[1]+" <a href=javascript:popMessage2('"+indata.id+"',<?php echo MESSAGE_POPUP;?>);>"+indata.method+
-                        	"</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
-                        	$(div_data).appendTo("#live");
-                        	});
+                          var ddt = indata.date.split(" ");
+
+                          var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";
+                          url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+
+                          var div_data =
+                          "<p align=left>"+ddt[1]+" <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
+                          "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                          $(div_data).appendTo("#live");
                           });
-                        return false;
-                        });
+                    });
+                  return false;
+                  });
 
 			$(document).ready(function()
                         {
@@ -256,27 +260,32 @@ class HTML_ToolBox {
 		<button id="refresh-calls" style="width: 60; border: 0; background: #fff;  float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>  
 
 		</div><br>
-                <script type="text/javascript">
-                        $('#refresh-calls').click(function()
-                        {
-                        // $.getJSON("api/search/method/INVITE&limit=5",function(data)
-                        $.getJSON("api/api.php?task=search&field=METHOD&value=INVITE&limit=5",function(data)
-                        {
-                        $('#livecalls').html('');
-                        $.each(data.session, function(i,indata)
-                        {
-			var ddt = indata.date.split(" ");
-                        var div_data =
-                        "<p align=left>"+ddt[1]+" <a href=javascript:popMessage2('"+indata.id+"',<?php echo MESSAGE_POPUP;?>);>"+indata.method+
-                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
-                        $(div_data).appendTo("#livecalls");
-                        });
-                        }
-                        );
-                        return false;
-                        });
+    <script type="text/javascript">
+                  $('#refresh-calls').click(function()
+                  {
+                  // $.getJSON("api/search/method/INVITE&limit=5",function(data)
+                  $.getJSON("api/api.php?task=search&field=METHOD&value=INVITE&limit=5",function(data)
+                  {
+                  $('#livecalls').html('');
+                  $.each(data.session, function(i,indata)
+                  {
 
-		 $(document).ready(function()
+                  var ddt = indata.date.split(" ");
+
+                  var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";
+                  url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+
+                  var div_data =
+                  "<p align=left>"+ddt[1]+" <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
+                  "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                  $(div_data).appendTo("#livecalls");
+                  });
+                  }
+                  );
+                  return false;
+                  });
+
+                  $(document).ready(function()
                  {
    			 $('#timer2').change(function () { clearInterval(calls_refresh); setTT(this.value); }); 
 
