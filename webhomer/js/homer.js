@@ -364,16 +364,15 @@ function popMessage2(id, type) {
 function checkAnswer(id, value) {
 
           var submit = 0;
-          var search=/(search|suchen|go|submit)/gi;
+          var search=/ (search|suchen|go|submit)/gi;
           if(value.match(search)){
                submit =1;
                value = value.replace(search, "");
           }
 
-           value = value.replace(/ /,"");
-           var inputID = document.getElementById(id);
-           inputID.value = value;
-           document.homer.submit();
+          value = value.replace(/ /,"");
+          document.getElementById(id).value = value;           
+          if(submit == 1) document.homer.submit();
 }
 
 
