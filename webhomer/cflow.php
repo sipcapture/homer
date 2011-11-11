@@ -425,8 +425,8 @@ foreach($localdata as $data) {
 	$tportx = $COORD[$toip] + 10*CFLOW_FACTOR;
         $fportx = $COORD[$fromip] - 40*CFLOW_FACTOR;
 	}
-       $portt = $toport;
-       $portf = $fromport;
+       $portf = $toport;
+       $portt = $fromport;
   }
   else {
      if (CFLOW_DIRECTION == 0 ) {
