@@ -79,6 +79,16 @@ function sipMessage() {
         $protos = array("UDP","TCP","TLS","SCTP");
         $family = array("IPv4", "IPv6");
         $types = array("REQUEST", "RESPONSE");
+ 
+        //Crop Search Parameters, if any
+        $flow_from_date = getVar('from_date', NULL, 'get', 'string');
+        $flow_from_time =  getVar('from_time', NULL, 'get', 'string');
+ 
+        if (isset($flow_from_date, $flow_from_time))
+        {
+          $ft = date("Y-m-d H:i:s", strtotime($flow_from_date." ".$flow_from_time));
+          $where = "(`date` = '$ft') AND ";
+        }
 
         $option = array(); //prevent problems
 
@@ -86,7 +96,7 @@ function sipMessage() {
 
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
-                        ."\n WHERE id=$id limit 1";
+                        ."\n WHERE ".$where." id=$id limit 1";
 
                 $rows = $db->loadObjectList($query);
         }
