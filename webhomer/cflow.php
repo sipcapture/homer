@@ -438,9 +438,9 @@ foreach($localdata as $data) {
 	       $tportx = $COORD[$toip] - 40*CFLOW_FACTOR;
          $fportx = $COORD[$fromip] + 10*CFLOW_FACTOR;
 	}
-	       $portf = $fromport;
-	       $portt = $toport;
-
+         
+         $portt = $fromport;
+         $portf = $toport;
   }
     
   imagettftext ( $im, $fontSize, 0, $tportx, $arrow_y1 + 6, $color['gray3'], $fontFace, $portf);
