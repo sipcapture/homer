@@ -410,7 +410,7 @@ class HTML_search {
 						<label for="ruri_user" title="B-Number in Request URI user part">RURI User *</label>
 					</td>
 					<td>
-						<input type="text" name="ruri_user" id="ruri_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['ruri_user'])) echo $search['ruri_user']; ?>"  x-webkit-speech onwebkitspeechchange="checkAnswer(this.id, this.value);" />
+						<input type="text" name="ruri_user" id="ruri_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['ruri_user'])) echo $search['ruri_user']; ?>" <?php if(WEBKIT_SPEECH) echo "x-webkit-speech onwebkitspeechchange='checkAnswer(this.id, this.value);'";?> />
 					</td>
 				</tr>                   
 				<tr>
@@ -418,7 +418,7 @@ class HTML_search {
 						<label for="from_user" title="Userpart in From URI">From User</label>
 					</td>
 					<td>
-						<input type="text" name="from_user" id="from_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['from_user'])) echo $search['from_user']; ?>" x-webkit-speech onwebkitspeechchange="checkAnswer(this.id, this.value);"/>
+						<input type="text" name="from_user" id="from_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['from_user'])) echo $search['from_user']; ?>" <?php if(WEBKIT_SPEECH) echo "x-webkit-speech onwebkitspeechchange='checkAnswer(this.id, this.value);'";?> />
 					</td>
 				</tr>
 				<tr>
@@ -426,7 +426,7 @@ class HTML_search {
 						<label for="to_user" title="Userpart in To URI">To User</label>
 					</td>
 					<td>
-						<input type="text" name="to_user" id="to_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['to_user'])) echo $search['to_user']; ?>" x-webkit-speech onwebkitspeechchange="checkAnswer(this.id, this.value);" />
+						<input type="text" name="to_user" id="to_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['to_user'])) echo $search['to_user']; ?>" <?php if(WEBKIT_SPEECH) echo "x-webkit-speech onwebkitspeechchange='checkAnswer(this.id, this.value);'";?> />
 					</td>
 				</tr>
 				<tr>
@@ -434,7 +434,7 @@ class HTML_search {
 						<label for="pid_user" title="P-Asserted and P-Preffered">PID User</label>
 					</td>
 					<td>
-						<input type="text" name="pid_user" id="pid_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['pid_user'])) echo $search['pid_user']; ?>"  x-webkit-speech onwebkitspeechchange="checkAnswer(this.id, this.value);" />
+						<input type="text" name="pid_user" id="pid_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['pid_user'])) echo $search['pid_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
@@ -442,7 +442,7 @@ class HTML_search {
 						<label for="contact_user" title="Contact header"">Contact User</label>
 					</td>
 					<td>
-						<input type="text" name="contact_user" id="contact_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['contact_user'])) echo $search['contact_user']; ?>" x-webkit-speech onwebkitspeechchange="checkAnswer(this.id, this.value);" />
+						<input type="text" name="contact_user" id="contact_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['contact_user'])) echo $search['contact_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
@@ -450,7 +450,7 @@ class HTML_search {
 						<label for="auth_user" title="Proxy-Auth, WWW-Auth">Auth User</label>
 					</td>
 					<td>
-						<input type="text" name="auth_user" id="auth_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['auth_user'])) echo $search['auth_user']; ?>" x-webkit-speech onwebkitspeechchange="checkAnswer(this.id, this.value);" />
+						<input type="text" name="auth_user" id="auth_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['auth_user'])) echo $search['auth_user']; ?>" />
 					</td>
 				</tr>
 			</table><br>
