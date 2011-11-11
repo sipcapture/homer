@@ -141,6 +141,9 @@ while($partcount > ($maxparts + $newparts)) {
            print "Couldn't drop partition: $minpart\n";
            break;
     }
+    
+    #decrease partcount
+    $partcount--;
 }
 
 # < condition
