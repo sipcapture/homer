@@ -215,17 +215,6 @@ class HTML_Admin {
 // Check for new definitions in configuration_example
 if (NOCHECK != 1) {
 
-	$rconf  = file_get_contents("configuration.php", true);
-	$econf  = file_get_contents("configuration_example.php", true);
-	if( $econf != false) {
-		$defi = substr_count($econf, 'define(');
-		$defq = substr_count($rconf, 'define(');
-        	if ($defi != $defq) {
-        	// echo "<script>alert('Missing Definitions: ".($defi-$defq)."');</script>";
-        	// echo "<b>WARNING: Parameters missing! [ ".($defi-$defq)." ]</b><br>Check 'configuration_example.php'<br><br>";
-        	}
-	}
-
 	if (!is_writable(PCAPDIR)) {
                 echo "<b>WARNING: ".PCAPDIR." MUST be writable!</b><br>";
                 echo "<br><hr><br>";
