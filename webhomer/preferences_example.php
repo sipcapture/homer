@@ -46,8 +46,8 @@ define(NOCHECK, 0); /* set to 1, dont check config */
 /* ACCESS LEVEL 3 - Users, 2 - Manager, 1 - Admin, 0 - nobody */
 define(ACCESS_SEARCH, 3); /* SEARCH FOR ALL:*/
 define(ACCESS_TOOLBOX, 1); /* TOLBOX FOR ADMIN */
-define(ACCESS_STATS, 3); /* SEARCH FOR ALL */
-define(ACCESS_ADMIN, 1); /* SEARCH FOR ALL */
+define(ACCESS_STATS, 3); /* STATS FOR ALL */
+define(ACCESS_ADMIN, 1); /* ADMIN FOR ADMIN */
 
 /* WEBKIT ENABLE */
   define(WEBKIT_SPEECH, 1); /* enable:1 , disable: 0 */
