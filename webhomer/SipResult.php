@@ -110,16 +110,19 @@ class SipResult
      //return substr($this->micro_ts, -9);
   }
   
-  public function getMethod()
+   public function getMethod()
   {
-  
+
       if(!defined('MESSAGE_POPUP')) $popuptype = 1;
       else $popuptype = MESSAGE_POPUP;
-            
-      return "<a href=\"javascript:popMessage2('".$this->id."', $popuptype);\">".$this->method."</a>";
-//      return "<a href=\"javascript:showMessage('".$this->id."','".$this->loctable."','".$this->tnode."','". implode(",",$this->location)."');\">".$this->method."</a>";
-//      return "<div class=\"spantrace\"><a href=\"javascript:showMessage('".$this->id."','".$this->loctable."','".$this->tnode."','". implode(",",$this->location)."');\">".$this->method."</a></div>";
-      //return $this->method;
+
+      $fd = date("Y-m-d", strtotime($this->date));
+      $ft = date("H:i:s", strtotime($this->date));
+
+      $url = "utils.php?task=sipmessage&id=".$this->id."&popuptype=".$popuptype;
+      $url .= "&from_time=".$ft."&from_date=".$fd;
+
+      return "<a href=\"javascript:popMessage2(".$popuptype.",'".$this->id."','".$url."');\">".$this->method."</a>";
   }
 
   public function getReplyReason()
