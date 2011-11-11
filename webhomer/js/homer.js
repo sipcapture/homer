@@ -308,9 +308,8 @@ function showCallFlow2(type, callid, url) {
 		}
 }
 
-function popMessage2(id, type) {
-
-			var url = "utils.php?task=sipmessage&id="+id+"&popuptype="+type;
+function popMessage2(type, id, url) {
+			
 			var posx = $('body').data('posx');
 			var posy = $('body').data('posy');
 			
