@@ -49,4 +49,7 @@ define(ACCESS_TOOLBOX, 1); /* TOLBOX FOR ADMIN */
 define(ACCESS_STATS, 3); /* SEARCH FOR ALL */
 define(ACCESS_ADMIN, 1); /* SEARCH FOR ALL */
 
+/* WEBKIT ENABLE */
+  define(WEBKIT_SPEECH, 1); /* enable:1 , disable: 0 */
+
 ?>
