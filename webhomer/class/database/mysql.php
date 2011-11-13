@@ -35,11 +35,13 @@ class HomerDB {
 
        //MAKE SURE TO FILL IN DATABASE INFO
 	var $hostname_logon = HOST;		//Database server LOCATION
+  var $port_logon = PORT;		//Database PORT
 	var $database_logon = DB;		//Database NAME
 	var $username_logon = USER;		//Database USERNAME
 	var $password_logon = PW;		//Database PASSWORD
 
 	var $hostname_homer = HOMER_HOST;	//Database server LOCATION
+  var $port_homer = HOMER_PORT;	//Database server PORT
 	var $database_homer = HOMER_DB;		//Database NAME
 	var $username_homer = HOMER_USER;	//Database USERNAME
 	var $password_homer = HOMER_PW;		//Database PASSWORD
