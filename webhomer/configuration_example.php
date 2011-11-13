@@ -3,6 +3,7 @@
 /*********************************************************************************/
 /* Access db of homer */
 define(HOST, "localhost");
+define(PORT, 3306);
 define(USER, "root");
 define(PW, "root");
 define(DB, "homer_users");
@@ -12,6 +13,7 @@ define(DB, "homer_users");
 *  please define all your nodes in homer_nodes table
 */
 define(HOMER_HOST, "localhost");
+define(HOMER_PORT, 3306);
 define(HOMER_USER, "homer_user");
 define(HOMER_PW, "homer_password");
 define(HOMER_DB, "homer_db");
