@@ -42,7 +42,7 @@ include_once('SipDataTable.php');
 // build a Browser Service object based on the type that was selected
 include_once('SipSearchService.php');
                          
-$sipService = new SipSearchService($db->hostname_homer, $db->database_homer, $db->username_homer, $db->password_homer);
+$sipService = new SipSearchService($db->hostname_homer);
   
 // instatiate new DataTable
 $table = new SipDataTable();

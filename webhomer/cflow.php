@@ -125,8 +125,16 @@ if (isset($flow_from_date, $flow_from_time, $flow_to_time, $flow_to_date))
 /* Prevent break SQL */
 if(isset($where)) $where.=" AND ";
 
+//if($db->dbconnect_homer($mynodeshost[$tnode])) {
+if(!$db->dbconnect_homer(NULL))
+{
+    //No connect;
+    exit;
+}
+
 /* CID */
 $where.="( callid = '".$cid."'";
+
 /* Detect second B-LEG ID */
 if($b2b) {
     if(BLEGCID == "x-cid") {
@@ -141,15 +149,7 @@ if($b2b) {
 }
 $where .= ") ";
 
-
 $localdata=array();
-
-//if($db->dbconnect_homer($mynodeshost[$tnode])) {
-if(!$db->dbconnect_homer(NULL))
-{
-    //No connect;
-    exit;
-}
 
 $query = "SELECT * "
           ."\n FROM ".HOMER_TABLE
@@ -166,7 +166,7 @@ $querytd = "SELECT TIMEDIFF(max(date),min(date)) as tot_dur "
           ."\n FROM ".HOMER_TABLE
           ."\n WHERE ".$where;
 $totdurs = $db->loadObjectList($querytd);
-$totdur = mysql_real_escape_string($totdurs[0]->tot_dur);
+$totdur = $totdurs[0]->tot_dur;
 
 //$query="SELECT * FROM $table WHERE $where order by micro_ts limit 100;";
 $rows = $db->loadObjectList($query);

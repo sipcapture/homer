@@ -23,6 +23,7 @@ foreach($nodes as $node) {
         $mynodesname[$node->id] = $node->name;
 }
 
+
 include("components/main/main.php");
 $main = new HomerMain();
 

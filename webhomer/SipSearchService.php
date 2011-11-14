@@ -74,14 +74,10 @@ class SipSearchService implements ISipService
 					     'type'       => 'type',
 					     'node'	  => 'node');
 
-  public function __construct($host, $database, $user, $password)
+  public function __construct($homerhost)
   {
-  
-    try {
-      $this->connection = new PDO("mysql:host=$host;dbname=$database", $user, $password);
-    } catch (PDOException $e){
-      die($e->getMessage());
-    }
+      global $db;  
+      
   }
 
   function compare($x, $y)
@@ -99,6 +95,8 @@ class SipSearchService implements ISipService
   {
 
      global $db;
+
+     $db->dbconnect_homer(NULL);           
     
      $sort = $this->propertyToColumnMapping[$sort];
 
@@ -155,19 +153,15 @@ class SipSearchService implements ISipService
 
               $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ". $where;
-	
-	      $statement = $this->connection->query($query);
-	      $result = $statement->fetch();
-	      
-	      $count += $result['count'];
+                      ."\n WHERE ". $where.";";
+              $count += $db->loadResult($query);	                      	      
       }
 
       return $count;
 
     } else {
 
-	$results = array();
+  $results = array();
   $datasort = array();
   $message = array();
 
@@ -181,9 +175,7 @@ class SipSearchService implements ISipService
                 ."\n WHERE ". $where
                 ."\n ORDER BY {$sort} {$sortDirection} "
                 ."\n limit {$offset}, {$num}";				
-
-	        $statement = $this->connection->query($query);
-	        $result = $statement->fetchAll();
+                $result = $db->loadObjectArray($query);
           // Check if we must show up only UNIQ messages. No duplicate!
           //only unique
           if($unique) {
@@ -200,7 +192,7 @@ class SipSearchService implements ISipService
         //Get aliases (hosts)
         $hosts = $db->getAliases();
 	$sipresults = $this->hydrateResults($results, $location, $hosts);
-      
+
       return $sipresults;
     }
   }
@@ -212,6 +204,8 @@ class SipSearchService implements ISipService
   {
 
      global $db;
+     
+     $db->dbconnect_homer(NULL);           
      
      $whereSqlParts = array();
 
@@ -288,11 +282,8 @@ class SipSearchService implements ISipService
               $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ({$whereSql})". $where;                                                                                        
-
-              $statement = $this->connection->query($query);
-              $result = $statement->fetch();
-
-              $count += $result['count'];
+                      
+              $count += $db->loadResult($query);                            
       }
 
       return $count;
@@ -316,9 +307,7 @@ class SipSearchService implements ISipService
                                 ."\n ORDER BY {$sort} {$sortDirection} "
                                 ."\n LIMIT {$offset}, {$num}"
                                 ;
-
-              $statement = $this->connection->query($query);
-              $result = $statement->fetchAll();
+              $result = $db->loadObjectArray($query);               
               // Check if we must show up only UNIQ messages. No duplicate!
               if($unique) {
                     foreach($result as $key=>$row) {

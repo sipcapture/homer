@@ -1,7 +1,7 @@
 <?php
 /*
  * HOMER Web Interface
- * Homer's mysql.php
+ * Homer's pdo.php
  *
  * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
  * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
@@ -35,13 +35,13 @@ class HomerDB {
 
        //MAKE SURE TO FILL IN DATABASE INFO
 	var $hostname_logon = HOST;		//Database server LOCATION
-  var $port_logon = PORT;		//Database PORT
+	var $port_logon = PORT;			//Database PORT default MYSQL
 	var $database_logon = DB;		//Database NAME
 	var $username_logon = USER;		//Database USERNAME
 	var $password_logon = PW;		//Database PASSWORD
 
 	var $hostname_homer = HOMER_HOST;	//Database server LOCATION
-  var $port_homer = HOMER_PORT;	//Database server PORT
+	var $port_homer = HOMER_PORT ;		//Database server PORT. default MYSQL
 	var $database_homer = HOMER_DB;		//Database NAME
 	var $username_homer = HOMER_USER;	//Database USERNAME
 	var $password_homer = HOMER_PW;		//Database PASSWORD
@@ -54,11 +54,20 @@ class HomerDB {
 	
 	//encryption
 	var $encrypt = true;		//set to true to use md5 encryption for the password
+	/* CONNECT */
+	protected $connection;		//Our connection
 
 	//connect to database
 	function dbconnect(){
-		$connections = mysql_connect($this->hostname_logon, $this->username_logon, $this->password_logon) or die ('Unable to connect to the database');
-		mysql_select_db($this->database_logon) or die ('Unable to select database!');	
+
+		if(!$this->port_logon) $this->port_logon=3306; // Set to default		      
+		
+		try {
+		      $dbstring = DATABASE.":host=".$this->hostname_logon.";port=".$this->port_logon.";dbname=".$this->database_logon;
+		      $this->connection = new PDO($dbstring, $this->username_logon, $this->password_logon);
+		} catch (PDOException $e){
+		      die($e->getMessage());
+		}
 		return;
 	}
 
@@ -66,15 +75,15 @@ class HomerDB {
 	function dbconnect_homer($host){
 	        
                 if(!$host) $host = $this->hostname_homer;	                        
+                if(!$this->port_logon) $this->port_logon=3306; // Set to default		      
 	
-		if(!($connections = mysql_connect($host, $this->username_homer, $this->password_homer))) {
-		        echo 'Unable to connect to the homer database';
-		        return false;
-                }
-		if(!mysql_select_db($this->database_homer)) { 
-		        echo 'Unable to select homer database!';
-		        return false;
-                }
+                try {
+		      $dbstring = DATABASE.":host=".$host.";port=".$this->port_homer.";dbname=".$this->database_homer;
+		      $this->connection = new PDO($dbstring, $this->username_homer, $this->password_homer);
+		} catch (PDOException $e){
+		      die($e->getMessage());
+		}                
+                
 		return true;
 	}
 		
@@ -84,11 +93,12 @@ class HomerDB {
               $args  = func_get_args();
               $query = array_shift($args);
               $query = str_replace("?", "%s", $query);
-              $args  = array_map('mysql_real_escape_string', $args);
+              $args  = array_map($this->connection->quote, $args);
               array_unshift($args,$query);
-              $query = call_user_func_array('sprintf',$args);
-              $result = mysql_query($query) or die(mysql_error());              
-              //echo $query;
+              $query = call_user_func_array('sprintf',$args);              
+ 	      $statement = $this->connection->prepare($query);
+ 	      $statement->execute(); 	                      
+              $result = $statement->fetch();              
               if($result){
                       return $result;
 	      }else{
@@ -103,7 +113,7 @@ class HomerDB {
               $args  = func_get_args();
               $query = array_shift($args);
               $query = str_replace("?", "%s", $query);
-              $args  = array_map('mysql_real_escape_string', $args);
+              $args  = array_map($this->connection->quote, $args);
               array_unshift($args,$query);
               $query = call_user_func_array('sprintf',$args);
               return $query;
@@ -119,41 +129,38 @@ class HomerDB {
 	}
 
 	function executeQuery($query) {			
-		$result = mysql_query($query);
+		//$result = mysql_query($query);
+		
+		$statement = $this->connection->prepare($query);
+		$statement->execute();
+
 		if(!$result) return false;
 		else return true;
 	}
 
-	function loadObjectList($query, $key='') {
+	function loadObjectList($query) {
 	
-	        
-	        if (!($cur = mysql_query($query))) {
-        	        return null;
-	        }
-        	$array = array();
-	        while ($row = mysql_fetch_object( $cur )) {
-        	        if ($key) {
-                	$array[$row->$key] = $row;
-	                } else {
-        	        $array[] = $row;
-                	}
-	        }
-        	mysql_free_result( $cur );
-	        return $array;
+		$statement = $this->connection->prepare($query);
+		$statement->execute();		                	  
+	        $result = $statement->fetchAll(PDO::FETCH_CLASS);
+	        return $result;	        
+	}
+	
+	function loadObjectArray($query) {
+	
+		$statement = $this->connection->prepare($query);
+		$statement->execute();		                	  
+	        $result = $statement->fetchAll();
+	        return $result;
 	}
 
 	function loadResult($query)
 	{
-        	if (!($cur = mysql_query($query))) {
-	                        return null;
-        	}
-	        $ret = null;
-        	if ($row = mysql_fetch_row( $cur )) {
-	                $ret = $row[0];
-        	}
-	        mysql_free_result( $cur );
-        	return $ret;
-	}	
+        	$statement = $this->connection->prepare($query);
+        	$statement->execute();        	                        	
+        	$result = $statement->fetch(PDO::FETCH_NUM);
+        	return $result[0];        	                                             	
+	}		
 }
 
 ?>

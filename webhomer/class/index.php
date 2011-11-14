@@ -37,8 +37,8 @@ define('__ROOT__', dirname(dirname(__FILE__)));
 if(!file_exists(__ROOT__."/configuration.php")) { die("Configuration not found. Please refer to the README file."); }
 else require_once(__ROOT__."/configuration.php");
 
-/* We can added postgresql support too */
-require_once("class/database/".DATABASE.".php");
+/* Changed to PDO */
+require_once("class/database/pdo.php");
 $db = new HomerDB;
 
 /* AUTH CLASS */
