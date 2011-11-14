@@ -45,7 +45,7 @@ class HTML_mainhtml {
             <link type="text/css" href="styles/jquery-ui-1.8.4.custom.css" rel="stylesheet" />	
             <link type="text/css" href="styles/inettuts.css" rel="stylesheet" />
             <link type="text/css" href="styles/inettuts.js.css" rel="stylesheet" />            
-
+            <link rel="icon" href="favicon.ico" />
             </head>
             
             <body>          
