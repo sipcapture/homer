@@ -42,7 +42,7 @@ $xhours = STAT_RANGE;
 ?>
 
 
-		<div id="chart1" style="min-width: 380px; width: 99%; margin-left: 1px; float: center; height: 220px"></div>
+		<div id="chart1" style="min-width: 360px; width: 99%; margin-left: 1px; float: center; height: 220px"></div>
 
 
 

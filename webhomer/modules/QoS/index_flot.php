@@ -68,12 +68,12 @@ foreach($response as $entry){
 
 ?>
 		<div id="trap" style="width: 99%;">
-		<div id="chart5" style="min-width: 100px; width: 32%; margin-left: 1px; float: left; height: 220px;"></div>
-		<div id="chart4" style="min-width: 100px; width: 32%; margin-left: 1px; float: left; height: 220px;"></div>
-	        <div id="chart6" style="min-width: 100px; width: 32%; margin-left: 1px; float: left; height: 220px;"></div>
+		<div id="chart5" style="min-width: 90px; width: 32%; margin-left: 1px; float: left; height: 220px;"></div>
+		<div id="chart4" style="min-width: 90px; width: 32%; margin-left: 1px; float: left; height: 220px;"></div>
+	        <div id="chart6" style="min-width: 90px; width: 32%; margin-left: 1px; float: left; height: 220px;"></div>
 		</div>
  
-<div id="chart7" style="min-width: 380px; width: 99%; margin-left: 1px; float: center; height: 220px"></div>
+<div id="chart7" style="min-width: 360px; width: 99%; margin-left: 1px; float: center; height: 220px"></div>
 
 <script type="text/javascript">
 
