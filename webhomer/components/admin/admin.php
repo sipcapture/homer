@@ -156,9 +156,11 @@ class Component {
 	  }
 
 	  function server_report() {
+		    // check new config for sql port
+		    if (!HOMER_PORT) {$sqlport='3306';} else {$sqlport = HOMER_PORT;}
 		    $report = array();
 		    $tcp_serv = array(
-				  '3306'=>'MySQL',
+				  $sqlport =>'MySQL',
 		                  '80'=>'HTTP',
 		                  '25'=>'SMTP',
 		                  '22'=>'SSH');
