@@ -1,4 +1,3 @@
-
 CREATE TABLE IF NOT EXISTS `homer_hosts` (
   `id` int(10) NOT NULL AUTO_INCREMENT,
   `host` varchar(80) NOT NULL,
@@ -60,3 +59,18 @@ CREATE TABLE IF NOT EXISTS `homer_nodes` (
 
 INSERT INTO `homer_nodes` VALUES(1, '10.0.81.145', 'node01', 1);
 INSERT INTO `homer_nodes` VALUES(2, '10.0.136.234', 'node02', 2);
+
+--
+-- Table for search logging 
+--
+
+CREATE TABLE IF NOT EXISTS `homer_searchlog` (
+  `id` int(10) NOT NULL AUTO_INCREMENT,
+  `useremail` varchar(50) NOT NULL,
+  `date` datetime NOT NULL,
+  `search` text NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `useremail` (`useremail`),
+  KEY `datekey` (`date`)
+) ENGINE=MyISAM  DEFAULT CHARSET=utf8 AUTO_INCREMENT=9 ;
+
