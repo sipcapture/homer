@@ -61,7 +61,7 @@
 }
 
 .dataTables_info {
-	padding-top: 3px;
+	padding-top: 30px;
 }
 
 table.display thead th {
@@ -141,6 +141,7 @@ table.display thead th div.DataTables_sort_wrapper span {
 .dataTables_info {
 	width: 50%;
 	float: left;
+	vertical-align: middle;
 }
 
 .dataTables_paginate {
@@ -298,13 +299,45 @@ tr.even {
 }
 
 .top, .bottom {
-	padding: 15px;
+	padding: 10px;
 	background-color: #F5F5F5;
 	border: 1px solid #CCCCCC;
 }
 
 .top .dataTables_info {
+	display:inline; 
+	//position:relative;
+	align:middle;
+	margin-bottom: 10px; margin-top: 10px;
+}
+
+.top .dataTables_filter {
+	float: left;
+	width: 40%;
+	text-align: left;
+	display: inline;
+}
+
+.top .dataTables_paginate {
+	float: right;
+	align: middle;
+	width: 30%;
+	display: inline;
+}
+
+
+.bottom .dataTables_info {
 	float: none;
+	margin:30px;
+	text-align: middle;
+	display:inline;
+}
+
+.bottom .dataTables_paginate {
+	float: right;
+	align: middle;
+	width: 30%;
+	display: inline;
 }
 
 .clear {
