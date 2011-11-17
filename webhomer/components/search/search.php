@@ -130,7 +130,7 @@ class Component {
                   $search['to_date'] = $timeparam->to_date = getVar('to_date', '', '', 'string');	        
                   $search['from_time'] = $timeparam->from_time = getVar('from_time', NULL, '', 'string');
                   $search['to_time'] = $timeparam->to_time = getVar('to_time', NULL, '', 'string');
-                  $search['max_records'] = $timeparam->max_records = getVar('max_records', 100, 'post', 'int');
+                  //$search['max_records'] = $timeparam->max_records = getVar('max_records', 100, 'post', 'int');
                   $search['unique'] = $unique = getVar('unique', 0, 'post', 'int');
 
                   $ft = date("Y-m-d H:i:s", strtotime($timeparam->from_date." ".$timeparam->from_time));
@@ -164,7 +164,7 @@ class Component {
                   
                   $datatable->setSearchRequest($search);
                   
-                  HTML_search::displayResultSearch(&$datatable, $ft, $tt);
+                  HTML_search::displayResultSearch(&$datatable, $ft, $tt, $search);
         }
 
         function showMessage()  {
