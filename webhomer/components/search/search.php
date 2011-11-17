@@ -148,11 +148,22 @@ class Component {
                   $search['contact_port'] = $networkparam->contact_port = getVar('contact_port', 0, 'post', 'int');
                   $search['originator_ip'] = $networkparam->originator_ip = getVar('originator_ip', NULL, 'post', 'string');	
                   $search['originator_port'] = $networkparam->originator_port = getVar('originator_port', 0, 'post', 'int');
-                  $datatable->setSearchRequest($search);
+                  
                   //Please change protocol
                   //$search['proto'] = $proto = getVar('proto', 2, 'post', 'int');	
                   //$search['family'] = $family = getVar('family', 2, 'post', 'int');	
                   $_SESSION['homersearch'] = json_encode($search);
+                  
+                  if(SEARCHLOG) {
+                        $query = $db->makeQuery("INSERT INTO homer_searchlog SET `useremail`='?', `date`=NOW(), `search`= '?';" ,
+                                        $_SESSION['loggedin'], $_SESSION['homersearch']);
+                        $db->executeQuery($query);                        
+                        $query = $db->makeQuery("DELETE FROM homer_searchlog WHERE `date` < (CURDATE() - INTERVAL ".SEARCHLOG." DAY)");
+                        $db->executeQuery($query);
+                  }
+                  
+                  $datatable->setSearchRequest($search);
+                  
                   HTML_search::displayResultSearch(&$datatable, $ft, $tt);
         }
 
