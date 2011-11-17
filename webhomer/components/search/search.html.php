@@ -606,7 +606,7 @@ class HTML_search {
 	}
 
 
-	function displayResultSearch ($table,$ft,$tt) {
+	function displayResultSearch ($table,$ft,$tt, $search) {
 	
 		//Color Generator
 		srand(floor(time() / (60*60*24)));
@@ -629,22 +629,29 @@ class HTML_search {
 	</script>
 
 
- <table border="0" cellpadding="0" cellspacing="0" bgcolor="#eeeeee">
-        <tr>
-                <td style="border: 1px solid #C0C0C0"><font size="4"><b>&#916;</b></font>
-                        <input type="text" name="Display" id="delta_value_1" align="right" class="textfieldstyle2"></td>
-                <td style="border: 1px solid #C0C0C0; width: 20px; font-size: 20px; font-weight: bold; text-align: center;"> - </td>
-                <td style="border: 1px solid #C0C0C0">
-                        <input type="text" name="Display2" id="delta_value_2" align="right" class="textfieldstyle2"></td>
-                <td style="border: 1px solid #C0C0C0; width: 20px; font-size: 20px; font-weight: bold; text-align: center;"> = </td>
-                <td style="border: 1px solid #C0C0C0"><input type="text" id="delta_result" name="Display3" align="right" size="10" class="textfieldstyle2"> &micro;</td>
-                <td>&nbsp;&nbsp;</td>
-                <td style="border: 1px solid #C0C0C0;text-align: right">Result: <b><?php echo date("d-m-Y H:i:s", strtotime($ft));?> - <?php echo date("d-m-Y H:i:s", strtotime($tt));?></b> </td>
-        </tr>
-</table>
+<div style="display: inline; float: left; font-weight: bold; solid #C0C0C0;padding: 5px;">
+  &#916; <input type="text" name="Display" id="delta_value_1" align="right" class="textfieldstyle2"> -
+  <input type="text" name="Display2" id="delta_value_2" align="right" class="textfieldstyle2"> =
+  <input type="text" id="delta_result" name="Display3" align="right" size="10" class="textfieldstyle2"> &micro;
+</div>
+<div style="display: inline; float: right ; width: 40%; font-weight: bold; padding: 5px;">
+<i>Result</i>: [<?php echo date("d-m-Y H:i:s", strtotime($ft));?> - <?php echo date("d-m-Y H:i:s", strtotime($tt));?>].
+<?php
+                $ignore =  array('from_date', 'to_date', 'from_time', 'to_time');
+                $mydata = array();
+                foreach($search as $key=>$value) {
 
+                        if($value == '' || in_array($key,$ignore)) continue;
+                        if($key == "location") {
+                              $mydata[] = "$key = ".implode($value,",");
+                        }
+                        else $mydata[]= "$key = $value ";
+                }
+                echo "<i>Params</i>: [ ".implode($mydata, ";")." ]";
+?>
+</div>
 
-        <?php echo $table->render(); ?>
+<?php echo $table->render(); ?>
 
         <script type="text/javascript" language="javascript">
                 
