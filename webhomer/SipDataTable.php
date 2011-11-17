@@ -467,6 +467,9 @@ class SipDataTable extends DataTable_DataTable
     // add LangugateConfig to the DataTableConfig object
     $config->setLanguageConfig($languageConfig);
 
+    $dom = "<\"top\"fip<\"clear\">>rt<\"bottom\"lip<\"clear\">>";
+    $config->setDom($dom);
+
     // set data table options
     $config->setClass("display")
            ->setDisplayLength(25)
