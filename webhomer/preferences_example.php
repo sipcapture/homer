@@ -52,7 +52,8 @@ define(ACCESS_ADMIN, 1); /* ADMIN FOR ADMIN */
 /* WEBKIT ENABLE */
 define(WEBKIT_SPEECH, 1); /* enable:1 , disable: 0 */
 
-/* LOGGING */
-define(SEARCHLOG, 0);  /* ENABLE SEARCH LOGGING */
+
+/* LOGGING. to enable set bigger as 0, if 10 == 10 days keep logs */
+define(SEARCHLOG, 0);  
 
 ?>
