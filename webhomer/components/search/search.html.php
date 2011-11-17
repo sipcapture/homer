@@ -642,12 +642,10 @@ class HTML_search {
                 foreach($search as $key=>$value) {
 
                         if($value == '' || in_array($key,$ignore)) continue;
-                        if($key == "location") {
-                              $mydata[] = "$key = ".implode($value,",");
-                        }
-                        else $mydata[]= "$key = $value ";
+                        if($key == "location") $mydata[]="$key=".implode($value,",");
+                        else $mydata[]="$key=$value";
                 }
-                echo "<i>Params</i>: [ ".implode($mydata, ";")." ]";
+                echo "<i>Params</i>: [ ".implode($mydata, "; ")." ]";
 ?>
 </div>
 
