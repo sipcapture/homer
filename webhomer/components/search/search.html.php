@@ -606,7 +606,7 @@ class HTML_search {
 	}
 
 
-	function displayResultSearch ($table,$ft,$tt, $search) {
+	function displayResultSearch ($table,$ft,$tt,$search, $abvis) {
 	
 		//Color Generator
 		srand(floor(time() / (60*60*24)));
