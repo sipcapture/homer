@@ -681,93 +681,93 @@ class HTML_search {
 
 	<table border="0" class="layout-grid" width="100%">
 	<tr>
-	    <td><input type="checkbox" onClick="fnShowHide(1); " class="text ui-widget-content ui-corner-all" checked/></td>
+	    <td><input type="checkbox" onClick="fnShowHide(1); " class="text ui-widget-content ui-corner-all" <?php if($abvis[1]) echo "checked";?> /></td>
 	    <td>ID</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(2); " class="text ui-widget-content ui-corner-all" checked/></td>	    	    
+	    <td><input type="checkbox" onClick="fnShowHide(2); " class="text ui-widget-content ui-corner-all" <?php if($abvis[2]) echo "checked";?> /></td>	    	    
 	    <td>Date</td>
-	    <td><input type="checkbox" onClick="fnShowHide(3); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(3); " class="text ui-widget-content ui-corner-all" <?php if($abvis[3]) echo "checked";?>/></td>	    
 	    <td>Timestamp</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(4); " class="text ui-widget-content ui-corner-all" checked/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(4); " class="text ui-widget-content ui-corner-all" <?php if($abvis[4]) echo "checked";?> /></td>	    
 	    <td>Method</td>
         </tr>
         <tr>
-	    <td><input type="checkbox" onClick="fnShowHide(5); " class="text ui-widget-content ui-corner-all" /></td>
+	    <td><input type="checkbox" onClick="fnShowHide(5); " class="text ui-widget-content ui-corner-all" <?php if($abvis[5]) echo "checked";?> /></td>
 	    <td>Reply Reason</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(6); " class="text ui-widget-content ui-corner-all"/></td>	    	    
+	    <td><input type="checkbox" onClick="fnShowHide(6); " class="text ui-widget-content ui-corner-all" <?php if($abvis[6]) echo "checked";?>/></td>	    	    
 	    <td>Request URI</td>
-	    <td><input type="checkbox" onClick="fnShowHide(7); " class="text ui-widget-content ui-corner-all" checked/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(7); " class="text ui-widget-content ui-corner-all" <?php if($abvis[7]) echo "checked";?> /></td>	    
 	    <td>RURI User</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(8); " class="text ui-widget-content ui-corner-all" checked/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(8); " class="text ui-widget-content ui-corner-all" <?php if($abvis[8]) echo "checked";?> /></td>	    
 	    <td>From User</td>
         </tr>
 	<tr>
-	    <td><input type="checkbox" onClick="fnShowHide(9);" class="text ui-widget-content ui-corner-all"/></td>
+	    <td><input type="checkbox" onClick="fnShowHide(9);" class="text ui-widget-content ui-corner-all" <?php if($abvis[9]) echo "checked";?>/></td>
 	    <td>From Tag</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(10);" class="text ui-widget-content ui-corner-all" checked/></td>	    	    
+	    <td><input type="checkbox" onClick="fnShowHide(10);" class="text ui-widget-content ui-corner-all" <?php if($abvis[10]) echo "checked";?>/></td>	    	    
 	    <td>To User</td>
-	    <td><input type="checkbox" onClick="fnShowHide(11); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(11); " class="text ui-widget-content ui-corner-all" <?php if($abvis[11]) echo "checked";?>/></td>	    
 	    <td>To Tag</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(12); " class="text ui-widget-content ui-corner-all" checked/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(12); " class="text ui-widget-content ui-corner-all" <?php if($abvis[12]) echo "checked";?>/></td>	    
 	    <td>Pid User</td>
         </tr>
         <tr>
-	    <td><input type="checkbox" onClick="fnShowHide(13); " class="text ui-widget-content ui-corner-all"/></td>	    	    
+	    <td><input type="checkbox" onClick="fnShowHide(13); " class="text ui-widget-content ui-corner-all" <?php if($abvis[13]) echo "checked";?>/></td>	    	    
 	    <td>Contact User</td>
-	    <td><input type="checkbox" onClick="fnShowHide(14); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(14); " class="text ui-widget-content ui-corner-all" <?php if($abvis[14]) echo "checked";?>/></td>	    
 	    <td>Auth User</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(15); " class="text ui-widget-content ui-corner-all" checked/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(15); " class="text ui-widget-content ui-corner-all" <?php if($abvis[15]) echo "checked";?>/></td>	    
 	    <td>Call-ID</td>
-	    <td><input type="checkbox" onClick="fnShowHide(16); " class="text ui-widget-content ui-corner-all"/></td>
+	    <td><input type="checkbox" onClick="fnShowHide(16); " class="text ui-widget-content ui-corner-all" <?php if($abvis[16]) echo "checked";?>/></td>
 	    <td>Call-ID Aleg</td>	    	    
         </tr>
 	<tr>
-	    <td><input type="checkbox" onClick="fnShowHide(17); " class="text ui-widget-content ui-corner-all"/></td>	    	    
+	    <td><input type="checkbox" onClick="fnShowHide(17); " class="text ui-widget-content ui-corner-all" <?php if($abvis[17]) echo "checked";?>/></td>	    	    
 	    <td>Via 1</td>
-	    <td><input type="checkbox" onClick="fnShowHide(18); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(18); " class="text ui-widget-content ui-corner-all" <?php if($abvis[18]) echo "checked";?>/></td>	    
 	    <td>Via 1 branch</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(19); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(19); " class="text ui-widget-content ui-corner-all" <?php if($abvis[19]) echo "checked";?>/></td>	    
 	    <td>Cseq</td>
-	    <td><input type="checkbox" onClick="fnShowHide(20); " class="text ui-widget-content ui-corner-all"/></td>
+	    <td><input type="checkbox" onClick="fnShowHide(20); " class="text ui-widget-content ui-corner-all" <?php if($abvis[20]) echo "checked";?>/></td>
 	    <td>Diversion</td>	    	    
         </tr>
         <tr>
-	    <td><input type="checkbox" onClick="fnShowHide(21); " class="text ui-widget-content ui-corner-all"/></td>	    	    
+	    <td><input type="checkbox" onClick="fnShowHide(21); " class="text ui-widget-content ui-corner-all" <?php if($abvis[21]) echo "checked";?>/></td>	    	    
 	    <td>Reason</td>
-	    <td><input type="checkbox" onClick="fnShowHide(22); " class="text ui-widget-content ui-corner-all"/></td>	    
+      <td><input type="checkbox" onClick="fnShowHide(22); " class="text ui-widget-content ui-corner-all" <?php if($abvis[22]) echo "checked";?>/></td>	    
 	    <td>Content-Type</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(23); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(23); " class="text ui-widget-content ui-corner-all" <?php if($abvis[23]) echo "checked";?>/></td>	    
 	    <td>Authorization</td>
-	    <td><input type="checkbox" onClick="fnShowHide(24); " class="text ui-widget-content ui-corner-all"/></td>
+	    <td><input type="checkbox" onClick="fnShowHide(24); " class="text ui-widget-content ui-corner-all" <?php if($abvis[24]) echo "checked";?>/></td>
 	    <td>User Agent</td>	    	    
         </tr>        
         <tr>
-	    <td><input type="checkbox" onClick="fnShowHide(25); " class="text ui-widget-content ui-corner-all" checked/></td>	    	    
+	    <td><input type="checkbox" onClick="fnShowHide(25); " class="text ui-widget-content ui-corner-all" <?php if($abvis[25]) echo "checked";?>/></td>	    	    
 	    <td>Source IP</td>
-	    <td><input type="checkbox" onClick="fnShowHide(26); " class="text ui-widget-content ui-corner-all" checked/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(26); " class="text ui-widget-content ui-corner-all" <?php if($abvis[26]) echo "checked";?>/></td>	    
 	    <td>Source Port</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(27); " class="text ui-widget-content ui-corner-all" checked/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(27); " class="text ui-widget-content ui-corner-all" <?php if($abvis[27]) echo "checked";?>/></td>	    
 	    <td>Dest. IP</td>
-	    <td><input type="checkbox" onClick="fnShowHide(28); " class="text ui-widget-content ui-corner-all" checked/></td>
+	    <td><input type="checkbox" onClick="fnShowHide(28); " class="text ui-widget-content ui-corner-all" <?php if($abvis[28]) echo "checked";?>/></td>
 	    <td>Dest. Port</td>	    	    
         </tr>                
         <tr>
-	    <td><input type="checkbox" onClick="fnShowHide(29); " class="text ui-widget-content ui-corner-all"/></td>	    	    
+	    <td><input type="checkbox" onClick="fnShowHide(29); " class="text ui-widget-content ui-corner-all" <?php if($abvis[29]) echo "checked";?>/></td>	    	    
 	    <td>Contact IP</td>
-	    <td><input type="checkbox" onClick="fnShowHide(30); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(30); " class="text ui-widget-content ui-corner-all" <?php if($abvis[30]) echo "checked";?>/></td>	    
 	    <td>Contact Port</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(31); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(31); " class="text ui-widget-content ui-corner-all" <?php if($abvis[31]) echo "checked";?>/></td>	    
 	    <td>Origin. IP</td>
-	    <td><input type="checkbox" onClick="fnShowHide(32); " class="text ui-widget-content ui-corner-all"/></td>
+	    <td><input type="checkbox" onClick="fnShowHide(32); " class="text ui-widget-content ui-corner-all" <?php if($abvis[32]) echo "checked";?>/></td>
 	    <td>Origin. Port</td>	    	    
         </tr>                
         <tr>
-	    <td><input type="checkbox" onClick="fnShowHide(33); " class="text ui-widget-content ui-corner-all"/></td>	    	    
+	    <td><input type="checkbox" onClick="fnShowHide(33); " class="text ui-widget-content ui-corner-all" <?php if($abvis[33]) echo "checked";?>/></td>	    	    
 	    <td>Proto</td>
-	    <td><input type="checkbox" onClick="fnShowHide(34); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(34); " class="text ui-widget-content ui-corner-all" <?php if($abvis[34]) echo "checked";?>/></td>	    
 	    <td>Family</td>	    
-	    <td><input type="checkbox" onClick="fnShowHide(35); " class="text ui-widget-content ui-corner-all"/></td>	    
+	    <td><input type="checkbox" onClick="fnShowHide(35); " class="text ui-widget-content ui-corner-all" <?php if($abvis[35]) echo "checked";?>/></td>	    
 	    <td>Type</td>
-	    <td><input type="checkbox" onClick="fnShowHide(36); " class="text ui-widget-content ui-corner-all" checked/></td>
+	    <td><input type="checkbox" onClick="fnShowHide(36); " class="text ui-widget-content ui-corner-all" <?php if($abvis[36]) echo "checked";?>/></td>
 	    <td>Node</td>	    	    
         </tr>        
         
