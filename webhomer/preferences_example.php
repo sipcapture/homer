@@ -50,6 +50,9 @@ define(ACCESS_STATS, 3); /* STATS FOR ALL */
 define(ACCESS_ADMIN, 1); /* ADMIN FOR ADMIN */
 
 /* WEBKIT ENABLE */
-  define(WEBKIT_SPEECH, 1); /* enable:1 , disable: 0 */
+define(WEBKIT_SPEECH, 1); /* enable:1 , disable: 0 */
+
+/* LOGGING */
+define(SEARCHLOG, 0);  /* ENABLE SEARCH LOGGING */
 
 ?>
