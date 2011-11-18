@@ -164,17 +164,21 @@ class Component {
                   
                   $datatable->setSearchRequest($search);
                   
+                  $columns = $datatable->getColumns();
+                  foreach($columns as $key=>$column) {
+                          $visible = $column->isVisible();
+                          $title = $column->getTitle();
+                          $showColumns[$key]= array("title" => $title, "visible" => $visible);
+                  }
+
                   if (get_magic_quotes_gpc() == true && isset($_COOKIE['homerdata_SIPTable_index_php'])) {
                         $cookie = stripslashes($_COOKIE['homerdata_SIPTable_index_php']);
                         $allcokie = json_decode($cookie);
                         $abvis = $allcokie->abVisCols;
-                  }
-                  else {
-                        $visdata = array(0,1,2,4,7,8,10,12,15,25,26,27,28,36);
-                        foreach($visdata as $key=>$value) $abvis[$value] = 1;
+                        foreach($abvis as $key=>$value) $showColumns[$key]["visible"] = $value;
                   }
                   
-                  HTML_search::displayResultSearch(&$datatable, $ft, $tt, $search, $abvis);
+                  HTML_search::displayResultSearch(&$datatable, $ft, $tt, $search, $showColumns);
         }
 
         function showMessage()  {
