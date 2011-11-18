@@ -39,7 +39,7 @@ class SipDataTable extends DataTable_DataTable
 
     $column0 = new DataTable_Column();
     $column0->setName("checkbox")
-            ->setTitle("")
+            ->setTitle("&#916;")
             ->setGetMethod("getCheckbox")
             ->setSortKey("id")
             ->setIsSortable(false);
@@ -486,6 +486,13 @@ class SipDataTable extends DataTable_DataTable
 
     // pass DataTable_Config to the parent
     parent::__construct($config);
+  }
+  
+  /* return our columns */
+
+  public function getColumns()
+  {
+       return $this->config->getColumns();
   }
 
   /**
