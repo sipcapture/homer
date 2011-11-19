@@ -188,6 +188,13 @@ class HTML_ToolBox {
                 <div class="widget-content">
                 <div id="live"></div><br>
                 <div id="live-control">
+		<button disabled id="refresh-list" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  
+		<select id="items1"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 15;" >
+			<option value="5">5</option>
+			<option value="10">10</option>
+			<option value="15">15</option>
+			<option value="20">20</option>
+		</select>
 		<select id="timer1"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
 			<option value="0">0</option>
 			<option value="15">15</option>
@@ -196,32 +203,34 @@ class HTML_ToolBox {
 		</select>
 		<button id="refresh-last" style="width: 60; border: 0; background: #fff;  float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>  
 		</div><br>
-           <script type="text/javascript">
-                  $('#refresh-last').click(function()
-                    {
-                    $.getJSON("api/api.php?task=last&limit=5",function(data)
-                    {
-                    $('#live').html('');
-                    $.each(data.last, function(i,indata)
+                <script type="text/javascript">
+		 $('#refresh-last').click(function()
                           {
-                          var ddt = indata.date.split(" ");
+			  var itempool1 = $('#items1').val();
+                          $.getJSON("api/api.php?task=last&limit="+itempool1,function(data)
+                          {
+                          $('#live').html('');
+                          $.each(data.last, function(i,indata)
+                        	{
+				var ddt = indata.date.split(" ");
 
-                          var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";
-                          url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
-
-                          var div_data =
-                          "<p align=left>"+ddt[1]+" <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
-                          "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
-                          $(div_data).appendTo("#live");
+				var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";
+				url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+				                           
+                        	var div_data =
+              			"<p align=left>"+ddt[1]+" <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
+                        	"</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                        	$(div_data).appendTo("#live");
+                        	});
                           });
-                    });
-                  return false;
-                  });
+                        return false;
+                        });
 
 			$(document).ready(function()
                         {
 				
    			 $('#timer1').change(function () { clearInterval(last_refresh); setTT(this.value); }); 
+   			 $('#items1').change(function () { itempool1 = this.value;  $("#refresh-last").click(); }); 
 
 			$("#refresh-last").click();
 			var last_refresh = 0;
@@ -251,6 +260,13 @@ class HTML_ToolBox {
                 <div id="livecalls"></div><br>
                 <div id="calls-control">
 			<!--	<input type='number' size='2' value=''  style="width: 20; border: 0; background: #fff; float: right;  margin-left: 5; height: 15;" class="ui-corner-all ui-widget2"> -->
+		<button disabled id="refresh-list2" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  
+		<select id="items2"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 15;" >
+			<option value="5">5</option>
+			<option value="10">10</option>
+			<option value="15">15</option>
+			<option value="20">20</option>
+		</select>
 		<select id="timer2"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
 			<option value="0">0</option>
 			<option value="15">15</option>
@@ -259,35 +275,37 @@ class HTML_ToolBox {
 		</select>
 		<button id="refresh-calls" style="width: 60; border: 0; background: #fff;  float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>  
 
-		</div><br>
-    <script type="text/javascript">
-                  $('#refresh-calls').click(function()
-                  {
-                  // $.getJSON("api/search/method/INVITE&limit=5",function(data)
-                  $.getJSON("api/api.php?task=search&field=METHOD&value=INVITE&limit=5",function(data)
-                  {
-                  $('#livecalls').html('');
-                  $.each(data.session, function(i,indata)
-                  {
+		</div><br>		
+                <script type="text/javascript">
+                        $('#refresh-calls').click(function()
+                        {
+                        // $.getJSON("api/search/method/INVITE&limit=5",function(data)
+			var itempool2 = $('#items2').val();
+                        $.getJSON("api/api.php?task=search&field=METHOD&value=INVITE&limit="+itempool2,function(data)
+                        {
+                        $('#livecalls').html('');
+                        $.each(data.session, function(i,indata)
+                        {
 
-                  var ddt = indata.date.split(" ");
+			var ddt = indata.date.split(" ");
+			
+			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
+	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+			
+                        var div_data =
+                        "<p align=left>"+ddt[1]+" <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
+                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                        $(div_data).appendTo("#livecalls");
+                        });
+                        }
+                        );
+                        return false;
+                        });
 
-                  var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";
-                  url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
-
-                  var div_data =
-                  "<p align=left>"+ddt[1]+" <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
-                  "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
-                  $(div_data).appendTo("#livecalls");
-                  });
-                  }
-                  );
-                  return false;
-                  });
-
-                  $(document).ready(function()
+		 $(document).ready(function()
                  {
    			 $('#timer2').change(function () { clearInterval(calls_refresh); setTT(this.value); }); 
+   			 $('#items2').change(function () { itempool2 = this.value; $("#refresh-calls").click(); }); 
 
 			$("#refresh-calls").click();
 			var calls_refresh = 0;
