@@ -1,4 +1,7 @@
-webhomer - dir containt the web interface to the homer's DB. Webhomer 3.0 RC1
-old/webhomer2 - old version of webhomer. Version 2.0
+webhomer/ - web interface to Homer's DB. webhomer 3.x
+scripts/ - service scripts for webhomer 3.x
+sql/ - sql setup files for webhomer 3.x
+old/ - old/legacy version of webhomer. Version 2.0
+captagent/ - homer capture agent source
 
-
+see the HOW-TO Documentation for detailed setup instructions
