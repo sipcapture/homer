@@ -31,7 +31,7 @@ defined( '_HOMEREXEC' ) or die( 'Restricted access' );
 
 class HTML_mainhtml {
 
-     function displayStart ($status, $header,$task, $level) {
+     function displayStart ($status, $header,$task, $level, $bgcolor) {
 
         ?>
         <html xmlns="http://www.w3.org/1999/xhtml">
@@ -48,7 +48,7 @@ class HTML_mainhtml {
             <link rel="icon" href="favicon.ico" />
             </head>
             
-            <body>          
+            <body style="background-color: <?php echo $bgcolor; ?>;" >          
             <script type="text/javascript">var IER=<?php echo IERROR;?>;</script>
             <script type="text/javascript" src="js/homer.js"></script>
             <!--[if lte IE 8]><script language="javascript" type="text/javascript" src="js/excanvas.min.js"></script><![endif]-->                
@@ -66,7 +66,7 @@ class HTML_mainhtml {
 
       function displayBackground ($bglogo) {
 ?>
-	<div id="newbg" class="newbg"><img id="bgpic" src="images/<?php echo $bglogo; ?>" width="101%" height="auto" /></div>
+	<div id="newbg" class="newbg" style="height: auto;"><img id="bgpic" src="images/<?php echo $bglogo; ?>" width="101%" height="auto" /></div>
 
 <?php 
       }

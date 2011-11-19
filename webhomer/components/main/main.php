@@ -41,16 +41,16 @@ class HomerMain {
            
            $title = $titles[$component];
 
-           HTML_mainhtml::displayStart($title, $header, $task, $level);
-           
 	   /* Background */
 	   if (DAYNIGHT != 0) { 
 		$date = date("G");
-	        if ($date >= 6 AND $date <= 20) { $bglogo = "bgwave.jpg"; } 
-		else { $bglogo = "bgwave2.jpg"; }
-	   } else if (DAYNIGHT == 3) { $bglogo = "bgwave2.jpg"; } 
-	   else { $bglogo = "bgwave.jpg"; }
+	        if ($date >= 6 AND $date <= 20) { $bglogo = "bgwave.jpg"; $bgcolor = "#FFFFFF"; } 
+		else { $bglogo = "bgwave2.jpg"; $bgcolor = "#000000"; }
+	   } else if (DAYNIGHT == 3) { $bglogo = "bgwave2.jpg"; $bgcolor = "#000000"; } 
+	   else { $bglogo = "bgwave.jpg"; $bgcolor = "#FFFFFF"; }
 
+           HTML_mainhtml::displayStart($title, $header, $task, $level, $bgcolor);
+           
            HTML_mainhtml::displayBackground($bglogo);
 
            /* For login we do nothing */
