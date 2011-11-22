@@ -121,9 +121,9 @@ function checkboxEvent(ms, id) {
         if(isVisible) {
                 calculateDelta(ms);
         }
-        else {
-                alert("Just checked:["+id+"]");
-        }
+        //else {
+        //        alert("Just checked:["+id+"]");
+        //}
 }
 
 function toggleDelta() {
