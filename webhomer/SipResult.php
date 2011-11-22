@@ -246,7 +246,14 @@ class SipResult
 
   public function getSourceIP()
   {
-      return $this->source_ip;
+       if (GEOIP_LINK==1) {
+                return "<a href='".GEOIP_URL.$this->source_ip."' target='_blank'>".$this->source_ip."</a>";
+       } else if (GEOIP_LINK==2) {
+                $url = "http://api.hostip.info/get_html.php?ip=".$this->source_ip;
+       return "<a href=\"javascript:popAny('".$url."', '".$this->source_ip."');\">".$this->source_ip."</a>";
+       } else {
+                return $this->source_ip;
+       }
   }
 
   public function getSourcePort()
@@ -256,7 +263,15 @@ class SipResult
 
   public function getDestinationIP()
   {
-      return $this->destination_ip;
+       if (GEOIP_LINK==1) {
+                return "<a href='".GEOIP_URL.$this->destination_ip."' target='_blank'>".$this->destination_ip."</a>";
+       } else if (GEOIP_LINK==2) {
+                $url = "http://api.hostip.info/get_html.php?ip=".$this->destination_ip;
+       return "<a href=\"javascript:popAny('".$url."', '".$this->destination_ip."');\">".$this->destination_ip."</a>";
+       } else {
+                return $this->destination_ip;
+       }
+
   }
   
   public function getDestinationPort()

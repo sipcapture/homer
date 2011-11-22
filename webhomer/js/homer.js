@@ -90,6 +90,29 @@ function check_form() {
         return true;
 }
 
+function checkboxEvent(ms, id) {
+
+	var isVisible = $('#deltacalc').is(':visible');
+	if(isVisible) {
+		calculateDelta(ms);
+	}
+	//else {		
+	//	alert("Just checked:["+id+"]");
+	//}
+}
+
+function toggleDelta() {
+
+	var g = document.getElementsByName('cid[]');
+	for(var i = 0; i < g.length; i++)
+        {
+                        if(g[i].checked) g[i].checked=false;
+        }
+
+	$('#deltacalc').toggle('slow');	
+}
+
+
 function calculateDelta(ms) {
 
 	var a = document.getElementById('delta_value_1');
@@ -114,29 +137,6 @@ function calculateDelta(ms) {
 		c.value = "";
 	} 
 }
-
-function checkboxEvent(ms, id) {
-
-        var isVisible = $('#deltacalc').is(':visible');
-        if(isVisible) {
-                calculateDelta(ms);
-        }
-        //else {
-        //        alert("Just checked:["+id+"]");
-        //}
-}
-
-function toggleDelta() {
-
-        var g = document.getElementsByName('cid[]');
-        for(var i = 0; i < g.length; i++)
-        {
-                        if(g[i].checked) g[i].checked=false;
-        }
-
-        $('#deltacalc').toggle('slow');
-}
-
 
 function sipSendForm() {
 
@@ -209,9 +209,10 @@ function popMessage(id) {
 			document.getElementById(id).focus(); 
 }
 
-function popAny(url) {
+function popAny(url,title) {
 
 			//var url = "utils.php?task=sipmessage&id="+id;
+			if (!title) {var title = ''; }
 			var posx = $('body').data('posx');
 			var posy = $('body').data('posy');
 			var id = (new Date()).getTime();
@@ -234,7 +235,7 @@ function popAny(url) {
 				},
 				open: function(e, i) {  $(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); },	
                                 close: function(e, i) { $(this).remove(); },
-                                title: 'PopAny: '
+                                title: title
                         })
 			.css('zIndex', -1)
 			.focus();
