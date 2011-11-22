@@ -115,6 +115,29 @@ function calculateDelta(ms) {
 	} 
 }
 
+function checkboxEvent(ms, id) {
+
+        var isVisible = $('#deltacalc').is(':visible');
+        if(isVisible) {
+                calculateDelta(ms);
+        }
+        else {
+                alert("Just checked:["+id+"]");
+        }
+}
+
+function toggleDelta() {
+
+        var g = document.getElementsByName('cid[]');
+        for(var i = 0; i < g.length; i++)
+        {
+                        if(g[i].checked) g[i].checked=false;
+        }
+
+        $('#deltacalc').toggle('slow');
+}
+
+
 function sipSendForm() {
 
 	var phpsip_to = $('#phpsip_to').val();var phpsip_from = $('#phpsip_from').val();var phpsip_prox = $('#phpsip_prox').val();
