@@ -673,6 +673,15 @@ class HTML_search {
         
         $(document).ready( function () {
                 $('#deltacalc').hide();
+                
+                var checkedStatus = false;
+                $('#SIPTable th:eq(0)').click(function() {
+                        if(checkedStatus == false) checkedStatus = true;
+                        else checkedStatus = false;
+                        $("#SIPTable tbody tr td:first-child input:checkbox").each(function() {
+                                this.checked = checkedStatus;
+                        });
+                });
         } );
         
         </script>
