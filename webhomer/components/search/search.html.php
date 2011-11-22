@@ -629,7 +629,7 @@ class HTML_search {
 	</script>
 
 
-<div style="display: inline; float: left; font-weight: bold; solid #C0C0C0;padding: 5px;">
+<div style="display: inline; float: left; font-weight: bold; solid #C0C0C0;padding: 5px;" id="deltacalc">
   &#916; <input type="text" name="Display" id="delta_value_1" align="right" class="textfieldstyle2"> -
   <input type="text" name="Display2" id="delta_value_2" align="right" class="textfieldstyle2"> =
   <input type="text" id="delta_result" name="Display3" align="right" size="10" class="textfieldstyle2"> &micro;
@@ -670,6 +670,10 @@ class HTML_search {
                 for ( var i=0, iLen=oSettings.aoPreSearchCols.length ; i<iLen ; i++ ) { oSettings.aoPreSearchCols[i].sSearch = ""; }
                 oSettings.oApi._fnReDraw( oSettings );
         }
+        
+        $(document).ready( function () {
+                $('#deltacalc').hide();
+        } );
         
         </script>
 
