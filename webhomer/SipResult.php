@@ -90,7 +90,7 @@ class SipResult
   
   public function getCheckbox()
   {
-      return "<input style='input' type='checkbox' id='cb".$this->id."' name='cid[]' value='". substr($this->micro_ts,0,-2)."' onclick='calculateDelta(this.value);' />";
+      return "<input style='input' type='checkbox' id='cb".$this->id."' name='cid[]' value='". substr($this->micro_ts,0,-2)."' onclick='checkboxEvent(this.value, this.id);' />";
   }
 
   public function getDate()
