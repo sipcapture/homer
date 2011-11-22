@@ -115,7 +115,8 @@ class HTML_mainhtml {
 			<div class="left"></div> 
 			    <ul id="icons" class="ui-widget ui-helper-clearfix">
 
-<?php if($component == "search" && $task == "result"):?>			    
+<?php if($component == "search" && $task == "result"):?>	
+                             <li class="ui-state-default ui-corner-all" style="cursor:pointer;" onClick="javascript:toggleDelta();" id="delta" title="Show delta"><span class="ui-icon ui-icon-alert"></span></li>
                             <li class="ui-state-default ui-corner-all" style="cursor:pointer;" id="setupheader" title="Show Columns"><span class="ui-icon ui-icon-wrench"></span></li>
                             <li class="ui-state-default ui-corner-all" style="cursor:pointer;" onClick="javascript:showSearch();" title="Field Search"><span class="ui-icon ui-icon-search"></span></li>
                             <li class="ui-state-default ui-corner-all" style="cursor:pointer;" onClick="javascript:$('#SIPTable').dataTable().fnFilterClear();" title="Clear Local Filter"><span class="ui-icon ui-icon-cancel"></span></li>
