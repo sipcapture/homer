@@ -228,7 +228,7 @@ function getSearch() {
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
                         ."\n WHERE ".$field." = '".$value."' "
-			."\n AND ( `date` > UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$hours." HOUR) )"
+			."\n AND ( `date` > DATE_SUB( NOW() , INTERVAL ".$hours." HOUR) )"
 			."\n ORDER BY id DESC"
 			." limit ".$limit;
 
@@ -290,7 +290,7 @@ function getStatsUA() {
         if($db->dbconnect_homer(HOMER_HOST)) {
 
 	$query = "SELECT useragent, sum(total) as count from stats_useragent "
-		   ."where `from_date` > UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$hours." HOUR) "
+		   ."where `from_date` > DATE_SUB( NOW() , INTERVAL ".$hours." HOUR ) "
 		   ."AND method='".$method."' group by useragent order by count DESC";
 	if($limit) {$query .= " limit ".$limit; }
 
