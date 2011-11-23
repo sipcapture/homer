@@ -72,7 +72,7 @@ class HTML_Statistic {
         foreach( $submodules as $key => $value){
 ?>
 
-                $('#Modules').append('<div id="stats<?php echo $modcount ?>" style="width:95%;height: auto;overflow: auto;" />');
+                $('#Modules').append('<div id="stats<?php echo $modcount ?>" style="width:95%;height: auto;overflow: none;" />');
                 $('#stats<?php echo $modcount ?>').load('<?php echo $value ?>/index_<?php echo $chart ?>.php');
 
 
