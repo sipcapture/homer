@@ -53,7 +53,7 @@ define(ACCESS_ADMIN, 1); /* ADMIN FOR ADMIN */
 define(WEBKIT_SPEECH, 1); /* enable:1 , disable: 0 */
 
 /* LOGGING. to enable set bigger as 0, if 10 == 10 days keep logs */
-define(SEARCHLOG, 0);  
+define(SEARCHLOG, 0);
 
 /* IP GeoLocation Links (requires client internet access) */
 define(GEOIP_LINK, 0); /* 0, Disabled - 1, External Query GEOIP_URL, 2, Internal PopUp */
