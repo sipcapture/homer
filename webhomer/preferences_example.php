@@ -1,7 +1,7 @@
 <?php
 
-define(CONFIG_VERSION, "1.0.6"); /* Please ALWAYS include CONFIGVERSION */
-define(WEBHOMER_VERSION, "3.2.3"); /* WEBHOMER VERSION */
+define(CONFIG_VERSION, "1.0.7"); /* Please ALWAYS include CONFIGVERSION */
+define(WEBHOMER_VERSION, "3.2.4"); /* WEBHOMER VERSION */
 
 /* Search params */
 define(COLORTAG, 0); /* color based on callid, fromtag */
