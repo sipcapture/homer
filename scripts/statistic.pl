@@ -22,7 +22,7 @@
 
 use DBI;
 
-$version = "0.0.1";
+$version = "0.0.2";
 $mysql_table = "sip_capture";
 $mysql_dbname = "homer_db";
 $mysql_user = "homer_user";
@@ -98,7 +98,11 @@ $registers = loadResult("SELECT COUNT(*) ".$mainquery." AND method = 'REGISTER'"
 $regiserauth = loadResult("SELECT COUNT(*) ".$mainquery." AND method = '401' AND cseq like '% REGISTER'");
 #REGISTERED! for expire =0 will be also calculate as registered. Bad idea but no chance :-/
 $registered = loadResult("SELECT COUNT(*) ".$mainquery." AND method='200' AND cseq like '% REGISTER'");
-insertStat($statsmethod,"method='REGISTER',total='".$registers."',auth='".$regiserauth."',completed='".$registered."'");
+
+#Bad register
+$badregister=0;
+$badregister = $regiserauth - $registered if($registered < $regiserauth);
+insertStat($statsmethod,"method='REGISTER', uncompleted='".$badregister."', total='".$registers."',auth='".$regiserauth."',completed='".$registered."'");
 
 #USER AGENT
 #REGISTRATION
