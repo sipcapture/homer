@@ -129,7 +129,7 @@ jQuery(document).ready(function() {
            { 
                xaxes: [ { mode: 'time' } ],
                yaxes: [ { position: 'left' }, { position: 'right' }],
-  	       legend: [{ position: "nw", margin: 10, backgroundOpacity: 1 }],
+  	       legend: { position: "nw", margin: 10, show: 'true' },
   	       grid: { borderWidth: 0, clickable: true }
            });
 
