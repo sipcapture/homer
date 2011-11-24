@@ -75,12 +75,9 @@ $response = json_decode($jsondata, true);
 foreach($response as $entry){
         foreach($entry as $data){
 	$newtime = (strtotime($data['from_date']." ".$offset));
-	$auth = $data['auth']; $pass = $data['completed']; $failed = ( $pass / $auth );
-		if ($failed >= 0) {
+	$auth = $data['auth']; $pass = $data['completed']; $total = $data['total'];
+	$failed = $total - $pass; 
                 	$sip401[] = '['.$newtime.'000, '.$failed.']';
-                } else { 
-			$sip401[] = '['.$newtime.'000, '.($failed + 3).']';
-		}
         }
 }
 
