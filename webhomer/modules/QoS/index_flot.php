@@ -61,7 +61,7 @@ $response = json_decode($jsondata, true);
 foreach($response as $entry){
         foreach($entry as $qdat){
         $regOK[] = ' '.$qdat['sum(completed)'].' ';
-        $regKO[] = ' '.$qdat['sum(uncompleted)'].' ';
+        $regKO[] = ' '.$qdat['sum(auth)']-$qdat['sum(completed)'].' ';
         }
 }
 
