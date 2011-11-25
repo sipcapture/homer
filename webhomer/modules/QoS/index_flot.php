@@ -60,8 +60,10 @@ $response = json_decode($jsondata, true);
 //print_r( $response);
 foreach($response as $entry){
         foreach($entry as $qdat){
+	$failed = $qdat['sum(total)']-$qdat['sum(completed)']-$qdat['sum(auth)'];
+	if ($failed < 0) { $failed = 0; }
         $regOK[] = ' '.$qdat['sum(completed)'].' ';
-        $regKO[] = ' '.$qdat['sum(total)']-$qdat['sum(completed)-$qdat['sum(auth)'].' ';
+        $regKO[] = ' '.$failed.' ';
         }
 }
 
