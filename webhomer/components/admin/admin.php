@@ -146,7 +146,7 @@ class Component {
           }
 
 	  function check_service_local($service) {
-		  if ($service == "SIPCAPTURE") $service_name="kamailio.pid";
+		  if ($service == "SIPCAPTURE") $service_name="-e kamailio.pid -e opensips.pid";
 		  if ($service == "MySQL") $service_name="mysqld";
 		    $check = exec('ps aux | grep -v grep | grep '.$service_name);
 		    if ($check) {
