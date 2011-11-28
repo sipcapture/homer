@@ -261,7 +261,7 @@ error:
 void usage(int8_t e) {
     printf("usage: captagent <-mvhnc> <-d dev> <-s host> <-p port>\n"
            "             <-P pid file> <-r port|portrange> <-f filter file>\n"
-           "             <-i 102> <-H 1|2>\n"
+           "             <-i id> <-H 1|2>\n"
            "   -h  is help/usage\n"
            "   -v  is version information\n"
            "   -m  is don't go into promiscuous mode\n"
@@ -273,7 +273,7 @@ void usage(int8_t e) {
            "   -P  is open specified pid file instead of the default (%s)\n"
            "   -f  is the file with specific pcap filter\n"
            "   -c  is checkout\n"
-           "   -i  is capture identifity. Must be a 16-bit number\n"
+           "   -i  is capture identifity. Must be a 16-bit number. I.e: 101\n"
            "   -H  is HEP protocol version [1|2]. By default we use HEP version 1\n"
            "", DEFAULT_PORT, DEFAULT_PIDFILE);
 	exit(e);
