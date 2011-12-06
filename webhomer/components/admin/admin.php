@@ -123,13 +123,14 @@ class Component {
                  
                   HTML_Admin::displayAdminHealth($report);
                   
-                  
+       
                   HTML_Admin::displayAdminForms();
                   
           }
           
           
           function check_port($port) {
+		    if ($port == 0) { return true; }
 		    $conn = @fsockopen("127.0.0.1", $port, $errno, $errstr, 0.2);
 		    if ($conn) {
 		        fclose($conn);
@@ -138,6 +139,7 @@ class Component {
           }
 
 	  function check_port_udp($port) {
+		    if ($port == 0) { return true; }
                     $conn = @fsockopen("udp://127.0.0.1", $port, $errno, $errstr);
                     if ($conn) {
                         fclose($conn);
@@ -152,20 +154,24 @@ class Component {
 		    if ($check) {
 			return true;
 		    }
-
 	  }
 
 	  function server_report() {
-		    // check new config for sql port
-		    if (!HOMER_PORT) {$sqlport='3306';} else {$sqlport = HOMER_PORT;}
+		   // get service definitions from preferences 
+		   if (!defined('HOMER_PORT')) { $sql_port='3306'; } else { $sql_port = HOMER_PORT; }
+                   if (!defined('SERVICE_HTTP_PORT')) { $http_port='80'; }  else { $http_port = SERVICE_HTTP_PORT; }
+                   if (!defined('SERVICE_SMTP_PORT')) { $smtp_port='25'; }  else { $smtp_port = SERVICE_SMTP_PORT; }
+                   if (!defined('SERVICE_SSH_PORT'))  { $ssh_port='22'; }   else { $ssh_port = SERVICE_SSH_PORT; }
+                   if (!defined('SERVICE_SIP_PORT'))  { $sip_port='5060'; } else { $sip_port = SERVICE_SIP_PORT; }
+
 		    $report = array();
 		    $tcp_serv = array(
-				  $sqlport =>'MySQL',
-		                  '80'=>'HTTP',
-		                  '25'=>'SMTP',
-		                  '22'=>'SSH');
+				  $sql_port =>'MySQL',
+		                  $http_port =>'HTTP',
+		                  $smtp_port =>'SMTP',
+		                  $ssh_port =>'SSH');
 		    $udp_serv = array(
-                                  '5060'=>'SIPCAPTURE');
+                                  $sip_port =>'SIPCAPTURE');
 
 
 		    foreach ($udp_serv as $port=>$service) {

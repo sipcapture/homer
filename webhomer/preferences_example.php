@@ -1,6 +1,6 @@
 <?php
 
-define(CONFIG_VERSION, "1.0.7"); /* Please ALWAYS include CONFIGVERSION */
+define(CONFIG_VERSION, "1.0.8"); /* Please ALWAYS include CONFIGVERSION */
 define(WEBHOMER_VERSION, "3.2.4"); /* WEBHOMER VERSION */
 
 /* Search params */
@@ -59,5 +59,10 @@ define(SEARCHLOG, 0);
 define(GEOIP_LINK, 0); /* 0, Disabled - 1, External Query GEOIP_URL, 2, Internal PopUp */
 define(GEOIP_URL, "http://www.infosniper.net/?ip_address=");
 
+/* ADMIN SERVICE MONITORING */
+define(SERVICE_HTTP_PORT, 80);
+define(SERVICE_SMTP_PORT, 25);
+define(SERVICE_SSH_PORT, 22);
+define(SERVICE_SIP_PORT, 5060);
 
 ?>
