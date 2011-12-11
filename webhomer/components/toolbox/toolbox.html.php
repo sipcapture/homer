@@ -216,9 +216,22 @@ class HTML_ToolBox {
 
 				var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";
 				url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+
+				var furl = "cflow.php?cid="+indata.callid+
+				"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
+				<?php 
+				 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
+				 else echo '"&popuptype='.CFLOW_POPUP.'"+';
+				 // if (!defined('BLEGDETECT')) echo '""+'; 
+				 // else echo '"&callid_bleg="+indata.callid+"'.BLEGCID.'"+';
+				?>
+				"";
 				                           
                         	var div_data =
-              			"<p align=left>"+ddt[1]+" <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
+              			"<p align=left>"+ddt[1]+
+			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+indata.callid+"','"+furl+
+			"');>#</a>] <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+escape(indata.id)+"','"+url+"');>"+indata.method+
+			//        " <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
                         	"</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
                         	$(div_data).appendTo("#live");
                         	});
@@ -288,12 +301,25 @@ class HTML_ToolBox {
                         {
 
 			var ddt = indata.date.split(" ");
-			
+			var diff=new Date();
+			ddx = diff.getHours();			
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
 	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
-			
+
+			var furl = "cflow.php?cid="+indata.callid+
+			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
+			<?php 
+			 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
+			 else echo '"&popuptype='.CFLOW_POPUP.'"+';
+			  if (!defined('BLEGDETECT')) echo '""+'; 
+			  else echo '"&callid_aleg="+indata.callid+"'.BLEGCID.'"+';
+			?>
+			"";
+
                         var div_data =
-                        "<p align=left>"+ddt[1]+" <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
+                        "<p align=left>"+ddt[1]+ 
+			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+indata.callid+"','"+furl+
+			"');>#</a>] <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+escape(indata.id)+"','"+url+"');>"+indata.method+
                         "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
                         $(div_data).appendTo("#livecalls");
                         });
