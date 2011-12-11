@@ -500,7 +500,7 @@ $(document).ready(function(){
     <input id="s2" type="button" value="PCAP" onclick="window.open('pcap.php?cid=<?php echo $cid;?>&b2b=<?php echo $b2b; ?>');" style="background: transparent;"/>
 <?php  if (isset($flow_from_date)) { ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
-    <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().load('cflow.php?cid=<?php echo $cid ?>&b2b=<?php echo $b2b ?>');"/>
+    <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?cid=<?php echo $cid ?>&b2b=<?php echo $b2b ?>');"/>
 <?php } else {  ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
 <?php   }       ?>
