@@ -492,7 +492,7 @@ $winid = rand(1111, 9999);
 $(document).ready(function(){
 
       $('input:button').button();
-      $('#rtpinfo').hide();
+      $('#rtpinfo<?php echo $winid; ?>').hide();
       $('#image<?php echo $winid; ?>').zoomable();
 
 //      $(this).find('a.ui-dialog-titlebar-close').parent().append( $('#ybuttons') );
@@ -516,10 +516,10 @@ $(document).ready(function(){
 <?php } else {  ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
 <?php   }  ?>
-    <input type="button" value="RTP info" style="opacity: 1; background: transparent;" onclick="$('#callflow').toggle(400);$('#rtpinfo').toggle(400);" />
+    <input type="button" value="RTP info" style="opacity: 1; background: transparent;" onclick="$('#callflow<?php echo $winid; ?>').toggle(400);$('#rtpinfo<?php echo $winid; ?>').toggle(400);" />
 </div>
 <center>
-<div id="callflow" style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
+<div id="callflow<?php echo $winid; ?>" style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
 <img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image<?php echo $winid; ?>">
 <map name='map' id='map'>
 <?php
@@ -543,7 +543,7 @@ foreach($click as $cds) {
 ?>
 </map>
 </div>
-<div id="rtpinfo">
+<div id="rtpinfo<?php echo $winid; ?>">
 <br>
 <br>
 <?php 
