@@ -299,7 +299,7 @@ function showCallFlow2(type, callid, url) {
 		                }}).dialog({
 	        	        	autoOpen: true,
         	        	        // autoResize: true,
-					stack: false,
+					stack: true,
 					width: 'auto',
 					position: [posx-300, posy-80],
 					// height: 'auto',
