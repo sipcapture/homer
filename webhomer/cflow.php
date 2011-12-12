@@ -149,7 +149,8 @@ if($b2b) {
 }
 $where .= ") ";
 
-$localdata=array();
+$localdata = array();
+$rtpinfo   = array();
 
 $query = "SELECT * "
           ."\n FROM ".HOMER_TABLE
@@ -182,6 +183,17 @@ foreach($rows as $data) {
   
   $hosts[$data->source_ip] = 1;
   $hosts[$data->destination_ip] = 1;
+  
+  /* RTP INFO */
+  if(preg_match('/=/',$data->rtp_stat)) {
+	$newArray = array();
+	$tmparray = explode(",", $data->rtp_stat);
+	foreach ($tmparray as $lineNum => $line) {
+		list($key, $value) = explode("=", $line);
+		$newArray[$key] = $value;
+	}			
+	$rtpinfo[] = $newArray;
+  }  
 
   //Check user agent and generate type of UAC
   //Better to make it in DB.
@@ -480,7 +492,7 @@ $winid = rand(1111, 9999);
 $(document).ready(function(){
 
       $('input:button').button();
-
+      $('#rtpinfo').hide();
       $('#image<?php echo $winid; ?>').zoomable();
 
 //      $(this).find('a.ui-dialog-titlebar-close').parent().append( $('#ybuttons') );
@@ -503,11 +515,11 @@ $(document).ready(function(){
     <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?cid=<?php echo $cid ?>&b2b=<?php echo $b2b ?>');"/>
 <?php } else {  ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
-<?php   }       ?>
-
+<?php   }  ?>
+    <input type="button" value="RTP info" style="opacity: 1; background: transparent;" onclick="$('#callflow').toggle(400);$('#rtpinfo').toggle(400);" />
 </div>
 <center>
-<div style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
+<div id="callflow" style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
 <img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image<?php echo $winid; ?>">
 <map name='map' id='map'>
 <?php
@@ -530,7 +542,49 @@ foreach($click as $cds) {
 
 ?>
 </map>
-</center>
+</div>
+<div id="rtpinfo">
+<br>
+<br>
+<?php 
+
+if(count($rtpinfo) == 0) echo "No rtp info available for this call";
+
+//https://supportforums.cisco.com/servlet/JiveServlet/downloadBody/18784-102-3-46597/spaPhoneP-RTP-Stat_09292011.pdf
+echo "<table border='1'>";
+foreach ($rtpinfo as $key=>$data) {
+	//PS = <packet sent>
+	if(isset($data['PS'])) echo "<tr><td>Packets sent:</td><td>".$data['PS']."</td></tr>";
+	//OS = <packet recieved>
+	if(isset($data['OS'])) echo "<tr><td>Octets sent:</td><td>".$data['OS']."</td></tr>";
+	//PR = <octet recieved>
+	if(isset($data['PR'])) echo "<tr><td>Packets recieved:</td><td>".$data['PR']."</td></tr>";
+	//OR = <octet recieved>
+	if(isset($data['OR'])) echo "<tr><td>Octets recieved:</td><td>".$data['OR']."</td></tr>";
+	//PL = <packet lost>
+	if(isset($data['PL'])) {
+		$perc = 0;
+		if(isset($data['PR'])) $perc = floor($data['PL'] * 100 / $data['PR'] * 1000) / 1000;		
+		echo "<tr><td>Packet lost:</td><td>".$data['PL']." ( $perc %)</td></tr>";		
+	}
+	//JI = <jitter ms>
+	if(isset($data['JI'])) echo "<tr><td>Jitter ms:</td><td>".$data['JI']." ms.</td></tr>";
+	//LA = <delay ms>
+	if(isset($data['LA'])) echo "<tr><td>Delay ms:</td><td>".$data['LA']." ms.</td></tr>";
+	//DU = <call duration seconds>
+	if(isset($data['DU'])) {
+		$total = $data['DU'];
+		$minutes = intval(($total / 60) % 60); 
+		$seconds = intval($total % 60); 
+		echo "<tr><td>Call duration:</td><td>".$data['DU']." seconds. ($minutes min. $seconds sec.)</td></tr>";
+	}
+	//EN = <encoder>
+	if(isset($data['EN'])) echo "<tr><td>Encoder:</td><td>".$data['EN']."</td></tr>";
+	//DE = <decoder>
+	if(isset($data['DE'])) echo "<tr><td>Decoder:</td><td>".$data['DE']."</td></tr>";
+}
+echo "</table>";
+?>
 </div>
 </center>
 </body>

@@ -66,6 +66,7 @@ class SipResult
   private $type;
   private $node;  
   private $callidtag;  
+  private $rtp_stat;  
 
   private $loctable;
   private $tnode;
@@ -121,8 +122,10 @@ class SipResult
 
       $url = "utils.php?task=sipmessage&id=".$this->id."&popuptype=".$popuptype;
       $url .= "&from_time=".$ft."&from_date=".$fd;
-
-      return "<a href=\"javascript:popMessage2(".$popuptype.",'".$this->id."','".$url."');\">".$this->method."</a>";
+      
+      $rtpinfo = "";
+      if(preg_match('/=/',$this->rtp_stat)) $rtpinfo = " <b>(R)</b>";     
+      return "<a href=\"javascript:popMessage2(".$popuptype.",'".$this->id."','".$url."');\">".$this->method."</a>".$rtpinfo;
   }
 
   public function getReplyReason()
@@ -187,7 +190,8 @@ class SipResult
    $url = "cflow.php?cid=".$this->callid;
    $url .= "&from_time=".$search->from_time."&to_time=".$search->to_time."&from_date=".$fd."&to_date=".$td;
    $url .= "&callid_aleg=".$search->b2b."&popuptype=".$popuptype;
-   
+
+
    return "<a alt='callflow' href=\"javascript:showCallFlow2($popuptype, '".$this->callid."','".$url."');\">".$this->callid."</a>";
 
   }  
