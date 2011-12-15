@@ -27,6 +27,7 @@ define(HOMER_TABLE, "sip_capture");
 
 define(PCAPDIR,"/var/www/webhomer/tmp/");
 define(WEBPCAPLOC,"/webhomer/tmp/");
+define(APIURL,"http://localhost");
 define(APILOC,"/webhomer/api/");
 
 /* INCLUDE preferences */

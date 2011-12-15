@@ -33,6 +33,8 @@ $included = 1;
 include('../../configuration.php');
 } else { $included = 0; }
 
+/* fix intranet web */
+if(!defined(APIURL)) define(APIURL, "http://".$_SERVER['SERVER_NAME']);
 
 date_default_timezone_set(CFLOW_TIMEZONE);
 $offset = STAT_OFFSET;
@@ -53,7 +55,7 @@ $(document).ready(function() {
 
 <?php
 
-$uri = "http://".$_SERVER['SERVER_NAME'].APILOC;
+$uri = APIURL.APILOC;
 $request = $uri."api.php?task=statsua&limit=11";
 $jsondata = file_get_contents($request);
 $response = json_decode($jsondata, true);

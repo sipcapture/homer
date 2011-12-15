@@ -61,7 +61,9 @@ $('#refresh-graph').click(function(){
 
 <?php
 
-$uri = "http://".$_SERVER['SERVER_NAME'].APILOC;
+if(!defined(APIURL)) define(APIURL, "http://".$_SERVER['SERVER_NAME']);
+
+$uri = APIURL.APILOC;
 
 // INVITES
 $request = $uri."api.php?task=statscount&method=INVITE&hours=".$xhours;

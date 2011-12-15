@@ -38,7 +38,9 @@ date_default_timezone_set(CFLOW_TIMEZONE);
 $offset = STAT_OFFSET;
 $hours = STAT_RANGE;
 
-$uri = "http://".$_SERVER['SERVER_NAME'].APILOC;
+if(!defined(APIURL)) define(APIURL, "http://".$_SERVER['SERVER_NAME']);
+
+$uri = APIURL.APILOC;
 
 $request = $uri."api.php?task=statscount&method=INVITE&measure=1&hours=".$hours;
 $jsondata = file_get_contents($request);

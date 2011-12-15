@@ -32,8 +32,10 @@ include('../../configuration.php');
 echo '<script type="text/javascript" src="js/highstock.js"></script>';
 }
 
+/* fix intranet web */
+if(!defined(APIURL)) define(APIURL, "http://".$_SERVER['SERVER_NAME']);
 
-$uri = "http://".$_SERVER['SERVER_NAME'].APILOC;
+$uri = APIURL.APILOC;
 $request = $uri."api.php?task=statsua";
 $jsondata = file_get_contents($request);
 $response = json_decode($jsondata, true);
