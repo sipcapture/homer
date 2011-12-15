@@ -22,7 +22,7 @@
 
 use DBI;
 
-$version = "0.2.1";
+$version = "0.2.2";
 $mysql_table = "sip_capture";
 $mysql_dbname = "homer_db";
 $mysql_user = "mysql_login";
