@@ -158,6 +158,7 @@ for(my $i=0; $i<$newparts; $i++) {
     ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($oldstamp);
 
     my $newpartname = sprintf("p%04d%02d%02d%02d",($year+=1900),(++$mon),$mday,$hour);    
+    $newpartname.= sprintf("%02d", $min) if($partstep > 1);
     
     $query = "SELECT COUNT(*) "
              ."\n FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME='".$mysql_table."'"
