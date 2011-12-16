@@ -169,6 +169,8 @@ $querytd = "SELECT TIMEDIFF(max(date),min(date)) as tot_dur "
 $totdurs = $db->loadObjectList($querytd);
 $totdur = $totdurs[0]->tot_dur;
 
+$statuscall = 0;
+
 //$query="SELECT * FROM $table WHERE $where order by micro_ts limit 100;";
 $rows = $db->loadObjectList($query);
 foreach($rows as $data) {
@@ -180,6 +182,12 @@ foreach($rows as $data) {
   }
 
   $localdata[] = $data;  
+  
+  if(preg_match('/[4-6][0-9][0-9]/',$data->method)) $statuscall = 1;
+  else if($data->method == "CANCEL") $statuscall = 2;
+  else if($data->method == "BYE") $statuscall = 3;
+  else if($data->method == "200" && preg_match('/INVITE/',$data->cseq)) $statuscall = 4;
+  else if(preg_match('/[3][0-9][0-9]/',$data->method)) $statuscall = 5;
   
   $hosts[$data->source_ip] = 1;
   $hosts[$data->destination_ip] = 1;
@@ -474,6 +482,15 @@ imagedestroy($im);
 //<area href=' vocal-bad-ack2.cap' coords='50,62,900,85'></area>
 //<area href='test' coords='40,80,200,65'></area>
 $winid = rand(1111, 9999);
+
+/* color call status */
+if($statuscall == 1) $statuscolor="red";
+else if($statuscall == 2) $statuscolor="orange";
+else if($statuscall == 3) $statuscolor="lightgreen";
+else if($statuscall == 4) $statuscolor="lightblue";
+else if($statuscall == 5) $statuscolor="yellow";
+else $statuscolor="white";
+
 ?>
 <html>
 <head>
@@ -511,10 +528,10 @@ $(document).ready(function(){
 <!--    <input id="s1" type="button" class="ui-state-default ui-corner-all" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');"  style="background: transparent;"  /> -->
     <input id="s2" type="button" value="PCAP" onclick="window.open('pcap.php?cid=<?php echo $cid;?>&b2b=<?php echo $b2b; ?>');" style="background: transparent;"/>
 <?php  if (isset($flow_from_date)) { ?>
-    <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
+    <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
     <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?cid=<?php echo $cid ?>&b2b=<?php echo $b2b ?>');"/>
 <?php } else {  ?>
-    <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent;" disabled />
+    <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
 <?php   }  ?>
     <input type="button" value="RTP info" style="opacity: 1; background: transparent;" onclick="$('#callflow<?php echo $winid; ?>').toggle(400);$('#rtpinfo<?php echo $winid; ?>').toggle(400);" />
 </div>
