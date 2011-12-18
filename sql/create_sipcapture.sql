@@ -42,7 +42,7 @@ CREATE TABLE `sip_capture` (
   `rtp_stat` varchar(256) NOT NULL,
   `type` int(2) NOT NULL,
   `node` varchar(125) NOT NULL,
-  `msg` text NOT NULL,
+  `msg` varchar(1500) NOT NULL,
   PRIMARY KEY (`id`,`date`),
   KEY `ruri_user` (`ruri_user`),
   KEY `from_user` (`from_user`),
