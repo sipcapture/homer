@@ -1,7 +1,7 @@
 <?php
 /*
  * HOMER Web Interface
- * Homer's REST API (Json) v0.1.2
+ * Homer's REST API (Json) v0.1.3
  *
  * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
  * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
@@ -54,6 +54,10 @@ switch ($task) {
 
         case 'last':
                 getLast();
+                break;
+
+        case 'last_perf':
+                getLastPerf();
                 break;
 
         case 'search':
@@ -199,6 +203,51 @@ function getLast() {
 
 }
 
+function getLastPerf() {
+
+	// minimal query
+	if(isset($_GET['limit'])) {
+ 
+	//Set our variables
+	$limit = ($_GET['limit']);
+	$method = ($_GET['method']);
+	
+	if(!isset($limit)) {
+                $limit = 10;
+        }
+
+	$setdate=setDate();
+	$where .= $setdate;
+
+	// Proceed with Query
+        global $mynodeshost, $db;
+        $option = array(); //prevent problems
+        if($db->dbconnect_homer(HOMER_HOST)) {
+
+		$last = "SELECT MAX(id) FROM ".HOMER_TABLE;
+                $lastrows = $db->loadObjectList($last);
+		$counter = $lastrow - $limit;
+
+                $query = "SELECT * "
+                        ."\n FROM ".HOMER_TABLE
+                        ."\n WHERE id > ".$counter
+			."\n ORDER BY id DESC"
+			." limit 0,".$limit;
+			//." limit 1";
+
+                $rows = $db->loadObjectList($query);
+        }
+
+	// Prepare JSON reply
+	$output = json_encode(array('last' => $rows));
+	 
+	// Output the result
+	echo $output;
+
+  	}
+
+}
+
 function getSearch() {
 
 	// minimal query
@@ -209,13 +258,21 @@ function getSearch() {
 	$value = ($_GET['value']);
 	$limit = ($_GET['limit']);
 	$hours = ($_GET['hours']);
+	$minutes = ($_GET['minutes']);
 	
 	if(!isset($limit)) {
                 $limit = 10;
         }
 	if(!isset($hours)) {
-                $hours = 2;
+                $minutes_h = 0;
+	} else {
+                $minutes_h = round($hours * 60);
+	}
+	if(!isset($minutes)) {
+                $minutes = 2;
         }
+
+	$trange = $minutes + $minutes_h;
 
 	$setdate=setDate();
 	$where .= $setdate;
@@ -228,7 +285,8 @@ function getSearch() {
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
                         ."\n WHERE ".$field." = '".$value."' "
-			."\n AND ( `date` > UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$hours." HOUR) )"
+			//."\n AND ( `date` > UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$hours." HOUR) )"
+			."\n AND ( `date` > UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$trange." MINUTE) )"
 			."\n ORDER BY id DESC"
 			." limit ".$limit;
 

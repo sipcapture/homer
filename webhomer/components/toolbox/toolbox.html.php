@@ -207,7 +207,7 @@ class HTML_ToolBox {
 		 $('#refresh-last').click(function()
                           {
 			  var itempool1 = $('#items1').val();
-                          $.getJSON("api/api.php?task=last&limit="+itempool1,function(data)
+                          $.getJSON("api/api.php?task=last_perf&limit="+itempool1,function(data)
                           {
                           $('#live').html('');
                           $.each(data.last, function(i,indata)
