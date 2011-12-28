@@ -1,7 +1,7 @@
 <?php
 /*
  * HOMER Web Interface
- * Homer's REST API (Json) v0.1.3
+ * Homer's REST API (Json) v0.1.4
  *
  * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
  * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
@@ -170,6 +170,8 @@ function getLast() {
 	//Set our variables
 	$limit = ($_GET['limit']);
 	$method = ($_GET['method']);
+	$quid = ($_GET['user']);
+	$qip = ($_GET['ip']);
 	
 	if(!isset($limit)) {
                 $limit = 10;
@@ -177,6 +179,14 @@ function getLast() {
 
 	$setdate=setDate();
 	$where .= $setdate;
+
+	if(isset($qip)) {
+                $where .= " AND (source_ip = '".$qip."' OR destination_ip = '".$qip."' OR contact_ip = '".$qip."')";
+        }
+
+	if(isset($quid)) {
+                $where .= " AND (ruri_user = '".$quid."' OR from_user = '".$quid."' OR to_user = '".$quid."')";
+        }
 
 	// Proceed with Query
         global $mynodeshost, $db;
@@ -187,7 +197,7 @@ function getLast() {
                         ."\n FROM ".HOMER_TABLE
                         ."\n WHERE ".$where
 			."\n ORDER BY id DESC"
-			." limit ".$limit;
+			." limit 0,".$limit;
 			//." limit 1";
 
                 $rows = $db->loadObjectList($query);
