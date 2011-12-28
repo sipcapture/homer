@@ -183,6 +183,7 @@ class HTML_ToolBox {
 
         <ul id="column2" class="column" >
 
+<!--
   	<li class="widget color-green" id="widget-last">
                 <div class="widget-head"><h3>Last SIP</h3></div>
                 <div class="widget-content">
@@ -265,14 +266,11 @@ class HTML_ToolBox {
                 </div>
         </li>
 
-<!-- last 5 calls via API -->
-
         <li class="widget color-green" id="widget-calls">
                 <div class="widget-head"><h3>Last Calls</h3></div>
                 <div class="widget-content">
                 <div id="livecalls"></div><br>
                 <div id="calls-control">
-			<!--	<input type='number' size='2' value=''  style="width: 20; border: 0; background: #fff; float: right;  margin-left: 5; height: 15;" class="ui-corner-all ui-widget2"> -->
 		<button disabled id="refresh-list2" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  
 		<select id="items2"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 15;" >
 			<option value="5">5</option>
@@ -347,6 +345,251 @@ class HTML_ToolBox {
 				}
 			}
 
+
+		 });
+
+                </script>
+
+                </div>
+        </li>
+-->
+
+<!-- Freesearch via API -->
+
+        <li class="widget color-green" id="widget-apitool">
+                <div class="widget-head"><h3>SIP Filter #1</h3></div>
+                <div class="widget-content">
+                <div id="livetool"></div><br>
+                <div id="tool-control">
+		<button disabled id="refresh-list3" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  
+		<select id="items3"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 15;" >
+			<option value="5">5</option>
+			<option value="10" selected>10</option>
+			<option value="15">15</option>
+			<option value="20">20</option>
+		</select>
+		<select id="filter3"  style="float: left; width: 106; border: 0;  margin-left: 5; height: 15;" >
+			<option value=""></option>
+			<option value="ANY">(ANY)</option>
+			<option value="INVITE">INVITE</option>
+			<option value="REGISTER">REGISTER</option>
+			<option value="OPTIONS">OPTIONS</option>
+			<option value="BYE">BYE</option>
+			<option value="SIP">SIP CODE -></option>
+		</select>
+		<input id="sipcode3" size="6" value=""  style="border: 1;  margin-left: 6; height: 16;" class="ui-corner-all ui-widget2">
+		<select id="timer3"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
+			<option value="0">0</option>
+			<option value="15">15</option>
+			<option value="30">30</option>
+			<option value="60">60</option>
+		</select>
+		<button id="refresh-tool" style="width: 60; border: 0; background: #fff;  float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>  
+
+		</div><br>		
+                <script type="text/javascript">
+			$('#sipcode3').hide();
+                        $('#refresh-tool').click(function()
+                        {
+	
+			var itempool3 = $('#items3').val();
+			var filterpool3 = $('#filter3').val();
+			if (filterpool3 == "SIP") {filterpool3=  $('#sipcode3').val(); }
+			if (filterpool3 == "") {
+				var apicall = '';
+				$('#livetool').html('');
+			} else if (filterpool3 == "ANY" ) {
+                        	var apicall = "api/api.php?task=last_perf&limit="+itempool3;
+			} else {
+                        	var apicall = "api/api.php?task=search&field=METHOD&value="+filterpool3+"&limit="+itempool3;
+                        }
+			
+                        //$.getJSON("api/api.php?task=search&field=METHOD&value="+filterpool3+"&limit="+itempool3,function(data)
+                        $.getJSON(apicall,function(data)
+			{
+                        $('#livetool').html('');
+			if (!data.session) {src=data.last} else {src=data.session}
+                        //$.each(data.session, function(i,indata)
+                        $.each(src, function(i,indata)
+                        {
+
+			var ddt = indata.date.split(" ");
+			var diff=new Date();
+			ddx = diff.getHours();			
+			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
+	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+
+			var furl = "cflow.php?cid="+indata.callid+
+			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
+			<?php 
+			 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
+			 else echo '"&popuptype='.CFLOW_POPUP.'"+';
+			  if (!defined('BLEGDETECT')) echo '""+'; 
+			  else echo '"&callid_aleg="+indata.callid+"'.BLEGCID.'"+';
+			?>
+			"";
+
+                        var div_data =
+                        "<p align=left>"+ddt[1]+ 
+			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+indata.callid+"','"+furl+
+			"');>#</a>] <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+escape(indata.id)+"','"+url+"');>"+indata.method+
+                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                        $(div_data).appendTo("#livetool");
+                        });
+                        }
+                        );
+                        return false;
+                        });
+
+
+		 $(document).ready(function()
+                 {
+   			 $('#timer3').change(function () { clearInterval(tool_refresh); setTT(this.value); }); 
+   			 $('#items3').change(function () { itempool3 = this.value; $("#refresh-tool").click(); }); 
+   			 $('#filter3').change(function () {
+				if (this.value == "SIP") { 
+					$('#sipcode3').show(); 
+				} else { 
+					$('#sipcode3').hide();  
+					$("#refresh-tool").click();
+				} 
+			 }); 
+
+			$("#refresh-tool").click();
+			var tool_refresh = 0;
+			function setTT(timer){
+				if (timer == 0) { clearInterval(tool_refresh); } else {
+				var timerx = (timer*1000);
+				tool_refresh = setInterval(
+				function ()
+				{
+				$('#refresh-tool').click();
+				}, timerx );
+				//}, 10000);
+				}
+			}
+
+		 });
+
+                </script>
+
+                </div>
+        </li>
+
+<!-- Callsearch via API -->
+
+        <li class="widget color-green" id="widget-apicall">
+                <div class="widget-head"><h3>SIP Filter #2</h3></div>
+                <div class="widget-content">
+                <div id="livecalls"></div><br>
+                <div id="call-control">
+		<button disabled id="refresh-list4" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  
+		<select id="items4"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 15;" >
+			<option value="5">5</option>
+			<option value="10" selected>10</option>
+			<option value="15">15</option>
+			<option value="20">20</option>
+		</select>
+		<select id="filter4"  style="float: left; width: 106; border: 0;  margin-left: 5; height: 15;" >
+			<option value=""></option>
+			<option value="ANY">(ANY)</option>
+			<option value="INVITE">INVITE</option>
+			<option value="REGISTER">REGISTER</option>
+			<option value="OPTIONS">OPTIONS</option>
+			<option value="BYE">BYE</option>
+			<option value="SIP">SIP CODE -></option>
+		</select>
+		<input id="sipcode4" size="6" value=""  style="border: 1;  margin-left: 6; height: 16;" class="ui-corner-all ui-widget2">
+		<select id="timer4"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
+			<option value="0">0</option>
+			<option value="15">15</option>
+			<option value="30">30</option>
+			<option value="60">60</option>
+		</select>
+		<button id="apicall-tool" style="width: 60; border: 0; background: #fff;  float: right; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">refresh</button>  
+
+		</div><br>		
+                <script type="text/javascript">
+			$('#sipcode4').hide();
+                        $('#apicall-tool').click(function()
+                        {
+	
+			var itempool4 = $('#items4').val();
+			var filterpool4 = $('#filter4').val();
+			if (filterpool4 == "SIP") {filterpool4=  $('#sipcode4').val(); }
+			if (filterpool4 == "") {
+				var apicall = '';
+				$('#livecalls').html('');
+			} else if (filterpool4 == "ANY" ) {
+                        	var apicall = "api/api.php?task=last_perf&limit="+itempool4;
+			} else {
+                        	var apicall = "api/api.php?task=search&field=METHOD&value="+filterpool4+"&limit="+itempool4;
+                        }
+			
+                        //$.getJSON("api/api.php?task=search&field=METHOD&value="+filterpool4+"&limit="+itempool4,function(data)
+                        $.getJSON(apicall,function(data)
+			{
+                        $('#livecalls').html('');
+			if (!data.session) {src=data.last} else {src=data.session}
+                        //$.each(data.session, function(i,indata)
+                        $.each(src, function(i,indata)
+                        {
+
+			var ddt = indata.date.split(" ");
+			var diff=new Date();
+			ddx = diff.getHours();			
+			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
+	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+
+			var furl = "cflow.php?cid="+indata.callid+
+			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
+			<?php 
+			 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
+			 else echo '"&popuptype='.CFLOW_POPUP.'"+';
+			  if (!defined('BLEGDETECT')) echo '""+'; 
+			  else echo '"&callid_aleg="+indata.callid+"'.BLEGCID.'"+';
+			?>
+			"";
+
+                        var div_data =
+                        "<p align=left>"+ddt[1]+ 
+			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+indata.callid+"','"+furl+
+			"');>#</a>] <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+escape(indata.id)+"','"+url+"');>"+indata.method+
+                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                        $(div_data).appendTo("#livecalls");
+                        });
+                        }
+                        );
+                        return false;
+                        });
+
+
+		 $(document).ready(function()
+                 {
+   			 $('#timer4').change(function () { clearInterval(ctool_refresh); setTT(this.value); }); 
+   			 $('#items4').change(function () { itempool4 = this.value; $("#apicall-tool").click(); }); 
+   			 $('#filter4').change(function () {
+				if (this.value == "SIP") { 
+					$('#sipcode4').show(); 
+				} else { 
+					$('#sipcode4').hide();  
+					$("#apicall-tool").click();
+				} 
+			 }); 
+
+			$("#apicall-tool").click();
+			var ctool_refresh = 0;
+			function setTT(timer){
+				if (timer == 0) { clearInterval(ctool_refresh); } else {
+				var timerx = (timer*1000);
+				ctool_refresh = setInterval(
+				function ()
+				{
+				$('#apicall-tool').click();
+				}, timerx );
+				//}, 10000);
+				}
+			}
 
 		 });
 
