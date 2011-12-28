@@ -490,16 +490,12 @@ class HTML_ToolBox {
 			<option value="15">15</option>
 			<option value="20">20</option>
 		</select>
-		<select id="filter4"  style="float: left; width: 106; border: 0;  margin-left: 5; height: 15;" >
+		<select id="filter4"  style="float: left; width: 50; border: 0;  margin-left: 5; height: 15;" >
 			<option value=""></option>
-			<option value="ANY">(ANY)</option>
-			<option value="INVITE">INVITE</option>
-			<option value="REGISTER">REGISTER</option>
-			<option value="OPTIONS">OPTIONS</option>
-			<option value="BYE">BYE</option>
-			<option value="SIP">SIP CODE -></option>
+			<option value="UID">UID</option>
+			<option value="IP">IP</option>
 		</select>
-		<input id="sipcode4" size="6" value=""  style="border: 1;  margin-left: 6; height: 16;" class="ui-corner-all ui-widget2">
+		<input id="sipcode4" size="15" value=""  style="border: 1;  margin-left: 6; height: 16;" class="ui-corner-all ui-widget2">
 		<select id="timer4"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
 			<option value="0">0</option>
 			<option value="15">15</option>
@@ -516,8 +512,16 @@ class HTML_ToolBox {
 	
 			var itempool4 = $('#items4').val();
 			var filterpool4 = $('#filter4').val();
-			if (filterpool4 == "SIP") {filterpool4=  $('#sipcode4').val(); }
-			if (filterpool4 == "") {
+			if (filterpool4 == "SIP") {
+				filterpool4=  $('#sipcode4').val(); 
+                        	var apicall = "api/api.php?task=search&field=METHOD&value="+filterpool4+"&limit="+itempool4;
+			} else if (filterpool4 == "IP") {
+				filterpool4=  $('#sipcode4').val(); 
+                        	var apicall = "api/api.php?task=last&ip="+filterpool4+"&limit="+itempool4;
+			} else if (filterpool4 == "UID") {
+				filterpool4=  $('#sipcode4').val(); 
+                        	var apicall = "api/api.php?task=last&user="+filterpool4+"&limit="+itempool4;
+			} else if (filterpool4 == "") {
 				var apicall = '';
 				$('#livecalls').html('');
 			} else if (filterpool4 == "ANY" ) {
@@ -569,9 +573,11 @@ class HTML_ToolBox {
    			 $('#timer4').change(function () { clearInterval(ctool_refresh); setTT(this.value); }); 
    			 $('#items4').change(function () { itempool4 = this.value; $("#apicall-tool").click(); }); 
    			 $('#filter4').change(function () {
-				if (this.value == "SIP") { 
+				if (this.value == "SIP"|this.value=="UID"|this.value=="IP") {
+					$('#sipcode4').val('');
 					$('#sipcode4').show(); 
 				} else { 
+					$('#sipcode4').val('');
 					$('#sipcode4').hide();  
 					$("#apicall-tool").click();
 				} 
