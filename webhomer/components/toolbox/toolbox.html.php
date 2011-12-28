@@ -362,13 +362,13 @@ class HTML_ToolBox {
                 <div id="livetool"></div><br>
                 <div id="tool-control">
 		<button disabled id="refresh-list3" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  
-		<select id="items3"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 15;" >
+		<select id="items3"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 18;" >
 			<option value="5">5</option>
 			<option value="10" selected>10</option>
 			<option value="15">15</option>
 			<option value="20">20</option>
 		</select>
-		<select id="filter3"  style="float: left; width: 106; border: 0;  margin-left: 5; height: 15;" >
+		<select id="filter3"  style="float: left; width: 106; border: 0;  margin-left: 5; height: 18;" >
 			<option value=""></option>
 			<option value="ANY">(ANY)</option>
 			<option value="INVITE">INVITE</option>
@@ -377,8 +377,8 @@ class HTML_ToolBox {
 			<option value="BYE">BYE</option>
 			<option value="SIP">SIP CODE -></option>
 		</select>
-		<input id="sipcode3" size="6" value=""  style="border: 1;  margin-left: 6; height: 16;" class="ui-corner-all ui-widget2">
-		<select id="timer3"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
+		<input id="sipcode3" size="6" value=""  style="border: 1;  margin-left: 6; height: 18;" class="ui-corner-all ui-widget2">
+		<select id="timer3"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 18;" >
 			<option value="0">0</option>
 			<option value="15">15</option>
 			<option value="30">30</option>
@@ -484,19 +484,19 @@ class HTML_ToolBox {
                 <div id="livecalls"></div><br>
                 <div id="call-control">
 		<button disabled id="refresh-list4" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  
-		<select id="items4"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 15;" >
+		<select id="items4"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 18;" >
 			<option value="5">5</option>
 			<option value="10" selected>10</option>
 			<option value="15">15</option>
 			<option value="20">20</option>
 		</select>
-		<select id="filter4"  style="float: left; width: 50; border: 0;  margin-left: 5; height: 15;" >
+		<select id="filter4"  style="float: left; width: 50; border: 0;  margin-left: 5; height: 18;" >
 			<option value=""></option>
 			<option value="UID">UID</option>
 			<option value="IP">IP</option>
 		</select>
-		<input id="sipcode4" size="15" value=""  style="border: 1;  margin-left: 6; height: 16;" class="ui-corner-all ui-widget2">
-		<select id="timer4"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 15;" >
+		<input id="sipcode4" size="15" value=""  style="border: 1;  margin-left: 6; height: 18;" class="ui-corner-all ui-widget2">
+		<select id="timer4"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 18;" >
 			<option value="0">0</option>
 			<option value="15">15</option>
 			<option value="30">30</option>
