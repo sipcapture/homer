@@ -361,7 +361,7 @@ class HTML_ToolBox {
                 <div class="widget-content">
                 <div id="livetool"></div><br>
                 <div id="tool-control">
-		<button disabled id="refresh-list3" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  
+<!--		<button disabled id="refresh-list3" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  -->
 		<select id="items3"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 18;" >
 			<option value="5">5</option>
 			<option value="10" selected>10</option>
@@ -483,7 +483,7 @@ class HTML_ToolBox {
                 <div class="widget-content">
                 <div id="livecalls"></div><br>
                 <div id="call-control">
-		<button disabled id="refresh-list4" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  
+<!--		<button disabled id="refresh-list4" style="width: 60; border: 0; background: #fff;  float: left; margin: 0 0 9 0;"  class="ui-button ui-widget2 ui-corner-all">results</button>  -->
 		<select id="items4"  style="float: left; width: 45; border: 0;  margin-left: 5; height: 18;" >
 			<option value="5">5</option>
 			<option value="10" selected>10</option>
