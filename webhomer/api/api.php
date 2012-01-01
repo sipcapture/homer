@@ -1,7 +1,7 @@
 <?php
 /*
  * HOMER Web Interface
- * Homer's REST API (Json) v0.1.4
+ * Homer's REST API (Json) v0.1.5
  *
  * Copyright (C) 2011-2012 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
  * Copyright (C) 2011-2012 Lorenzo Mangani <lorenzo.mangani@gmail.com>
@@ -66,6 +66,10 @@ switch ($task) {
 
 	case 'debug':
 		getVars();
+		break;
+
+	case 'sipsend':
+		dophpSip();
 		break;
 
         case 'statsua':
@@ -370,6 +374,41 @@ function getStatsUA() {
 	 
 	// Output the result
 	echo $output;
+
+
+}
+
+function dophpSip() {
+
+	 //Set our variables
+ 	require_once('php-sip/PhpSIP.class.php');
+        $phpsip_to = getVar('to', NULL, '', 'string');
+        $phpsip_from = getVar('from', NULL, '', 'string');
+        $phpsip_prox = getVar('proxy', NULL, '', 'string');
+        $phpsip_meth = getVar('method', NULL, '', 'string');
+        $phpsip_head = getVar('head', NULL, '', 'string');
+        echo "FROM: ".$phpsip_from."<br>TO: ".$phpsip_to."<br>VIA ".$phpsip_prox."<br>METHOD: ".$phpsip_meth
+        ."<br>HEAD: ".$phpsip_head."<br>";
+        echo "<br>";
+        /* Sends test message */
+        try
+        {
+          $api = new PhpSIP();
+          $api->setProxy(''.$phpsip_prox);
+          $api->addHeader('X-Capture: '.$phpsip_head);
+          $api->setMethod(''.$phpsip_meth);
+          $api->setFrom("sip:".$phpsip_from);
+          $api->setUri("sip:".$phpsip_to);
+          $api->setUserAgent('HOMER/Php-Sip');
+          $res = $api->send();
+
+          echo "SIP response: $res\n";
+
+        } catch (Exception $e) {
+
+          echo $e;
+        }
+
 
 
 }

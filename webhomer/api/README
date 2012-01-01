@@ -48,6 +48,9 @@ stat-register:	Returns Values for Registartion Events
 		REST: (tbd)
 		api/api.php?task=statscount&method=REGISTRATION&hours=
 
+sipsend:	Generates Diagnosting SIP Message (one-shot)
+		REST: (tbd)
+		api/api.php?task=sipsend&to=&from=&proxy=&method=&header=
 
 	..to be continued..
 

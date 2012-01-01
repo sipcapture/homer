@@ -251,7 +251,7 @@ function phpSip() {
         try
         {
           $api = new PhpSIP();
-          $api->setProxy('sipx.qxip.net:5060');
+          $api->setProxy(''.$phpsip_prox);
           $api->addHeader('X-Capture: '.$phpsip_head);
           $api->setMethod(''.$phpsip_meth);
           $api->setFrom("sip:".$phpsip_from);
