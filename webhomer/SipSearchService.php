@@ -128,10 +128,16 @@ class SipSearchService implements ISipService
 	   if($key == "callid" && $b2b ) $callwhere.=" (";
 
 	   $eqlike = preg_match("/%/", $value) ? " like " : " = ";
-           $mkey = "`".$key."`";
-           $mvalue = "'".$value."'";
-           if($s == 1) $callwhere.=" AND ";
-           $callwhere.= $mkey.$eqlike.$mvalue;
+     
+     if(preg_match("/^!/", $value)) {
+           $value =  preg_replace("/^!/", "", $value);
+           $eqlike = "!=";
+     }
+
+     $mkey = "`".$key."`";
+     $mvalue = "'".$value."'";
+     if($s == 1) $callwhere.=" AND ";
+     $callwhere.= $mkey.$eqlike.$mvalue;
 
 	   if($key == "callid" && $b2b) {
                 if(BLEGCID == "x-cid") $callwhere .= "OR callid_aleg ".$eqlike.$mvalue;
@@ -232,10 +238,16 @@ class SipSearchService implements ISipService
       $s=0;
      foreach($homer as $key=>$value) {
 
-	if(in_array($key, $skip_keys)) continue;
-	if(!isset($callwhere)) $callwhere = "(";
-	if($key == "callid" && $b2b) $callwhere.=" (";
-	$eqlike = preg_match("/%/", $value) ? " like " : " = ";
+   	if(in_array($key, $skip_keys)) continue;
+	   if(!isset($callwhere)) $callwhere = "(";
+	   if($key == "callid" && $b2b) $callwhere.=" (";
+	   $eqlike = preg_match("/%/", $value) ? " like " : " = ";
+      
+     if(preg_match("/^!/", $value)) {
+           $value =  preg_replace("/^!/", "", $value);
+           $eqlike = "!=";
+     }
+
         $mkey = "`".$key."`";
         $mvalue = "'".$value."'";
         if($s == 1) $callwhere.=" AND ";
