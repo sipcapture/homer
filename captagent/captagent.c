@@ -31,19 +31,18 @@
 #include <errno.h>
 #include <string.h>
 
-#include <netinet/if_ether.h>
 #ifndef __USE_BSD
 #define __USE_BSD  
 #endif /* __USE_BSD */
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <netinet/ip.h>
 #ifdef USE_IPV6
 #include <netinet/ip6.h>
 #endif /* USE_IPV6 */
 #define __FAVOR_BSD 
 #include <netinet/udp.h>
-
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <netinet/if_ether.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <netdb.h>
