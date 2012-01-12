@@ -68,6 +68,9 @@ class HTML_Admin {
 			},
 	
 			afterSave: function(o){
+        if(o.type == 'categorypassword') {
+               $('.categorypassword.id' + o.id).html('xxx');
+        }
 				if (o.type == 'category2name') {
 					$('.category2name.id' + o.id).prepend('$');
 			}
@@ -154,7 +157,9 @@ class HTML_Admin {
                     foreach($row as $key=>$value) {
                         if($key == "id" || $key == "userid") continue;          
                         $id = !isset($row->userid) ? $row->id : $row->userid;
-
+                        
+                        if($key == "password") $value = "xxx";
+                        
                         if($key == "userlevel") 
                         	echo "<td class=\"editableDropDown category{$key} removable id{$type}{$id}\">".$adminGroup[$value-1]."</td>\n";                  
                         else echo "<td class=\"editableSingle category{$key} removable id{$type}{$id}\">$value</td>\n";                    
