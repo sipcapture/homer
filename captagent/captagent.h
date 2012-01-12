@@ -1,4 +1,3 @@
-
 #define VERSION "0.8.2"
 #define DEFAULT_CONFIG "/usr/local/etc/captagent/captagent.conf"
 #define DEFAULT_PIDFILE  "/var/run/captagent.pid"
@@ -10,6 +9,15 @@ char filter_expr[1024];
 /* Ethernet / IP / UDP header IPv4 */
 const int udp_payload_offset = 14+20+8;
 
+/* FreeBSD or Solaris */
+#ifndef ETH_P_IP
+#define ETH_P_IP 0x0800
+struct ethhdr {
+	unsigned char        h_dest[6];
+	unsigned char        h_source[6];
+	uint16_t             h_proto;
+};
+#endif
 
 struct hep_hdr{
     u_int8_t hp_v;            /* version */
