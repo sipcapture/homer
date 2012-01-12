@@ -134,10 +134,18 @@ class SipSearchService implements ISipService
            $eqlike = "!=";
      }
 
-     $mkey = "`".$key."`";
-     $mvalue = "'".$value."'";
-     if($s == 1) $callwhere.=" AND ";
-     $callwhere.= $mkey.$eqlike.$mvalue;
+       /* Array search */
+     if(preg_match("/;/", $value)) {
+              $dda = array();
+              foreach(preg_split("/;/", $value) as $k=>$v) $dda[] = "`".$key."`".$eqlike."'".$v."'";
+              $callwhere.="( ". ($eqlike == " = ") ? implode(" OR ",$dda) : implode(" AND ",$dda)." )";
+     }
+     else {
+               $mkey = "`".$key."`";
+               $mvalue = "'".$value."'";
+               if($s == 1) $callwhere.=" AND ";
+               $callwhere.= $mkey.$eqlike.$mvalue;
+     }
 
 	   if($key == "callid" && $b2b) {
                 if(BLEGCID == "x-cid") $callwhere .= "OR callid_aleg ".$eqlike.$mvalue;
@@ -248,18 +256,26 @@ class SipSearchService implements ISipService
            $eqlike = "!=";
      }
 
-        $mkey = "`".$key."`";
-        $mvalue = "'".$value."'";
-        if($s == 1) $callwhere.=" AND ";
-        $callwhere.= $mkey.$eqlike.$mvalue;
-
-        if($key == "callid" && $b2b) {
+     /* Array search */
+     if(preg_match("/;/", $value)) {
+              $dda = array();
+              foreach(preg_split("/;/", $value) as $k=>$v) $dda[] = "`".$key."`".$eqlike."'".$v."'";
+              $callwhere.="( ". ($eqlike == " = ") ? implode(" OR ",$dda) : implode(" AND ",$dda)." )";
+     }
+     else {
+               $mkey = "`".$key."`";
+               $mvalue = "'".$value."'";
+               if($s == 1) $callwhere.=" AND ";
+               $callwhere.= $mkey.$eqlike.$mvalue;
+     }
+     
+      if($key == "callid" && $b2b) {
                 if(BLEGCID == "x-cid") $callwhere .= "OR callid_aleg ".$eqlike.$mvalue;
                 else if(BLEGCID == "-0") $callwhere .= " OR callid ".$eqlike."'".$value.BLEGCID."'";
                 $callwhere .= ") ";
-        }
+      }
 
-	$s = 1;
+	    $s = 1;
     }
                        
     if(isset($callwhere)) $where .= " AND ".$callwhere.")";
