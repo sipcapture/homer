@@ -369,6 +369,12 @@ function getStatsUA() {
                 $rows = $db->loadObjectList($query);
         }
 
+	// Avoid empty set
+	if(empty($rows)){
+          $rows[useragent] = "none";
+          $rows[count] = "0";
+        }
+
 	// Prepare JSON reply
 	$output = json_encode(array('ua' => $rows));
 	 
