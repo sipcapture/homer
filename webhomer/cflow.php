@@ -537,8 +537,8 @@ $(document).ready(function(){
 </div>
 <center>
 <div id="callflow<?php echo $winid; ?>" style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
-<img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map' id="image<?php echo $winid; ?>">
-<map name='map' id='map'>
+<img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map<?php echo $winid; ?>' id="image<?php echo $winid; ?>">
+<map name='map<?php echo $winid; ?>' id='map<?php echo $winid; ?>'>
 <?php
 
 if(!defined('MESSAGE_POPUP')) $popuptype = 1;
