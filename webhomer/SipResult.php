@@ -121,7 +121,7 @@ class SipResult
       $ft = date("H:i:s", strtotime($this->date));
 
       $url = "utils.php?task=sipmessage&id=".$this->id."&popuptype=".$popuptype;
-      $url .= "&from_time=".$ft."&from_date=".$fd;
+      $url .= "&from_time=".$ft."&from_date=".$fd."&tnode=".$this->tnode;
       
       $rtpinfo = "";
       if(preg_match('/=/',$this->rtp_stat)) $rtpinfo = " <b>(R)</b>";     
@@ -189,7 +189,7 @@ class SipResult
    $td = date("Y-m-d", strtotime($search->to_date));   
    $url = "cflow.php?cid=".$this->callid;
    $url .= "&from_time=".$search->from_time."&to_time=".$search->to_time."&from_date=".$fd."&to_date=".$td;
-   $url .= "&callid_aleg=".$search->b2b."&popuptype=".$popuptype;
+   $url .= "&callid_aleg=".$search->b2b."&popuptype=".$popuptype."&location[]=".implode("&location[]=", $search->location);
 
 
    return "<a alt='callflow' href=\"javascript:showCallFlow2($popuptype, '".$this->callid."','".$url."');\">".$this->callid."</a>";
