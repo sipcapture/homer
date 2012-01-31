@@ -94,9 +94,7 @@ class SipSearchService implements ISipService
   public function getAll($offset, $num, $sort, $sortDirection = 'desc', $isCount = false, $homer)
   {
 
-     global $db;
-
-     $db->dbconnect_homer(NULL);           
+     global $db, $mynodeshost;             
     
      $sort = $this->propertyToColumnMapping[$sort];
 
@@ -165,6 +163,8 @@ class SipSearchService implements ISipService
       $count=0;
       foreach($location as $value) { 
 
+              $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+              
               $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ". $where.";";
@@ -184,6 +184,8 @@ class SipSearchService implements ISipService
 
 	foreach($location as $value) {
 	
+              $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+              
               $query = "SELECT *,".$tnode
                 ."\n FROM ".HOMER_TABLE 
                 ."\n WHERE ". $where
@@ -201,7 +203,8 @@ class SipSearchService implements ISipService
           $results = array_merge($results,$result);	      
 	}
 
-        //usort($results, 'compare');
+        /* Sort it if we have more than 1 location*/
+        if(count($location) > 1) usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
         //Get aliases (hosts)
         $hosts = $db->getAliases();
@@ -217,9 +220,7 @@ class SipSearchService implements ISipService
   public function searchAll($search, $columns, $offset, $num, $sort, $sortDirection = 'asc', $isCount = false, $homer, $searchtColumns, $parent)
   {
 
-     global $db;
-     
-     $db->dbconnect_homer(NULL);           
+     global $db, $mynodeshost;                  
      
      $whereSqlParts = array();
 
@@ -307,6 +308,8 @@ class SipSearchService implements ISipService
       $count=0;
       foreach($location as $value) {
 
+              $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+              
               $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ({$whereSql})". $where;                                                                                        
@@ -329,6 +332,8 @@ class SipSearchService implements ISipService
       
       foreach($location as $value) {
 
+              $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+              
               $query = "SELECT *,".$tnode
                                 ."\n FROM ".HOMER_TABLE
                                 ."\n WHERE ({$whereSql}) ". $where
@@ -345,8 +350,9 @@ class SipSearchService implements ISipService
               }
               $results = array_merge($results,$result);
         }
-
-        //usort($results, 'compare');
+        
+        /* Sort it if we have more than 1 location*/
+        if(count($location) > 1) usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
         //Get aliases (hosts)
         $hosts = $db->getAliases();                   
