@@ -100,13 +100,14 @@ class SipSearchService implements ISipService
 
      $location = $homer->location;
 
-     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time', 'unique','b2b');
+     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time', 'unique','b2b','limit');
      $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
      $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));
      $thour = date("H", strtotime($homer->to_date." ".$homer->to_time));
      $unique = $homer->unique;
      $b2b = $homer->b2b;
+     $limit = $homer->limit;
            
      /*Always ON */
      if(BLEGDETECT == 1) $b2b=1;
@@ -163,12 +164,23 @@ class SipSearchService implements ISipService
       $count=0;
       foreach($location as $value) { 
 
-              $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+             $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
               
-              $query = "SELECT count(id) as count"
+             if($limit) {                           
+                  /* COUNT LIMIT. Use it for BIG BIG TABLES */
+                  $query = "SELECT id "
+                       ."\n FROM ".HOMER_TABLE."_".$node
+                      ."\n WHERE ". $where." LIMIT $limit;";
+                  $db->executeQuery($query);              
+                  $query = "SELECT FOUND_ROWS();";              
+             }
+             else {
+                  $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ". $where.";";
-              $count = max($count, $db->loadResult($query)); 
+                      ."\n WHERE ({$whereSql})". $where;                 
+             }
+              
+             $count = max($count, $db->loadResult($query)); 
       }
 
       return $count;
@@ -227,13 +239,14 @@ class SipSearchService implements ISipService
      $location = $homer->location;
      
 
-     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time','unique','b2b');
+     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time','unique','b2b','limit');
      $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
      $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));
      $thour = date("H", strtotime($homer->to_date." ".$homer->to_time));
      $unique = $homer->unique;
      $b2b = $homer->b2b;
+     $limit = $homer->limit;
 
      /*Always ON */
      if(BLEGDETECT == 1) $b2b=1;
@@ -309,11 +322,21 @@ class SipSearchService implements ISipService
       foreach($location as $value) {
 
               $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
-              
-              $query = "SELECT count(id) as count"
+
+              if($limit) {                           
+                  /* COUNT LIMIT. Use it for BIG BIG TABLES */
+                  $query = "SELECT id "
+                       ."\n FROM ".HOMER_TABLE."_".$node
+                      ."\n WHERE ". $where." LIMIT $limit;";
+                  $db->executeQuery($query);              
+                  $query = "SELECT FOUND_ROWS();";              
+              }
+              else {
+                  $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ({$whereSql})". $where;                                                                                        
-                      
+                      ."\n WHERE ({$whereSql})". $where;                 
+              }
+              
               $count = max($count, $db->loadResult($query));
       }
 
