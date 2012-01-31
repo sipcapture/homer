@@ -73,6 +73,7 @@ function sipMessage() {
 
 	$id = getVar('id', 0, '', 'int');
 	$popuptype = getVar('popuptype', 1, '', 'int');
+  $tnode = getVar('tnode', 0, '', 'int');
 
 	global $mynodeshost, $db;
 
@@ -92,8 +93,8 @@ function sipMessage() {
 
         $option = array(); //prevent problems
 
-        if($db->dbconnect_homer(HOMER_HOST)) {
-
+        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
+        
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
                         ."\n WHERE ".$where." id=$id limit 1";
@@ -178,9 +179,10 @@ function liveSearch() {
 
   if (AUTOCOMPLETE != 0) {
 
-	$searchterm = getVar('term', NULL, '', 'string');
-	$searchfield = getVar('field', NULL, '', 'string');
-  	// timedate limit
+        $searchterm = getVar('term', NULL, '', 'string');
+        $searchfield = getVar('field', NULL, '', 'string');
+        $tnode = getVar('tnode', 0, '', 'int');
+        // timedate limit
         $search['date'] = $timeparam->date = getVar('date', '', '', 'string');
         $search['from_date'] = $timeparam->date = getVar('from_date', '', '', 'string');
         $search['to_date'] = $timeparam->date = getVar('to_date', '', '', 'string');
@@ -204,7 +206,7 @@ function liveSearch() {
 
         $option = array(); //prevent problems
 
-        if($db->dbconnect_homer(HOMER_HOST)) {
+        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
 
                 $query = "SELECT distinct ".$searchfield
                         ."\n FROM ".HOMER_TABLE
