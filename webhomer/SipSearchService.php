@@ -179,12 +179,12 @@ class SipSearchService implements ISipService
   $datasort = array();
   $message = array();
 
-  $tnode = "'".$value."' as tnode";
-  if($unique) $tnode .= ", MD5(msg) as md5sum";
-
 	foreach($location as $value) {
 	
               $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+              
+              $tnode = "'".$value."' as tnode";
+              if($unique) $tnode .= ", MD5(msg) as md5sum";
               
               $query = "SELECT *,".$tnode
                 ."\n FROM ".HOMER_TABLE 
@@ -325,14 +325,14 @@ class SipSearchService implements ISipService
 
       $results = array();
       $datasort = array();
-      $message = array();
-
-      $tnode = "'".$value."' as tnode";
-      if($unique) $tnode .= ", MD5(msg) as md5sum";
+      $message = array();     
       
       foreach($location as $value) {
 
               $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+              
+              $tnode = "'".$value."' as tnode";
+              if($unique) $tnode .= ", MD5(msg) as md5sum";
               
               $query = "SELECT *,".$tnode
                                 ."\n FROM ".HOMER_TABLE
