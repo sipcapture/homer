@@ -46,15 +46,6 @@ foreach (glob( PCAPDIR . $fileTypes) as $tmpfile) {
     }
 }
 
-/* My Nodes */
-$mynodeshost = array();
-$mynodesname = array();
-$nodes = $db->getAliases('nodes');
-foreach($nodes as $node) {
-        $mynodeshost[$node->id] = $node->host;
-        $mynodesname[$node->id] = $node->name;
-}
-
 $aliases = $db->getAliases();
 
 $arrow_step=40*CFLOW_FACTOR;
@@ -107,6 +98,8 @@ $option = array(); //prevent problems
 $cid = getVar('cid', NULL, 'get', 'string');
 $b2b = getVar('b2b', 0, 'get', 'int');
 $popuptype = getVar('popuptype', 1, 'get', 'int');
+$unique = getVar('unique', 0, 'get', 'int');
+
 if(BLEGDETECT == 1) $b2b =1;
 
 //Crop Search Parameters, if any
@@ -114,6 +107,10 @@ $flow_from_date = getVar('from_date', NULL, 'get', 'string');
 $flow_from_time = getVar('from_time', NULL, 'get', 'string');
 $flow_to_time = getVar('to_time', NULL, 'get', 'string');
 $flow_to_date = getVar('to_date', NULL, 'get', 'string');
+$location = getVar('location', NULL, 'get', 'array');
+
+/*PCAP will use the same QUERY STRING */
+$pcapurl = $_SERVER["QUERY_STRING"];
 
 if (isset($flow_from_date, $flow_from_time, $flow_to_time, $flow_to_date))
 {
@@ -125,8 +122,7 @@ if (isset($flow_from_date, $flow_from_time, $flow_to_time, $flow_to_date))
 /* Prevent break SQL */
 if(isset($where)) $where.=" AND ";
 
-//if($db->dbconnect_homer($mynodeshost[$tnode])) {
-if(!$db->dbconnect_homer(NULL))
+if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$location[0]] : NULL))
 {
     //No connect;
     exit;
@@ -147,34 +143,69 @@ if($b2b) {
   
     $where .= " OR callid='".$cid.BLEGCID."'";
 }
+
 $where .= ") ";
 
 $localdata = array();
 $rtpinfo   = array();
 
-$query = "SELECT * "
+$results = array();
+$max_ts = 0;
+$min_ts = 0;
+$statuscall=0;
+
+foreach($location as $value) {
+
+        $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+
+        $tnode = "'".$value."' as tnode";
+        if($unique) $tnode .= ", MD5(msg) as md5sum";
+
+        $query = "SELECT *, ".$tnode
           ."\n FROM ".HOMER_TABLE
           ."\n WHERE ".$where." order by micro_ts ASC limit 100";
 
-$rows = $db->loadObjectList($query);
+        //$result = $db->loadObjectList($query);
+        $result = $db->loadObjectArray($query);
 
-if(count($rows)==0) {
+        // Check if we must show up only UNIQ messages. No duplicate!
+        //only unique
+        if($unique) {
+                foreach($result as $key=>$row) {
+                           if(isset($message[$row[md5sum]])) unset($result[$key]);
+                           else $message[$row[md5sum]] = $row[node];
+                }
+        }
+
+        $results = array_merge($results,$result);
+
+        $querytd = "SELECT max(micro_ts) as max_ts, min(micro_ts) as min_ts "
+                  ."\n FROM ".HOMER_TABLE
+                  ."\n WHERE ".$where;
+
+        $mm_ts_call = $db->loadObjectList($querytd);
+
+        /* Check if our time duration is correct */
+        if($mm_ts_call[0]->max_ts > $max_ts) $max_ts = $mm_ts_call[0]->max_ts;
+        if($min_ts == 0 || $min_ts > $mm_ts_call[0]->min_ts) $min_ts = $mm_ts_call[0]->min_ts;
+}
+
+if(count($results)==0) {
     echo "No data found!";
     exit;
 }
 
-$querytd = "SELECT TIMEDIFF(max(date),min(date)) as tot_dur "
-          ."\n FROM ".HOMER_TABLE
-          ."\n WHERE ".$where;
-$totdurs = $db->loadObjectList($querytd);
-$totdur = $totdurs[0]->tot_dur;
+/* Sort it if we have more than 1 location*/
+if(count($location) > 1) usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
-$statuscall = 0;
+/* And total duraion now: */
+$totdur = intval(($max_ts- $min_ts) / 1000000);
 
-//$query="SELECT * FROM $table WHERE $where order by micro_ts limit 100;";
-$rows = $db->loadObjectList($query);
-foreach($rows as $data) {
-  
+/*Our LOOP */
+foreach($results as $row) {
+
+  $data = (object) $row;
+ 
   /* LOCAL RESOLV */
   foreach($aliases as $alias) {
             if($alias->host == $data->source_ip) $data->source_ip = $alias->name;
@@ -425,7 +456,7 @@ foreach($localdata as $data) {
   //$cds[4] = nl2br(addslashes($data->msg));
   $cds[4] = nl2br(addslashes($data->id));
   $cds[5] = $data->date;
-
+  $cds[6] = $data->tnode;
   
   $click[] = $cds;
   
@@ -526,7 +557,7 @@ $(document).ready(function(){
     <input id="z2" type="button" value="-" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomOut')" title="Zoom out"  style="background: transparent;" />
     <input id="r1" type="button" value="Reset" onclick="$('#image<?php echo $winid; ?>').zoomable();$('#image<?php echo $winid; ?>').width('<?php echo $size_x;?>').height('<?php echo $size_y;?>');"  style="background: transparent;" />
 <!--    <input id="s1" type="button" class="ui-state-default ui-corner-all" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');"  style="background: transparent;"  /> -->
-    <input id="s2" type="button" value="PCAP" onclick="window.open('pcap.php?cid=<?php echo $cid;?>&b2b=<?php echo $b2b; ?>');" style="background: transparent;"/>
+    <input id="s2" type="button" value="PCAP" onclick="window.open('pcap.php?<?php echo $pcapurl; ?>');" style="background: transparent;"/>
 <?php  if (isset($flow_from_date)) { ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
     <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?cid=<?php echo $cid ?>&b2b=<?php echo $b2b ?>');"/>
@@ -552,7 +583,7 @@ foreach($click as $cds) {
      $ft = date("H:i:s", strtotime($cds[5]));
 
      $url = "utils.php?task=sipmessage&id=".$messg."&popuptype=".$popuptype;
-     $url .= "&from_time=".$ft."&from_date=".$fd;
+     $url .= "&from_time=".$ft."&from_date=".$fd."&tnode=".$cds[6];
 
      echo "<area shape='rect' href='javascript:popMessage2(".$popuptype.",\"".$messg."\",\"".$url."\")' coords='$cz' alt='Area'></area>\n";
 }
