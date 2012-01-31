@@ -552,6 +552,14 @@ class HTML_search {
                         						<input type="checkbox" name="unique" id="unique" class="checkboxdstyle" value="1" <?php if(isset($search['unique']) && $search['unique'] == 1) echo "checked"; ?> />
 			                        		</td>
                         				</tr>
+                                   <tr>
+                                    <td width="150" class="tablerow_two">
+                                       <label for="limit" title="Limit">Limit</label>
+                                     </td>
+                                    <td>
+                                                <input name="limit" id="limit" value="<?php if(isset($search['limit'])) echo $search['limit']; else echo "0";?>" class="ui-select ui-widget ui-state-default ui-corner-all"  />
+                                     </td>
+                                  </tr>
 						</table><br>	
                 </div>
             </li>
