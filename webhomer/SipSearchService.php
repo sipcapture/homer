@@ -168,7 +168,7 @@ class SipSearchService implements ISipService
               $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ". $where.";";
-              $count += $db->loadResult($query);	                      	      
+              $count = max($count, $db->loadResult($query)); 
       }
 
       return $count;
@@ -314,7 +314,7 @@ class SipSearchService implements ISipService
                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ({$whereSql})". $where;                                                                                        
                       
-              $count += $db->loadResult($query);                            
+              $count = max($count, $db->loadResult($query));
       }
 
       return $count;
