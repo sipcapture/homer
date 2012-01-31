@@ -64,26 +64,25 @@ switch ($task) {
                 getSearch();
                 break;
 
-	case 'debug':
-		getVars();
-		break;
+        case 'debug':
+               getVars();
+               break;
 
-	case 'sipsend':
-		dophpSip();
-		break;
+        case 'sipsend':
+              dophpSip();
+              break;
 
-        case 'statsua':
+       case 'statsua':
                 getStatsUA();
                 break;
 
-        case 'statscount':
+       case 'statscount':
                 getStatsCount();
                 break;
 
-	case '';
-		echo 'NULL';
-		break;
-
+       default: 
+          echo 'NULL';
+          break;
 }
 
 function getVars() {
