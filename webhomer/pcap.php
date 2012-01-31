@@ -150,7 +150,7 @@ $flow_to_date = getVar('to_date', NULL, 'get', 'string');
 $flow_from_time = getVar('from_time', NULL, 'get', 'string');
 $flow_to_time = getVar('to_time', NULL, 'get', 'string');
 $unique = getVar('unique', 0, 'get', 'int');
-$location = getVar('location', NULL, 'get', 'array');
+$location = getVar('location', array(0), 'get', 'array');
 
 /* HOMER DB */
 if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$location[0]] : NULL))

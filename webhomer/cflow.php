@@ -107,7 +107,7 @@ $flow_from_date = getVar('from_date', NULL, 'get', 'string');
 $flow_from_time = getVar('from_time', NULL, 'get', 'string');
 $flow_to_time = getVar('to_time', NULL, 'get', 'string');
 $flow_to_date = getVar('to_date', NULL, 'get', 'string');
-$location = getVar('location', NULL, 'get', 'array');
+$location = getVar('location', array(0), 'get', 'array');
 
 /*PCAP will use the same QUERY STRING */
 $pcapurl = $_SERVER["QUERY_STRING"];

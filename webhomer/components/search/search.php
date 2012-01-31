@@ -125,7 +125,7 @@ class Component {
                   $search['user_agent'] = $headerparam->user_agent = getVar('user_agent', NULL, 'post', 'string');
 	
                   //Time
-                  $search['location'] = $location = getVar('location', array(), '', 'array');	
+                  $search['location'] = $location = getVar('location', array(0), '', 'array');	
                   $search['from_date'] = $timeparam->from_date = getVar('from_date', '', '', 'string');	        
                   $search['to_date'] = $timeparam->to_date = getVar('to_date', '', '', 'string');	        
                   $search['from_time'] = $timeparam->from_time = getVar('from_time', NULL, '', 'string');
@@ -200,7 +200,7 @@ class Component {
 
                 $option = array(); //prevent problems
 
-                if($db->dbconnect_homer("localhost")) {                
+                if($db->dbconnect_homer(NULL)) {                
                       $query = "SELECT * FROM ".HOMER_TABLE." WHERE id=$id limit 1";
                       $rows = $db->loadObjectList($query);
                 }

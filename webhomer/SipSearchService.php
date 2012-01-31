@@ -169,7 +169,7 @@ class SipSearchService implements ISipService
              if($limit) {                           
                   /* COUNT LIMIT. Use it for BIG BIG TABLES */
                   $query = "SELECT id "
-                       ."\n FROM ".HOMER_TABLE."_".$node
+                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ". $where." LIMIT $limit;";
                   $db->executeQuery($query);              
                   $query = "SELECT FOUND_ROWS();";              
@@ -178,8 +178,7 @@ class SipSearchService implements ISipService
                   $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ". $where.";";                      
-             }
-              
+             }                          
              $count = max($count, $db->loadResult($query)); 
       }
 
@@ -326,7 +325,7 @@ class SipSearchService implements ISipService
               if($limit) {                           
                   /* COUNT LIMIT. Use it for BIG BIG TABLES */
                   $query = "SELECT id "
-                       ."\n FROM ".HOMER_TABLE."_".$node
+                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ". $where." LIMIT $limit;";
                   $db->executeQuery($query);              
                   $query = "SELECT FOUND_ROWS();";              

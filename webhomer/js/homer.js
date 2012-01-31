@@ -291,7 +291,7 @@ function showCallFlow2(type, callid, url) {
 		var posx = $('body').data('posx');
                 var posy = $('body').data('posy');
 
-		if( url.indexOf("location[]") == -1) { url = url+'&location[]=%'; }
+		//if( url.indexOf("location[]") == -1) { url = url+'&location[]=%'; }
 		
 		if(type == 1) {
 			var cflow = $('<div id="cflow"></div>').load(url, '', function(response, status, xhr) {
