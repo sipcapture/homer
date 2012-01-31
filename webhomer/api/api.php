@@ -99,6 +99,7 @@ function getSession() {
 	$cid = intval($_GET['cid']);
 	$cid2 = intval($_GET['cid2']);
 	$limit = ($_GET['limit']);
+  $tnode = getVar('tnode', 0, '', 'int');
 	
 	if(!isset($limit)) {
                 $limit = 100;
@@ -109,7 +110,7 @@ function getSession() {
 	// Proceed with Query
         global $mynodeshost, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(HOMER_HOST)) {
+        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
 
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
@@ -137,14 +138,15 @@ function getMsg() {
 	if(isset($_GET['id'])) {
  
 	//Set our variables
-	$id = intval($_GET['id']);
+	$id = intval($_GET['id']);  
+  $tnode = getVar('tnode', 0, '', 'int');
 	
 	$setdate=setDate();
 	
 	// Proceed with Query
         global $mynodeshost, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(HOMER_HOST)) {
+        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
 
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
@@ -175,6 +177,7 @@ function getLast() {
 	$method = ($_GET['method']);
 	$quid = ($_GET['user']);
 	$qip = ($_GET['ip']);
+  $tnode = getVar('tnode', 0, '', 'int');
 	
 	if(!isset($limit)) {
                 $limit = 10;
@@ -194,7 +197,7 @@ function getLast() {
 	// Proceed with Query
         global $mynodeshost, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(HOMER_HOST)) {
+        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
 
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
@@ -224,6 +227,7 @@ function getLastPerf() {
 	//Set our variables
 	$limit = ($_GET['limit']);
 	$method = ($_GET['method']);
+  $tnode = getVar('tnode', 0, '', 'int');
 	
 	if(!isset($limit)) {
                 $limit = 10;
@@ -235,7 +239,7 @@ function getLastPerf() {
 	// Proceed with Query
         global $mynodeshost, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(HOMER_HOST)) {
+        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
 
 		$last = "SELECT MAX(id) FROM ".HOMER_TABLE;
                 $lastrows = $db->loadObjectList($last);
@@ -272,6 +276,7 @@ function getSearch() {
 	$limit = ($_GET['limit']);
 	$hours = ($_GET['hours']);
 	$minutes = ($_GET['minutes']);
+  $tnode = getVar('tnode', 0, '', 'int');   
 	
 	if(!isset($limit)) {
                 $limit = 10;
@@ -293,7 +298,7 @@ function getSearch() {
 	// Proceed with Query
         global $mynodeshost, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(HOMER_HOST)) {
+        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
 
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
@@ -349,6 +354,8 @@ function getStatsUA() {
 	$method = ($_GET['method']);
 	$hours = ($_GET['hours']);
 	$limit = ($_GET['limit']);
+  $tnode = getVar('tnode', 0, '', 'int');   
+  
 	if(!isset($method)) {
                 $method =  "INVITE";
         }
@@ -358,7 +365,7 @@ function getStatsUA() {
 	// Proceed with Query
         global $mynodeshost, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(HOMER_HOST)) {
+        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
 
 	$query = "SELECT useragent, sum(total) as count from stats_useragent "
 		   ."where `from_date` > DATE_SUB( NOW() , INTERVAL ".$hours." HOUR ) "
@@ -424,6 +431,8 @@ function getStatsCount() {
 	$method = ($_GET['method']);
 	$hours = ($_GET['hours']);
 	$measure = ($_GET['measure']);
+  $tnode = getVar('tnode', 0, '', 'int');
+  
 	if(!isset($method)||$method!="INVITE" && $method!="REGISTER" && $method!="CURRENT") {
                 $method =  "ALL";
         }
@@ -434,7 +443,7 @@ function getStatsCount() {
 	// Proceed with Query
         global $mynodeshost, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(HOMER_HOST)) {
+        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
 	// Methods & According Response Formats/Vars
 
 	if ($method == "INVITE") {
