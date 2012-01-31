@@ -149,6 +149,8 @@ class Component {
                   $search['originator_ip'] = $networkparam->originator_ip = getVar('originator_ip', NULL, 'post', 'string');	
                   $search['originator_port'] = $networkparam->originator_port = getVar('originator_port', 0, 'post', 'int');
                   
+                  $search['limit'] = $limit = getVar('limit', 0, 'post', 'int');
+                  
                   //Please change protocol
                   //$search['proto'] = $proto = getVar('proto', 2, 'post', 'int');	
                   //$search['family'] = $family = getVar('family', 2, 'post', 'int');	
