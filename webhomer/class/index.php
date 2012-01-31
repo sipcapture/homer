@@ -60,6 +60,15 @@ $component = getVar('component', 'search', '', 'string');
 $userlevel =  $_SESSION['userlevel'];
 $header =  getVar('component', 0, '', 'int');
 
+/* My Nodes */
+$mynodeshost = array();
+$mynodesname = array();
+$nodes = $db->getAliases('nodes');
+foreach($nodes as $node) {
+        $mynodeshost[$node->id] = $node->host;
+        $mynodesname[$node->id] = $node->name;
+}
+
 /* SECURITY LEVEL: 1 - Admin, 2 - Manager, 3 - User, 4 - Guest*/
 $components = array("search" => ACCESS_SEARCH, "toolbox" => ACCESS_TOOLBOX, "statistic" =>ACCESS_STATS, "admin" => ACCESS_ADMIN);
 
