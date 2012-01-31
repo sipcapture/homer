@@ -149,9 +149,11 @@ $flow_from_date = getVar('from_date', NULL, 'get', 'string');
 $flow_to_date = getVar('to_date', NULL, 'get', 'string');
 $flow_from_time = getVar('from_time', NULL, 'get', 'string');
 $flow_to_time = getVar('to_time', NULL, 'get', 'string');
+$unique = getVar('unique', 0, 'get', 'int');
+$location = getVar('location', NULL, 'get', 'array');
 
-//if($db->dbconnect_homer($mynodeshost[$tnode])) {
-if(!$db->dbconnect_homer(NULL))
+/* HOMER DB */
+if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$location[0]] : NULL))
 {
     //No connect;
     exit;
@@ -197,16 +199,39 @@ if(isset($cid)) {
 if(!isset($limit)) { $limit = 100; }
 
 $localdata=array();
+$results = array();
 
+foreach($location as $value) {
 
-$query = "SELECT * "
-	."\n FROM ".HOMER_TABLE
-        ."\n WHERE ".$where." order by micro_ts ASC limit ".$limit;
-$rows = $db->loadObjectList($query);
+        $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
 
-//$query="SELECT * FROM $table WHERE $where order by micro_ts limit 100;";
-$rows = $db->loadObjectList($query);
-foreach($rows as $row) {
+        $tnode = "'".$value."' as tnode";
+        if($unique) $tnode .= ", MD5(msg) as md5sum";
+
+        $query = "SELECT *, ".$tnode
+          ."\n FROM ".HOMER_TABLE
+          ."\n WHERE ".$where." order by micro_ts ASC limit ".$limit;
+
+        $result = $db->loadObjectArray($query);
+
+        // Check if we must show up only UNIQ messages. No duplicate!
+        //only unique
+        if($unique) {
+                foreach($result as $key=>$row) {
+                           if(isset($message[$row[md5sum]])) unset($result[$key]);
+                           else $message[$row[md5sum]] = $row[node];
+                }
+        }
+
+        $results = array_merge($results,$result);
+}
+
+/* Sort it if we have more than 1 location*/
+if(count($location) > 1) usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
+
+foreach($results as $val) {
+
+  $row = (object) $val;
 
 	$data=$row->msg;
 	$size->data=strlen($data);
