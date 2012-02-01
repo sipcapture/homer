@@ -66,7 +66,7 @@ define(SERVICE_SSH_PORT, 22);
 define(SERVICE_SIP_PORT, 5060);
 
 /* PCAP Exporting: Set to '0' for Local, '1' for Cloud */
-define(CSHARK, 1);
+define(CSHARK, 0);
 define(CSHARK_API, "2468738734d4f9db0d4b65db0c5daa3d");
 define(CSHARK_URI, "http://www.cloudshark.org");
 
