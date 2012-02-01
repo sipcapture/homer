@@ -301,12 +301,54 @@ foreach($results as $val) {
 
 
 $pcapfile="HOMER_$cid.pcap";
-$fsize=strlen($buf);;
-header("Content-type: application/octet-stream");
-header("Content-Disposition: filename=\"".$pcapfile."\"");
-header("Content-length: $fsize");
-header("Cache-control: private"); 
-echo $buf;
-exit;
+
+// Check if local PCAP or CSHARK enabled
+
+if (CSHARK == 1) {
+
+   $apishark = CSHARK_URI."/api/v1/".CSHARK_API."/upload";
+   $pfile = PCAPDIR."/".$pcapfile;
+   $fileHandle = fopen($pfile, 'w') or die("Error opening file");
+   fwrite($fileHandle, $buf);
+   fclose($fileHandle); 
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_HEADER, 0);
+    curl_setopt($ch, CURLOPT_VERBOSE, 0);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/4.0 (compatible;)");
+    curl_setopt($ch, CURLOPT_URL, $apishark);
+    curl_setopt($ch, CURLOPT_POST, true);
+    // curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    // curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    // curl_setopt($ch, CURLOPT_CAINFO, getcwd() . "/opt/ca-cert-cshark.crt");
+
+    $post = array(
+        "file"=>"@$pfile",
+    );
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
+    $response = curl_exec($ch);
+
+    $json=json_decode($response,true);
+    $url = "http://www.cloudshark.org/captures/".$json[id];
+    header('Location: '.$url);
+
+    // Remove Temp
+    unlink($pfile);
+
+    exit;
+
+} else {
+
+    $fsize=strlen($buf);;
+    header("Content-type: application/octet-stream");
+    header("Content-Disposition: filename=\"".$pcapfile."\"");
+    header("Content-length: $fsize");
+    header("Cache-control: private"); 
+    echo $buf;
+    exit;
+
+} 
+
 
 ?>
