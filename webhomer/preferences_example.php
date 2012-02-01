@@ -65,10 +65,10 @@ define(SERVICE_SMTP_PORT, 25);
 define(SERVICE_SSH_PORT, 22);
 define(SERVICE_SIP_PORT, 5060);
 
-/* PCAP Exporting: Set to '0' for Local, '1' for Cloud */
+/* PCAP Exporting: Set to '0' for Local Shark, '1' for Cloud Shark  */
+/* WARNING: Internet routes or proxy defaults REQUIRED to use CloudShark */
 define(CSHARK, 0);
-define(CSHARK_API, "2468738734d4f9db0d4b65db0c5daa3d");
+define(CSHARK_API, "2468738734d4f9db0d4b65db0c5daa3d"); /* Homer generic key, request yours if needed */
 define(CSHARK_URI, "http://www.cloudshark.org");
-
 
 ?>

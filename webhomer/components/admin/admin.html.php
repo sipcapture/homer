@@ -229,10 +229,10 @@ if (NOCHECK != 1) {
 // Print subset
 $userdef = get_defined_constants(true);
         foreach($userdef['user'] as $key => $value){
-	if(!preg_match("/HOMER_|__|_HOMER|RADIUS_|DB|USER|IERROR|PW|CSHARK|GEOIP_URL/", "$key")){
+	if(!preg_match("/HOMER_|__|_HOMER|RADIUS_|DB|USER|IERROR|PW|ACCESS_|CSHARK_|GEOIP_URL/", "$key")){
         echo '<tr><td width="150">'.$key.'</td><td>';
 	echo '<button class="ui-state-default ui-button ui-widget ui-corner-all" style="width:200px;" disabled>';
-	if ($value != '0') {echo $value;} else {echo "<i>default</i>";}
+	if ($value != '0') {echo $value;} else {echo "<i>(default)</i>";}
 	echo "</button>";
 	echo '</td></tr>';
 	}
