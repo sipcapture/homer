@@ -78,11 +78,18 @@ class HomerDB {
                 if(!$this->port_logon) $this->port_logon=3306; // Set to default		      
 	
                 try {
-		      $dbstring = DATABASE.":host=".$host.";port=".$this->port_homer.";dbname=".$this->database_homer;
-		      $this->connection = new PDO($dbstring, $this->username_homer, $this->password_homer);
-		} catch (PDOException $e){
-		      die($e->getMessage());
-		}                
+                  $dbstring = DATABASE.":host=".$host.";port=".$this->port_homer.";dbname=".$this->database_homer;
+                  $this->connection = new PDO($dbstring, $this->username_homer, $this->password_homer);
+                } catch (PDOException $e){                    
+                    try {
+                          // if connection is not establish, use HOMER_HOSTNAME from configuration.php                 
+                          $host = $this->hostname_homer;  
+                          $dbstring = DATABASE.":host=".$host.";port=".$this->port_homer.";dbname=".$this->database_homer;
+                          $this->connection = new PDO($dbstring, $this->username_homer, $this->password_homer);
+                     } catch (PDOException $e){
+                          die($e->getMessage());
+                     }                                                        
+                }                
                 
 		return true;
 	}
