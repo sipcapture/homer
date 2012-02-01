@@ -105,9 +105,9 @@ if($auth->logincheck() == false){
 }
 
 /* Some extra functions  */
-function getVar($name, $default, $request, $type) {
-        $val = $_REQUEST[$name];
-        if(!$val) $val = $default;
+function getVar($name, $default, $request, $type) {        
+        // Thank Iank Blenke for this fix
+        $val = isset($_REQUEST[$name]) ? $_REQUEST[$name] : $default;        
         $type = strtoupper($type);
         if(strcmp($type,"int") == 0) intval($val);
         else if(strcmp($type,"string") == 0) return strval($val);
