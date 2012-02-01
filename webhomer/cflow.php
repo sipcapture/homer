@@ -201,7 +201,7 @@ if(count($results)==0) {
 if(count($location) > 1) usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
 /* And total duraion now: */
-$totdur = intval(($max_ts- $min_ts) / 1000000);
+$totdur = gmdate("H:i:s", intval(($max_ts- $min_ts) / 1000000));
 
 /*Our LOOP */
 foreach($results as $row) {
