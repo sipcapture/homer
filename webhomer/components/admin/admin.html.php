@@ -121,7 +121,7 @@ class HTML_Admin {
 	function displayAdminUsers($datas,$names,$types) {
 	
 	/* USERS/HOSTS/NODES  FORM */
-        $headers  = array("USERS","ALIASES","NODES"); 
+        $headers  = array("USERS","ALIASES","DB NODES"); 
         $adminGroup = array("Admin","Manager","User","Guest");
                 
         foreach($datas as $index=>$rows) {
