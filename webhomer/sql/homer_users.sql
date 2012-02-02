@@ -1,3 +1,7 @@
+--
+-- The table for Fake DNS resolving.
+--
+
 CREATE TABLE IF NOT EXISTS `homer_hosts` (
   `id` int(10) NOT NULL AUTO_INCREMENT,
   `host` varchar(80) NOT NULL,
@@ -19,7 +23,7 @@ INSERT INTO `homer_hosts` VALUES(2, '192.168.0.4', 'acme-234', 1);
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur f Tabelle `homer_logon`
+--  Users of HOMER (1 - ADMIN, 2 - Power User, 3 - User)
 --
 
 CREATE TABLE IF NOT EXISTS `homer_logon` (
@@ -39,7 +43,7 @@ INSERT INTO `homer_logon` VALUES(NULL, 'test@test.com', MD5('test123'), 1);
 -- --------------------------------------------------------
 
 --
--- Tabellenstruktur f Tabelle `homer_nodes`
+--  Databases NODES of HOMER. You can have many DB instances.
 --
 
 CREATE TABLE IF NOT EXISTS `homer_nodes` (
@@ -57,8 +61,8 @@ CREATE TABLE IF NOT EXISTS `homer_nodes` (
 -- Daten f Tabelle `homer_nodes`
 --
 
-INSERT INTO `homer_nodes` VALUES(1, '10.0.81.145', 'node01', 1);
-INSERT INTO `homer_nodes` VALUES(2, '10.0.136.234', 'node02', 2);
+INSERT INTO `homer_nodes` VALUES(1, '127.0.0.1', 'homer_db01', 1);
+INSERT INTO `homer_nodes` VALUES(2, '10.0.136.234', 'homer_db02', 1);
 
 --
 -- Table for search logging 
