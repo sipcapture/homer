@@ -27,8 +27,7 @@
  *
 */
 
-define(_HOMEREXEC, 1);
-#define(SKIPAUTH, 1);
+define('_HOMEREXEC', 1);
 
 /* MAIN CLASS modules */
 include("class/index.php");
