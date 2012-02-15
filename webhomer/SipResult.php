@@ -50,7 +50,7 @@ class SipResult
   private $cseq;
   private $diversion;
   private $reason;
-//  private $contenttype;
+  private $content_type;
   private $authorization;
   private $user_agent;
   private $source_ip;
