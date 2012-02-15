@@ -148,7 +148,9 @@ class Component {
                   $search['contact_port'] = $networkparam->contact_port = getVar('contact_port', 0, 'post', 'int');
                   $search['originator_ip'] = $networkparam->originator_ip = getVar('originator_ip', NULL, 'post', 'string');	
                   $search['originator_port'] = $networkparam->originator_port = getVar('originator_port', 0, 'post', 'int');
-                  
+
+                  /* Capture node ID. HEPv2 protocol */
+                  $search['node'] = $node = getVar('node', NULL, 'post', 'string');                  
                   $search['limit'] = $limit = getVar('limit', 0, 'post', 'int');
                   
                   //Please change protocol
