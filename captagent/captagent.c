@@ -53,9 +53,7 @@
 #include <signal.h>
 #include <time.h>
 
-#include "inih/ini.c"
-
-
+#include "minIni/minIni.h"
 #include "captagent.h"
 
 /* sender socket */
@@ -260,6 +258,27 @@ error:
 }
 
 void usage(int8_t e) {
+#ifdef USE_CONFFILE
+    printf("usage: captagent <-mvhnc> <-d dev> <-s host> <-p port>\n"
+           "             <-P pid file> <-r port|portrange> <-f filter file>\n"
+           "             <-i id> <-H 1|2> --config=<file>\n"
+           "      -h  is help/usage\n"
+           "      -v  is version information\n"
+           "      -m  is don't go into promiscuous mode\n"
+           "      -n  is don't go into background\n"
+           "      -d  is use specified device instead of the pcap default\n"
+           "      -s  is the capture server\n"
+           "      -p  is use specified port of capture server\n"
+           "      -r  is open specified capturing port or portrange instead of the default (%s)\n"
+           "      -P  is open specified pid file instead of the default (%s)\n"
+           "      -f  is the file with specific pcap filter\n"
+           "      -c  is checkout\n"
+           "      -i  is capture identifity. Must be a 16-bit number. I.e: 101\n"
+           "      -H  is HEP protocol version [1|2]. By default we use HEP version 1\n"
+           "--config  is config file to use to specify some options. Default location is [%s]\n"
+           "", DEFAULT_PORT, DEFAULT_PIDFILE, DEFAULT_CONFIG);
+	exit(e);
+#else
     printf("usage: captagent <-mvhnc> <-d dev> <-s host> <-p port>\n"
            "             <-P pid file> <-r port|portrange> <-f filter file>\n"
            "             <-i id> <-H 1|2>\n"
@@ -278,6 +297,8 @@ void usage(int8_t e) {
            "   -H  is HEP protocol version [1|2]. By default we use HEP version 1\n"
            "", DEFAULT_PORT, DEFAULT_PIDFILE);
 	exit(e);
+
+#endif
 }
 
 
@@ -361,35 +382,9 @@ error:
 }
 
 
-typedef struct
-{
-    int version;
-    const char* name;
-    const char* email;
-} configuration;
-
-static int ini_handler(void* user, const char* section, const char* name,
-                   const char* value)
-{
-    configuration* pconfig = (configuration*)user;
-
-    #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
-    if (MATCH("protocol", "version")) {
-        pconfig->version = atoi(value);
-    } else if (MATCH("user", "name")) {
-        pconfig->name = strdup(value);
-    } else if (MATCH("user", "email")) {
-        pconfig->email = strdup(value);
-    } else {
-        return 0;  /* unknown section/name, error */
-    }
-    return 1;
-}
-
-
 int main(int argc,char **argv)
 {
-        int mode, c, nofork=0, checkout=0;
+        int mode, c, nofork=0, checkout=0, heps=0;
         char errbuf[PCAP_ERRBUF_SIZE];
         pcap_t *sniffer;
         struct bpf_program filter;
@@ -404,19 +399,29 @@ int main(int argc,char **argv)
 
 	creator_pid = getpid();
 
-	configuration config;
+#ifdef USE_CONFFILE
 
-	if (ini_parse("test.ini", ini_handler, &config) < 0) {
-		printf("Can't load 'test.ini'\n");
-		return 1;
-	}
+        #define sizearray(a)  (sizeof(a) / sizeof((a)[0]))
 
-	    printf("Config loaded from 'test.ini': version=%d, name=%s, email=%s\n",
-		config.version, config.name, config.email);
-	    return 0;
+        char *conffile = NULL;
+
+        static struct option long_options[] = {
+                {"config", optional_argument, 0, 'C'},
+                {0, 0, 0, 0}
+        };
 	
-	while((c=getopt(argc, argv, "mvhncp:s:d:c:P:r:f:i:H:"))!=EOF) {
+
+        
+        while((c=getopt_long(argc, argv, "mvhncp:s:d:c:P:r:f:i:H:C:", long_options, NULL))!=-1) {
+#else
+        while((c=getopt(argc, argv, "mvhncp:s:d:c:P:r:f:i:H:C:"))!=EOF) {
+#endif
                 switch(c) {
+#ifdef USE_CONFFILE
+                        case 'C':
+                                        conffile = optarg ? optarg : DEFAULT_CONFIG;
+                                        break;
+#endif
                         case 'd':
                                         usedev = optarg;
                                         break;
@@ -461,11 +466,78 @@ int main(int argc,char **argv)
                                         break;             
                         case 'H':
                                         hepversion = atoi(optarg);
+					heps=1;
                                         break;                                                     
 	                default:
                                         abort();
                 }
         }
+
+#ifdef USE_CONFFILE
+
+        long n;
+        char ini[100];
+        char usedev_ini[100];
+        char captport_ini[100];
+        char captportr_ini[100];
+        char filter_ini[255];
+        char captid_ini[10];
+        char hep_ini[2];
+
+	if(heps == 0) {
+		n = ini_gets("main", "hep", "dummy", hep_ini, sizearray(hep_ini), conffile);
+		if(strcmp(hep_ini, "dummy") != 0) {
+			 hepversion=atoi(hep_ini);
+		}
+
+		if(hepversion == 0)
+			hepversion = 1;
+	}
+
+        if(captid == 0) {
+                n = ini_gets("main", "identifier", "dummy", captid_ini, sizearray(captid_ini), conffile);
+                if(strcmp(captid_ini, "dummy") != 0) {
+                         captid=atoi(captid_ini);
+                }
+        }
+
+        if(capt_host == NULL) {
+                n = ini_gets("main", "capture_server", "dummy", ini, sizearray(ini), conffile);
+                if(strcmp(ini, "dummy") != 0) {
+                         capt_host=ini;
+                }
+        }
+
+        if(capt_port == NULL) {
+                n = ini_gets("main", "capture_server_port", "dummy", captport_ini, sizearray(captport_ini), conffile);
+                if(strcmp(captport_ini, "dummy") != 0) {
+                         capt_port=captport_ini;
+                }
+        }
+
+        if(portrange == NULL) {
+                n = ini_gets("main", "capture_server_portrange", "dummy", captportr_ini, sizearray(captportr_ini), conffile);
+                if(strcmp(captportr_ini, "dummy") != 0) {
+                         portrange=captportr_ini;
+                }
+        }
+
+        if(filter_file == NULL) {
+                n = ini_gets("main", "filter_file", "dummy", filter_ini, sizearray(filter_ini), conffile);
+                if(strcmp(filter_ini, "dummy") != 0) {
+                         filter_file=filter_ini;
+                }
+        }
+
+
+        if(usedev == NULL) {
+                n = ini_gets("main", "device", "dummy", usedev_ini, sizearray(usedev_ini), conffile);
+                if(strcmp(usedev_ini, "dummy") != 0) {
+                         usedev=usedev_ini;
+                }
+        }
+
+#endif
 
 	if(capt_host == NULL || capt_port == NULL) {
 	        fprintf(stderr,"capture server and capture port must be defined!\n");
@@ -559,6 +631,9 @@ int main(int argc,char **argv)
                 fprintf(stdout,"Capture ID  : [%i]\n", captid);
                 fprintf(stdout,"HEP version : [%i]\n", hepversion);
                 fprintf(stdout,"Filter      : [%s]\n", filter_expr);
+#ifdef USE_CONFFILE
+                fprintf(stdout,"Config file : [%s]\n", conffile);
+#endif
                 return 0;
         }        
 
