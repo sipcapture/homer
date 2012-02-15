@@ -174,8 +174,8 @@ foreach($location as $value) {
         //only unique
         if($unique) {
                 foreach($result as $key=>$row) {
-                           if(isset($message[$row[md5sum]])) unset($result[$key]);
-                           else $message[$row[md5sum]] = $row[node];
+                           if(isset($message[$row['md5sum']])) unset($result[$key]);
+                           else $message[$row['md5sum']] = $row[node];
                 }
         }
 
