@@ -61,7 +61,7 @@ class DataTable_Config
   protected $loadingHtml             = '<p>loading data</p>';
   protected $cookieDuration          = 7200;
   protected $isSaveStateEnabled      = true;
-  protected $cookiePrefix	     = homerdata_;
+  protected $cookiePrefix	     = 'homerdata_';
 //  protected $stripClasses            = array('odd', 'even',);
   protected $stripClasses		= array();
 
