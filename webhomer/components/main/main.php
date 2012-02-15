@@ -42,11 +42,11 @@ class HomerMain {
            $title = $titles[$component];
 
 	   /* Background */
-	   if (DAYNIGHT != 0) { 
+	   if (DAYNIGHT == 1) { 
 		$date = date("G");
 	        if ($date >= 6 AND $date <= 20) { $bglogo = "bgwave.jpg"; $bgcolor = "#FFFFFF"; } 
 		else { $bglogo = "bgwave2.jpg"; $bgcolor = "#000000"; }
-	   } else if (DAYNIGHT == 3) { $bglogo = "bgwave2.jpg"; $bgcolor = "#000000"; } 
+	   } else if (DAYNIGHT == 2) { $bglogo = "bgwave2.jpg"; $bgcolor = "#000000"; } 
 	   else { $bglogo = "bgwave.jpg"; $bgcolor = "#FFFFFF"; }
 
            HTML_mainhtml::displayStart($title, $header, $task, $level, $bgcolor);

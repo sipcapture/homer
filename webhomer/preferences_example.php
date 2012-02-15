@@ -5,7 +5,7 @@ define('WEBHOMER_VERSION', "3.2.4"); /* WEBHOMER VERSION */
 
 /* Search params */
 define('COLORTAG', 0); /* color based on callid, fromtag */
-define('DAYNIGHT', 1); /* day/night based theme, 0=day, 1=rotate, 3=night */
+define('DAYNIGHT', 1); /* day/night based theme, 0=day, 1=rotate, 2=night */
 define('CHARTER', 2); /* 1: Highcharts, 2: Flot */
 define('AJAXTYPE',"POST"); /* AJAX request type can be POST or GET */
 
