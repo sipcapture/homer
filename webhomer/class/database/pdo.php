@@ -56,14 +56,13 @@ class HomerDB {
 	var $encrypt = true;		//set to true to use md5 encryption for the password
 	/* CONNECT */
 	protected $connection;		//Our connection
+  protected $resultCount;   //number of rows affected by a query. 
 
 	//connect to database
 	function dbconnect(){
-
-		if(!$this->port_logon) $this->port_logon=3306; // Set to default		      
 		
-		try {
-		      $dbstring = DATABASE.":host=".$this->hostname_logon.";port=".$this->port_logon.";dbname=".$this->database_logon;
+		try {		      
+          $dbstring = DATABASE.":host=".$this->hostname_logon. (($this->port_logon) ? ";port=".$this->port_logon : "" ) . ";dbname=".$this->database_logon;
 		      $this->connection = new PDO($dbstring, $this->username_logon, $this->password_logon);
 		} catch (PDOException $e){
 		      die($e->getMessage());
@@ -74,17 +73,16 @@ class HomerDB {
 	//connect to database
 	function dbconnect_homer($host){
 	        
-                if(!$host) $host = $this->hostname_homer;	                        
-                if(!$this->port_logon) $this->port_logon=3306; // Set to default		      
+                if(!$host) $host = $this->hostname_homer;	                                             
 	
-                try {
-                  $dbstring = DATABASE.":host=".$host.";port=".$this->port_homer.";dbname=".$this->database_homer;
+                try {                  
+                  $dbstring = DATABASE.":host=".$host.(($this->port_logon) ? ";port=".$this->port_logon : "" ).";dbname=".$this->database_homer;
                   $this->connection = new PDO($dbstring, $this->username_homer, $this->password_homer);
                 } catch (PDOException $e){                    
                     try {
                           // if connection is not establish, use HOMER_HOSTNAME from configuration.php                 
-                          $host = $this->hostname_homer;  
-                          $dbstring = DATABASE.":host=".$host.";port=".$this->port_homer.";dbname=".$this->database_homer;
+                          $host = $this->hostname_homer;                            
+                          $dbstring = DATABASE.":host=".$host.(($this->port_logon) ? ";port=".$this->port_logon : "" ).";dbname=".$this->database_homer;
                           $this->connection = new PDO($dbstring, $this->username_homer, $this->password_homer);
                      } catch (PDOException $e){
                           die($e->getMessage());
@@ -97,34 +95,37 @@ class HomerDB {
 	//prevent injection
 	function qry($query) {
 	      $this->dbconnect();
-              $args  = func_get_args();
-              $query = array_shift($args);
-              $query = str_replace("?", "%s", $query);
-              $args  = array_map($this->connection->quote, $args);
-              array_unshift($args,$query);
-              $query = call_user_func_array('sprintf',$args);              
- 	      $statement = $this->connection->prepare($query);
- 	      $statement->execute(); 	                      
-              $result = $statement->fetch();              
-              if($result){
-                      return $result;
+        $args  = func_get_args();
+        $query = array_shift($args);
+        $query = str_replace("?", "%s", $query);        
+        if(DATABASE == 'pgsql') $query = $this->toPgSql($query);
+        $args  = array_map($this->connection->quote, $args);        
+        array_unshift($args,$query);
+        $query = call_user_func_array('sprintf',$args);              
+        $statement = $this->connection->prepare($query);
+        $statement->execute(); 	                 
+        $this->resultCount = $statement->rowCount();    
+        $result = $statement->fetch();              
+        if($result){
+                return $result;
 	      }else{
 	              $error = "Error";
 	              return $result;
-              }
         }
+  }
         
         //prevent injection
 	function makeQuery($query) {
 	      $this->dbconnect();
-              $args  = func_get_args();
-              $query = array_shift($args);
-              $query = str_replace("?", "%s", $query);
-              $args  = array_map($this->connection->quote, $args);
-              array_unshift($args,$query);
-              $query = call_user_func_array('sprintf',$args);
-              return $query;
-        }
+        $args  = func_get_args();
+        $query = array_shift($args);
+        $query = str_replace("?", "%s", $query);        
+        if(DATABASE == 'pgsql') $query = $this->toPgSql($query);        
+        $args  = array_map($this->connection->quote, $args);
+        array_unshift($args,$query);
+        $query = call_user_func_array('sprintf',$args);
+        return $query;
+  }
 	
 	function getAliases($table='hosts', $key=''){
 		//conect to DB
@@ -137,37 +138,53 @@ class HomerDB {
 
 	function executeQuery($query) {			
 		//$result = mysql_query($query);
-		
+		if(DATABASE == 'pgsql') $query = $this->toPgSql($query);
 		$statement = $this->connection->prepare($query);
-		$statement->execute();
+    $result = $statement->execute();
+  	$this->resultCount = $statement->rowCount();
 
 		if(!$result) return false;
 		else return true;
 	}
 
 	function loadObjectList($query) {
-	
+
+    if(DATABASE == 'pgsql') $query = $this->toPgSql($query);
 		$statement = $this->connection->prepare($query);
 		$statement->execute();		                	  
-	        $result = $statement->fetchAll(PDO::FETCH_CLASS);
-	        return $result;	        
+    $this->resultCount = $statement->rowCount();      
+	  $result = $statement->fetchAll(PDO::FETCH_CLASS);
+	  return $result;	        
 	}
 	
 	function loadObjectArray($query) {
 	
+    if(DATABASE == 'pgsql') $query = $this->toPgSql($query);
 		$statement = $this->connection->prepare($query);
 		$statement->execute();		                	  
-	        $result = $statement->fetchAll();
-	        return $result;
+    $this->resultCount = $statement->rowCount();      
+	  $result = $statement->fetchAll();
+	  return $result;
+	}
+   
+  function toPgSql($query) {
+		$query = str_replace("`", '"', $query);
+		return preg_replace('/[Ll][Ii][Mm][Ii][Tt]\s+([0-9]+)\s*,\s*([0-9]+)/', ' LIMIT ${2} OFFSET ${1}', $query);
 	}
 
 	function loadResult($query)
 	{
+          if(DATABASE == 'pgsql') $query = $this->toPgSql($query);
         	$statement = $this->connection->prepare($query);
-        	$statement->execute();        	                        	
+        	$statement->execute();     
+          $this->resultCount = $statement->rowCount();           
         	$result = $statement->fetch(PDO::FETCH_NUM);
         	return $result[0];        	                                             	
 	}		
+   
+  function getResultCount(){
+		return $this->resultCount;
+  }
 }
 
 ?>
