@@ -173,15 +173,15 @@ class SipSearchService implements ISipService
                   $query = "SELECT id "
                        ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ". $where . $captnode ." LIMIT $limit;";
-                  $db->executeQuery($query);              
-                  $query = "SELECT FOUND_ROWS();";              
+                  $db->executeQuery($query);                               
+                  $count = max($count, $db->getResultCount());
              }
              else {
                   $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ". $where. $captnode.";";                      
-             }                          
-             $count = max($count, $db->loadResult($query)); 
+                  $count = max($count, $db->loadResult($query));                       
+             }                                       
       }
 
       return $count;
@@ -210,8 +210,8 @@ class SipSearchService implements ISipService
           //only unique
           if($unique) {
                     foreach($result as $key=>$row) {
-                           if(isset($message[$row[md5sum]])) unset($result[$key]);
-                           else $message[$row[md5sum]] = $row[node];                          
+                           if(isset($message[$row['md5sum']])) unset($result[$key]);
+                           else $message[$row['md5sum']] = $row[node];                          
                     }
           }        
           $results = array_merge($results,$result);	      
@@ -333,15 +333,14 @@ class SipSearchService implements ISipService
                        ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ". $where . $captnode ." LIMIT $limit;";
                   $db->executeQuery($query);              
-                  $query = "SELECT FOUND_ROWS();";              
+                  $count = max($count, $db->getResultCount());              
               }
               else {
                   $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
                       ."\n WHERE ({$whereSql})". $where . $captnode;                 
-              }
-              
-              $count = max($count, $db->loadResult($query));
+                  $count = max($count, $db->loadResult($query));
+              }                            
       }
 
       return $count;
@@ -372,8 +371,8 @@ class SipSearchService implements ISipService
               // Check if we must show up only UNIQ messages. No duplicate!
               if($unique) {
                     foreach($result as $key=>$row) {
-                           if(isset($message[$row[md5sum]])) unset($result[$key]);
-                           else $message[$row[md5sum]] = $row[node];
+                           if(isset($message[$row['md5sum']])) unset($result[$key]);
+                           else $message[$row['md5sum']] = $row[node];
                     }
               }
               $results = array_merge($results,$result);
