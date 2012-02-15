@@ -28,10 +28,10 @@
 */
 
 /* MAIN CLASS modules */
-define(_HOMEREXEC, 1);
+define('_HOMEREXEC', 1);
 
 /* NO AUTH for local calls */
-if($_SERVER["SERVER_ADDR"] == $_SERVER["REMOTE_ADDR"]) define(SKIPAUTH, 1);
+if($_SERVER["SERVER_ADDR"] == $_SERVER["REMOTE_ADDR"]) define('SKIPAUTH', 1);
 /* END */ 
 
 set_include_path('../');

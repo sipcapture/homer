@@ -52,7 +52,7 @@ $xhours = STAT_RANGE;
 
 <?php
 
-if(!defined(APIURL)) define(APIURL, "http://".$_SERVER['SERVER_NAME']);
+if(!defined(APIURL)) define('APIURL', "http://".$_SERVER['SERVER_NAME']);
 
 $uri = APIURL.APILOC;
 

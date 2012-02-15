@@ -75,9 +75,9 @@ $components = array("search" => ACCESS_SEARCH, "toolbox" => ACCESS_TOOLBOX, "sta
 /* Disable stats changing security level */
 if(detectIE()) {
   //$components["statistic"]=0;
-  define("IERROR",1);
+  define('IERROR',1);
 }
-else define("IERROR",0);
+else define('IERROR',0);
 
 #Extra Security check
 $security = 0;

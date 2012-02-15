@@ -33,7 +33,7 @@ echo '<script type="text/javascript" src="js/highstock.js"></script>';
 }
 
 /* fix intranet web */
-if(!defined(APIURL)) define(APIURL, "http://".$_SERVER['SERVER_NAME']);
+if(!defined(APIURL)) define('APIURL', "http://".$_SERVER['SERVER_NAME']);
 
 $uri = APIURL.APILOC;
 $request = $uri."api.php?task=statsua";

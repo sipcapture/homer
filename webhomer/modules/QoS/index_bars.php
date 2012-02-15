@@ -33,7 +33,7 @@
 include('configuration.php');
 $hours = STAT_RANGE;
 
-if(!defined(APIURL)) define(APIURL, "http://".$_SERVER['SERVER_NAME']);
+if(!defined(APIURL)) define('APIURL', "http://".$_SERVER['SERVER_NAME']);
 
 $uri = APIURL.APILOC;
 
