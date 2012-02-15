@@ -38,7 +38,6 @@ class HTML_search {
     	        
 		<script src="js/jquery.timeentry.js" type="text/javascript"></script>
 		<script src="js/jquery.mousewheel.js" type="text/javascript"></script>
-		<script src="js/jquery.timeentry-de.js" type="text/javascript"></script>
   	    	<script type="text/javascript" src="js/cookie.jquery.js"></script>
 		<script type="text/javascript" src="js/inettuts3.js?<?php echo time(); ?>"></script>
 	
