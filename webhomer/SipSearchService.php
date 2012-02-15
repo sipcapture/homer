@@ -94,18 +94,19 @@ class SipSearchService implements ISipService
   public function getAll($offset, $num, $sort, $sortDirection = 'desc', $isCount = false, $homer)
   {
 
-     global $db, $mynodeshost;             
+     global $db, $mynodeshost, $mynodesname;             
     
      $sort = $this->propertyToColumnMapping[$sort];
 
      $location = $homer->location;
 
-     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time', 'unique','b2b','limit');
+     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time', 'unique','b2b','limit','node');
      $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
      $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));
      $thour = date("H", strtotime($homer->to_date." ".$homer->to_time));
      $unique = $homer->unique;
+     $node = $homer->node;
      $b2b = $homer->b2b;
      $limit = $homer->limit;
            
@@ -165,19 +166,20 @@ class SipSearchService implements ISipService
       foreach($location as $value) { 
 
              $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+             $captnode =  isset($node) ? " AND node='".$mynodesname[$value].":".$node."'" : "";
               
              if($limit) {                           
                   /* COUNT LIMIT. Use it for BIG BIG TABLES */
                   $query = "SELECT id "
                        ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ". $where." LIMIT $limit;";
+                      ."\n WHERE ". $where . $captnode ." LIMIT $limit;";
                   $db->executeQuery($query);              
                   $query = "SELECT FOUND_ROWS();";              
              }
              else {
                   $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ". $where.";";                      
+                      ."\n WHERE ". $where. $captnode.";";                      
              }                          
              $count = max($count, $db->loadResult($query)); 
       }
@@ -193,13 +195,14 @@ class SipSearchService implements ISipService
 	foreach($location as $value) {
 	
               $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+              $captnode =  isset($node) ? " AND node='".$mynodesname[$value].":".$node."'" : "";
               
               $tnode = "'".$value."' as tnode";
               if($unique) $tnode .= ", MD5(msg) as md5sum";
               
               $query = "SELECT *,".$tnode
                 ."\n FROM ".HOMER_TABLE 
-                ."\n WHERE ". $where
+                ."\n WHERE ". $where . $captnode
                 ."\n ORDER BY {$sort} {$sortDirection} "
                 ."\n limit {$offset}, {$num}";				
                 $result = $db->loadObjectArray($query);
@@ -231,19 +234,20 @@ class SipSearchService implements ISipService
   public function searchAll($search, $columns, $offset, $num, $sort, $sortDirection = 'asc', $isCount = false, $homer, $searchtColumns, $parent)
   {
 
-     global $db, $mynodeshost;                  
+     global $db, $mynodeshost, $mynodesname;                  
      
      $whereSqlParts = array();
 
      $location = $homer->location;
      
 
-     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time','unique','b2b','limit');
+     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time','unique','b2b','limit','node');
      $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
      $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));
      $thour = date("H", strtotime($homer->to_date." ".$homer->to_time));
      $unique = $homer->unique;
+     $node = $homer->node;
      $b2b = $homer->b2b;
      $limit = $homer->limit;
 
@@ -321,19 +325,20 @@ class SipSearchService implements ISipService
       foreach($location as $value) {
 
               $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+              $captnode =  isset($node) ? " AND node='".$mynodesname[$value].":".$node."'" : "";
 
               if($limit) {                           
                   /* COUNT LIMIT. Use it for BIG BIG TABLES */
                   $query = "SELECT id "
                        ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ". $where." LIMIT $limit;";
+                      ."\n WHERE ". $where . $captnode ." LIMIT $limit;";
                   $db->executeQuery($query);              
                   $query = "SELECT FOUND_ROWS();";              
               }
               else {
                   $query = "SELECT count(id) as count"
                       ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ({$whereSql})". $where;                 
+                      ."\n WHERE ({$whereSql})". $where . $captnode;                 
               }
               
               $count = max($count, $db->loadResult($query));
@@ -352,13 +357,14 @@ class SipSearchService implements ISipService
       foreach($location as $value) {
 
               $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+              $captnode =  isset($node) ? " AND node='".$mynodesname[$value].":".$node."'" : "";
               
               $tnode = "'".$value."' as tnode";
               if($unique) $tnode .= ", MD5(msg) as md5sum";
               
               $query = "SELECT *,".$tnode
                                 ."\n FROM ".HOMER_TABLE
-                                ."\n WHERE ({$whereSql}) ". $where
+                                ."\n WHERE ({$whereSql}) ". $where . $captnode
                                 ."\n ORDER BY {$sort} {$sortDirection} "
                                 ."\n LIMIT {$offset}, {$num}"
                                 ;
