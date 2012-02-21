@@ -76,6 +76,7 @@ esac
 # Check if Install Directory Present
 if [ ! $1 ] || [ -z "$1" ] ; then
      # Prompt for installation directory or do default
+     echo "This script will download, compile and install the requirements for Homer automatically."
      echo
      echo "Enter SIPCAPTURE/Kamailio install path or 'abort' [/usr/local/kamailio]: "
      read  destination
