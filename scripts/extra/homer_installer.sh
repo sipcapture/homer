@@ -327,9 +327,9 @@ else
 fi
 	# Define database options
 	echo "HOMER TABLES SETUP..."
-	echo "Choose MYSQL Homer User (blank for default) : "
+	echo "Choose MYSQL Homer User (blank for 'homer') : "
 	read sqlhomeruser
-	echo "Choose MYSQL Homer Pass (blank for default) : "
+	echo "Choose MYSQL Homer Pass (blank for random) : "
 	stty -echo
 	read sqlhomerpassword
 	stty echo
@@ -338,8 +338,8 @@ fi
 		sqlhomeruser="homer"
 	fi
 	if [ "$sqlhomerpassword" = "" ] ; then
-		echo "Using default password... (insecure)"
-		sqlhomerpassword="sipping0"
+		echo "Using random password... "
+		sqlhomerpassword=$(cat /dev/urandom|tr -dc "a-zA-Z0-9-_\$\?"|fold -w 9|head -n 1)
 	fi
 
 	# Create MySQL Databases & Import schemas
