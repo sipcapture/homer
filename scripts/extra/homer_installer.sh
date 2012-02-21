@@ -431,15 +431,17 @@ else
 	chmod +x /opt/statistic.pl
 
 	# Set Cron: Statistic
+	echo "" > /opt/homer.cron
 	read -p "Install Statistics Cronjob? (y/N): " choice
 	case "$choice" in 
 	  y|Y ) 
-		echo "Installing cronjob..."
+		echo "Adding cronjob..."
 		statistic="/opt/statistic.pl 2>&1> /dev/null"
 		job1="5 * * * * $statistic"
-		CRON1=$(echo "$job1" | crontab -)
-		CHECK1=$(crontab -l | grep "$job1" )
-		#echo "TEST: $CHECK1" 
+		crontab -l > /opt/cron.tmp
+		echo "$job1" >> /opt/cron.tmp
+		CRON=$(cat /opt/cron.tmp | crontab -)
+		rm -rf /opt/cron.tmp
 		;;
 	  n|N|* ) echo "skipping";;
 	esac
@@ -448,16 +450,18 @@ else
 	read -p "Install Rotation Cronjob? (y/N): " choice
 	case "$choice" in
 	  y|Y )
-	        echo "Installing cronjob..."
+	        echo "Adding cronjob..."
 		# Set Cron: Partition Rotation 
 		rotate="/opt/partrotate_unixtimestamp.pl 2>&1> /dev/null"
 		job2="* 0 * * * $rotate"
-		CRON2=$(echo "$job2" | crontab -)
-		CHECK2=$(crontab -l | grep "$job2" )
-		#echo "TEST: $CHECK2" 
+		crontab -l > /opt/cron.tmp
+		echo "$job2" >> /opt/cron.tmp
+		CRON=$(cat /opt/cron.tmp | crontab - )
+		rm -rf /opt/cron.tmp
 		;;
 	  n|N|* ) echo "skipping";;
 	esac
+
 
 fi
 
