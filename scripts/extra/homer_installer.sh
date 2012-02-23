@@ -70,12 +70,11 @@ case $BITS in
 	;;
 esac
 
-hash wget 2>&- || { echo >&2 "I require wget but it's not installed.  Aborting."; };
-hash curl 2>&- || { echo >&2 "I require wget but it's not installed.  Aborting."; };
 
+func_netcheck() {
 # Check connectivity
+hash wget 2>&- || { echo >&2 "I require wget but it's not installed."; };
 wget -q --tries=10 --timeout=5 'http://www.sipcapture.org/installer.html' -O /tmp/net.check &> /dev/null 
-
 if [ ! -s /tmp/net.check ]; then 
     echo "WARNING:"
     echo "This installer requires internet connectivity to proceed further successfully."
@@ -83,13 +82,13 @@ if [ ! -s /tmp/net.check ]; then
     echo "please follow instructions in the HOW-TO for manual installation & setup"
     echo "available at http://sipcapture.org or http://homer.googlecode.com"
     echo
-    rm -rf /tmp/net.check
     #exit 1
 else
     echo "OS: Internet connectivity up"
     echo
-    rm -rf /tmp/net.check
 fi
+    rm -rf /tmp/net.check
+}
 
      # We should be good to go!
      echo
