@@ -210,8 +210,8 @@ foreach($results as $row) {
  
   /* LOCAL RESOLV */
   foreach($aliases as $alias) {
-            if($alias->host == $data->source_ip) $data->source_ip = $alias->name;
-            if($alias->host == $data->destination_ip) $data->destination_ip = $alias->name;
+            if(strtoupper($alias->host) == $data->source_ip) $data->source_ip = $alias->name;
+            if(strtoupper($alias->host) == $data->destination_ip) $data->destination_ip = $alias->name;
   }
 
   $localdata[] = $data;  
