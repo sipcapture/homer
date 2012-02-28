@@ -6,7 +6,7 @@ define('WEBHOMER_VERSION', "3.2.4"); /* WEBHOMER VERSION */
 /* Search params */
 define('COLORTAG', 0); /* color based on callid, fromtag */
 define('DAYNIGHT', 1); /* day/night based theme, 0=day, 1=rotate, 2=night */
-define('CHARTER', 2); /* 1: Highcharts, 2: Flot */
+define('CHARTER', 2); /* 1: Highcharts, 2: Flot (suggested) */
 define('AJAXTYPE',"POST"); /* AJAX request type can be POST or GET */
 
 /* CFLOW Options */
@@ -21,6 +21,8 @@ define('MESSAGE_POPUP',1); /* Modal type: 1, Browser popup: 2 */
 define('MODULES', 0);  /* Set to 1 Enable Statistic Modules */
 define('STAT_OFFSET', "");  /* Force statistic time offset, ie: "+2 hours" */
 define('STAT_RANGE', 24);  /* Statistic default span/range, in hours */
+define('ADMIN_DBSTAT', 0);  /* Display db status in admin page, MySQL only */
+define('ADMIN_NETSTAT', 0);  /* Display network packets in admin page */
 
 /* Search Results Options */
 define('RESULTS_ORDER', "asc"); 

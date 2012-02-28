@@ -116,14 +116,22 @@ class Component {
 		  }
                                   
                   HTML_Admin::displayAdminUsers($datas,$names,$types);
-                  
+
                   HTML_Admin::displayAdminInfo();                  
 
           	  $report = $this->server_report();
                  
                   HTML_Admin::displayAdminHealth($report);
                   
-       
+		  if (ADMIN_NETSTAT != 0) {
+          	  $bwstats = $this->network_report();
+                  HTML_Admin::displayNetworkStats($bwstats);
+		  }                         
+		  if (ADMIN_DBSTAT != 0) {
+          	  $bwstats = $this->database_report();
+                  HTML_Admin::displayDBStats($bwstats);
+		  }                         
+
                   HTML_Admin::displayAdminForms();
                   
           }
@@ -149,7 +157,7 @@ class Component {
 
 	  function check_service_local($service) {
 		  if ($service == "SIPCAPTURE") $service_name="-e kamailio.pid -e opensips.pid";
-		  if ($service == "MySQL") $service_name="mysqld";
+		  if ($service == "MySQL") $service_name="-e mysqld -e postgres";
 		    $check = exec('ps aux | grep -v grep | grep '.$service_name);
 		    if ($check) {
 			return true;
@@ -185,7 +193,55 @@ class Component {
 
 		    return $report;
           }
+
+
+	  function database_report() {
+
+		global $mynodeshost, $db;
+
+		$dbstats = array();
+		$query = 'SHOW STATUS';
+                $dbstat = $db->loadObjectList($query);
+		$qps=$dbstat->Questions->Value;
+		foreach ($dbstat as $row) {
+			if ($row->Value != 0) {
+				if(!preg_match("/HOMER_|Innodb|Com_|Flush_/", $row->Variable_name)) {
+					//echo $row->Variable_name . ' = ' . $row->Value . "<br>";
+					$dbstats[$row->Variable_name] =  $row->Value;
+				}
+			}
+		}
+
+		return $dbstats;
+
+	  }
+
           
+	  function network_report() {
+
+		// grab some basic network vars
+		$bwstats = array();
+	        exec('cat /proc/net/dev|grep eth',$bufr);
+	            foreach ($bufr as $buf) {
+                    	list($dev_name, $stats_list) = preg_split('/:/', $buf, 2);
+                    	$stats = preg_split('/\s+/', trim($stats_list));
+                        $bwstats["TX PACKETS"] += $stats[8];
+                        $bwstats["RX PACKETS"] += $stats[0];
+                        $bwstats["ERRORS"] += ($stats[2] + $stats[10]);
+                        $bwstats["DROPPED"] += ($stats[3] + $stats[11]);
+            	        }
+		 	exec('bwm-ng -o plain -c 1 | grep eth', $result, $status);
+		        if ($status != 0) {
+			        $bwstats[RATE] = "Not Available. Install bwn-ng";
+		        } else {
+				foreach ($result as $result2) {
+                    		$cstats = preg_split('/  +/', trim($result2));
+		        	$bwstats["RATE ".$cstats[0]] = $cstats[3]." (TX:".$cstats[1]." RX: ".$cstats[2].")";
+			}
+		    }
+
+		return $bwstats;
+	  }
 
           function showCreateUser() {
 

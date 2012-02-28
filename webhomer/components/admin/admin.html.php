@@ -296,13 +296,68 @@ $userdef = get_defined_constants(true);
                 </script>
 <?php 
 		} 
-?>
-
-
-</ul><br>
-<?php
 
 	}
+
+ function displayNetworkStats($bwstats) {
+
+	if (ADMIN_NETSTAT != 0) {	
+?>
+
+<!-- Netstats -->
+	 <li class="widget color-blue" id="widget-network">
+                <div class="widget-head"><h3>Network</h3></div>
+                <div class="widget-content">
+
+                <br><h1>Network Status</h1>
+	  <br><br>
+	  <table  class="bodystyle" cellspacing="0" width="95%">
+	  
+<?php
+ foreach ($bwstats as $key=>$value) {
+
+	echo "<tr><td>".$key."</td><td>".$value."</td></tr>";
+}
+?>
+	</table><br>
+                </div>
+        </li>
+
+
+
+<?php
+	}
+  }
+
+ function displayDBStats($dbstats) {
+
+	if (ADMIN_DBSTAT != 0) {
+?>
+
+<!-- DBstats -->
+	 <li class="widget color-blue" id="widget-database">
+                <div class="widget-head"><h3>Database</h3></div>
+                <div class="widget-content">
+
+                <br><h1>Database Status</h1>
+	  <br><br>
+	  <table  class="bodystyle" cellspacing="0" width="95%">
+	  
+<?php
+ foreach ($dbstats as $key=>$value) {
+
+	echo "<tr><td>".$key."</td><td>".$value."</td></tr>";
+}
+?>
+	</table><br>
+                </div>
+        </li>
+
+
+
+<?php
+	}
+   }
 
 	function displayAdminForms() {
 	
