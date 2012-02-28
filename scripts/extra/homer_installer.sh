@@ -7,7 +7,7 @@
 #
 # Thanks to all the good souls testing this! We SIPpreciate it!
 
-VERSION=0.6.0
+VERSION=0.6.1
 HOSTNAME=$(hostname)
 
 clear; 
@@ -242,6 +242,11 @@ case $DIST in
 	;;
     'CENTOS')
 	#read -p "DB User: " sqlusername
+	if [ ! -f "/etc/init.d/$MYSQL" ]; then
+		echo
+		echo "HALT! There is no database. Please install $MYSQL manually and retry."
+		exit 1
+	fi
 	/etc/init.d/$MYSQL start
 	read -p "MYSQL ROOT Pass: " sqlpassword
 	sqlusername=root
