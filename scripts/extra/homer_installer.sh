@@ -161,9 +161,19 @@ case $DIST in
         if [ "$VERS" = "6" ]
         then
             yum -y install $COMMON_PKGS git
+	    if [ ! "$?" == "0" ]; then
+		echo 
+		echo "HALT! Something went wrong. Please resolve the errors above and try again."
+		exit 1
+	    fi
 
         else
             yum -y install $COMMON_PKGS
+	    if [ ! "$?" == "0" ]; then
+		echo 
+		echo "HALT! Something went wrong. Please resolve the errors above and try again."
+		exit 1
+	    fi
             #install the RPMFORGE Repository
             if [ ! -f /etc/yum.repos.d/rpmforge.repo ]
             then
@@ -180,6 +190,12 @@ gpgcheck = 1
 ' > /etc/yum.repos.d/rpmforge.repo
             fi
             yum -y --enablerepo=rpmforge install git-core
+	    if [ ! "$?" == "0" ]; then
+		echo 
+		echo "HALT! Something went wrong. Please resolve the errors above and try again."
+		exit 1
+	    fi
+
         fi
         ;;
 esac
