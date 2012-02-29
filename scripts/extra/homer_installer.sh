@@ -156,7 +156,7 @@ case $DIST in
         #yum -y update
 
         VERS=$(cat /etc/redhat-release |cut -d' ' -f3 |cut -d'.' -f1)
-	cat "/tmp/centos.txt" | grep -e "5.6" -e "5.7" -q >> /dev/null
+	cat /etc/redhat-release | grep -e "5.6" -e "5.7" -q >> /dev/null
 	if [ $? == "0" ]; then
 	        PHPV="53"
 	else
