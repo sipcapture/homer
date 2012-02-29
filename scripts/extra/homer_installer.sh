@@ -7,7 +7,7 @@
 #
 # Thanks to all the good souls testing this! We SIPpreciate it!
 
-VERSION=0.6.1
+VERSION=0.6.2
 HOSTNAME=$(hostname)
 
 clear; 
@@ -156,8 +156,14 @@ case $DIST in
         #yum -y update
 
         VERS=$(cat /etc/redhat-release |cut -d' ' -f3 |cut -d'.' -f1)
+	cat "/tmp/centos.txt" | grep -e "5.6" -e "5.7" -q >> /dev/null
+	if [ $? == "0" ]; then
+	        PHPV="53"
+	else
+		PHPV=""
+	fi
 
-        COMMON_PKGS=" autoconf automake bzip2 cpio curl curl-devel curl-devel expat-devel fileutils make gcc gcc-c++ gettext-devel gnutls-devel openssl openssl-devel openssl-devel perl patch unzip wget zip zlib zlib-devel bison flex mysql mysql-server mysql-devel pcre-devel libxml2-devel sox httpd php php-gd php-json php-mysql"
+        COMMON_PKGS=" autoconf automake bzip2 cpio curl curl-devel curl-devel expat-devel fileutils make gcc gcc-c++ gettext-devel gnutls-devel openssl openssl-devel openssl-devel perl patch unzip wget zip zlib zlib-devel bison flex mysql mysql-server mysql-devel pcre-devel libxml2-devel sox httpd php$PHPV php$PHPV-gd php$PHPV-json php$PHPV-mysql"
         if [ "$VERS" = "6" ]
         then
             yum -y install $COMMON_PKGS git
