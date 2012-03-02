@@ -188,8 +188,8 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
 	
 	if(hepversion == 2) {
 	        len += sizeof(struct hep_timehdr);
-        	hep_time.tv_sec = tvb.tv_sec;          
-        	hep_time.tv_usec = tvb.tv_usec;
+        	hep_time.tv_sec = pkthdr->ts.tv_sec;          
+        	hep_time.tv_usec = pkthdr->ts.tv_usec;
         	hep_time.captid = captid;	
         }
 	
@@ -267,6 +267,7 @@ void usage(int8_t e) {
            "      -m  is don't go into promiscuous mode\n"
            "      -n  is don't go into background\n"
            "      -d  is use specified device instead of the pcap default\n"
+           "      -D  is use specified pcap file instead of a device\n"
            "      -s  is the capture server\n"
            "      -p  is use specified port of capture server\n"
            "      -r  is open specified capturing port or portrange instead of the default (%s)\n"
@@ -287,6 +288,7 @@ void usage(int8_t e) {
            "   -m  is don't go into promiscuous mode\n"
            "   -n  is don't go into background\n"
            "   -d  is use specified device instead of the pcap default\n"
+           "   -D  is use specified pcap file instead of a device\n"           
            "   -s  is the capture server\n"
            "   -p  is use specified port of capture server\n"
            "   -r  is open specified capturing port or portrange instead of the default (%s)\n"
@@ -390,7 +392,7 @@ int main(int argc,char **argv)
         struct bpf_program filter;
         struct addrinfo *ai, hints[1] = {{ 0 }};
         char *dev=NULL, *portrange=DEFAULT_PORT, *capt_host = NULL;
-        char *capt_port = NULL, *usedev = NULL;
+        char *capt_port = NULL, *usedev = NULL, *usefile = NULL;
         char* filter_file = NULL;
 	char filter_string[800] = {0};      
         FILE *filter_stream;  
@@ -412,9 +414,9 @@ int main(int argc,char **argv)
 	
 
         
-        while((c=getopt_long(argc, argv, "mvhncp:s:d:c:P:r:f:i:H:C:", long_options, NULL))!=-1) {
+        while((c=getopt_long(argc, argv, "mvhncp:s:d:D:c:P:r:f:i:H:C:", long_options, NULL))!=-1) {
 #else
-        while((c=getopt(argc, argv, "mvhncp:s:d:c:P:r:f:i:H:C:"))!=EOF) {
+        while((c=getopt(argc, argv, "mvhncp:s:d:D:c:P:r:f:i:H:C:"))!=EOF) {
 #endif
                 switch(c) {
 #ifdef USE_CONFFILE
@@ -425,6 +427,9 @@ int main(int argc,char **argv)
                         case 'd':
                                         usedev = optarg;
                                         break;
+                        case 'D':
+                                        usefile = optarg;
+                                        break;                                        
                         case 's':
                                         capt_host = optarg;
                                         break;
@@ -543,12 +548,16 @@ int main(int argc,char **argv)
 	        fprintf(stderr,"capture server and capture port must be defined!\n");
 		usage(-1);
 	}
-	
-	dev = usedev ? usedev : pcap_lookupdev(errbuf);
 
-        if (!dev) {
-            perror(errbuf);
-            exit(-1);
+	/* DEV || FILE */
+	if(!usefile) {
+
+            dev = usedev ? usedev : pcap_lookupdev(errbuf);
+            if (!dev) {
+                perror(errbuf);
+                exit(-1);
+            }
+
         }
 
         if(hepversion != 1 && hepversion != 2) {
@@ -598,10 +607,18 @@ int main(int argc,char **argv)
             }
         }
         
-        if((sniffer = pcap_open_live(dev, snaplen, promisc, to, errbuf)) == NULL) {
-                fprintf(stderr,"Failed to open packet sniffer on %s: pcap_open_live(): %s\n", dev, errbuf);
-                return 5;
-        }
+        if(dev) {        
+            if((sniffer = pcap_open_live(dev, snaplen, promisc, to, errbuf)) == NULL) {
+                    fprintf(stderr,"Failed to open packet sniffer on %s: pcap_open_live(): %s\n", dev, errbuf);
+                    return 5;
+            }
+        } else {
+            
+            if((sniffer = pcap_open_offline(usefile, errbuf)) == NULL) {   
+                    fprintf(stderr,"Failed to open packet sniffer on %s: pcap_open_offline(): %s\n", usefile, errbuf);
+                    return 6;        
+            }                
+        }        
 
         /* create filter string */
         snprintf(filter_expr, 1024, "udp port%s %s and not dst host %s %s", strchr(portrange,'-') ? "range": "" , portrange, capt_host, filter_string);
@@ -621,6 +638,7 @@ int main(int argc,char **argv)
         if(checkout) {
                 fprintf(stdout,"Version     : [%s]\n", VERSION);
                 fprintf(stdout,"Device      : [%s]\n", dev);
+                fprintf(stdout,"File        : [%s]\n", usefile);
                 fprintf(stdout,"Port range  : [%s]\n", portrange);
                 fprintf(stdout,"Capture host: [%s]\n", capt_host);
                 fprintf(stdout,"Capture port: [%s]\n", capt_port);
@@ -640,6 +658,8 @@ int main(int argc,char **argv)
         /* install packet handler for sniffer session */
         while (pcap_loop(sniffer, 0, (pcap_handler)callback, 0));
         
+
+        handler(1);
         /* we should never get here during normal operation */
         return 0;
 }
