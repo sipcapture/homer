@@ -17,6 +17,9 @@ BuildRequires:  gcc
 BuildRequires:  gcc-c++
 
 %if %{_vendor} == suse
+
+%define webroot %{_prefix}/srv/www/htdocs
+
 Requires: apache2
 Requires: apache2-mod_php5
 Requires: libmysqlclient18
@@ -61,6 +64,8 @@ Requires: php5-sysvshm
 
 %else # CentOS/Fedora
 
+%define webroot %{_localstatedir}/www/html
+
 %if 0%{?rhel} < 6 && 0%{?fedora} == 0
 %define php php53
 %else
@@ -98,22 +103,22 @@ rm -rf $RPM_BUILD_ROOT
 %doc
 %attr(755,root,root) %{_bindir}/captagent
 %{_sysconfdir}/captagent/captagent.ini
-%dir %attr(755,apache,apache) %{_localstatedir}/www/webhomer/tmp
-%dir %attr(755,apache,apache) %{_localstatedir}/www/webhomer/tmp/colors
-%{_localstatedir}/www/webhomer/modules/*
-%{_localstatedir}/www/webhomer/php-sip/*
-%{_localstatedir}/www/webhomer/js/*
-%{_localstatedir}/www/webhomer/class/*
-%{_localstatedir}/www/webhomer/components/*
-%{_localstatedir}/www/webhomer/api/*
-%{_localstatedir}/www/webhomer/api/.htaccess
-%{_localstatedir}/www/webhomer/sql/*
-%{_localstatedir}/www/webhomer/styles/*
-%{_localstatedir}/www/webhomer/images/*
-%{_localstatedir}/www/webhomer/DataTable/*
-%{_localstatedir}/www/webhomer/*.php
-%{_localstatedir}/www/webhomer/*.ico
-%{_localstatedir}/www/webhomer/*.ttf
+%dir %attr(755,apache,apache) %{webroot}/webhomer/tmp
+%dir %attr(755,apache,apache) %{webroot}/webhomer/tmp/colors
+%{webroot}/webhomer/modules/*
+%{webroot}/webhomer/php-sip/*
+%{webroot}/webhomer/js/*
+%{webroot}/webhomer/class/*
+%{webroot}/webhomer/components/*
+%{webroot}/webhomer/api/*
+%{webroot}/webhomer/api/.htaccess
+%{webroot}/webhomer/sql/*
+%{webroot}/webhomer/styles/*
+%{webroot}/webhomer/images/*
+%{webroot}/webhomer/DataTable/*
+%{webroot}/webhomer/*.php
+%{webroot}/webhomer/*.ico
+%{webroot}/webhomer/*.ttf
 
 %changelog
 * Fri Mar 9 2012 Douglas Hubler <douglas@hubler.us>
