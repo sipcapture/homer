@@ -562,11 +562,13 @@ $(document).ready(function(){
     <input id="s2" type="button" value="PCAP" onclick="window.open('pcap.php?<?php echo $pcapurl; ?>');" style="background: transparent;"/>
 <?php  if (isset($flow_from_date)) { ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
-    <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?<?php echo $complete_url ?>');"/>
+    <input type="button" value="Expand Seach" style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?<?php echo $complete_url ?>');"/>
 <?php } else {  ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
 <?php   }  ?>
+<?php if(count($rtpinfo) != 0) { ?>
     <input type="button" value="RTP info" style="opacity: 1; background: transparent;" onclick="$('#callflow<?php echo $winid; ?>').toggle(400);$('#rtpinfo<?php echo $winid; ?>').toggle(400);" />
+<?php } ?>
 </div>
 <center>
 <div id="callflow<?php echo $winid; ?>" style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
@@ -614,7 +616,7 @@ foreach ($rtpinfo as $key=>$data) {
 	//PL = <packet lost>
 	if(isset($data['PL'])) {
 		$perc = 0;
-		if(isset($data['PR'])) $perc = floor($data['PL'] * 100 / $data['PR'] * 1000) / 1000;		
+		if(isset($data['PL']) && $date['PL']<=0 ) $perc = floor($data['PL'] * 100 / $data['PR'] * 1000) / 1000;		
 		echo "<tr><td>Packet lost:</td><td>".$data['PL']." ( $perc %)</td></tr>";		
 	}
 	//JI = <jitter ms>
