@@ -330,7 +330,7 @@ if (CSHARK == 1) {
     $response = curl_exec($ch);
 
     $json=json_decode($response,true);
-    $url = "http://www.cloudshark.org/captures/".$json[id];
+    $url = CSHARK_URI."/captures/".$json[id];
     header('Location: '.$url);
 
     // Remove Temp
