@@ -175,6 +175,7 @@ if(isset($where)) $where.=" AND ";
 if(isset($cid)) {
 
 	/* CID */
+	$fileid="CID_".$cid;
 	$where .= "( callid = '".$cid."'";
 	/* Detect second B-LEG ID */
 	if($b2b) {
@@ -190,10 +191,12 @@ if(isset($cid)) {
 	$where .= ") ";
 	         
 } else if(isset($from_user)) {
+	 $fileid="FROM_".$from_user."_".mt_rand();
          $where .= "( from_user = '".$from_user."'";
          if(isset($to_user)) { $where .= " OR to_user='".$to_user."')"; } else {  $where .= ") ";}
 } else if(isset($to_user)) {
-         $where .= "( to_user = '".$to_user."')";
+         $fileid="TO_".$to_user."_".mt_rand();
+	 $where .= "( to_user = '".$to_user."')";
 }
 
 if(!isset($limit)) { $limit = 100; }
@@ -299,8 +302,7 @@ foreach($results as $val) {
 	$buf.=$pkt;
 }
 
-
-$pcapfile="HOMER_$cid.pcap";
+$pcapfile="HOMER_$fileid.pcap";
 
 // Check if local PCAP or CSHARK enabled
 
