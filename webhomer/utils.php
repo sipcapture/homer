@@ -253,20 +253,24 @@ function LoadPcap() {
 		if (! $_FILES['file']) { 
 			// show upload form if empty request
 			?>
-			<form action="utils.php?task=pcapin" method="post" enctype="multipart/form-data">
+			<div id="pcapout">
+			<form id="pcapup"  target="FileUpload" action="utils.php?task=pcapin" method="post" enctype="multipart/form-data">
 			<input type="file" name="file" id="file" /> 
 			<br />
-			<input type="submit" name="submit" value="Submit" />
+			<input type="submit" name="submit" value="Submit" onclick="$('#FileUpload').show();" />
 			</form>
+			</div>
+			<iframe id="FileUpload" name="FileUpload" src="" style="font-size: 6pt; border: none; background: transparent; display: none; height: 50px; width: 70%;"></iframe>
 			<?php 
 			exit;
 		} else {
+			echo "<font size='-1'>"; 
 			if ($_FILES["file"]["error"] > 0) {
 		 		echo "Error: " . $_FILES["file"]["error"] . "<br />"; 
 			} else {
 			        $pcapin = PCAPDIR . $_FILES["file"]["name"];
 				$fext = substr($pcapin, strripos($pcapin, '.'));
-				if ($fext != '.pcap') {echo $fext." != PCAP!"; exit;}
+				if ($fext != '.pcap') {echo $fext." != .PCAP"; exit;}
 				move_uploaded_file($_FILES["file"]["tmp_name"], $pcapin );
 				if (!file_exists($pcapin)) { echo "File Horror!"; } else {
 					exec(PCAP_AGENT.' -P /tmp/captagent_in.pid -s '.PCAP_HEP_IP.' -p '.PCAP_HEP_PORT.' -D '.$pcapin, $result, $status);
@@ -276,7 +280,8 @@ function LoadPcap() {
 						echo "PCAP succesfully imported to DB"; }
 					}
 				}
-			}
+			} 
+			echo "</font>";
 		}
 	}
 

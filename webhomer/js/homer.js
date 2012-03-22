@@ -146,10 +146,10 @@ function sipSendForm() {
 	adminAction('sipsend', 'to='+phpsip_to+'&from='+phpsip_from+'&proxy='+phpsip_prox+'&method='+phpsip_meth+'&head='+phpsip_head);
 }
 
-function adminAction(task, action) {
+function adminAction(task, action, title) {
 
    var url = "utils.php?task="+task+"&"+action;
-   
+   if (!title) {var title = 'Result:'}
 			var popup = $('<div id="popup"></div>')
                         .load(url, '', function(response, status, xhr) {
                         if (status == 'error') {
@@ -164,7 +164,7 @@ function adminAction(task, action) {
 				height: 'auto',
 				open: function(e, i) {  $(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); },	
 				close: function(e, i) { $(this).remove(); },	
-                                title: 'Result: '
+                                title: title
                         })
 			.css('zIndex', -1)
 			.focus();			
