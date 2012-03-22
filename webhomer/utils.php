@@ -257,7 +257,7 @@ function LoadPcap() {
 			<form id="pcapup"  target="FileUpload" action="utils.php?task=pcapin" method="post" enctype="multipart/form-data">
 			<input type="file" name="file" id="file" /> 
 			<br />
-			<input type="submit" name="submit" value="Submit" onclick="$('#FileUpload').show();" />
+			<input type="submit" name="submit" value="Start Upload" onclick="$('#FileUpload').show();" />
 			</form>
 			</div>
 			<iframe id="FileUpload" name="FileUpload" src="" style="font-size: 6pt; border: none; background: transparent; display: none; height: 50px; width: 70%;"></iframe>
