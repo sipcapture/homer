@@ -56,6 +56,10 @@ switch ($task) {
                 phpSip();
                 break;
 
+        case 'pcapin':
+                LoadPcap();
+                break;
+
 	case 'reconfig':
                 // reConf();
                 break;
@@ -235,6 +239,45 @@ function SaveCflow() {
 	header("Content-type: application/x-cflow-png");
 	header("Content-Disposition: attachment; filename=HOMER_CFLOW_".$_REQUEST['cflow']);
 	readfile(PCAPDIR.$_REQUEST['cflow']);
+	}
+
+}
+
+function LoadPcap() {
+	$fn = (isset($_SERVER['HTTP_X_FILENAME']) ? $_SERVER['HTTP_X_FILENAME'] : false);
+	if ($fn) {
+		// AJAX call
+		file_put_contents(PCAPDIR . $fn, file_get_contents('php://input') ); 
+	} else {
+		// FORM submit
+		if (! $_FILES['file']) { 
+			// show upload form if empty request
+			?>
+			<form action="utils.php?task=pcapin" method="post" enctype="multipart/form-data">
+			<input type="file" name="file" id="file" /> 
+			<br />
+			<input type="submit" name="submit" value="Submit" />
+			</form>
+			<?php 
+			exit;
+		} else {
+			if ($_FILES["file"]["error"] > 0) {
+		 		echo "Error: " . $_FILES["file"]["error"] . "<br />"; 
+			} else {
+			        $pcapin = PCAPDIR . $_FILES["file"]["name"];
+				$fext = substr($pcapin, strripos($pcapin, '.'));
+				if ($fext != '.pcap') {echo $fext." != PCAP!"; exit;}
+				move_uploaded_file($_FILES["file"]["tmp_name"], $pcapin );
+				if (!file_exists($pcapin)) { echo "File Horror!"; } else {
+					exec(PCAP_AGENT.' -P /tmp/captagent_in.pid -s '.PCAP_HEP_IP.' -p '.PCAP_HEP_PORT.' -D '.$pcapin, $result, $status);
+		                        if ($status != 0) { echo "Agent Not Available. Install captagent";
+		                        } else { 
+						if ($result[0]!='') { echo $result[0]; } else {
+						echo "PCAP succesfully imported to DB"; }
+					}
+				}
+			}
+		}
 	}
 
 }
