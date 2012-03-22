@@ -257,10 +257,10 @@ function LoadPcap() {
 			<form id="pcapup"  target="FileUpload" action="utils.php?task=pcapin" method="post" enctype="multipart/form-data">
 			<input type="file" name="file" id="file" /> 
 			<br />
-			<input type="submit" name="submit" value="Start Upload" onclick="$('#FileUpload').show();" />
+			<input type="submit" name="submit" value="Start Upload" onclick="$('#FileUpload').show();" /> <img src="images/pcap.png" align="middle" style="margin: -6 2 0 0;"> 
 			</form>
 			</div>
-			<iframe id="FileUpload" name="FileUpload" src="" style="font-size: 6pt; border: none; background: transparent; display: none; height: 50px; width: 70%;"></iframe>
+			<iframe id="FileUpload" name="FileUpload" src="" style="font-size: 6pt; border: none; background: transparent; display: none; height: 50px; width: auto;"></iframe>
 			<?php 
 			exit;
 		} else {
@@ -277,7 +277,7 @@ function LoadPcap() {
 		                        if ($status != 0) { echo "Agent Not Available. Install captagent";
 		                        } else { 
 						if ($result[0]!='') { echo $result[0]; } else {
-						echo "PCAP succesfully imported to DB"; }
+						echo "PCAP streamed to ".PCAP_HEP_IP.":".PCAP_HEP_PORT; }
 					}
 				}
 			} 
