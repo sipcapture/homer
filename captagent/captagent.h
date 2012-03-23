@@ -9,6 +9,14 @@ char filter_expr[1024];
 /* Ethernet / IP / UDP header IPv4 */
 const int udp_payload_offset = 14+20+8;
 
+struct ethhdr_vlan {
+	unsigned char        h_dest[6];
+	unsigned char        h_source[6];
+  uint16_t             type;		 	/* vlan type*/ 
+	uint16_t             ptt;		 	 /* priority */   
+	uint16_t             h_proto;
+};
+
 /* FreeBSD or Solaris */
 #ifndef ETH_P_IP
 #define ETH_P_IP 0x0800
