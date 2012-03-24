@@ -97,7 +97,7 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
         ethsize  = sizeof(struct ethhdr);      
         ipversion = ntohs(((struct ethhdr *)packet)->h_proto);
         
-        /* need to test VLAN IEE 802.1Q skip */
+        /* VLAN IEE 802.1Q skip */
         if(ipversion == 0x8100) {
             ipversion = ntohs(((struct ethhdr_vlan *)packet)->h_proto);
             ethsize = sizeof(struct ethhdr_vlan);
