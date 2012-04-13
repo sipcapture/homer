@@ -277,7 +277,7 @@ void usage(int8_t e) {
            "      -d  is use specified device instead of the pcap default\n"
            "      -D  is use specified pcap file instead of a device\n"
            "      -s  is the capture server\n"
-           "      -p  is use specified port of capture server. i.e. 9000\n"
+           "      -p  is use specified port of capture server. i.e. 9060\n"
            "      -r  is open specified capturing port or portrange instead of the default (%s)\n"
            "      -P  is open specified pid file instead of the default (%s)\n"
            "      -f  is the file with specific pcap filter\n"
@@ -298,7 +298,7 @@ void usage(int8_t e) {
            "   -d  is use specified device instead of the pcap default\n"
            "   -D  is use specified pcap file instead of a device\n"           
            "   -s  is the capture server\n"
-           "   -p  is use specified port of capture server. i.e. 9000\n"
+           "   -p  is use specified port of capture server. i.e. 9060\n"
            "   -r  is open specified capturing port or portrange instead of the default (%s)\n"
            "   -P  is open specified pid file instead of the default (%s)\n"
            "   -f  is the file with specific pcap filter\n"
@@ -630,7 +630,7 @@ int main(int argc,char **argv)
 
         /* create filter string */
         /* snprintf(filter_expr, 1024, "udp port%s %s and not dst host %s %s", strchr(portrange,'-') ? "range": "" , portrange, capt_host, filter_string); */        
-        /* please use the capture port not from SIP range. I.e. 9000 */
+        /* please use the capture port not from SIP range. I.e. 9060 */
         snprintf(filter_expr, 1024, "udp port%s %s and not dst port %s %s", strchr(portrange,'-') ? "range": "" , portrange, capt_port, filter_string);
 
         /* compile filter expression (global constant, see above) */
