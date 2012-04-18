@@ -324,11 +324,9 @@ function showCallFlow2(type, callid, url) {
 				settings.left = (screen.width-settings.width)/2;
 			}
 		
-			parameters = "location=" + settings.location + ",menubar=" + settings.menubar + ",height=" + settings.height + ",width=" + settings.width + ",toolbar=" + settings.toolbar + ",scrollbars=" + settings.scrollbars  + ",status=" + settings.status + ",resizable=" + settings.resizable + ",left=" + settings.left  + ",screenX=" + settings.left + ",top=" + settings.top  + ",screenY=" + settings.top;
-			var name = 'Call Flow: '+callid;
-       /* IE doesnt accept space or extra characters on the popup windows name. */
-			winObj = window.open(url, 'Callflow', parameters);
+			parameters = "location=" + settings.location + ",menubar=" + settings.menubar + ",height=" + settings.height + ",width=" + settings.width + ",toolbar=" + settings.toolbar + ",scrollbars=" + settings.scrollbars  + ",status=" + settings.status + ",resizable=" + settings.resizable + ",left=" + settings.left  + ",screenX=" + settings.left + ",top=" + settings.top  + ",screenY=" + settings.top;			       
 			
+      winObj = window.open(url, 'x'+(Math.random() * 1000).toFixed(0), parameters);			
 			winObj.focus();			
 		}
 }
