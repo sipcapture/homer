@@ -326,7 +326,8 @@ function showCallFlow2(type, callid, url) {
 		
 			parameters = "location=" + settings.location + ",menubar=" + settings.menubar + ",height=" + settings.height + ",width=" + settings.width + ",toolbar=" + settings.toolbar + ",scrollbars=" + settings.scrollbars  + ",status=" + settings.status + ",resizable=" + settings.resizable + ",left=" + settings.left  + ",screenX=" + settings.left + ",top=" + settings.top  + ",screenY=" + settings.top;
 			var name = 'Call Flow: '+callid;
-			winObj = window.open(url, name, parameters);
+       /* IE doesnt accept space or extra characters on the popup windows name. */
+			winObj = window.open(url, 'Callflow', parameters);
 			
 			winObj.focus();			
 		}
