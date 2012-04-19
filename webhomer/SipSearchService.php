@@ -100,7 +100,7 @@ class SipSearchService implements ISipService
 
      $location = $homer->location;
 
-     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time', 'unique','b2b','limit','node');
+     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time', 'unique','b2b','limit','node','logic_or');
      $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
      $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));
@@ -109,6 +109,7 @@ class SipSearchService implements ISipService
      $node = $homer->node;
      $b2b = $homer->b2b;
      $limit = $homer->limit;
+     $and_or = $homer->logic_or ? " OR " : " AND ";
            
      /*Always ON */
      if(BLEGDETECT == 1) $b2b=1;
@@ -129,23 +130,23 @@ class SipSearchService implements ISipService
 
 	   $eqlike = preg_match("/%/", $value) ? " like " : " = ";
      
-     if(preg_match("/^!/", $value)) {
-           $value =  preg_replace("/^!/", "", $value);
-           $eqlike = "!=";
-     }
+           if(preg_match("/^!/", $value)) {
+               $value =  preg_replace("/^!/", "", $value);
+               $eqlike = "!=";
+           }
 
-       /* Array search */
-     if(preg_match("/;/", $value)) {
+           /* Array search */
+           if(preg_match("/;/", $value)) {
               $dda = array();
               foreach(preg_split("/;/", $value) as $k=>$v) $dda[] = "`".$key."`".$eqlike."'".$v."'";
               $callwhere.="( ". ($eqlike == " = ") ? implode(" OR ",$dda) : implode(" AND ",$dda)." )";
-     }
-     else {
+           }
+           else {
                $mkey = "`".$key."`";
                $mvalue = "'".$value."'";
-               if($s == 1) $callwhere.=" AND ";
+               if($s == 1) $callwhere.=$and_or;
                $callwhere.= $mkey.$eqlike.$mvalue;
-     }
+           }
 
 	   if($key == "callid" && $b2b) {
                 if(BLEGCID == "x-cid") $callwhere .= "OR callid_aleg ".$eqlike.$mvalue;
@@ -241,7 +242,7 @@ class SipSearchService implements ISipService
      $location = $homer->location;
      
 
-     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time','unique','b2b','limit','node');
+     $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time','unique','b2b','limit','node','logic_or');
      $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
      $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));

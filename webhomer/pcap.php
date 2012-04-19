@@ -119,7 +119,7 @@ $pcap_packet = pack("lssllll", $pcaphdr->magic, $pcaphdr->version_major,
             $pcaphdr->version_minor, $pcaphdr->thiszone, 
             $pcaphdr->sigfigs, $pcaphdr->snaplen, $pcaphdr->network);
 
-$buf=$pcap_packet;
+
 
 //Ethernet header
 $eth_hdr = new ethernet_header();
@@ -139,7 +139,6 @@ if ($table == NULL) { $table="sip_capture"; }
 //$cid="1234567890";
 
 // Get Variables
-$cid = getVar('cid', NULL, 'get', 'string');
 $b2b = getVar('b2b', NULL, 'get', 'string');
 $from_user = getVar('from_user', NULL, 'get', 'string');
 $to_user = getVar('to_user', NULL, 'get', 'string');
@@ -151,6 +150,13 @@ $flow_from_time = getVar('from_time', NULL, 'get', 'string');
 $flow_to_time = getVar('to_time', NULL, 'get', 'string');
 $unique = getVar('unique', 0, 'get', 'int');
 $location = getVar('location', array(0), 'get', 'array');
+$text = getVar('text', 0, 'get', 'int');
+
+$cid_array = getVar('cid', NULL, 'get');
+if(is_array($cid_array)) $cid = $cid_array[0];
+else $cid = $cid_array;
+
+if(!$text) $buf=$pcap_packet;
 
 /* HOMER DB */
 if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$location[0]] : NULL))
@@ -172,31 +178,29 @@ if (isset($flow_to_date, $flow_from_time, $flow_to_time))
 if(isset($where)) $where.=" AND ";
 
 // Build Search Query
-if(isset($cid)) {
+if(isset($cid_array)) {
 
 	/* CID */
 	$fileid="CID_".$cid;
-	$where .= "( callid = '".$cid."'";
 	/* Detect second B-LEG ID */
 	if($b2b) {
 	    if(BLEGCID == "x-cid") {
         	  $query = "SELECT callid FROM ".HOMER_TABLE." WHERE ".$where." AND callid_aleg='".$cid."'";
 	          $cid_aleg = $db->loadResult($query);
+	          $cid_array[] = $cid_aleg;
 	    }
-	    else if (BLEGCID == "-0") $cid_aleg = $cid.BLEGCID;
-	    else $cid_aleg = $cid;
-
-	    $where .= " OR callid='".$cid.BLEGCID."'";
-	}
-	$where .= ") ";
-	         
+	    else if (BLEGCID == "-0") { 
+	          $cid_aleg = $cid.BLEGCID;
+	          $cid_array[] = $cid_aleg;
+            }
+	}	         
 } else if(isset($from_user)) {
 	 $fileid="FROM_".$from_user."_".mt_rand();
          $where .= "( from_user = '".$from_user."'";
-         if(isset($to_user)) { $where .= " OR to_user='".$to_user."')"; } else {  $where .= ") ";}
+         if(isset($to_user)) { $where .= " OR to_user='".$to_user."') AND "; } else {  $where .= ") AND ";}
 } else if(isset($to_user)) {
          $fileid="TO_".$to_user."_".mt_rand();
-	 $where .= "( to_user = '".$to_user."')";
+	 $where .= "( to_user = '".$to_user."') AND ";
 }
 
 if(!isset($limit)) { $limit = 100; }
@@ -211,102 +215,119 @@ foreach($location as $value) {
         $tnode = "'".$value."' as tnode";
         if($unique) $tnode .= ", MD5(msg) as md5sum";
 
-        $query = "SELECT *, ".$tnode
-          ."\n FROM ".HOMER_TABLE
-          ."\n WHERE ".$where." order by micro_ts ASC limit ".$limit;
+        foreach($cid_array as $cid) {
+            
+            $local_where = $where." ( callid = '".$cid."' )";                               
+            
+            $query = "SELECT *, ".$tnode
+                     ."\n FROM ".HOMER_TABLE
+                     ."\n WHERE ".$local_where." order by micro_ts ASC limit ".$limit;
 
-        $result = $db->loadObjectArray($query);
+            $result = $db->loadObjectArray($query);
 
-        // Check if we must show up only UNIQ messages. No duplicate!
-        //only unique
-        if($unique) {
+            // Check if we must show up only UNIQ messages. No duplicate!
+            //only unique
+            if($unique) {
                 foreach($result as $key=>$row) {
                            if(isset($message[$row[md5sum]])) unset($result[$key]);
                            else $message[$row[md5sum]] = $row[node];
                 }
-        }
+            }
 
-        $results = array_merge($results,$result);
+            $results = array_merge($results,$result);
+        }
 }
 
 /* Sort it if we have more than 1 location*/
-if(count($location) > 1) usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
+//if(count($location) > 1) 
+usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
 foreach($results as $val) {
 
-  $row = (object) $val;
+        $row = (object) $val;
 
 	$data=$row->msg;
 	$size->data=strlen($data);
 
-	//Ethernet + IP + UDP
-	$size->total=$size->ethernet + $size->ip + $size->udp;
-	//+Data
-	$size->total+=$size->data;
+	if($text) {
+	   
+	     $sec = intval($row->micro_ts / 1000000);
+	     $usec = $row->micro_ts - ($sec*1000000);
 
-	//Pcap record
-	$pcaprec_hdr = new pcaprec_hdr();
-	$pcaprec_hdr->ts_sec = intval($row->micro_ts / 1000000);  //4
-	$pcaprec_hdr->ts_usec = $row->micro_ts - ($pcaprec_hdr->ts_sec*1000000); //4   
-	$pcaprec_hdr->incl_len = $size->total; //4
-	$pcaprec_hdr->orig_len = $size->total; //4
+	     $buf .= "U ".date("Y/m/d H:i:s", $sec).".".$usec." "
+                    .$row->source_ip.":".$row->source_port." -> "
+	            .$row->destination_ip.":".$row->destination_port."\r\n";
+             $buf.=$data."\r\n";             
 
-	$pcaprec_packet = pack("llll", $pcaprec_hdr->ts_sec, $pcaprec_hdr->ts_usec, 
+	} else {
+
+    	     //Ethernet + IP + UDP
+    	     $size->total=$size->ethernet + $size->ip + $size->udp;
+    	     //+Data
+    	     $size->total+=$size->data;
+
+    	     //Pcap record
+    	     $pcaprec_hdr = new pcaprec_hdr();
+    	     $pcaprec_hdr->ts_sec = intval($row->micro_ts / 1000000);  //4
+    	     $pcaprec_hdr->ts_usec = $row->micro_ts - ($pcaprec_hdr->ts_sec*1000000); //4   
+    	     $pcaprec_hdr->incl_len = $size->total; //4
+    	     $pcaprec_hdr->orig_len = $size->total; //4
+
+    	     $pcaprec_packet = pack("llll", $pcaprec_hdr->ts_sec, $pcaprec_hdr->ts_usec, 
                        $pcaprec_hdr->incl_len, $pcaprec_hdr->orig_len);
 
-	$buf.=$pcaprec_packet;
+             $buf.=$pcaprec_packet;
 
-	//ethernet header
-	$buf.=$ethernet;
+             //ethernet header
+             $buf.=$ethernet;
 
-	//UDP
-	$udp_hdr = new udp_header();
-	$udp_hdr->src_port = $row->source_port;
-	$udp_hdr->dst_port = $row->destination_port;
-	$udp_hdr->length = $size->udp + $size->data; 
-	$udp_hdr->checksum = 0;
+             //UDP
+             $udp_hdr = new udp_header();
+             $udp_hdr->src_port = $row->source_port;
+             $udp_hdr->dst_port = $row->destination_port;
+             $udp_hdr->length = $size->udp + $size->data; 
+             $udp_hdr->checksum = 0;
 
-	//Calculate UDP checksum
-	$pseudo = pack("nnnna*", $udp_hdr->src_port,$udp_hdr->dst_port, $udp_hdr->length, $udp_hdr->checksum, $data);
-	$udp_hdr->checksum = &checksum($pseudo);
+             //Calculate UDP checksum
+             $pseudo = pack("nnnna*", $udp_hdr->src_port,$udp_hdr->dst_port, $udp_hdr->length, $udp_hdr->checksum, $data);
+             $udp_hdr->checksum = &checksum($pseudo);
 
-	//IPHEADER
+             //IPHEADER
 
-	$ipv4_hdr = new ipv4_packet();
+             $ipv4_hdr = new ipv4_packet();
+             $ip_ver = 4;
+             $ip_len = 5;
+             $ip_frag_flag = "010";
+             $ip_frag_oset = "0000000000000";
+             $ipv4_hdr->ver_len = $ip_ver . $ip_len;
+             $ipv4_hdr->tos = "00";
+             $ipv4_hdr->total_len = $size->ip + $size->udp + $size->data;;
+             $ipv4_hdr->ident = 19245;
+             $ipv4_hdr->fl_fr = 4000;
+             $ipv4_hdr->ttl = 30;
+             $ipv4_hdr->proto = 17;
+             $ipv4_hdr->checksum = 0;
+             $ipv4_hdr->src_ip = ip2long($row->source_ip);
+             $ipv4_hdr->dst_ip = ip2long($row->destination_ip);
+             $pseudo = pack('H2H2nnH4C2nNN', $ipv4_hdr->ver_len,$ipv4_hdr->tos,$ipv4_hdr->total_len, $ipv4_hdr->ident,
+                     $ipv4_hdr->fl_fr, $ipv4_hdr->ttl,$ipv4_hdr->proto,$ipv4_hdr->checksum, $ipv4_hdr->src_ip, $ipv4_hdr->dst_ip);
+             $ipv4_hdr->checksum = checksum($pseudo);
 
-	$ip_ver = 4;
-	$ip_len = 5;
-	$ip_frag_flag = "010";
-	$ip_frag_oset = "0000000000000";
-	$ipv4_hdr->ver_len = $ip_ver . $ip_len;
-	$ipv4_hdr->tos = "00";
-	$ipv4_hdr->total_len = $size->ip + $size->udp + $size->data;;
-	$ipv4_hdr->ident = 19245;
-	$ipv4_hdr->fl_fr = 4000;
-	$ipv4_hdr->ttl = 30;
-	$ipv4_hdr->proto = 17;
-	$ipv4_hdr->checksum = 0;
-	$ipv4_hdr->src_ip = ip2long($row->source_ip);
-	$ipv4_hdr->dst_ip = ip2long($row->destination_ip);
-
-	$pseudo = pack('H2H2nnH4C2nNN', $ipv4_hdr->ver_len,$ipv4_hdr->tos,$ipv4_hdr->total_len, $ipv4_hdr->ident,
-	            $ipv4_hdr->fl_fr, $ipv4_hdr->ttl,$ipv4_hdr->proto,$ipv4_hdr->checksum, $ipv4_hdr->src_ip, $ipv4_hdr->dst_ip);
-
-	$ipv4_hdr->checksum = checksum($pseudo);
-
-	$pkt = pack('H2H2nnH4C2nNNnnnna*', $ipv4_hdr->ver_len,$ipv4_hdr->tos,$ipv4_hdr->total_len, $ipv4_hdr->ident,
+             $pkt = pack('H2H2nnH4C2nNNnnnna*', $ipv4_hdr->ver_len,$ipv4_hdr->tos,$ipv4_hdr->total_len, $ipv4_hdr->ident,
         	    $ipv4_hdr->fl_fr, $ipv4_hdr->ttl,$ipv4_hdr->proto,$ipv4_hdr->checksum, $ipv4_hdr->src_ip, $ipv4_hdr->dst_ip,
 	            $udp_hdr->src_port,$udp_hdr->dst_port, $udp_hdr->length, $udp_hdr->checksum, $data);
+        }
 
 	//IP/UDP and DATA header	
 	$buf.=$pkt;
 }
 
-$pcapfile="HOMER_$fileid.pcap";
+$pcapfile="HOMER_$fileid";
+$pcapfile .= $text ? ".txt" : ".pcap";
 
 // Check if local PCAP or CSHARK enabled
 
-if (CSHARK == 1) {
+if (CSHARK == 1 && !$text) {
 
    $apishark = CSHARK_URI."/api/v1/".CSHARK_API."/upload";
    $pfile = PCAPDIR."/".$pcapfile;

@@ -219,7 +219,7 @@ class HTML_ToolBox {
 				var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";
 				url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
 
-				var furl = "cflow.php?cid="+indata.callid+
+				var furl = "cflow.php?cid[]="+indata.callid+
 				"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
 				<?php 
 				 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
@@ -305,7 +305,7 @@ class HTML_ToolBox {
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
 	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
 
-			var furl = "cflow.php?cid="+indata.callid+
+			var furl = "cflow.php?cid[]="+indata.callid+
 			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
 			<?php 
 			 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
@@ -420,7 +420,7 @@ class HTML_ToolBox {
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
 	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
 
-			var furl = "cflow.php?cid="+indata.callid+
+			var furl = "cflow.php?cid[]="+indata.callid+
 			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
 			<?php 
 			 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
@@ -546,7 +546,7 @@ class HTML_ToolBox {
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
 	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
 
-			var furl = "cflow.php?cid="+indata.callid+
+			var furl = "cflow.php?cid[]="+indata.callid+
 			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
 			<?php 
 			 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';

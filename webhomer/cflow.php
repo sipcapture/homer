@@ -95,10 +95,13 @@ $option = array(); //prevent problems
 //$cid="1234567890";
 
 //callid_aleg
-$cid = getVar('cid', NULL, 'get', 'string');
+$cid_array = getVar('cid', NULL, 'get');
 $b2b = getVar('b2b', 0, 'get', 'int');
 $popuptype = getVar('popuptype', 1, 'get', 'int');
 $unique = getVar('unique', 0, 'get', 'int');
+
+if(is_array($cid_array)) $cid = $cid_array[0];
+else $cid = $cid_array;
 
 if(BLEGDETECT == 1) $b2b =1;
 
@@ -131,8 +134,9 @@ if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$locat
 }
 
 /* CID */
-$where.="( callid = '".$cid."'";
+//$where.="( callid = '".$cid."'";
 
+$b2b = 0;
 /* Detect second B-LEG ID */
 if($b2b) {
     if(BLEGCID == "x-cid") {
@@ -146,7 +150,7 @@ if($b2b) {
     $where .= " OR callid='".$cid.BLEGCID."'";
 }
 
-$where .= ") ";
+//$where .= ") ";
 
 $localdata = array();
 $rtpinfo   = array();
@@ -163,33 +167,38 @@ foreach($location as $value) {
         $tnode = "'".$value."' as tnode";
         if($unique) $tnode .= ", MD5(msg) as md5sum";
 
-        $query = "SELECT *, ".$tnode
-          ."\n FROM ".HOMER_TABLE
-          ."\n WHERE ".$where." order by micro_ts ASC limit 100";
+        foreach($cid_array as $cid) {
 
-        //$result = $db->loadObjectList($query);
-        $result = $db->loadObjectArray($query);
+        	$local_where = $where." ( callid = '".$cid."' )";
 
-        // Check if we must show up only UNIQ messages. No duplicate!
-        //only unique
-        if($unique) {
-                foreach($result as $key=>$row) {
-                           if(isset($message[$row['md5sum']])) unset($result[$key]);
-                           else $message[$row['md5sum']] = $row[node];
-                }
-        }
+	        $query = "SELECT *, ".$tnode
+        	  ."\n FROM ".HOMER_TABLE
+	          ."\n WHERE ".$local_where." order by micro_ts ASC limit 100";
 
-        $results = array_merge($results,$result);
+	          //$result = $db->loadObjectList($query);
+	        $result = $db->loadObjectArray($query);
 
-        $querytd = "SELECT max(micro_ts) as max_ts, min(micro_ts) as min_ts "
-                  ."\n FROM ".HOMER_TABLE
-                  ."\n WHERE ".$where;
+	        // Check if we must show up only UNIQ messages. No duplicate!
+	        //only unique
+	        if($unique) {
+	                foreach($result as $key=>$row) {
+        	                   if(isset($message[$row['md5sum']])) unset($result[$key]);
+                	           else $message[$row['md5sum']] = $row[node];
+	                }
+	        }
 
-        $mm_ts_call = $db->loadObjectList($querytd);
+	        $results = array_merge($results,$result);	
 
-        /* Check if our time duration is correct */
-        if($mm_ts_call[0]->max_ts > $max_ts) $max_ts = $mm_ts_call[0]->max_ts;
-        if($min_ts == 0 || $min_ts > $mm_ts_call[0]->min_ts) $min_ts = $mm_ts_call[0]->min_ts;
+	        $querytd = "SELECT max(micro_ts) as max_ts, min(micro_ts) as min_ts "
+        	          ."\n FROM ".HOMER_TABLE
+                	  ."\n WHERE ".$where;
+
+	        $mm_ts_call = $db->loadObjectList($querytd);
+
+	        /* Check if our time duration is correct */
+	        if($mm_ts_call[0]->max_ts > $max_ts) $max_ts = $mm_ts_call[0]->max_ts;
+	        if($min_ts == 0 || $min_ts > $mm_ts_call[0]->min_ts) $min_ts = $mm_ts_call[0]->min_ts;
+	}
 }
 
 if(count($results)==0) {
@@ -198,7 +207,8 @@ if(count($results)==0) {
 }
 
 /* Sort it if we have more than 1 location*/
-if(count($location) > 1) usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
+//if(count($location) > 1) 
+usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
 /* And total duraion now: */
 $totdur = gmdate("H:i:s", intval(($max_ts- $min_ts) / 1000000));
@@ -560,6 +570,7 @@ $(document).ready(function(){
     <input id="r1" type="button" value="Reset" onclick="$('#image<?php echo $winid; ?>').zoomable();$('#image<?php echo $winid; ?>').width('<?php echo $size_x;?>').height('<?php echo $size_y;?>');"  style="background: transparent;" />
 <!--    <input id="s1" type="button" class="ui-state-default ui-corner-all" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');"  style="background: transparent;"  /> -->
     <input id="s2" type="button" value="PCAP" onclick="window.open('pcap.php?<?php echo $pcapurl; ?>');" style="background: transparent;"/>
+    <input id="s3" type="button" value="TEXT" onclick="window.open('pcap.php?<?php echo $pcapurl; ?>&text=1');" style="background: transparent;"/>
 <?php  if (isset($flow_from_date)) { ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
     <input type="button" value="Expand Seach" style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?<?php echo $complete_url ?>');"/>
