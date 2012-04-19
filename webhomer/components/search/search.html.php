@@ -564,12 +564,20 @@ class HTML_search {
                         						<input type="checkbox" name="unique" id="unique" class="checkboxdstyle" value="1" <?php if(isset($search['unique']) && $search['unique'] == 1) echo "checked"; ?> />
 			                        		</td>
                         				</tr>
+                        				<tr>
+	                	        			<td width="150" class="tablerow_two">
+		        	        	        		<label for="unique" title="Unique packet">Logic OR</label>
+                	        				</td>
+				                        	<td>
+                        						<input type="checkbox" name="logic_or" id="logic_or" class="checkboxdstyle" value="1" <?php if(isset($search['logic_or']) && $search['logic_or'] == 1) echo "checked"; ?> />
+			                        		</td>
+                        				</tr>
                                    <tr>
                                     <td width="150" class="tablerow_two">
                                        <label for="limit" title="Limit">Limit</label>
                                      </td>
                                     <td>
-                                                <input name="limit" id="limit" value="<?php if(isset($search['limit'])) echo $search['limit']; else echo "0";?>" class="ui-select ui-widget ui-state-default ui-corner-all"  />
+                                                <input name="limit" id="limit" value="<?php if(isset($search['limit'])) echo $search['limit']; else echo "100";?>" class="ui-select ui-widget ui-state-default ui-corner-all"  />
                                      </td>
                                   </tr>
 						</table><br>	
