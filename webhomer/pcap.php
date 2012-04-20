@@ -152,7 +152,7 @@ $unique = getVar('unique', 0, 'get', 'int');
 $location = getVar('location', array(0), 'get', 'array');
 $text = getVar('text', 0, 'get', 'int');
 
-$cid_array = getVar('cid', NULL, 'get');
+$cid_array = getVar('cid', NULL, 'get','array');
 if(is_array($cid_array)) $cid = $cid_array[0];
 else $cid = $cid_array;
 
