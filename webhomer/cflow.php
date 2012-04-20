@@ -95,7 +95,7 @@ $option = array(); //prevent problems
 //$cid="1234567890";
 
 //callid_aleg
-$cid_array = getVar('cid', NULL, 'get');
+$cid_array = getVar('cid', NULL, 'get','array');
 $b2b = getVar('b2b', 0, 'get', 'int');
 $popuptype = getVar('popuptype', 1, 'get', 'int');
 $unique = getVar('unique', 0, 'get', 'int');
