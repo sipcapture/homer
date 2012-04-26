@@ -191,7 +191,7 @@ foreach($location as $value) {
 
 	        $querytd = "SELECT max(micro_ts) as max_ts, min(micro_ts) as min_ts "
         	          ."\n FROM ".HOMER_TABLE
-                	  ."\n WHERE ".$where;
+                	  ."\n WHERE ".$local_where;
 
 	        $mm_ts_call = $db->loadObjectList($querytd);
 
