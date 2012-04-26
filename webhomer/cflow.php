@@ -189,15 +189,16 @@ foreach($location as $value) {
 
 	        $results = array_merge($results,$result);	
 
+          /* 
 	        $querytd = "SELECT max(micro_ts) as max_ts, min(micro_ts) as min_ts "
         	          ."\n FROM ".HOMER_TABLE
                 	  ."\n WHERE ".$local_where;
 
 	        $mm_ts_call = $db->loadObjectList($querytd);
 
-	        /* Check if our time duration is correct */
 	        if($mm_ts_call[0]->max_ts > $max_ts) $max_ts = $mm_ts_call[0]->max_ts;
 	        if($min_ts == 0 || $min_ts > $mm_ts_call[0]->min_ts) $min_ts = $mm_ts_call[0]->min_ts;
+          */
 	}
 }
 
@@ -210,13 +211,13 @@ if(count($results)==0) {
 //if(count($location) > 1) 
 usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
-/* And total duraion now: */
-$totdur = gmdate("H:i:s", intval(($max_ts- $min_ts) / 1000000));
-
 /*Our LOOP */
 foreach($results as $row) {
 
   $data = (object) $row;
+  
+  /* Min ts */
+  if(!$min_ts) $min_ts = $data->micro_ts;
  
   /* LOCAL RESOLV */
   foreach($aliases as $alias) {
@@ -298,6 +299,12 @@ foreach($results as $row) {
  
 
 }
+
+if(!$max_ts) $max_ts = $data->micro_ts;
+
+/* And total duraion now: */
+$totdur = gmdate("H:i:s", intval(($max_ts- $min_ts) / 1000000));
+
 
 // Calculate size of image:
 
