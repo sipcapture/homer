@@ -671,6 +671,8 @@ class SipDataTable extends DataTable_DataTable
                             'type': '".AJAXTYPE."',
                             'url': sSource,
                             'data': aoData,
+                            'timeout': '".AJAXTIMEOUT."',
+                            'error': function(){ alert(\"Timeout error. Please take small timeintervall\") },
                             'success': fnCallback
                     } );
             }
