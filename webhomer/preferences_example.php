@@ -1,13 +1,14 @@
 <?php
 
-define('CONFIG_VERSION', "1.0.8"); /* Please ALWAYS include CONFIGVERSION */
-define('WEBHOMER_VERSION', "3.2.4"); /* WEBHOMER VERSION */
+define('CONFIG_VERSION', "1.0.9"); /* Please ALWAYS include CONFIGVERSION */
+define('WEBHOMER_VERSION', "3.2.5"); /* WEBHOMER VERSION */
 
 /* Search params */
 define('COLORTAG', 0); /* color based on callid, fromtag */
 define('DAYNIGHT', 1); /* day/night based theme, 0=day, 1=rotate, 2=night */
 define('CHARTER', 2); /* 1: Highcharts, 2: Flot (suggested) */
 define('AJAXTYPE',"POST"); /* AJAX request type can be POST or GET */
+define('AJAXTIMEOUT',60000); /* AJAX timeout request. Milliseconds! */
 
 /* CFLOW Options */
 define('CFLOW_CLEANUP', 1); /* Automatic Cleanup of old Cflow images */
