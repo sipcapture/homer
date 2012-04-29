@@ -16,6 +16,7 @@ define('CFLOW_TIMEZONE', "Europe/Amsterdam"); /* Timezone that will display in C
 define('CFLOW_DIRECTION', 0); /* Callflow Direction */
 define('CFLOW_FACTOR', 1);   /* IMAGE size factor. The value can be float */
 define('CFLOW_POPUP',1); /* Modal type: 1, Browser popup: 2 */
+define('CFLOW_HPORT', 0); /* Activate host:port mapping for localhost action */
 define('MESSAGE_POPUP',1); /* Modal type: 1, Browser popup: 2 */
 
 /* Modules Options */
@@ -31,7 +32,8 @@ define('AUTOCOMPLETE', 0);  /* Enables autocomplete in FROM & TO fiels- WARNING:
 
 /* BLEG DETECTION */
 define('BLEGDETECT', 0); /* always detect BLEG leg in CFLOW/PCAP*/
-define('BLEGCID', "x-cid"); /* default Homer style.*/
+define('BLEGCID', "x-cid"); /* options: x-cid, b2b */
+define('BLEGTAIL', "-0"); /* session-ID correlation suffix, required for b2b mode */
 
 /* Database: mysql */
 define('DATABASE',"mysql");

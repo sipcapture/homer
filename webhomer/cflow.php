@@ -100,10 +100,13 @@ $b2b = getVar('b2b', 0, 'get', 'int');
 $popuptype = getVar('popuptype', 1, 'get', 'int');
 $unique = getVar('unique', 0, 'get', 'int');
 
+// Expand cflow to B2B-mode and full time search
+$full = getVar('full', 0, 'get', 'int');
+
 if(is_array($cid_array)) $cid = $cid_array[0];
 else $cid = $cid_array;
 
-if(BLEGDETECT == 1) $b2b =1;
+if(BLEGDETECT == 1 && $full == 1) { $b2b = 1; } else { $b2b = 0; }
 
 //Crop Search Parameters, if any
 $flow_from_date = getVar('from_date', NULL, 'get', 'string');
@@ -134,23 +137,25 @@ if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$locat
 }
 
 /* CID */
-//$where.="( callid = '".$cid."'";
 
-$b2b = 0;
-/* Detect second B-LEG ID */
-if($b2b) {
-    if(BLEGCID == "x-cid") {
-          $query = "SELECT callid FROM ".HOMER_TABLE
-                  ."\n WHERE ".$where." AND callid_aleg='".$cid."'";
-          $cid_aleg = $db->loadResult($query);    
-    }
-    else if (BLEGCID == "-0") $cid_aleg = $cid.BLEGCID;    
-    else $cid_aleg = $cid;
-  
-    $where .= " OR callid='".$cid.BLEGCID."'";
-}
+//$b2b = 0;
 
-//$where .= ") ";
+/* Detect second B-LEG ID and CID style */
+	if($b2b) {
+           switch (BLEGCID) {
+               default:
+                        $cid_aleg = $cid;
+               case "x-cid":
+                        $query = "SELECT callid FROM ".HOMER_TABLE
+                        ."\n WHERE ".$where." AND callid_aleg='".$cid."'";
+                        $cid_aleg = $db->loadResult($query);
+	       case "b2b":
+                        if (BLEGTAIL) $cid_aleg = $cid.BLEGTAIL;
+
+           }
+
+           // $where .= " OR (callid='".$cid_aleg."')";
+        }
 
 $localdata = array();
 $rtpinfo   = array();
@@ -170,6 +175,8 @@ foreach($location as $value) {
         foreach($cid_array as $cid) {
 
         	$local_where = $where." ( callid = '".$cid."' )";
+		/* Append B-LEG if set */
+		if (BLEGCID && $full == 1) $local_where .= " OR (callid='".$cid_aleg."')";
 
 	        $query = "SELECT *, ".$tnode
         	  ."\n FROM ".HOMER_TABLE
@@ -221,8 +228,17 @@ foreach($results as $row) {
  
   /* LOCAL RESOLV */
   foreach($aliases as $alias) {
-            if(strtoupper($alias->host) == $data->source_ip) $data->source_ip = $alias->name;
-            if(strtoupper($alias->host) == $data->destination_ip) $data->destination_ip = $alias->name;
+	$aliasup = strtoupper($alias->host);
+        if (CFLOW_HPORT && strpos($alias->host, ':') == false) {
+        $aliasup .= ":5060";
+        }
+
+        if($aliasup == $data->source_ip) $data->source_ip = $alias->name;
+        if($aliasup == $data->destination_ip) $data->destination_ip = $alias->name;
+
+	if($aliasup == $data->source_ip.":".$data->source_port) $data->source_ip = $alias->name;
+        if($aliasup == $data->destination_ip.":".$data->destination_port) $data->destination_ip = $alias->name;
+
   }
 
   $localdata[] = $data;  
@@ -233,8 +249,15 @@ foreach($results as $row) {
   else if($data->method == "200" && preg_match('/INVITE/',$data->cseq)) $statuscall = 4;
   else if(preg_match('/[3][0-9][0-9]/',$data->method)) $statuscall = 5;
   
-  $hosts[$data->source_ip] = 1;
-  $hosts[$data->destination_ip] = 1;
+  if (CFLOW_HPORT) {
+  	$hosts[$data->source_ip.":".$data->source_port] = 1;
+  	$hosts[$data->destination_ip.":".$data->destination_port] = 1;
+	$ssrc = ":".$data->source_port;
+  } else {
+  	$hosts[$data->source_ip] = 1;
+  	$hosts[$data->destination_ip] = 1;
+	$ssrc = "";
+  }
   
   /* RTP INFO */
   if(preg_match('/=/',$data->rtp_stat)) {
@@ -253,47 +276,47 @@ foreach($results as $row) {
  // SIP SWITCHES
 
  if(preg_match('/asterisk/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "asterisk";
+     $uac[$data->source_ip.$ssrc] = "asterisk";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/FreeSWITCH/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "freeswitch";
+     $uac[$data->source_ip.$ssrc] = "freeswitch";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/kamailio|openser|opensip|sip-router/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "openser";
+     $uac[$data->source_ip.$ssrc] = "openser";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/softx/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "sipgateway";
+     $uac[$data->source_ip.$ssrc] = "sipgateway";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/sipXecs/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "sipxecs";
+     $uac[$data->source_ip.$ssrc] = "sipxecs";
      $uac[$data->user_agent] = $data->user_agent;
  }
 
  // SIP ENDPOINTS
 
  else if(preg_match('/x-lite|Bria|counter-path/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "counterpath";
+     $uac[$data->source_ip.$ssrc] = "counterpath";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/WG4k/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "worldgate";
+     $uac[$data->source_ip.$ssrc] = "worldgate";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/Eki/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "ekiga";
+     $uac[$data->source_ip.$ssrc] = "ekiga";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/snom/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "snom";
+     $uac[$data->source_ip.$ssrc] = "snom";
      $uac[$data->user_agent] = $data->user_agent;
  }
 
  else {
-      $uac[$data->source_ip] = "sipgateway";
+      $uac[$data->source_ip.$ssrc] = "sipgateway";
       $uac[$data->user_agent] = $data->user_agent;
  }
  
@@ -403,10 +426,15 @@ foreach($localdata as $data) {
   $tstamp =  date("Y-m-d H:i:s.".$milliseconds." T",$data->micro_ts / 1000000);
 
 
-  $fromip = $data->source_ip;
-  $fromport = $data->source_port;
-  
-  $toip = $data->destination_ip;
+  if (CFLOW_HPORT) {
+  $fromip = $data->source_ip.":".$data->source_port;;
+  $toip = $data->destination_ip.":".$data->destination_port;;
+  } else {
+  $fromip = $data->source_ip;;
+  $toip = $data->destination_ip;;
+  }
+
+  $fromport = $data->source_port;  
   $toport = $data->destination_port;
 
   //Direction
@@ -580,7 +608,7 @@ $(document).ready(function(){
     <input id="s3" type="button" value="TEXT" onclick="window.open('pcap.php?<?php echo $pcapurl; ?>&text=1');" style="background: transparent;"/>
 <?php  if (isset($flow_from_date)) { ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
-    <input type="button" value="Expand Seach" style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?<?php echo $complete_url ?>');"/>
+    <input type="button" value="Expand Seach" style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?<?php echo $complete_url ?>&full=1');"/>
 <?php } else {  ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
 <?php   }  ?>
