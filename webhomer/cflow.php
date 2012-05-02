@@ -218,6 +218,16 @@ if(count($results)==0) {
 //if(count($location) > 1) 
 usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
+/* host:host check */
+if (CFLOW_HPORT) {
+        if (CFLOW_HPORT==2) {
+                foreach($results as $row) {
+                        $data = (object) $row;
+                        if($data->source_ip==$data->destination_ip){ $CFLOW_HPORT=1; }
+                } 
+	} else { $CFLOW_HPORT=1; }
+}
+
 /*Our LOOP */
 foreach($results as $row) {
 
@@ -229,7 +239,7 @@ foreach($results as $row) {
   /* LOCAL RESOLV */
   foreach($aliases as $alias) {
 	$aliasup = strtoupper($alias->host);
-        if (CFLOW_HPORT && strpos($alias->host, ':') == false) {
+        if ($CFLOW_HPORT && strpos($alias->host, ':') == false) {
         $aliasup .= ":5060";
         }
 
@@ -249,7 +259,7 @@ foreach($results as $row) {
   else if($data->method == "200" && preg_match('/INVITE/',$data->cseq)) $statuscall = 4;
   else if(preg_match('/[3][0-9][0-9]/',$data->method)) $statuscall = 5;
   
-  if (CFLOW_HPORT) {
+  if ($CFLOW_HPORT) {
   	$hosts[$data->source_ip.":".$data->source_port] = 1;
   	$hosts[$data->destination_ip.":".$data->destination_port] = 1;
 	$ssrc = ":".$data->source_port;
@@ -426,7 +436,7 @@ foreach($localdata as $data) {
   $tstamp =  date("Y-m-d H:i:s.".$milliseconds." T",$data->micro_ts / 1000000);
 
 
-  if (CFLOW_HPORT) {
+  if ($CFLOW_HPORT) {
   $fromip = $data->source_ip.":".$data->source_port;;
   $toip = $data->destination_ip.":".$data->destination_port;;
   } else {
