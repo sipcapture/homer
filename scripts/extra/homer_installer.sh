@@ -7,7 +7,7 @@
 #
 # Thanks to all the good souls testing this! We SIPpreciate it!
 
-VERSION=0.6.3
+VERSION=0.6.4
 HOSTNAME=$(hostname)
 
 clear; 
