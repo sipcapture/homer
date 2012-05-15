@@ -448,7 +448,7 @@ else
 	sed -i -e "s#$orig#$dest#g" $WEBROOT/webhomer/configuration.php
 
 	# Adjust webroot folder location for paths in configuration.php
- 	sed -i -e "s/http:\/\/localhost//g" $WEBROOT/webhomer/configuration.php
+   # sed -i -e "s/http:\/\/localhost//g" $WEBROOT/webhomer/configuration.php
 
 	# Ugly ways but still ways 
 	if [ "$DIST" == "CENTOS" ]; then
