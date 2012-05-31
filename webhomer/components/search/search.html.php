@@ -469,7 +469,8 @@ class HTML_search {
 					</td>
 					<td>
 						<input type="text" name="callid" id="callid" class="textfieldstyle2" size="40" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
-
+             &nbsp;
+            <input type="button" size="4" value="C" onClick="document.homer.callid.value='';" class="ui-button ui-widget ui-state-default ui-corner-all">
 					</td>
                                 </tr>
                                 <tr>					
