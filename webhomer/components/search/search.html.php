@@ -503,8 +503,12 @@ class HTML_search {
 								<td class="tablerow_two">
 								<?php
 
-								    if(isset($search['location'])) $locarray = $search['location'];
-								    else $locarray = array();
+                    if(isset($search['location']) && count($search['location'])) $locarray = $search['location'];
+                    else {
+                            if(defined('DEFAULTDBNODE')) $locarray[DEFAULTNODE]=DEFAULTNODE;
+                            else $locarray = array();
+                    }
+
 								    foreach ($nodes as $key=>$value) {
                                                                 ?>								
 								        <input type="checkbox" class="checkboxstyle2" name="location[]" id="location" value="<?php echo $key?>" <?php if(in_array($key,$locarray)) echo "checked"; ?>><?php echo $value;?>
