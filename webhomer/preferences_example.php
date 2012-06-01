@@ -76,6 +76,9 @@ define('CSHARK', 0);
 define('CSHARK_API', "2468738734d4f9db0d4b65db0c5daa3d"); /* Homer generic key, request yours if needed */
 define('CSHARK_URI', "http://www.cloudshark.org");
 
+/* SKIP AUTH for CFLOW/PCAP */
+define('SKIPCFLOWAUTH', 0);
+
 /* PCAP Import: Streams to your HEP capture socket, REQUIRES working captagent! specify path if needed */
 // define('PCAP_AGENT', 'captagent');
 // define('PCAP_HEP_IP', "192.168.1.100");
