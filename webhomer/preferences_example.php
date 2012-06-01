@@ -79,6 +79,9 @@ define('CSHARK_URI', "http://www.cloudshark.org");
 /* SKIP AUTH for CFLOW/PCAP */
 define('SKIPCFLOWAUTH', 0);
 
+/*DEFAULT SELECTED DB NODE */
+define('DEFAULTDBNODE',1);
+  
 /* PCAP Import: Streams to your HEP capture socket, REQUIRES working captagent! specify path if needed */
 // define('PCAP_AGENT', 'captagent');
 // define('PCAP_HEP_IP', "192.168.1.100");
