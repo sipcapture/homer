@@ -505,7 +505,7 @@ class HTML_search {
 
                     if(isset($search['location']) && count($search['location'])) $locarray = $search['location'];
                     else {
-                            if(defined('DEFAULTDBNODE')) $locarray[DEFAULTNODE]=DEFAULTNODE;
+                            if(defined('DEFAULTDBNODE')) $locarray[DEFAULTDBNODE]=DEFAULTDBNODE;
                             else $locarray = array();
                     }
 
