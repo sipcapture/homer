@@ -100,7 +100,7 @@ if($component == "login" && $task == "do") {
 
 //if((!defined("SKIPAUTH") || $component != "login") && $auth->logincheck() == false){
 if($auth->logincheck() == false){
-  if(preg_match('/(cflow.php|pcap.php)/', $_SERVER['SCRIPT_URL'])) die('Login at first');
+  if((!defined('SKIPCFLOWAUTH') || SKIPCFLOWAUTH == 0) && preg_match('/(cflow.php|pcap.php)$/', $_SERVER['SCRIPT_URL'])) die('Login at first');
 	$component = "login";	
 	$security = 1;
 }
