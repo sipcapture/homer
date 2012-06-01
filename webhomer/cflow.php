@@ -273,12 +273,15 @@ foreach($results as $row) {
   if(preg_match('/=/',$data->rtp_stat)) {
   
    $tmparray = array();
+   $newArray = array();
+   
    if(substr_count($data->rtp_stat, ";") > substr_count($data->rtp_stat, ","))
                                  $tmparray = preg_split('/\;/', $data->rtp_stat);
    else $tmparray = preg_split('/\,/', $data->rtp_stat);
 
   
-	 $newArray = array();
+	 
+   $newArray['PACKET']=$data->method.". SOURCE: ".$data->source_ip.":".$data->source_port;
 	
 	foreach ($tmparray as $lineNum => $line) {
 		list($key, $value) = explode("=", $line);
@@ -666,8 +669,8 @@ foreach($click as $cds) {
 if(count($rtpinfo) == 0) echo "No rtp info available for this call";
 
 //https://supportforums.cisco.com/servlet/JiveServlet/downloadBody/18784-102-3-46597/spaPhoneP-RTP-Stat_09292011.pdf
-echo "<table border='1'>";
 foreach ($rtpinfo as $key=>$data) {
+  echo "Info # ".($key+1)." FROM:". $data['PACKET']."<table border='1'>";
 	//PS = <packet sent>
 	if(isset($data['PS'])) echo "<tr><td>Packets sent:</td><td>".$data['PS']."</td></tr>";
 	//OS = <packet recieved>
@@ -697,8 +700,8 @@ foreach ($rtpinfo as $key=>$data) {
 	if(isset($data['EN'])) echo "<tr><td>Encoder:</td><td>".$data['EN']."</td></tr>";
 	//DE = <decoder>
 	if(isset($data['DE'])) echo "<tr><td>Decoder:</td><td>".$data['DE']."</td></tr>";
+  echo "</table><BR>";
 }
-echo "</table>";
 ?>
 </div>
 </center>
