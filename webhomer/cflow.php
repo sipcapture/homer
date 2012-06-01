@@ -271,8 +271,15 @@ foreach($results as $row) {
   
   /* RTP INFO */
   if(preg_match('/=/',$data->rtp_stat)) {
-	$newArray = array();
-	$tmparray = explode(",", $data->rtp_stat);
+  
+   $tmparray = array();
+   if(substr_count($data->rtp_stat, ";") > substr_count($data->rtp_stat, ","))
+                                 $tmparray = preg_split('/\;/', $data->rtp_stat);
+   else $tmparray = preg_split('/\,/', $data->rtp_stat);
+
+  
+	 $newArray = array();
+	
 	foreach ($tmparray as $lineNum => $line) {
 		list($key, $value) = explode("=", $line);
 		$newArray[$key] = $value;
