@@ -518,7 +518,7 @@ class HTML_ToolBox {
                         	var apicall = "api/api.php?task=search&field=METHOD&value="+filterpool4+"&limit="+itempool4;
 			} else if (filterpool4 == "IP") {
 				filterpool4=  $('#sipcode4').val(); 
-                        	var apicall = "api/api.php?task=last&ip="+strtoupper(filterpool4)+"&limit="+itempool4;
+                        	var apicall = "api/api.php?task=last&ip="+filterpool4.toUpperCase()+"&limit="+itempool4;
 			} else if (filterpool4 == "UID") {
 				filterpool4=  $('#sipcode4').val(); 
                         	var apicall = "api/api.php?task=last&user="+filterpool4+"&limit="+itempool4;
