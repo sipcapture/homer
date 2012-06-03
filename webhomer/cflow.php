@@ -92,8 +92,6 @@ function arrow ( $image, $color, $x, $y, $d = -1)
 $tnode=1;
 $option = array(); //prevent problems
 
-//$cid="1234567890";
-
 //callid_aleg
 $cid_array = getVar('cid', NULL, 'get','array');
 $b2b = getVar('b2b', 0, 'get', 'int');
@@ -236,19 +234,34 @@ foreach($results as $row) {
   /* Min ts */
   if(!$min_ts) $min_ts = $data->micro_ts;
  
-  /* LOCAL RESOLV */
+  $IPv6 = (strpos($data->source_ip, '::') === 0);
+  // $IPv4 = (strpos($data->source_ip, '.') > 0);
+
+  /* LOCAL RESOLV to name */
   foreach($aliases as $alias) {
 	$aliasup = strtoupper($alias->host);
         if ($CFLOW_HPORT && strpos($alias->host, ':') == false) {
         $aliasup .= ":5060";
         }
 
-        if($aliasup == $data->source_ip) $data->source_ip = $alias->name;
-        if($aliasup == $data->destination_ip) $data->destination_ip = $alias->name;
+        if($aliasup == $data->source_ip) $data->source_name = $alias->name;
+        if($aliasup == $data->destination_ip) $data->destination_name = $alias->name;
 
-	if($aliasup == $data->source_ip.":".$data->source_port) $data->source_ip = $alias->name;
-        if($aliasup == $data->destination_ip.":".$data->destination_port) $data->destination_ip = $alias->name;
+	if($aliasup == $data->source_ip.":".$data->source_port) $data->source_name = $alias->name;
+        if($aliasup == $data->destination_ip.":".$data->destination_port) $data->destination_name = $alias->name;
+  }
 
+  // compress IPv6 addresses for UI
+  if (IPv6) {
+        $data->source_ip = inet_ntop(inet_pton($data->source_ip));
+        $data->destination_ip = inet_ntop(inet_pton($data->destination_ip));
+  }
+  // replace IP with Aliases, if any is set
+  if ($data->source_name) {
+        $data->source_ip = $data->source_name;
+  }
+  if ($data->destination_name) {
+        $data->destination_ip = $data->destination_name;
   }
 
   $localdata[] = $data;  
@@ -399,7 +412,7 @@ $color['darkgray'] = imagecolorallocate($im, 0x90, 0x90, 0x90);
 $color['navy']     = imagecolorallocate($im, 0x00, 0x00, 0x80);
 $color['darknavy'] = imagecolorallocate($im, 0x00, 0x00, 0x50);
 
-imagefilledrectangle($im, 0, 0, $size_x, $size_y, $c1);
+imagefilledrectangle($im, 00, 0, $size_x, $size_y, $c1);
 
 //Generate HOSTs
 foreach($hosts as $key=>$value) {
@@ -416,7 +429,7 @@ foreach($hosts as $key=>$value) {
 
       imagelinethick($im, $line_x1, $line_y1, $line_x1, $line_y2, $color['gray2'], 2*CFLOW_FACTOR);
       //Put header!
-      imagettftext ( $im, $fontSize, 0, $line_x1  - (strlen($key) * 3*CFLOW_FACTOR), $line_y1 - 10, $color['darknavy'], $fontFace, $key);
+      imagettftext ( $im, $fontSize, 0, $line_x1  - (strlen($key) * 2*CFLOW_FACTOR), $line_y1 - 10, $color['darknavy'], $fontFace, $key);
 
       if($line_x1 > $max_x) $max_x = $line_x1;
 
@@ -562,7 +575,6 @@ foreach($localdata as $data) {
   }
     
   imagettftext ( $im, $fontSize, 0, $tportx, $arrow_y1 + 6, $color['gray3'], $fontFace, $portf);
-
   imagettftext ( $im, $fontSize, 0, $fportx, $arrow_y1 + 6, $color['gray3'], $fontFace, $portt);
 
   $arrow_y1+=$arrow_step;
