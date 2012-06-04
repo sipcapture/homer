@@ -468,18 +468,17 @@ class HTML_search {
 						<label for="callid" title="Callid">Call-ID / Session-ID</label>
 					</td>
 					<td>
-						<input type="text" name="callid" id="callid" class="textfieldstyle2" size="40" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
-             &nbsp;
-            <input type="button" size="4" value="C" onClick="document.homer.callid.value='';" class="ui-button ui-widget ui-state-default ui-corner-all">
+						<input type="text" name="callid" id="callid" class="textfieldstyle2" size="30" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
+						<input type="button" onClick="document.homer.callid.value='';" value="X" alt="clear" class="checkboxstyle" width="5" style="position:relative;border:0;width:5px;"/>
 					</td>
                                 </tr>
                                 <tr>					
 					<td width="150" class="tablerow_two">
                                                 <label for="callid_aleg" title="Search Call-ID as bridged call">B2B Call-ID</label>
                                         </td>
-                                        <td>
+                                        <td width="50">
                                                 <input type="checkbox" name="b2b" id="b2b" class="checkboxdstyle2" value="1" <?php if(isset($search['b2b']) && $search['b2b'] == 1) echo "checked"; ?>/>
-                                        </td>
+					</td>
 
 				</tr>
 			</table>
