@@ -49,12 +49,14 @@ class HomerAuthentication extends Authentication {
     
     radius_put_attr($radius,RADIUS_USER_NAME,$username); 
     radius_put_attr($radius,RADIUS_USER_PASSWORD,$password); 
+    radius_put_attr($radius,RADIUS_NAS_IDENTIFIER,RADIUS_IDENTIFIER);
 
     $response = radius_send_request($radius);
     
     if($response == RADIUS_ACCESS_ACCEPT) {
 	  $_SESSION['loggedin'] = $username;
-	  $_SESSION['userlevel'] = "3";  //All radius clients are users
+    $_SESSION['userlevel'] = RADIUS_USERLEVEL;  //User level set in settings.php
+
     
           return true;
     }
