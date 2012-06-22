@@ -1,5 +1,5 @@
 Name:           homer
-Version:        0.9
+Version:        3.0.0
 Release:        1%{?dist}
 Summary:        SIP capture server
 
@@ -24,6 +24,7 @@ Requires: apache2
 Requires: apache2-mod_php5
 Requires: libmysqlclient18
 Requires: libmysqlclient_r18
+# technically mysql can be on another server
 Requires: mysql-community-server
 Requires: mysql-community-server-client
 Requires: php5-mysql
@@ -73,6 +74,7 @@ Requires: php5-sysvshm
 %endif
 
 Requires: mysql
+# technically mysql can be on another server
 Requires: mysql-server
 Requires: httpd
 Requires: %{php}
