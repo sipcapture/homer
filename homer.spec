@@ -69,6 +69,8 @@ Requires: php5-sysvshm
 
 %if 0%{?rhel} < 6 && 0%{?fedora} == 0
 %define php php53
+# part of json support is now in php-common
+Requires: %{php}-json
 %else
 %define php php
 %endif
@@ -79,7 +81,6 @@ Requires: mysql-server
 Requires: httpd
 Requires: %{php}
 Requires: %{php}-gd
-Requires: %{php}-json
 Requires: %{php}-mysql
 %endif
 
