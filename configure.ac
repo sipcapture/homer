@@ -1,5 +1,5 @@
 AC_PREREQ(2.57)
-AC_INIT(homer, 3.0.0, homer-discuss@googlegroups.com)
+AC_INIT(homer, 3.2.5, homer-discuss@googlegroups.com)
 AC_CONFIG_AUX_DIR(config)
 AM_INIT_AUTOMAKE(foreign tar-ustar)
 AC_PROG_CC
