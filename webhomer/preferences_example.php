@@ -1,13 +1,14 @@
 <?php
 
-define('CONFIG_VERSION', "1.0.8"); /* Please ALWAYS include CONFIGVERSION */
-define('WEBHOMER_VERSION', "3.2.4"); /* WEBHOMER VERSION */
+define('CONFIG_VERSION', "1.0.9"); /* Please ALWAYS include CONFIGVERSION */
+define('WEBHOMER_VERSION', "3.2.5"); /* WEBHOMER VERSION */
 
 /* Search params */
 define('COLORTAG', 0); /* color based on callid, fromtag */
 define('DAYNIGHT', 1); /* day/night based theme, 0=day, 1=rotate, 2=night */
 define('CHARTER', 2); /* 1: Highcharts, 2: Flot (suggested) */
 define('AJAXTYPE',"POST"); /* AJAX request type can be POST or GET */
+define('AJAXTIMEOUT',60000); /* AJAX timeout request. Milliseconds! */
 
 /* CFLOW Options */
 define('CFLOW_CLEANUP', 1); /* Automatic Cleanup of old Cflow images */
@@ -15,6 +16,7 @@ define('CFLOW_TIMEZONE', "Europe/Amsterdam"); /* Timezone that will display in C
 define('CFLOW_DIRECTION', 0); /* Callflow Direction */
 define('CFLOW_FACTOR', 1);   /* IMAGE size factor. The value can be float */
 define('CFLOW_POPUP',1); /* Modal type: 1, Browser popup: 2 */
+define('CFLOW_HPORT', 0); /* Column/Host Mode = Plain: 0, +Port: 1, Auto-Select: 2 */
 define('MESSAGE_POPUP',1); /* Modal type: 1, Browser popup: 2 */
 
 /* Modules Options */
@@ -30,7 +32,8 @@ define('AUTOCOMPLETE', 0);  /* Enables autocomplete in FROM & TO fiels- WARNING:
 
 /* BLEG DETECTION */
 define('BLEGDETECT', 0); /* always detect BLEG leg in CFLOW/PCAP*/
-define('BLEGCID', "x-cid"); /* default Homer style.*/
+define('BLEGCID', "x-cid"); /* options: x-cid, b2b */
+define('BLEGTAIL', "-0"); /* session-ID correlation suffix, required for b2b mode */
 
 /* Database: mysql */
 define('DATABASE',"mysql");
@@ -72,5 +75,17 @@ define('SERVICE_SIP_PORT', 5060);
 define('CSHARK', 0);
 define('CSHARK_API', "2468738734d4f9db0d4b65db0c5daa3d"); /* Homer generic key, request yours if needed */
 define('CSHARK_URI', "http://www.cloudshark.org");
+
+/* SKIP AUTH for CFLOW/PCAP */
+define('SKIPCFLOWAUTH', 0);
+
+/*DEFAULT SELECTED DB NODE */
+define('DEFAULTDBNODE',1);
+  
+/* PCAP Import: Streams to your HEP capture socket, REQUIRES working captagent! specify path if needed */
+// define('PCAP_AGENT', 'captagent');
+// define('PCAP_HEP_IP', "192.168.1.100");
+// define('PCAP_HEP_PORT', "5060");
+
 
 ?>

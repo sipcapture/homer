@@ -56,6 +56,10 @@ switch ($task) {
                 phpSip();
                 break;
 
+        case 'pcapin':
+                LoadPcap();
+                break;
+
 	case 'reconfig':
                 // reConf();
                 break;
@@ -235,6 +239,56 @@ function SaveCflow() {
 	header("Content-type: application/x-cflow-png");
 	header("Content-Disposition: attachment; filename=HOMER_CFLOW_".$_REQUEST['cflow']);
 	readfile(PCAPDIR.$_REQUEST['cflow']);
+	}
+
+}
+
+function LoadPcap() {
+	$fn = (isset($_SERVER['HTTP_X_FILENAME']) ? $_SERVER['HTTP_X_FILENAME'] : false);
+	if ($fn) {
+		// AJAX call
+		file_put_contents(PCAPDIR . $fn, file_get_contents('php://input') ); 
+	} else {
+		// FORM submit
+		if (! $_FILES['file']) { 
+			// show upload form if empty request
+			?>
+			<div id="pcapout">
+			<form id="pcapup"  target="FileUpload" action="utils.php?task=pcapin" method="post" enctype="multipart/form-data">
+			<input type="file" name="file" id="file" /> <br>
+			<input type="checkbox" name="HEP2" id="HEP2" value="1"> PCAP Timestamps
+			<br /><br />
+			<input type="submit" name="submit" value="Start Upload" onclick="$('#FileUpload').show();" /> <img src="images/pcap.png" align="middle" style="margin: -6 2 0 0;"> 
+			</form>
+			</div>
+			<iframe id="FileUpload" name="FileUpload" src="" style="font-size: 6pt; border: none; background: transparent; display: none; height: 50px; width: auto;"></iframe>
+			<?php 
+			exit;
+		} else {
+			echo "<font size='-1'>"; 
+			if ($_FILES["file"]["error"] > 0) {
+		 		echo "Error: " . $_FILES["file"]["error"] . "<br />"; 
+			} else {
+			        $pcapin = PCAPDIR . $_FILES["file"]["name"];
+				if(isset($_POST['HEP2']) &&
+   					$_POST['HEP2'] == '1')
+					{ $hepv = " -H 2 -i 101"; } else { $hepv = ""; }
+				$fext = substr($pcapin, strripos($pcapin, '.'));
+				if ($fext != '.pcap') {echo $fext." != .PCAP"; exit;}
+				move_uploaded_file($_FILES["file"]["tmp_name"], $pcapin );
+				if (!file_exists($pcapin)) { echo "File Horror!"; } else {
+					exec(PCAP_AGENT.' -P /tmp/captagent_in.pid -s '.PCAP_HEP_IP.' -p '.PCAP_HEP_PORT.' -D '.$pcapin.' '.$hepv, $result, $status);
+		                        if ($status != 0) { echo "Agent Not Available. Install captagent";
+		                        } else { 
+						if ($result[0]!='') { echo $result[0]; } else {
+						echo "PCAP streamed to ".PCAP_HEP_IP.":".PCAP_HEP_PORT; 
+						if ($hepv != "") { echo "<br>PCAP Time Preserved"; }
+						}
+					}
+				}
+			} 
+			echo "</font>";
+		}
 	}
 
 }

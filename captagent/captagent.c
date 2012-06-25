@@ -66,7 +66,7 @@ int hepversion = 1;
 void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *packet) 
 {
 
-        struct ethhdr *ethernet;
+        //struct ethhdr *ethernet;
         struct ip *iph;
 
         struct udphdr *udph;
@@ -74,9 +74,10 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
         struct hep_hdr hdr;
         struct hep_timehdr hep_time;
         struct hep_iphdr hep_ipheader;
-        unsigned int len=0, iphdr_len=0, buflen=0, ipversion;
+        unsigned int len=0, iphdr_len=0, buflen=0, ethsize=0;
         struct timeval tvb;
         struct timezone tz;
+        uint16_t ipversion;        
         
 #ifdef USE_IPV6
         struct hep_ip6hdr hep_ip6header;        
@@ -92,16 +93,23 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
                                  
         /* this packet is too small to make sense */
         if (pkthdr->len < udp_payload_offset) return;
-
-        ethernet = (struct ethhdr *) (packet);
+        
+        ethsize  = sizeof(struct ethhdr);      
+        ipversion = ntohs(((struct ethhdr *)packet)->h_proto);
+        
+        /* VLAN IEE 802.1Q skip */
+        if(ipversion == 0x8100) {
+            ipversion = ntohs(((struct ethhdr_vlan *)packet)->h_proto);
+            ethsize = sizeof(struct ethhdr_vlan);
+        }
 
         gettimeofday( &tvb, &tz );
                 
-        switch ((ipversion=ntohs(ethernet->h_proto))) {        
+        switch (ipversion) {        
 
                 case ETH_P_IP: {
                     len  = sizeof(struct hep_iphdr);
-                    iph = (struct ip*)(packet + sizeof(struct ethhdr));
+                    iph = (struct ip*)(packet + ethsize );
                     iphdr_len = iph->ip_hl*4;
                     /* if we don't have ipv4 */
                     if(iph->ip_v != 4)  
@@ -112,7 +120,7 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
 
 #ifdef USE_IPV6
         	case ETH_P_IPV6: {
-                    ip6h = (struct ip6_hdr *) (packet + sizeof(struct ethhdr));
+                    ip6h = (struct ip6_hdr *) (packet + ethsize);
                     iphdr_len = sizeof(struct ip6_hdr);
             
                     /* if we don't have ipv6 header */
@@ -168,7 +176,7 @@ void callback(u_char *useless, const struct pcap_pkthdr *pkthdr, const u_char *p
         }                                                                                                                 
         
         /* and sizeof of ethdr */
-        iphdr_len += sizeof (struct ethhdr);
+        iphdr_len += ethsize;
         /*if packet too small. second check in*/
         if(pkthdr->len < (iphdr_len + sizeof(struct udphdr))) return;
 	/*copy udp header */
@@ -269,7 +277,7 @@ void usage(int8_t e) {
            "      -d  is use specified device instead of the pcap default\n"
            "      -D  is use specified pcap file instead of a device\n"
            "      -s  is the capture server\n"
-           "      -p  is use specified port of capture server\n"
+           "      -p  is use specified port of capture server. i.e. 9060\n"
            "      -r  is open specified capturing port or portrange instead of the default (%s)\n"
            "      -P  is open specified pid file instead of the default (%s)\n"
            "      -f  is the file with specific pcap filter\n"
@@ -290,7 +298,7 @@ void usage(int8_t e) {
            "   -d  is use specified device instead of the pcap default\n"
            "   -D  is use specified pcap file instead of a device\n"           
            "   -s  is the capture server\n"
-           "   -p  is use specified port of capture server\n"
+           "   -p  is use specified port of capture server. i.e. 9060\n"
            "   -r  is open specified capturing port or portrange instead of the default (%s)\n"
            "   -P  is open specified pid file instead of the default (%s)\n"
            "   -f  is the file with specific pcap filter\n"
@@ -621,7 +629,9 @@ int main(int argc,char **argv)
         }        
 
         /* create filter string */
-        snprintf(filter_expr, 1024, "udp port%s %s and not dst host %s %s", strchr(portrange,'-') ? "range": "" , portrange, capt_host, filter_string);
+        /* snprintf(filter_expr, 1024, "udp port%s %s and not dst host %s %s", strchr(portrange,'-') ? "range": "" , portrange, capt_host, filter_string); */        
+        /* please use the capture port not from SIP range. I.e. 9060 */
+        snprintf(filter_expr, 1024, "udp port%s %s and not dst port %s %s", strchr(portrange,'-') ? "range": "" , portrange, capt_port, filter_string);
 
         /* compile filter expression (global constant, see above) */
         if (pcap_compile(sniffer, &filter, filter_expr, 0, 0) == -1) {

@@ -1,4 +1,4 @@
-#define VERSION "0.8.4"
+#define VERSION "0.8.5"
 #define DEFAULT_CONFIG "/usr/local/etc/captagent/captagent.ini"
 #define DEFAULT_PIDFILE  "/var/run/captagent.pid"
 #define DEFAULT_PORT "5060"
@@ -8,6 +8,14 @@ char filter_expr[1024];
 
 /* Ethernet / IP / UDP header IPv4 */
 const int udp_payload_offset = 14+20+8;
+
+struct ethhdr_vlan {
+	unsigned char        h_dest[6];
+	unsigned char        h_source[6];
+  uint16_t             type;		 	/* vlan type*/ 
+	uint16_t             ptt;		 	 /* priority */   
+	uint16_t             h_proto;
+};
 
 /* FreeBSD or Solaris */
 #ifndef ETH_P_IP

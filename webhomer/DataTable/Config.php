@@ -58,7 +58,7 @@ class DataTable_Config
   protected $scrollLoadGap;
   protected $paginationType          = self::PAGINATION_TYPE_FULL_NUMBERS;
   protected $languageConfig;
-  protected $loadingHtml             = '<p>loading data</p>';
+  protected $loadingHtml             = '<div align="center"><img src="images/search.gif" border=0>loading data... please wait</div>';  
   protected $cookieDuration          = 7200;
   protected $isSaveStateEnabled      = true;
   protected $cookiePrefix	     = 'homerdata_';

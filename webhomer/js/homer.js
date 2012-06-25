@@ -146,10 +146,10 @@ function sipSendForm() {
 	adminAction('sipsend', 'to='+phpsip_to+'&from='+phpsip_from+'&proxy='+phpsip_prox+'&method='+phpsip_meth+'&head='+phpsip_head);
 }
 
-function adminAction(task, action) {
+function adminAction(task, action, title) {
 
    var url = "utils.php?task="+task+"&"+action;
-   
+   if (!title) {var title = 'Result:'}
 			var popup = $('<div id="popup"></div>')
                         .load(url, '', function(response, status, xhr) {
                         if (status == 'error') {
@@ -164,7 +164,7 @@ function adminAction(task, action) {
 				height: 'auto',
 				open: function(e, i) {  $(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); },	
 				close: function(e, i) { $(this).remove(); },	
-                                title: 'Result: '
+                                title: title
                         })
 			.css('zIndex', -1)
 			.focus();			
@@ -249,7 +249,7 @@ function showCallFlow(id,table,tnode,location,unique,tag,callid,fdate,tdate, ft,
 
   if ( callid.match(/-0$/) )  { callid = callid.replace(/-0$/,""); }
 
-	  var url = "cflow.php?cid="+callid;
+	  var url = "cflow.php?cid[]="+callid;
 
 	  if (fdate != undefined) {
 		  url += "&from_time="+ft+"&to_time="+tt;
@@ -290,28 +290,42 @@ function showCallFlow2(type, callid, url) {
 
 		var posx = $('body').data('posx');
                 var posy = $('body').data('posy');	  
-		
+                
+                var g = document.getElementsByName('cid[]');
+		var found = 0;
+
+	        for(var i = 0; i < g.length; i++)
+        	{
+	            if(g[i].checked) {
+			var cellText = $('#'+g[i].id).parent().parent().find("a[alt=\"callflow\"]").text();		
+			if(found == 0 && cellText != callid) {  url += "&cid[]="+cellText; found = 1; }
+                	g[i].checked=false;
+	            }
+        	}
+
 		if(type == 1) {
-			var cflow = $('<div id="cflow"></div>').load(url, '', function(response, status, xhr) {
-	             	   if (status == 'error') { 
-					var msg = "Sorry but there was an error: ";
-		        	        $(".content").html(msg + xhr.status + " " + xhr.statusText);
-		                }}).dialog({
-	        	        	autoOpen: true,
-        	        	        // autoResize: true,
-					stack: true,
-					width: 'auto',
-					position: [posx-300, posy-80],
-					// height: 'auto',
-					height: 500,
-					minHeight: 300,
-					close: function(e, i) { $(this).remove(); },	
-					open: function(e, i) {  
-					$(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight"); 
-					//	$(this).css({ height: 'auto' });
-					},	
-	        	                title: 'Call Flow: '+callid
-				}).css('zIndex', -1).focus();	
+			var cflow = jQuery('<div id="cflow"></div>').load(url, '', function(response, status, xhr) {
+                           if (status == 'error') {
+                                        var msg = "Sorry but there was an error: ";
+                                        $(".content").html(msg + xhr.status + " " + xhr.statusText);
+                                }}).dialog({
+                                        autoOpen: true,
+                                        // autoResize: true,
+                                        stack: true,
+                                        width: 'auto',
+                                        position: [posx-300, posy-80],
+                                        // height: 'auto',
+                                        height: 500,
+                                        minHeight: 300,
+                                        close: function(e, i) { $(this).remove(); },
+                                        open: function(e, i) {
+						$(this).css({ overflow: 'hidden' });
+	                                        //$(this).css({ height: 'auto' });
+	                                        //$(this).parents(".ui-dialog:first").find(".ui-dialog-titlebar").addClass("ui-state-highlight");
+                                       		 //$(this).css({ height: 'auto' });
+                                        },
+                                        title: 'Call Flow: '+callid
+                                }).css('zIndex', -1).focus();
 		}
 		else {
 		
@@ -325,11 +339,9 @@ function showCallFlow2(type, callid, url) {
 			}
 		
 			parameters = "location=" + settings.location + ",menubar=" + settings.menubar + ",height=" + settings.height + ",width=" + settings.width + ",toolbar=" + settings.toolbar + ",scrollbars=" + settings.scrollbars  + ",status=" + settings.status + ",resizable=" + settings.resizable + ",left=" + settings.left  + ",screenX=" + settings.left + ",top=" + settings.top  + ",screenY=" + settings.top;
-			var name = 'Call Flow: '+callid;
-			winObj = window.open(url, name, parameters);
-			
+			var winObj = window.open(url, 'x'+(Math.random() * 10000).toFixed(0), parameters);			
 			winObj.focus();			
-		}
+		}                		
 }
 
 function popMessage2(type, id, url) {

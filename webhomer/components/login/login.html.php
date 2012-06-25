@@ -69,7 +69,7 @@ body {
 <body>
 
 <?php 
-	if(CONFIG_VERSION != "1.0.8") echo "<h2><font color='red'>Your CONFIG FILE is outdated!</font></h2>"; 
+	if(CONFIG_VERSION != "1.0.9") echo "<h2><font color='red'>Your CONFIG FILE is outdated!</font></h2>"; 
  	if (!is_writable(PCAPDIR)) {echo "<h2><font color='red'>Your TMP directory is not writeable!</font></h2>";}
 ?>
 

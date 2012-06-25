@@ -92,15 +92,19 @@ function arrow ( $image, $color, $x, $y, $d = -1)
 $tnode=1;
 $option = array(); //prevent problems
 
-//$cid="1234567890";
-
 //callid_aleg
-$cid = getVar('cid', NULL, 'get', 'string');
+$cid_array = getVar('cid', NULL, 'get','array');
 $b2b = getVar('b2b', 0, 'get', 'int');
 $popuptype = getVar('popuptype', 1, 'get', 'int');
 $unique = getVar('unique', 0, 'get', 'int');
 
-if(BLEGDETECT == 1) $b2b =1;
+// Expand cflow to B2B-mode and full time search
+$full = getVar('full', 0, 'get', 'int');
+
+if(is_array($cid_array)) $cid = $cid_array[0];
+else $cid = $cid_array;
+
+if(BLEGDETECT == 1 && $full == 1) { $b2b = 1; } else { $b2b = 0; }
 
 //Crop Search Parameters, if any
 $flow_from_date = getVar('from_date', NULL, 'get', 'string');
@@ -131,22 +135,25 @@ if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$locat
 }
 
 /* CID */
-$where.="( callid = '".$cid."'";
 
-/* Detect second B-LEG ID */
-if($b2b) {
-    if(BLEGCID == "x-cid") {
-          $query = "SELECT callid FROM ".HOMER_TABLE
-                  ."\n WHERE ".$where." AND callid_aleg='".$cid."'";
-          $cid_aleg = $db->loadResult($query);    
-    }
-    else if (BLEGCID == "-0") $cid_aleg = $cid.BLEGCID;    
-    else $cid_aleg = $cid;
-  
-    $where .= " OR callid='".$cid.BLEGCID."'";
-}
+//$b2b = 0;
 
-$where .= ") ";
+/* Detect second B-LEG ID and CID style */
+	if($b2b) {
+           switch (BLEGCID) {
+               default:
+                        $cid_aleg = $cid;
+               case "x-cid":
+                        $query = "SELECT callid FROM ".HOMER_TABLE
+                        ."\n WHERE ".$where." AND callid_aleg='".$cid."'";
+                        $cid_aleg = $db->loadResult($query);
+	       case "b2b":
+                        if (BLEGTAIL) $cid_aleg = $cid.BLEGTAIL;
+
+           }
+
+           // $where .= " OR (callid='".$cid_aleg."')";
+        }
 
 $localdata = array();
 $rtpinfo   = array();
@@ -163,33 +170,41 @@ foreach($location as $value) {
         $tnode = "'".$value."' as tnode";
         if($unique) $tnode .= ", MD5(msg) as md5sum";
 
-        $query = "SELECT *, ".$tnode
-          ."\n FROM ".HOMER_TABLE
-          ."\n WHERE ".$where." order by micro_ts ASC limit 100";
+        foreach($cid_array as $cid) {
 
-        //$result = $db->loadObjectList($query);
-        $result = $db->loadObjectArray($query);
+        	$local_where = $where." ( callid = '".$cid."' )";
+		/* Append B-LEG if set */
+		if (BLEGCID && $full == 1) $local_where .= " OR (callid='".$cid_aleg."')";
 
-        // Check if we must show up only UNIQ messages. No duplicate!
-        //only unique
-        if($unique) {
-                foreach($result as $key=>$row) {
-                           if(isset($message[$row['md5sum']])) unset($result[$key]);
-                           else $message[$row['md5sum']] = $row[node];
-                }
-        }
+	        $query = "SELECT *, ".$tnode
+        	  ."\n FROM ".HOMER_TABLE
+	          ."\n WHERE ".$local_where." order by micro_ts ASC limit 100";
 
-        $results = array_merge($results,$result);
+	          //$result = $db->loadObjectList($query);
+	        $result = $db->loadObjectArray($query);
 
-        $querytd = "SELECT max(micro_ts) as max_ts, min(micro_ts) as min_ts "
-                  ."\n FROM ".HOMER_TABLE
-                  ."\n WHERE ".$where;
+	        // Check if we must show up only UNIQ messages. No duplicate!
+	        //only unique
+	        if($unique) {
+	                foreach($result as $key=>$row) {
+        	                   if(isset($message[$row['md5sum']])) unset($result[$key]);
+                	           else $message[$row['md5sum']] = $row[node];
+	                }
+	        }
 
-        $mm_ts_call = $db->loadObjectList($querytd);
+	        $results = array_merge($results,$result);	
 
-        /* Check if our time duration is correct */
-        if($mm_ts_call[0]->max_ts > $max_ts) $max_ts = $mm_ts_call[0]->max_ts;
-        if($min_ts == 0 || $min_ts > $mm_ts_call[0]->min_ts) $min_ts = $mm_ts_call[0]->min_ts;
+          /* 
+	        $querytd = "SELECT max(micro_ts) as max_ts, min(micro_ts) as min_ts "
+        	          ."\n FROM ".HOMER_TABLE
+                	  ."\n WHERE ".$local_where;
+
+	        $mm_ts_call = $db->loadObjectList($querytd);
+
+	        if($mm_ts_call[0]->max_ts > $max_ts) $max_ts = $mm_ts_call[0]->max_ts;
+	        if($min_ts == 0 || $min_ts > $mm_ts_call[0]->min_ts) $min_ts = $mm_ts_call[0]->min_ts;
+          */
+	}
 }
 
 if(count($results)==0) {
@@ -198,20 +213,55 @@ if(count($results)==0) {
 }
 
 /* Sort it if we have more than 1 location*/
-if(count($location) > 1) usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
+//if(count($location) > 1) 
+usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
-/* And total duraion now: */
-$totdur = gmdate("H:i:s", intval(($max_ts- $min_ts) / 1000000));
+/* host:host check */
+if (CFLOW_HPORT) {
+        if (CFLOW_HPORT==2) {
+                foreach($results as $row) {
+                        $data = (object) $row;
+                        if($data->source_ip==$data->destination_ip){ $CFLOW_HPORT=1; }
+                } 
+	} else { $CFLOW_HPORT=1; }
+}
 
 /*Our LOOP */
 foreach($results as $row) {
 
   $data = (object) $row;
+  
+  /* Min ts */
+  if(!$min_ts) $min_ts = $data->micro_ts;
  
-  /* LOCAL RESOLV */
+  $IPv6 = (strpos($data->source_ip, '::') === 0);
+  // $IPv4 = (strpos($data->source_ip, '.') > 0);
+
+  /* LOCAL RESOLV to name */
   foreach($aliases as $alias) {
-            if(strtoupper($alias->host) == $data->source_ip) $data->source_ip = $alias->name;
-            if(strtoupper($alias->host) == $data->destination_ip) $data->destination_ip = $alias->name;
+	$aliasup = strtoupper($alias->host);
+        if ($CFLOW_HPORT && strpos($alias->host, ':') == false) {
+        $aliasup .= ":5060";
+        }
+
+        if($aliasup == $data->source_ip) $data->source_name = $alias->name;
+        if($aliasup == $data->destination_ip) $data->destination_name = $alias->name;
+
+	if($aliasup == $data->source_ip.":".$data->source_port) $data->source_name = $alias->name;
+        if($aliasup == $data->destination_ip.":".$data->destination_port) $data->destination_name = $alias->name;
+  }
+
+  // compress IPv6 addresses for UI
+  if (IPv6) {
+        $data->source_ip = inet_ntop(inet_pton($data->source_ip));
+        $data->destination_ip = inet_ntop(inet_pton($data->destination_ip));
+  }
+  // replace IP with Aliases, if any is set
+  if ($data->source_name) {
+        $data->source_ip = $data->source_name;
+  }
+  if ($data->destination_name) {
+        $data->destination_ip = $data->destination_name;
   }
 
   $localdata[] = $data;  
@@ -222,13 +272,30 @@ foreach($results as $row) {
   else if($data->method == "200" && preg_match('/INVITE/',$data->cseq)) $statuscall = 4;
   else if(preg_match('/[3][0-9][0-9]/',$data->method)) $statuscall = 5;
   
-  $hosts[$data->source_ip] = 1;
-  $hosts[$data->destination_ip] = 1;
+  if ($CFLOW_HPORT) {
+  	$hosts[$data->source_ip.":".$data->source_port] = 1;
+  	$hosts[$data->destination_ip.":".$data->destination_port] = 1;
+	$ssrc = ":".$data->source_port;
+  } else {
+  	$hosts[$data->source_ip] = 1;
+  	$hosts[$data->destination_ip] = 1;
+	$ssrc = "";
+  }
   
   /* RTP INFO */
   if(preg_match('/=/',$data->rtp_stat)) {
-	$newArray = array();
-	$tmparray = explode(",", $data->rtp_stat);
+  
+   $tmparray = array();
+   $newArray = array();
+   
+   if(substr_count($data->rtp_stat, ";") > substr_count($data->rtp_stat, ","))
+                                 $tmparray = preg_split('/\;/', $data->rtp_stat);
+   else $tmparray = preg_split('/\,/', $data->rtp_stat);
+
+  
+	 
+   $newArray['PACKET']=$data->method.". SOURCE: ".$data->source_ip.":".$data->source_port;
+	
 	foreach ($tmparray as $lineNum => $line) {
 		list($key, $value) = explode("=", $line);
 		$newArray[$key] = $value;
@@ -242,52 +309,58 @@ foreach($results as $row) {
  // SIP SWITCHES
 
  if(preg_match('/asterisk/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "asterisk";
+     $uac[$data->source_ip.$ssrc] = "asterisk";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/FreeSWITCH/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "freeswitch";
+     $uac[$data->source_ip.$ssrc] = "freeswitch";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/kamailio|openser|opensip|sip-router/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "openser";
+     $uac[$data->source_ip.$ssrc] = "openser";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/softx/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "sipgateway";
+     $uac[$data->source_ip.$ssrc] = "sipgateway";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/sipXecs/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "sipxecs";
+     $uac[$data->source_ip.$ssrc] = "sipxecs";
      $uac[$data->user_agent] = $data->user_agent;
  }
 
  // SIP ENDPOINTS
 
  else if(preg_match('/x-lite|Bria|counter-path/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "counterpath";
+     $uac[$data->source_ip.$ssrc] = "counterpath";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/WG4k/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "worldgate";
+     $uac[$data->source_ip.$ssrc] = "worldgate";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/Eki/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "ekiga";
+     $uac[$data->source_ip.$ssrc] = "ekiga";
      $uac[$data->user_agent] = $data->user_agent;
  }
  else if(preg_match('/snom/i', $data->user_agent)) {
-     $uac[$data->source_ip] = "snom";
+     $uac[$data->source_ip.$ssrc] = "snom";
      $uac[$data->user_agent] = $data->user_agent;
  }
 
  else {
-      $uac[$data->source_ip] = "sipgateway";
+      $uac[$data->source_ip.$ssrc] = "sipgateway";
       $uac[$data->user_agent] = $data->user_agent;
  }
  
 
 }
+
+if(!$max_ts) $max_ts = $data->micro_ts;
+
+/* And total duraion now: */
+$totdur = gmdate("H:i:s", intval(($max_ts- $min_ts) / 1000000));
+
 
 // Calculate size of image:
 
@@ -339,7 +412,7 @@ $color['darkgray'] = imagecolorallocate($im, 0x90, 0x90, 0x90);
 $color['navy']     = imagecolorallocate($im, 0x00, 0x00, 0x80);
 $color['darknavy'] = imagecolorallocate($im, 0x00, 0x00, 0x50);
 
-imagefilledrectangle($im, 0, 0, $size_x, $size_y, $c1);
+imagefilledrectangle($im, 00, 0, $size_x, $size_y, $c1);
 
 //Generate HOSTs
 foreach($hosts as $key=>$value) {
@@ -356,7 +429,7 @@ foreach($hosts as $key=>$value) {
 
       imagelinethick($im, $line_x1, $line_y1, $line_x1, $line_y2, $color['gray2'], 2*CFLOW_FACTOR);
       //Put header!
-      imagettftext ( $im, $fontSize, 0, $line_x1  - (strlen($key) * 3*CFLOW_FACTOR), $line_y1 - 10, $color['darknavy'], $fontFace, $key);
+      imagettftext ( $im, $fontSize, 0, $line_x1  - (strlen($key) * 2*CFLOW_FACTOR), $line_y1 - 10, $color['darknavy'], $fontFace, $key);
 
       if($line_x1 > $max_x) $max_x = $line_x1;
 
@@ -386,10 +459,15 @@ foreach($localdata as $data) {
   $tstamp =  date("Y-m-d H:i:s.".$milliseconds." T",$data->micro_ts / 1000000);
 
 
-  $fromip = $data->source_ip;
-  $fromport = $data->source_port;
-  
-  $toip = $data->destination_ip;
+  if ($CFLOW_HPORT) {
+  $fromip = $data->source_ip.":".$data->source_port;;
+  $toip = $data->destination_ip.":".$data->destination_port;;
+  } else {
+  $fromip = $data->source_ip;;
+  $toip = $data->destination_ip;;
+  }
+
+  $fromport = $data->source_port;  
   $toport = $data->destination_port;
 
   //Direction
@@ -497,7 +575,6 @@ foreach($localdata as $data) {
   }
     
   imagettftext ( $im, $fontSize, 0, $tportx, $arrow_y1 + 6, $color['gray3'], $fontFace, $portf);
-
   imagettftext ( $im, $fontSize, 0, $fportx, $arrow_y1 + 6, $color['gray3'], $fontFace, $portt);
 
   $arrow_y1+=$arrow_step;
@@ -560,13 +637,16 @@ $(document).ready(function(){
     <input id="r1" type="button" value="Reset" onclick="$('#image<?php echo $winid; ?>').zoomable();$('#image<?php echo $winid; ?>').width('<?php echo $size_x;?>').height('<?php echo $size_y;?>');"  style="background: transparent;" />
 <!--    <input id="s1" type="button" class="ui-state-default ui-corner-all" value="PNG" onclick="window.open('utils.php?task=saveit&cflow=<?php echo $file?>');"  style="background: transparent;"  /> -->
     <input id="s2" type="button" value="PCAP" onclick="window.open('pcap.php?<?php echo $pcapurl; ?>');" style="background: transparent;"/>
+    <input id="s3" type="button" value="TEXT" onclick="window.open('pcap.php?<?php echo $pcapurl; ?>&text=1');" style="background: transparent;"/>
 <?php  if (isset($flow_from_date)) { ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
-    <input type="button" value="..." style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?<?php echo $complete_url ?>');"/>
+    <input type="button" value="Expand Seach" style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?<?php echo $complete_url ?>&full=1');"/>
 <?php } else {  ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
 <?php   }  ?>
+<?php if(count($rtpinfo) != 0) { ?>
     <input type="button" value="RTP info" style="opacity: 1; background: transparent;" onclick="$('#callflow<?php echo $winid; ?>').toggle(400);$('#rtpinfo<?php echo $winid; ?>').toggle(400);" />
+<?php } ?>
 </div>
 <center>
 <div id="callflow<?php echo $winid; ?>" style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
@@ -601,8 +681,8 @@ foreach($click as $cds) {
 if(count($rtpinfo) == 0) echo "No rtp info available for this call";
 
 //https://supportforums.cisco.com/servlet/JiveServlet/downloadBody/18784-102-3-46597/spaPhoneP-RTP-Stat_09292011.pdf
-echo "<table border='1'>";
 foreach ($rtpinfo as $key=>$data) {
+  echo "Info # ".($key+1)." FROM:". $data['PACKET']."<table border='1'>";
 	//PS = <packet sent>
 	if(isset($data['PS'])) echo "<tr><td>Packets sent:</td><td>".$data['PS']."</td></tr>";
 	//OS = <packet recieved>
@@ -614,7 +694,7 @@ foreach ($rtpinfo as $key=>$data) {
 	//PL = <packet lost>
 	if(isset($data['PL'])) {
 		$perc = 0;
-		if(isset($data['PR'])) $perc = floor($data['PL'] * 100 / $data['PR'] * 1000) / 1000;		
+		if(isset($data['PL']) && $date['PL']<=0 ) $perc = floor($data['PL'] * 100 / $data['PR'] * 1000) / 1000;		
 		echo "<tr><td>Packet lost:</td><td>".$data['PL']." ( $perc %)</td></tr>";		
 	}
 	//JI = <jitter ms>
@@ -632,8 +712,8 @@ foreach ($rtpinfo as $key=>$data) {
 	if(isset($data['EN'])) echo "<tr><td>Encoder:</td><td>".$data['EN']."</td></tr>";
 	//DE = <decoder>
 	if(isset($data['DE'])) echo "<tr><td>Decoder:</td><td>".$data['DE']."</td></tr>";
+  echo "</table><BR>";
 }
-echo "</table>";
 ?>
 </div>
 </center>

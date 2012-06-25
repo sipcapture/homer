@@ -468,17 +468,17 @@ class HTML_search {
 						<label for="callid" title="Callid">Call-ID / Session-ID</label>
 					</td>
 					<td>
-						<input type="text" name="callid" id="callid" class="textfieldstyle2" size="40" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
-
+						<input type="text" name="callid" id="callid" class="textfieldstyle2" size="30" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
+						<input type="button" onClick="document.homer.callid.value='';" value="X" alt="clear" class="checkboxstyle" width="5" style="position:relative;border:0;width:5px;"/>
 					</td>
                                 </tr>
                                 <tr>					
 					<td width="150" class="tablerow_two">
                                                 <label for="callid_aleg" title="Search Call-ID as bridged call">B2B Call-ID</label>
                                         </td>
-                                        <td>
+                                        <td width="50">
                                                 <input type="checkbox" name="b2b" id="b2b" class="checkboxdstyle2" value="1" <?php if(isset($search['b2b']) && $search['b2b'] == 1) echo "checked"; ?>/>
-                                        </td>
+					</td>
 
 				</tr>
 			</table>
@@ -502,8 +502,12 @@ class HTML_search {
 								<td class="tablerow_two">
 								<?php
 
-								    if(isset($search['location'])) $locarray = $search['location'];
-								    else $locarray = array();
+                    if(isset($search['location']) && count($search['location'])) $locarray = $search['location'];
+                    else {
+                            if(defined('DEFAULTDBNODE')) $locarray[DEFAULTDBNODE]=DEFAULTDBNODE;
+                            else $locarray = array();
+                    }
+
 								    foreach ($nodes as $key=>$value) {
                                                                 ?>								
 								        <input type="checkbox" class="checkboxstyle2" name="location[]" id="location" value="<?php echo $key?>" <?php if(in_array($key,$locarray)) echo "checked"; ?>><?php echo $value;?>
@@ -564,12 +568,20 @@ class HTML_search {
                         						<input type="checkbox" name="unique" id="unique" class="checkboxdstyle" value="1" <?php if(isset($search['unique']) && $search['unique'] == 1) echo "checked"; ?> />
 			                        		</td>
                         				</tr>
+                        				<tr>
+	                	        			<td width="150" class="tablerow_two">
+		        	        	        		<label for="unique" title="Unique packet">Logic OR</label>
+                	        				</td>
+				                        	<td>
+                        						<input type="checkbox" name="logic_or" id="logic_or" class="checkboxdstyle" value="1" <?php if(isset($search['logic_or']) && $search['logic_or'] == 1) echo "checked"; ?> />
+			                        		</td>
+                        				</tr>
                                    <tr>
                                     <td width="150" class="tablerow_two">
                                        <label for="limit" title="Limit">Limit</label>
                                      </td>
                                     <td>
-                                                <input name="limit" id="limit" value="<?php if(isset($search['limit'])) echo $search['limit']; else echo "0";?>" class="ui-select ui-widget ui-state-default ui-corner-all"  />
+                                                <input name="limit" id="limit" value="<?php if(isset($search['limit'])) echo $search['limit']; else echo "100";?>" class="ui-select ui-widget ui-state-default ui-corner-all"  />
                                      </td>
                                   </tr>
 						</table><br>	

@@ -48,6 +48,7 @@ class HTML_ToolBox {
 		          $('#to_date').datepicker({ dateFormat: 'dd-mm-yy' });
 	 	         $('.timepicker1').timeEntry({show24Hours: true, showSeconds: true});
             	$('.timepicker2').timeEntry({show24Hours: true, showSeconds: true});
+
              	iNettuts.init();
              });
         });
@@ -218,7 +219,7 @@ class HTML_ToolBox {
 				var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";
 				url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
 
-				var furl = "cflow.php?cid="+indata.callid+
+				var furl = "cflow.php?cid[]="+indata.callid+
 				"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
 				<?php 
 				 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
@@ -304,7 +305,7 @@ class HTML_ToolBox {
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
 	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
 
-			var furl = "cflow.php?cid="+indata.callid+
+			var furl = "cflow.php?cid[]="+indata.callid+
 			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
 			<?php 
 			 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
@@ -419,7 +420,7 @@ class HTML_ToolBox {
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
 	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
 
-			var furl = "cflow.php?cid="+indata.callid+
+			var furl = "cflow.php?cid[]="+indata.callid+
 			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
 			<?php 
 			 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
@@ -517,7 +518,7 @@ class HTML_ToolBox {
                         	var apicall = "api/api.php?task=search&field=METHOD&value="+filterpool4+"&limit="+itempool4;
 			} else if (filterpool4 == "IP") {
 				filterpool4=  $('#sipcode4').val(); 
-                        	var apicall = "api/api.php?task=last&ip="+filterpool4+"&limit="+itempool4;
+                        	var apicall = "api/api.php?task=last&ip="+filterpool4.toUpperCase()+"&limit="+itempool4;
 			} else if (filterpool4 == "UID") {
 				filterpool4=  $('#sipcode4').val(); 
                         	var apicall = "api/api.php?task=last&user="+filterpool4+"&limit="+itempool4;
@@ -545,7 +546,7 @@ class HTML_ToolBox {
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
 	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
 
-			var furl = "cflow.php?cid="+indata.callid+
+			var furl = "cflow.php?cid[]="+indata.callid+
 			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
 			<?php 
 			 if (!defined('CFLOW_POPUP')) echo '"&popuptype=1"+';
@@ -664,8 +665,11 @@ class HTML_ToolBox {
                                         </td>
 				<td>
 			
-				<input type="button" style="background: transparent;" title="Generate PCAP" onclick="if($('#pcap_session').val() != ''){window.open('pcap.php?'+$('#pcap_match').val()+'='+$('#pcap_session').val()+'&from_date='+$('#from_date').val()+'&to_date='+$('#to_date').val()+'&from_time='+$('#from_time').val()+'&to_time='+$('#to_time').val() );} else {alert('no '+$('#pcap_match').val()+'!');}" value="Generate PCAP" role="button"  class="ui-button ui-widget ui-state-default ui-corner-all">
-				</td></tr>
+			       <input type="button" style="background: transparent;" title="Generate PCAP" onclick="if($('#pcap_session').val() != ''){window.open('pcap.php?'+$('#pcap_match').val()+'='+$('#pcap_session').val()+'&from_date='+$('#from_date').val()+'&to_date='+$('#to_date').val()+'&from_time='+$('#from_time').val()+'&to_time='+$('#to_time').val() );} else {alert('no '+$('#pcap_match').val()+'!');}" value="Generate PCAP" role="button"  class="ui-button ui-widget ui-state-default ui-corner-all"></input>
+<?php if ( defined('PCAP_AGENT') && PCAP_AGENT != '' ) { ?>
+			       <input type="button" style="background: transparent;" title="Import PCAP" onclick="adminAction('pcapin','','Import PCAP'); return false;" value="Import PCAP" role="button"  class="ui-button ui-widget ui-state-default ui-corner-all"></input>
+<?php } ?>
+			       </td></tr>
 			</table>
 			<br>
                    </div>
