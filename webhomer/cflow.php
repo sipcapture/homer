@@ -188,7 +188,7 @@ foreach($location as $value) {
 	        if($unique) {
 	                foreach($result as $key=>$row) {
         	                   if(isset($message[$row['md5sum']])) unset($result[$key]);
-                	           else $message[$row['md5sum']] = $row[node];
+                	           else $message[$row['md5sum']] = $row['node'];
 	                }
 	        }
 
@@ -240,7 +240,7 @@ foreach($results as $row) {
   /* LOCAL RESOLV to name */
   foreach($aliases as $alias) {
 	$aliasup = strtoupper($alias->host);
-        if ($CFLOW_HPORT && strpos($alias->host, ':') == false) {
+        if (!empty($CFLOW_HPORT) && strpos($alias->host, ':') == false) {
         $aliasup .= ":5060";
         }
 
@@ -252,15 +252,15 @@ foreach($results as $row) {
   }
 
   // compress IPv6 addresses for UI
-  if (IPv6) {
+  if (!empty($IPv6)) {
         $data->source_ip = inet_ntop(inet_pton($data->source_ip));
         $data->destination_ip = inet_ntop(inet_pton($data->destination_ip));
   }
   // replace IP with Aliases, if any is set
-  if ($data->source_name) {
+  if (!empty($data->source_name)) {
         $data->source_ip = $data->source_name;
   }
-  if ($data->destination_name) {
+  if (!empty($data->destination_name)) {
         $data->destination_ip = $data->destination_name;
   }
 
@@ -272,7 +272,7 @@ foreach($results as $row) {
   else if($data->method == "200" && preg_match('/INVITE/',$data->cseq)) $statuscall = 4;
   else if(preg_match('/[3][0-9][0-9]/',$data->method)) $statuscall = 5;
   
-  if ($CFLOW_HPORT) {
+  if (!empty($CFLOW_HPORT)) {
   	$hosts[$data->source_ip.":".$data->source_port] = 1;
   	$hosts[$data->destination_ip.":".$data->destination_port] = 1;
 	$ssrc = ":".$data->source_port;
@@ -431,7 +431,7 @@ foreach($hosts as $key=>$value) {
       //Put header!
       imagettftext ( $im, $fontSize, 0, $line_x1  - (strlen($key) * 2*CFLOW_FACTOR), $line_y1 - 10, $color['darknavy'], $fontFace, $key);
 
-      if($line_x1 > $max_x) $max_x = $line_x1;
+      if( empty( $max_x ) or $line_x1 > $max_x) $max_x = $line_x1;
 
       $line_x1+=$host_step;    
 }
@@ -442,9 +442,9 @@ imagelinethick($im, 0, $line_y2, $line_x1 - $host_step + 60*CFLOW_FACTOR, $line_
 
 foreach($localdata as $data) {
 
-  list($date, $time) = split(' ', $data->date);
-  list($year, $month, $day) = split('[/.-]', $date);
-  list($hour, $minute, $second) = split('[/:]', $time);
+  list($date, $time) = preg_split('| |', $data->date);
+  list($year, $month, $day) = preg_split('|[/.-]|', $date);
+  list($hour, $minute, $second) = preg_split('|[/:]|', $time);
 
   //print "$year, $month, $day, $hour, $minute, $second\n<BR>";
   // Take Seconds
@@ -459,7 +459,7 @@ foreach($localdata as $data) {
   $tstamp =  date("Y-m-d H:i:s.".$milliseconds." T",$data->micro_ts / 1000000);
 
 
-  if ($CFLOW_HPORT) {
+  if (!empty($CFLOW_HPORT)) {
   $fromip = $data->source_ip.":".$data->source_port;;
   $toip = $data->destination_ip.":".$data->destination_port;;
   } else {
@@ -579,7 +579,7 @@ foreach($localdata as $data) {
 
   $arrow_y1+=$arrow_step;
 
-  if(!$first) 
+  if(empty($first)) 
   {
     $first=$stamp;
     //imagelinethick($im, 12, 10, 12, 500, $black, 1);
