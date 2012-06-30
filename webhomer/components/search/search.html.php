@@ -126,64 +126,64 @@ class HTML_search {
 					<td width="150" class="tablerow_two">
 						<label for="ruri" title="RURI">RURI</label>
 					</td>
-					<td>
-						<input type="text" name="ruri" id="ruri" class="textfieldstyle2" size="40" value="<?php if(isset($search['ruri'])) echo $search['ruri']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="ruri" id="ruri" class="textfieldstyle-in" size="40" value="<?php if(isset($search['ruri'])) echo $search['ruri']; ?>" />
 					</td>
 				</tr>
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="via_1" title="VIA">VIA 1</label>
 					</td>
-					<td>
-						<input type="text" name="via_1" id="via_1" class="textfieldstyle2" size="40" value="<?php if(isset($search['via_1'])) echo $search['via_1']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="via_1" id="via_1" class="textfieldstyle-in" size="40" value="<?php if(isset($search['via_1'])) echo $search['via_1']; ?>" />
 					</td>
 				</tr>	
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="diversion" title="Diversion">Diversion</label>
 					</td>
-					<td>
-						<input type="text" name="diversion" id="diversion" class="textfieldstyle2" size="40" value="<?php if(isset($search['diversion'])) echo $search['diversion']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="diversion" id="diversion" class="textfieldstyle-in" size="40" value="<?php if(isset($search['diversion'])) echo $search['diversion']; ?>" />
 					</td>
 				</tr>	
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="cseq" title="Cseq">Cseq</label>
 					</td>
-					<td>
-						<input type="text" name="cseq" id="cseq" class="textfieldstyle2" size="40" value="<?php if(isset($search['cseq'])) echo $search['cseq']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="cseq" id="cseq" class="textfieldstyle-in" size="40" value="<?php if(isset($search['cseq'])) echo $search['cseq']; ?>" />
 					</td>
 				</tr>	
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="reason" title="Reason">Reason</label>
 					</td>
-					<td>
-						<input type="text" name="reason" id="reason" class="textfieldstyle2" size="40" value="<?php if(isset($search['reason'])) echo $search['reason']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="reason" id="reason" class="textfieldstyle-in" size="40" value="<?php if(isset($search['reason'])) echo $search['reason']; ?>" />
 					</td>
 				</tr>	
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="reason" title="Reason">Method</label>
 					</td>
-					<td>
-						<input type="text" name="method" id="method" class="textfieldstyle2" size="40" value="<?php if(isset($search['method'])) echo $search['method']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="method" id="method" class="textfieldstyle-in" size="40" value="<?php if(isset($search['method'])) echo $search['method']; ?>" />
 					</td>
 				</tr>	
 <!--				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="content-type" title="Content-Type">Content-Type</label>
 					</td>
-					<td>
-						<input type="text" name="content_type" id="content_type" class="textfieldstyle2" size="40" value="<?php if(isset($search['content_type'])) echo $search['content_type']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="content_type" id="content_type" class="textfieldstyle-in" size="40" value="<?php if(isset($search['content_type'])) echo $search['content_type']; ?>" />
 					</td>
 				</tr> 
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="authorization" title="Authorization">Authorization</label>
 					</td>
-					<td>
-						<input type="text" name="authorization" id="authorization" class="textfieldstyle2" size="40" value="<?php if(isset($search['authorization'])) echo $search['authorization']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="authorization" id="authorization" class="textfieldstyle-in" size="40" value="<?php if(isset($search['authorization'])) echo $search['authorization']; ?>" />
 					</td>
 				</tr>	
 -->
@@ -191,8 +191,8 @@ class HTML_search {
 					<td width="150" class="tablerow_two">
 						<label for="user_agent" title="User-Agent">User-Agent</label>
 					</td>
-					<td>
-						<input type="text" name="user_agent" id="user_agent" class="textfieldstyle2" size="40" value="<?php if(isset($search['user_agent'])) echo $search['user_agent']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="user_agent" id="user_agent" class="textfieldstyle-in" size="40" value="<?php if(isset($search['user_agent'])) echo $search['user_agent']; ?>" />
 					</td>
 				</tr>															
 			</table><br>
@@ -209,56 +209,56 @@ class HTML_search {
 					<td width="150" class="tablerow_two">
 						<label for="source_ip" title="Source IP">Source IP</label>
 					</td>
-					<td>
-						<input type="text" name="source_ip" id="source_ip" class="textfieldstyle" size="40" value="<?php if(isset($search['source_ip'])) echo $search['source_ip']; ?>" />
+					<td class="tableinputs" style="width:50%;" >
+						<input type="text" name="source_ip" id="source_ip" class="textfieldstyle-in" size="40" value="<?php if(isset($search['source_ip'])) echo $search['source_ip']; ?>" />
 					</td>
-					<td width="150" class="tablerow_two">
+					<td >
 						<label for="source_port" title="Source PORT">Port</label>
 					</td>
-					<td>
-						<input type="text" name="source_port" id="source_port" class="textfieldstyle2" size="5" value="<?php if(isset($search['source_port'])) echo $search['source_port']; ?>" />
+					<td class="tableinputs" style="width:20%;">
+						<input type="text" name="source_port" id="source_port" class="textfieldstyle-in" size="5" value="<?php if(isset($search['source_port'])) echo $search['source_port']; ?>" />
 					</td>
 				</tr>
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="destination_ip" title="Destination IP">Destination IP</label>
 					</td>
-					<td>
-						<input type="text" name="destination_ip" id="destination_ip" class="textfieldstyle" size="40" value="<?php if(isset($search['destination_ip'])) echo $search['destination_ip']; ?>" />
+					<td class="tableinputs" style="width:50%;" >
+						<input type="text" name="destination_ip" id="destination_ip" class="textfieldstyle-in" size="40" value="<?php if(isset($search['destination_ip'])) echo $search['destination_ip']; ?>" />
 					</td>
-					<td width="150" class="tablerow_two">
+					<td >
 						<label for="destination port" title="Destination PORT">Port</label>
 					</td>
-					<td>
-						<input type="text" name="destination_port" id="destination_port" class="textfieldstyle2" size="5" value="<?php if(isset($search['destination_port'])) echo $search['destination_port']; ?>" />
+					<td class="tableinputs" style="width:10%;">
+						<input type="text" name="destination_port" id="destination_port" class="textfieldstyle-in" size="5" value="<?php if(isset($search['destination_port'])) echo $search['destination_port']; ?>" />
 					</td>
 				</tr>	
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="contact_ip" title="Contact IP">Contact IP</label>
 					</td>
-					<td>
-						<input type="text" name="contact_ip" id="contact_ip" class="textfieldstyle" size="40" value="<?php if(isset($search['contact_ip'])) echo $search['contact_ip']; ?>" />
+					<td class="tableinputs" style="width:50%;" >
+						<input type="text" name="contact_ip" id="contact_ip" class="textfieldstyle-in" size="40" value="<?php if(isset($search['contact_ip'])) echo $search['contact_ip']; ?>" />
 					</td>
-					<td width="150" class="tablerow_two">
+					<td >
 						<label for="contact port" title="Contact PORT">Port</label>
 					</td>
-					<td>
-						<input type="text" name="contact_port" id="contact_port" class="textfieldstyle2" size="5" value="<?php if(isset($search['contact_port'])) echo $search['contact_port']; ?>" />
+					<td class="tableinputs" style="width:10%;">
+						<input type="text" name="contact_port" id="contact_port" class="textfieldstyle-in" size="5" value="<?php if(isset($search['contact_port'])) echo $search['contact_port']; ?>" />
 					</td>
 				</tr>
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="originator_ip" title="Originator IP">Originator IP</label>
 					</td>
-					<td>
-						<input type="text" name="originator_ip" id="originator_ip" class="textfieldstyle" size="40" value="<?php if(isset($search['originator_ip'])) echo $search['originator_ip']; ?>" />
+					<td class="tableinputs" style="width:50%;">
+						<input type="text" name="originator_ip" id="originator_ip" class="textfieldstyle-in" size="40" value="<?php if(isset($search['originator_ip'])) echo $search['originator_ip']; ?>" />
 					</td>
-					<td width="150" class="tablerow_two">
+					<td >
 						<label for="originator port" title="Originator PORT">Port</label>
 					</td>
-					<td>
-						<input type="text" name="originator_port" id="originator_port" class="textfieldstyle2" size="5" value="<?php if(isset($search['originator_port'])) echo $search['originator_port']; ?>" />
+					<td class="tableinputs" style="width:10%;">
+						<input type="text" name="originator_port" id="originator_port" class="textfieldstyle-in" size="5" value="<?php if(isset($search['originator_port'])) echo $search['originator_port']; ?>" />
 					</td>
 				</tr>				
 				<tr>
