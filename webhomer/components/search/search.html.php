@@ -32,7 +32,7 @@ defined( '_HOMEREXEC' ) or die( 'Restricted access' );
 
 class HTML_search {
 
-	function displaySearchForm ($search, $nodes) {
+	static function displaySearchForm ($search, $nodes) {
 
 ?>	
     	        

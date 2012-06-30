@@ -31,7 +31,7 @@
 class HTML_ToolBox {
 
 
-	function displayToolBox() {
+	static function displayToolBox() {
 
 ?>
 

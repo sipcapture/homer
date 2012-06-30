@@ -34,7 +34,7 @@ include('../../configuration.php');
 } else { $included = 0; }
 
 /* fix intranet web */
-if(!defined(APIURL)) define('APIURL', "http://".$_SERVER['SERVER_NAME']);
+if(!defined('APIURL')) define('APIURL', "http://".$_SERVER['SERVER_NAME']);
 
 date_default_timezone_set(CFLOW_TIMEZONE);
 $offset = STAT_OFFSET;
