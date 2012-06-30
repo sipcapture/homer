@@ -262,7 +262,7 @@ class HTML_search {
 					</td>
 				</tr>				
 				<tr>
-					<td width="40%" class="paramlist_key"><label for="proto" title=".">Proto</label></td>
+					<td width="20%" class="paramlist_key"><label for="proto" title=".">Proto</label></td>
 						<td class="tablerow_two">
 							<select name="proto" id="proto" class="ui-select ui-widget ui-state-default ui-corner-all" >
 							        <option value="1" >TCP</option>
@@ -273,7 +273,7 @@ class HTML_search {
 					</td>
 				</tr>
 				<tr>
-					<td width="40%" class="paramlist_key"><label for="family" title=".">Family</label></td>
+					<td width="20%" class="paramlist_key"><label for="family" title=".">Family</label></td>
 						<td class="tablerow_two">
 							<select name="family" id="family" class="ui-select ui-widget ui-state-default ui-corner-all" >
 								<option value="1" selected="selected">IPv4</option>
@@ -408,48 +408,48 @@ class HTML_search {
 					<td width="150" class="tablerow_two">
 						<label for="ruri_user" title="B-Number in Request URI user part">RURI User *</label>
 					</td>
-					<td>
-						<input type="text" name="ruri_user" id="ruri_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['ruri_user'])) echo $search['ruri_user']; ?>" <?php if(WEBKIT_SPEECH) echo "x-webkit-speech onwebkitspeechchange='checkAnswer(this.id, this.value);'";?> />
+					<td class="tableinputs">
+						<input type="text" name="ruri_user" id="ruri_user" class="textfieldstyle-in" size="40" value="<?php if(isset($search['ruri_user'])) echo $search['ruri_user']; ?>" <?php if(WEBKIT_SPEECH) echo "x-webkit-speech onwebkitspeechchange='checkAnswer(this.id, this.value);'";?> />
 					</td>
 				</tr>                   
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="from_user" title="Userpart in From URI">From User</label>
 					</td>
-					<td>
-						<input type="text" name="from_user" id="from_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['from_user'])) echo $search['from_user']; ?>" <?php if(WEBKIT_SPEECH) echo "x-webkit-speech onwebkitspeechchange='checkAnswer(this.id, this.value);'";?> />
+					<td class="tableinputs">
+						<input type="text" name="from_user" id="from_user" class="textfieldstyle-in" size="40" value="<?php if(isset($search['from_user'])) echo $search['from_user']; ?>" <?php if(WEBKIT_SPEECH) echo "x-webkit-speech onwebkitspeechchange='checkAnswer(this.id, this.value);'";?> />
 					</td>
 				</tr>
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="to_user" title="Userpart in To URI">To User</label>
 					</td>
-					<td>
-						<input type="text" name="to_user" id="to_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['to_user'])) echo $search['to_user']; ?>" <?php if(WEBKIT_SPEECH) echo "x-webkit-speech onwebkitspeechchange='checkAnswer(this.id, this.value);'";?> />
+					<td class="tableinputs">
+						<input type="text" name="to_user" id="to_user" class="textfieldstyle-in" size="40" value="<?php if(isset($search['to_user'])) echo $search['to_user']; ?>" <?php if(WEBKIT_SPEECH) echo "x-webkit-speech onwebkitspeechchange='checkAnswer(this.id, this.value);'";?> />
 					</td>
 				</tr>
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="pid_user" title="P-Asserted and P-Preffered">PID User</label>
 					</td>
-					<td>
-						<input type="text" name="pid_user" id="pid_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['pid_user'])) echo $search['pid_user']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="pid_user" id="pid_user" class="textfieldstyle-in" size="40" value="<?php if(isset($search['pid_user'])) echo $search['pid_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="contact_user" title="Contact header"">Contact User</label>
 					</td>
-					<td>
-						<input type="text" name="contact_user" id="contact_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['contact_user'])) echo $search['contact_user']; ?>" />
+					<td class="tableinputs">
+						<input type="text" name="contact_user" id="contact_user" class="textfieldstyle-in" size="40" value="<?php if(isset($search['contact_user'])) echo $search['contact_user']; ?>" />
 					</td>
 				</tr>
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="auth_user" title="Proxy-Auth, WWW-Auth">Auth User</label>
 					</td>
-					<td>
-						<input type="text" name="auth_user" id="auth_user" class="textfieldstyle2" size="40" value="<?php if(isset($search['auth_user'])) echo $search['auth_user']; ?>" />
+					<td class="tableinputs"	>
+						<input type="text" name="auth_user" id="auth_user" class="textfieldstyle-in" size="40" value="<?php if(isset($search['auth_user'])) echo $search['auth_user']; ?>" />
 					</td>
 				</tr>
 			</table><br>
@@ -465,18 +465,17 @@ class HTML_search {
                    <table class="bodystyle" cellspacing="1"  height="50">
 			 	<tr>
 					<td width="150" class="tablerow_two">
-						<label for="callid" title="Callid">Call-ID / Session-ID</label>
+						<label for="callid" title="Callid" onClick="document.homer.callid.value='';" >Call-ID</label>
 					</td>
-					<td>
-						<input type="text" name="callid" id="callid" class="textfieldstyle2" size="30" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
-						<input type="button" onClick="document.homer.callid.value='';" value="X" alt="clear" class="checkboxstyle" width="5" style="position:relative;border:0;width:5px;"/>
+					<td class="tableinputs">
+						<input type="text" name="callid" id="callid" class="textfieldstyle-in" size="40" value="<?php if(isset($search['callid'])) echo $search['callid']; ?>" />
 					</td>
                                 </tr>
                                 <tr>					
 					<td width="150" class="tablerow_two">
                                                 <label for="callid_aleg" title="Search Call-ID as bridged call">B2B Call-ID</label>
                                         </td>
-                                        <td width="50">
+                                        <td>
                                                 <input type="checkbox" name="b2b" id="b2b" class="checkboxdstyle2" value="1" <?php if(isset($search['b2b']) && $search['b2b'] == 1) echo "checked"; ?>/>
 					</td>
 
@@ -498,7 +497,7 @@ class HTML_search {
                     <table class="bodystyle" cellspacing="1" height="135">						
 							<tr>
 							
-								<td width="40%" class="paramlist_key"><label for="location" title="Homer DB Node">DB Location</label></td>
+								<td width="20%" class="paramlist_key"><label for="location" title="Homer DB Node">DB Location</label></td>
 								<td class="tablerow_two">
 								<?php
 
@@ -510,14 +509,14 @@ class HTML_search {
 
 								    foreach ($nodes as $key=>$value) {
                                                                 ?>								
-								        <input type="checkbox" class="checkboxstyle2" name="location[]" id="location" value="<?php echo $key?>" <?php if(in_array($key,$locarray)) echo "checked"; ?>><?php echo $value;?>
+								        <input type="checkbox" class="checkboxstyle2" name="location[]" id="location" value="<?php echo $key?>" <?php if(in_array($key,$locarray)||$key==1) echo "checked"; ?>><?php echo $value;?>
                                                                 <?php
                                                                     }
                                                                 ?>
 								</td>
 							</tr>
               <tr>
-                           <td width="40%" class="paramlist_key"><label for="location" title="Homer Capture Node">Capture node</label></td>
+                           <td width="20%" class="paramlist_key"><label for="location" title="Homer Capture Node">Capture node</label></td>
                            <td class="tablerow_two">
                              <input name="node" id="node" size="6" value="<?php if(isset($search['node'])) echo $search['node'];?>" class="ui-select ui-widget ui-state-default ui-corner-all"  />
                                    <!--
@@ -538,23 +537,23 @@ class HTML_search {
 							<tr>
 								<td width="20%" class="paramlist_key"><label for="date" title="Searching from this date">From Date</label></td>
 								<td class="tablerow_two">
-									<input size="10" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo date("d-m-Y");?> ">
+									<input size="8" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo date("d-m-Y");?> ">
 								&nbsp;-&nbsp;
-								        <input type="text" name="from_time" id="from_time" class="textfieldstyle2 timepicker1" size="7" value="<?php if(isset($search['from_time'])) echo $search['from_time']; else echo $ft;?>" />
+								        <input type="text" name="from_time" id="from_time" class="textfieldstyle2 timepicker1" size="5" value="<?php if(isset($search['from_time'])) echo $search['from_time']; else echo $ft;?>" />
 									
 								</td>
 							</tr>
 							<tr>
-								<td width="40%" class="paramlist_key"><label for="time" title="Searching up to this date">To Date</label></td>
+								<td width="20%" class="paramlist_key"><label for="time" title="Searching up to this date">To Date</label></td>
 								<td class="tablerow_two">
-                                                                      <input size="10" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("d-m-Y");?> ">
+                                                                      <input size="8" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("d-m-Y");?> ">
                                                                       &nbsp;-&nbsp;
-								      <input type="text" name="to_time" id="to_time" class="textfieldstyle2 timepicker2" size="7" value="<?php if(isset($search['to_time'])) echo $search['to_time']; else echo $tt; ?>" />
+								      <input type="text" name="to_time" id="to_time" class="textfieldstyle2 timepicker2" size="5" value="<?php if(isset($search['to_time'])) echo $search['to_time']; else echo $tt; ?>" />
 								</td>
 							</tr>
                                                         <!--
 							<tr>
-								<td width="40%" class="paramlist_key"><label for="maximum" title=".">Maximum records</label></td>
+								<td width="20%" class="paramlist_key"><label for="maximum" title=".">Maximum records</label></td>
 								<td class="tablerow_two">
 									<input type="text" name="max_records" id="max_records" class="textfieldstyle2" size="4" value="<?php if(isset($search['max_records'])) echo $search['max_records']; else echo '100'; ?>" />
 								</td>

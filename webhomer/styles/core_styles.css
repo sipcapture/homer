@@ -248,6 +248,17 @@ TD{font-family: Arial; font-size: 8pt;}
 
 .tablerow_two {
 	background-color: #F0F0F0;
+	width: 20%;
+}
+
+.paramlist_key {
+	background-color: #F0F0F0;
+	width: 20%;
+}
+
+.tableinputs {
+	background-color: #F0F0F0;
+	width: 500;
 }
 
 .sort_active {
