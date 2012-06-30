@@ -26,7 +26,7 @@ install:
 	install -m 0755 captagent /usr/local/bin/
 
 install-cfg:
-	install -m 0644 captagent.ini -D /usr/local/etc/captagent/ 
+	install -m 0644 captagent.ini -D /usr/local/etc/captagent/captagent.ini 
 	
 
 .PHONY: install install-cfg
