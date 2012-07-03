@@ -57,7 +57,10 @@ $alarm->setDB($db);
 
 $task = getVar('task', NULL, '', 'string');
 $component = getVar('component', 'search', '', 'string');
-$userlevel =  $_SESSION['userlevel'];
+if( !empty($_SESSION['userlevel']) )
+    $userlevel =  $_SESSION['userlevel'];
+else
+    $userlevel = 'default';
 $header =  getVar('component', 0, '', 'int');
 
 /* My Nodes */
@@ -100,7 +103,7 @@ if($component == "login" && $task == "do") {
 
 //if((!defined("SKIPAUTH") || $component != "login") && $auth->logincheck() == false){
 if($auth->logincheck() == false){
-  if((!defined('SKIPCFLOWAUTH') || SKIPCFLOWAUTH == 0) && preg_match('/(cflow.php|pcap.php)$/', $_SERVER['SCRIPT_URL'])) die('Login at first');
+  if((!defined('SKIPCFLOWAUTH') || SKIPCFLOWAUTH == 0) && preg_match('/(cflow.php|pcap.php)$/', $_SERVER['PHP_SELF'])) die('Login at first');
 	$component = "login";	
 	$security = 1;
 }

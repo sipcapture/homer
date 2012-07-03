@@ -27,7 +27,7 @@ padding-right: 10px;
 	background-color: #FFF;
 	padding-left: 5px;
 	height: 16px;
-	 width: 180px; 
+	/* width: 180px; */
 	border: 1px solid #999;
 }
 
@@ -38,6 +38,18 @@ padding-right: 10px;
 	background-color: #FFF;
 	padding-left: 5px;
 	height: 16px;
+	/*width: 180px;*/
+	border: 1px solid #999;
+}
+
+.textfieldstyle-in {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	line-height: 15px;
+	background-color: #FFF;
+	padding-left: 5px;
+	height: 16px;
+	width: 90%;
 	/*width: 180px;*/
 	border: 1px solid #999;
 }

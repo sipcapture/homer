@@ -31,7 +31,7 @@ defined( '_HOMEREXEC' ) or die( 'Restricted access' );
 
 class HTML_mainhtml {
 
-     function displayStart ($status, $header,$task, $level, $bgcolor) {
+     static function displayStart ($status, $header,$task, $level, $bgcolor) {
 
         ?>
         <html xmlns="http://www.w3.org/1999/xhtml">
@@ -64,14 +64,14 @@ class HTML_mainhtml {
 
       }
 
-      function displayBackground ($bglogo) {
+      static function displayBackground ($bglogo) {
 ?>
 	<div id="newbg" class="newbg" style="height: auto;"><img id="bgpic" src="images/<?php echo $bglogo; ?>" width="101%" height="auto" /></div>
 
 <?php 
       }
             
-      function displayToolBar($datas, $selected, $uptime) {
+      static function displayToolBar($datas, $selected, $uptime) {
       
 ?>
 	<div id="banner"> 
@@ -108,7 +108,7 @@ class HTML_mainhtml {
 
       }
 
-      function displayUserBar($component, $task) {
+      static function displayUserBar($component, $task) {
 ?>                 
       		
 		<div id="navigation"> 
@@ -136,11 +136,11 @@ class HTML_mainhtml {
 <?php
       }
 
-      function displayFormOpen() {
+      static function displayFormOpen() {
              echo '<form action="index.php" method="POST" name="homer" id="homer">';
-       }
+      }
 
-      function displayFormClose($component) {
+      static function displayFormClose($component) {
                     
             echo '<input type="hidden" name="task" id="task" value="result">';
             echo '<input type="hidden" name="component" id="component" value="'.$component.'">';
@@ -148,7 +148,7 @@ class HTML_mainhtml {
       
       }
  
-      function displayStop () {
+      static function displayStop () {
       
             echo '</body></html>';
             

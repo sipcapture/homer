@@ -65,6 +65,7 @@ define('GEOIP_LINK', 0); /* 0, Disabled - 1, External Query GEOIP_URL, 2, Intern
 define('GEOIP_URL', "http://www.infosniper.net/?ip_address=");
 
 /* ADMIN SERVICE MONITORING */
+define('SERVICE_MONITOR',0);
 define('SERVICE_HTTP_PORT', 80);
 define('SERVICE_SMTP_PORT', 25);
 define('SERVICE_SSH_PORT', 22);

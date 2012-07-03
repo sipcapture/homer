@@ -351,17 +351,19 @@ function setDate() {
 function getStatsUA() {
          
 	//Set our variables
-	$method = ($_GET['method']);
-	$hours = ($_GET['hours']);
+	if(!empty($_GET['method']))
+		$method = ($_GET['method']);
+	if(!empty($_GET['hours']))
+		$hours = ($_GET['hours']);
 	$limit = ($_GET['limit']);
-  $tnode = getVar('tnode', 0, '', 'int');   
+	$tnode = getVar('tnode', 0, '', 'int');   
   
 	if(!isset($method)) {
-                $method =  "INVITE";
-        }
+		$method =  "INVITE";
+	}
 	if(!isset($hours)) {
-                $hours =  24;
-        }
+		$hours =  24;
+	}
 	// Proceed with Query
         global $mynodeshost, $db;
         $option = array(); //prevent problems
@@ -429,8 +431,10 @@ function getStatsCount() {
          
 	//Set our variables
 	$method = ($_GET['method']);
-	$hours = ($_GET['hours']);
-	$measure = ($_GET['measure']);
+    if(!empty($_GET['hours']))
+    	$hours = ($_GET['hours']);
+    if(!empty($_GET['measure']))
+    	$measure = ($_GET['measure']);
   $tnode = getVar('tnode', 0, '', 'int');
   
 	if(!isset($method)||$method!="INVITE" && $method!="REGISTER" && $method!="CURRENT") {

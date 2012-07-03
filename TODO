@@ -1,8 +1,3 @@
-1. Replace callflow [COMPLETED]
-2. Export to PCAP file on select [COMPLETED]
-3. Callflow in search criterea [COMPLETED]
-4. Statistic must use separate tables.[COMPLETED]
-5. Fix partitioning index [COMPLETED]
-6. Extend API to access new Statistics [COMPLETED]
-7. External AUTH modules: LDAP(AD)/RADIUS [COMPLETED]
-8. Alarm module. E-Mails,SIP or XMPP messages to ADMIN [IN PROGRESS... 1%]
+
+1. Alarm module: E-Mails,SIP or XMPP messages to ADMIN [IN PROGRESS]
+

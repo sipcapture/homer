@@ -31,7 +31,7 @@ defined( '_HOMEREXEC' ) or die( 'Restricted access' );
 
 class HTML_Statistic {
 
-        function displayStats() {
+        static function displayStats() {
 ?>
   <div id="columns">
         <center>

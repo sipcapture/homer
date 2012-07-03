@@ -246,14 +246,18 @@ $userdef = get_defined_constants(true);
 	</li>
 
 	</ul>
+
+	<ul id="column3" class="column">
 		
 <?php
 	}
 	
 	function displayAdminHealth($report) {
+
+	if (SERVICE_MONITOR != 0) {
+
 ?>	
 	
-	<ul id="column3" class="column">
 
 
 		 <li class="widget color-green" id="widget-alarms">
@@ -296,6 +300,8 @@ $userdef = get_defined_constants(true);
                 </script>
 <?php 
 		} 
+
+	} 
 
 	}
 
