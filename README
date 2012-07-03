@@ -5,3 +5,24 @@ old/ - old/legacy version of webhomer. Version 2.0
 captagent/ - homer capture agent source
 
 see the HOW-TO Documentation for detailed setup instructions
+
+Quick Instructions:
+===================
+Step 1. Install prerequisites according ot detailed setup instructions
+
+Step 2. If you've checkout out from git repo
+ autoreconf -if
+
+Step 3. 
+  ./configure
+
+Step 4.
+  make all
+  sudo make install
+
+If you do not have root access, specify --prefix=/some/dir where
+/some/dir is a directory you do have root access to and then do not
+use sudo.
+
+
+
