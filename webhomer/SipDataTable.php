@@ -645,8 +645,12 @@ class SipDataTable extends DataTable_DataTable
     			{
     				$('td:eq({$this->getColumnIndexByName('id')})', nRow).html( '<b>A</b>' );
     			}
-                            	
-                        var callid = aData[{$this->getColumnIndexByName('callidtag')}];
+                        
+			/* Colour by CALLID */    	
+                        var callid = aData[{$this->getColumnIndexByName('callid')}];
+			/* Colour by CALLID + TAG */    	
+                        // var callid = aData[{$this->getColumnIndexByName('callidtag')}];
+
     			if(initColors[callid] === undefined) {
                             var r = Math.floor(Math.random()*256+100);
                             var g = Math.floor(Math.random()*256+100);
