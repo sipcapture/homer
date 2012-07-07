@@ -40,7 +40,7 @@ define('DATABASE',"mysql");
 
 /* AUTH: internal, radius_build, ldap  */
 define('AUTHENTICATION',"internal");
-#define('AUTHENTICATION_TEXT',"Please login with your credentials");
+// define('AUTHENTICATION_TEXT',"Please login with your credentials");
 
 /* ALARM MAIL */
 define('ALARM_FROMEMAIL',"homer@example.com");
