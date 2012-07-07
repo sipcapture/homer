@@ -81,7 +81,13 @@ body {
 	</td>
   </tr>
   <tr>
-    <td height="50" colspan="3" class="login" align="center">Please use your Homer login and password</td>
+    <td height="50" colspan="3" class="login" align="center">
+
+<?php
+        if(defined('AUTHENTICATION_TEXT') &&  "" != AUTHENTICATION_TEXT )
+        { echo AUTHENTICATION_TEXT; } else { echo "Please use your Homer login and password";}
+?>
+
   </tr>
   <tr>
     <td width="150" height="30" align="right">Login:</td>
