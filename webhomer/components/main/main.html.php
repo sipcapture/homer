@@ -72,7 +72,7 @@ class HTML_mainhtml {
       }
             
       static function displayToolBar($datas, $selected, $uptime) {
-      
+      global $task;   
 ?>
 	<div id="banner"> 
 		<h1 class="logo"> 

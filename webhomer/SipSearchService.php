@@ -105,11 +105,11 @@ class SipSearchService implements ISipService
      $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));
      $thour = date("H", strtotime($homer->to_date." ".$homer->to_time));
-     $unique = $homer->unique;
-     $node = $homer->node;
-     $b2b = $homer->b2b;
-     $limit = $homer->limit;
-     $and_or = $homer->logic_or ? " OR " : " AND ";
+     if (property_exists($homer, 'unique')) { $unique = $homer->unique; } else { $unique = NULL; }
+     if (property_exists($homer, 'node')) { $node = $homer->node; } else { $node = NULL; }
+     if (property_exists($homer, 'b2b')) { $b2b = $homer->b2b; } else { $b2b = NULL; }
+     if (property_exists($homer, 'limit')) { $limit = $homer->limit; } else { $limit = NULL; }
+     if (property_exists($homer, 'logic_or')) { $and_or = $homer->logic_or ? " OR " : " AND "; } else { $and_or = " AND "; }
            
      /*Always ON */
      if(BLEGDETECT == 1) $b2b=1;
@@ -118,7 +118,7 @@ class SipSearchService implements ISipService
      
      $where = "(`date` BETWEEN '$ft' AND '$tt' )";              
 
-     $max_records = (int) ($homer->max_records/count($location));
+     if (property_exists($homer, 'max_records')) $max_records = (int) ($homer->max_records/count($location));
      
      $s=0;
      foreach($homer as $key=>$value) {
@@ -247,11 +247,10 @@ class SipSearchService implements ISipService
      $tt = date("Y-m-d H:i:s", strtotime($homer->to_date." ".$homer->to_time));
      $fhour = date("H", strtotime($homer->from_date." ".$homer->from_time));
      $thour = date("H", strtotime($homer->to_date." ".$homer->to_time));
-     $unique = $homer->unique;
-     $node = $homer->node;
-     $b2b = $homer->b2b;
-     $limit = $homer->limit;
-
+     if (property_exists($homer, 'unique')) { $unique = $homer->unique; } else { $unique = NULL; }
+     if (property_exists($homer, 'node')) { $node = $homer->node; } else { $node = NULL; }
+     if (property_exists($homer, 'b2b')) { $b2b = $homer->b2b; } else { $b2b = NULL; }
+     if (property_exists($homer, 'limit')) { $limit = $homer->limit; } else { $limit = NULL; }
      /*Always ON */
      if(BLEGDETECT == 1) $b2b=1;
 
@@ -259,7 +258,7 @@ class SipSearchService implements ISipService
      
      $where = " AND (`date` BETWEEN '$ft' AND '$tt' )";              
 
-     $max_records = (int) ($homer->max_records/count($location));
+     if (property_exists($homer, 'max_records')) $max_records = (int) ($homer->max_records/count($location));
      
       $s=0;
      foreach($homer as $key=>$value) {
@@ -399,7 +398,9 @@ class SipSearchService implements ISipService
 
     //print_r($hosts);
     $browsers = array();    
-	// convert result set into array of SipResult objects
+    $sipresults = array();    
+
+    // convert result set into array of SipResult objects
     foreach($results as $result){
     
       foreach($hosts as $host) {

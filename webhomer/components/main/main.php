@@ -39,7 +39,10 @@ class HomerMain {
 
            $mytoolbar = array();
            
-           $title = $titles[$component];
+	   $title = '';
+           if (isset($component)) {
+                if(array_key_exists($component, $titles)) $title = $titles[$component];
+           }
 
 	   /* Background */
 	   if (DAYNIGHT == 1) { 
@@ -48,6 +51,9 @@ class HomerMain {
 		else { $bglogo = "bgwave2.jpg"; $bgcolor = "#000000"; }
 	   } else if (DAYNIGHT == 2) { $bglogo = "bgwave2.jpg"; $bgcolor = "#000000"; } 
 	   else { $bglogo = "bgwave.jpg"; $bgcolor = "#FFFFFF"; }
+
+	   if (! isset($header) ) $header = '';
+	   if (! isset($level) ) $level = '';
 
            HTML_mainhtml::displayStart($title, $header, $task, $level, $bgcolor);
            

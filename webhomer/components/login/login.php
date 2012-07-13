@@ -27,7 +27,7 @@
  *
 */
 
-define('_HOMEREXEC', 1);
+if (!defined('_HOMEREXEC')) define('_HOMEREXEC', 1);
 define('SKIPAUTH', 1);
 
 require_once ('login.html.php');

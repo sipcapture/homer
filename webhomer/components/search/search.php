@@ -79,7 +79,7 @@ class Component {
                   global $mynodeshost, $db;
         
                   /* AJAXTYPE FIX */
-                  if(!defined(AJAXTYPE)) define('AJAXTYPE', "GET");
+                  if(!defined('AJAXTYPE')) define('AJAXTYPE', "GET");
                           
                   include('DataTable/Autoloader.php');
                   spl_autoload_register(array('DataTable_Autoloader', 'autoload'));
