@@ -99,7 +99,7 @@ class HomerDB {
         $query = array_shift($args);
         $query = str_replace("?", "%s", $query);        
         if(DATABASE == 'pgsql') $query = $this->toPgSql($query);
-        $args  = array_map($this->connection->quote, $args);        
+	if (property_existes($this->connection, quote)) $args  = array_map($this->connection->quote, $args);
         array_unshift($args,$query);
         $query = call_user_func_array('sprintf',$args);              
         $statement = $this->connection->prepare($query);
