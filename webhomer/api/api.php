@@ -231,7 +231,7 @@ function getLastPerf() {
 
 		$last = "SELECT MAX(id) FROM ".HOMER_TABLE;
                 $lastrows = $db->loadObjectList($last);
-		$counter = $lastrow - $limit;
+		$counter = $last - $limit;
 
                 $query = "SELECT * "
                         ."\n FROM ".HOMER_TABLE
