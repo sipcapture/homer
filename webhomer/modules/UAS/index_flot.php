@@ -27,8 +27,7 @@
  *
 */
 
-$API = APILOC;
-if ($API == 'APILOC') {
+if (!defined('APILOC')) {
 $included = 1;
 include('../../configuration.php');
 } else { $included = 0; }

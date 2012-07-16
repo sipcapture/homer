@@ -27,8 +27,7 @@
  *
 */
 
-$API = APILOC;
-if ($API == 'APILOC') {
+if (!defined('APILOC')) {
 $included = 1;
 include('../../configuration.php');
 echo '<script type="text/javascript" src="js/highstock.js"></script>';

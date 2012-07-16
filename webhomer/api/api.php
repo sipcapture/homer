@@ -40,7 +40,7 @@ include_once("../class/index.php");
 
 date_default_timezone_set(CFLOW_TIMEZONE);
 
-$task=($_GET['task']);
+$task=(array_key_exists('task', $_GET) ? $_GET['task'] : NULL);
 
 switch ($task) {
 
@@ -98,13 +98,9 @@ function getSession() {
 	//Set our variables
 	$cid = intval($_GET['cid']);
 	$cid2 = intval($_GET['cid2']);
-	$limit = ($_GET['limit']);
+	$limit = (array_key_exists('limit', $_GET) ? $_GET['limit'] : 100);
   $tnode = getVar('tnode', 0, '', 'int');
 	
-	if(!isset($limit)) {
-                $limit = 100;
-        }
-
 	$setdate=setDate();
 	
 	// Proceed with Query
@@ -174,17 +170,13 @@ function getLast() {
  
 	//Set our variables
 	$limit = ($_GET['limit']);
-	$method = ($_GET['method']);
-	$quid = ($_GET['user']);
-	$qip = ($_GET['ip']);
+	$method = (array_key_exists('method', $_GET) ? $_GET['method'] : NULL);
+	$quid = (array_key_exists('method', $_GET) ? $_GET['user'] : NULL);
+	$qip = (array_key_exists('ip', $_GET) ? $_GET['ip'] : NULL);
   $tnode = getVar('tnode', 0, '', 'int');
 	
-	if(!isset($limit)) {
-                $limit = 10;
-        }
-
 	$setdate=setDate();
-	$where .= $setdate;
+	$where = $setdate;
 
 	if(isset($qip)) {
                 $where .= " AND (source_ip = '".$qip."' OR destination_ip = '".$qip."' OR contact_ip = '".$qip."')";
@@ -226,15 +218,11 @@ function getLastPerf() {
  
 	//Set our variables
 	$limit = ($_GET['limit']);
-	$method = ($_GET['method']);
+	$method = (array_key_exists('method', $_GET) ? $_GET['method'] : NULL);
   $tnode = getVar('tnode', 0, '', 'int');
 	
-	if(!isset($limit)) {
-                $limit = 10;
-        }
-
 	$setdate=setDate();
-	$where .= $setdate;
+	$where = $setdate;
 
 	// Proceed with Query
         global $mynodeshost, $db;
@@ -272,28 +260,22 @@ function getSearch() {
  
 	//Set our variables
 	$field = ($_GET['field']);
-	$value = ($_GET['value']);
-	$limit = ($_GET['limit']);
-	$hours = ($_GET['hours']);
-	$minutes = ($_GET['minutes']);
+	$value = (array_key_exists('value', $_GET) ? $_GET['value'] : NULL);
+	$limit = (array_key_exists('limit', $_GET) ? $_GET['limit'] : 10);
+	$hours = (array_key_exists('hours', $_GET) ? $_GET['hours'] : NULL);
+	$minutes = (array_key_exists('minutes', $_GET) ? $_GET['minutes'] : 2);
   $tnode = getVar('tnode', 0, '', 'int');   
 	
-	if(!isset($limit)) {
-                $limit = 10;
-        }
 	if(!isset($hours)) {
                 $minutes_h = 0;
 	} else {
                 $minutes_h = round($hours * 60);
 	}
-	if(!isset($minutes)) {
-                $minutes = 2;
-        }
 
 	$trange = $minutes + $minutes_h;
 
 	$setdate=setDate();
-	$where .= $setdate;
+	$where = $setdate;
 
 	// Proceed with Query
         global $mynodeshost, $db;
@@ -326,14 +308,12 @@ function getSearch() {
 function setDate() {
 
 	// Set Date & Time (!!WORK IN PROGRESS!!)
-
-	$qfd = ($_GET['fd']); $qtd = ($_GET['td']);
-	$qft = ($_GET['ft']); $qtt = ($_GET['tt']);
-
 	// If no date/time, default to today
-        if(!isset($qfd)) {
-                $qfd =  date("Y-m-d");
-        }
+	$qfd = (array_key_exists('fd', $_GET) ? $_GET['fd'] : date("Y-m-d"));
+	$qtd = (array_key_exists('td', $_GET) ? $_GET['td'] : NULL);
+	$qft = (array_key_exists('ft', $_GET) ? $_GET['ft'] : NULL);
+	$qtt = (array_key_exists('tt', $_GET) ? $_GET['tt'] : NULL);
+
         $fd = date("Y-m-d", strtotime($qfd));
         if(isset($qtd)) {
         $td = date("Y-m-d", strtotime($qtd));
@@ -351,19 +331,11 @@ function setDate() {
 function getStatsUA() {
          
 	//Set our variables
-	if(!empty($_GET['method']))
-		$method = ($_GET['method']);
-	if(!empty($_GET['hours']))
-		$hours = ($_GET['hours']);
-	$limit = ($_GET['limit']);
+	$method = (!empty($_GET['method']) ? $_GET['method'] : "INVITE");
+	$hours = (!empty($_GET['hours']) ? $_GET['hours'] : 24);
+	$limit = (array_key_exists('limit', $_GET) ? $_GET['limit'] : NULL);
 	$tnode = getVar('tnode', 0, '', 'int');   
   
-	if(!isset($method)) {
-		$method =  "INVITE";
-	}
-	if(!isset($hours)) {
-		$hours =  24;
-	}
 	// Proceed with Query
         global $mynodeshost, $db;
         $option = array(); //prevent problems
@@ -372,7 +344,7 @@ function getStatsUA() {
 	$query = "SELECT useragent, sum(total) as count from stats_useragent "
 		   ."where `from_date` > DATE_SUB( NOW() , INTERVAL ".$hours." HOUR ) "
 		   ."AND method='".$method."' group by useragent order by count DESC";
-	if($limit) {$query .= " limit ".$limit; }
+	if(isset($limit)) {$query .= " limit ".$limit; }
 
                 $rows = $db->loadObjectList($query);
         }
@@ -430,11 +402,9 @@ function dophpSip() {
 function getStatsCount() {
          
 	//Set our variables
-	$method = ($_GET['method']);
-    if(!empty($_GET['hours']))
-    	$hours = ($_GET['hours']);
-    if(!empty($_GET['measure']))
-    	$measure = ($_GET['measure']);
+	$method = (array_key_exists('method', $_GET) ? $_GET['method'] : NULL);
+	$hours = (array_key_exists('hours', $_GET) ? $_GET['hours'] : NULL);
+	$measure = (!empty($_GET['measure']) ? $_GET['measure'] : NULL);
   $tnode = getVar('tnode', 0, '', 'int');
   
 	if(!isset($method)||$method!="INVITE" && $method!="REGISTER" && $method!="CURRENT") {

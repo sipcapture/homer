@@ -32,9 +32,6 @@ define('_HOMEREXEC', "1");
 /* MAIN CLASS modules */
 include("class/index.php");
 
-define('_HOMEREXEC', "1");
-
-
 class pcap_hdr {
    public $magic; 	// 4 bits
    public $version_major; //2
@@ -134,7 +131,7 @@ $tnode=1;
 $option = array(); //prevent problems
 
 // Check if Table is set
-if ($table == NULL) { $table="sip_capture"; }
+if (!isset($table)) { $table="sip_capture"; }
 
 //$cid="1234567890";
 
@@ -248,6 +245,7 @@ foreach($results as $val) {
 
 	$data=$row->msg;
 	$size->data=strlen($data);
+	$ptk = '';
 
 	if($text) {
 	   
