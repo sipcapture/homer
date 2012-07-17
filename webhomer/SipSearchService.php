@@ -235,12 +235,13 @@ class SipSearchService implements ISipService
   public function searchAll($search, $columns, $offset, $num, $sort, $sortDirection = 'asc', $isCount = false, $homer, $searchtColumns, $parent)
   {
 
-     global $db, $mynodeshost, $mynodesname;                  
+     global $db, $mynodeshost, $mynodesname;
      
      $whereSqlParts = array();
 
      $location = $homer->location;
-     
+     //Get aliases (hosts)
+     $hosts = $db->getAliases();
 
      $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time','unique','b2b','limit','node','logic_or');
      $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
@@ -296,7 +297,7 @@ class SipSearchService implements ISipService
     }
                        
     if(isset($callwhere)) $where .= " AND ".$callwhere.")";
-    if(empty($searchtColumns)) {    
+    if(empty($searchtColumns)) {
         foreach($columns as $column){
           // get db column name
           //$columnName = $this->propertyToColumnMapping[$column];
@@ -307,6 +308,9 @@ class SipSearchService implements ISipService
       foreach($searchtColumns as $key=>$value){
       // get db column name      
        $columnName = $parent->getColumnIndexByNumber($key);
+       if ($columnName == "source_ip" || $columnName == "destination_ip" ) {
+         $value = $this->searchHost($value, $hosts);
+       }
        $eqlike = preg_match("/%/", $value) ? " like " : " = ";
        $whereSqlParts2[] = "{$columnName} {$eqlike} '{$value}'";
       }
@@ -416,5 +420,19 @@ class SipSearchService implements ISipService
     }
     
     return $sipresults;
+  }
+  
+  /**
+   * name -> IP
+   */
+  protected function searchHost($value, $hosts) {
+    
+    if(!filter_var($value, FILTER_VALIDATE_IP)) {
+      // search in hosts
+      foreach($hosts as $host) {
+        if ($host->name == $value) return $host->host;
+      }
+    }
+    return $value;
   }
 }
