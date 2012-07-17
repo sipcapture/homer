@@ -299,8 +299,8 @@ class SipSearchService implements ISipService
     if(empty($searchtColumns)) {    
         foreach($columns as $column){
           // get db column name
-          $columnName = $this->propertyToColumnMapping[$column];
-          $whereSqlParts[] = "{$column} LIKE '{$search}%'";           
+          //$columnName = $this->propertyToColumnMapping[$column];
+          $whereSqlParts[] = "{$column} LIKE '{$search}%'";
       }
     }
     else {
@@ -314,7 +314,7 @@ class SipSearchService implements ISipService
 
     // build where clause for all columns we are searching against
     $whereSql = implode($whereSqlParts, ' OR ');
-    $whereSql .= implode($whereSqlParts2, ' AND ');
+    if (isset($whereSqlParts2)) $whereSql .= implode($whereSqlParts2, ' AND ');
 
     //$node = sprintf("homer_node%02d.", $value);
 

@@ -521,9 +521,9 @@ class HTML_search {
                            <input name="node" id="node" size="6" value="<?php if(isset($search['node'])) echo $search['node'];?>" class="ui-select ui-widget ui-state-default ui-corner-all"  />
                                    <!--
                                     <select name="node" id="node" class="ui-select ui-widget ui-state-default ui-corner-all"  />
-                                    <option value="101" <?php if(($search['node']) == "101" ) echo 'selected="selected"'; ?> >Berlin [101]</option>
-                                    <option value="102" <?php if(($search['node']) == "102" ) echo 'selected="selected"'; ?> >Frankfurt [102]</option>
-                                    <option value="103" <?php if(($search['node']) == "103" ) echo 'selected="selected"'; ?> >Cologne [103]</option>                                     
+                                    <option value="101" <?php if(isset($search['node']) && (($search['node']) == "101" )) echo 'selected="selected"'; ?> >Berlin [101]</option>
+                                    <option value="102" <?php if(isset($search['node']) && (($search['node']) == "102" )) echo 'selected="selected"'; ?> >Frankfurt [102]</option>
+                                    <option value="103" <?php if(isset($search['node']) && (($search['node']) == "103" )) echo 'selected="selected"'; ?> >Cologne [103]</option>                                     
                                     </select>
                                   -->
                            </td>
