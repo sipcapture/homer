@@ -34,7 +34,7 @@ defined( '_HOMEREXEC' ) or die( 'Restricted access' );
 
 class HTML_Admin {
 
-	function displayNewAdminOverView($type, $allrows, $allnames, $task, $alldval) {
+	function displayNewAdminOverView($allrows, $allnames, $task, $alldval) {
 
 			global $mynodeshost, $task;
 			        	
@@ -397,7 +397,7 @@ $userdef = get_defined_constants(true);
 	</fieldset> 
 	<input type="hidden" name="task" value="createuser">
 	<input type="hidden" name="component" value="admin">
-	<input type="hidden" name="returntask" value="<?php echo $task;?>">
+	<input type="hidden" name="returntask" value="<?php if (isset($task)) echo $task;?>">
 	</form> 
 </div> 
 
@@ -413,7 +413,7 @@ $userdef = get_defined_constants(true);
 	</fieldset> 
 	<input type="hidden" name="task" value="createhost">
 	<input type="hidden" name="component" value="admin">
-	<input type="hidden" name="returntask" value="<?php echo $task;?>">
+	<input type="hidden" name="returntask" value="<?php if (isset($task)) echo $task;?>">
 	</form> 
 </div> 
 
@@ -429,7 +429,7 @@ $userdef = get_defined_constants(true);
 	</fieldset> 
 	<input type="hidden" name="task" value="createnode">
 	<input type="hidden" name="component" value="admin">
-	<input type="hidden" name="returntask" value="<?php echo $task;?>">
+	<input type="hidden" name="returntask" value="<?php if (isset($task)) echo $task;?>">
 	</form> 
 </div> 
 

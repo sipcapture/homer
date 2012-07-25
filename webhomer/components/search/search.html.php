@@ -898,7 +898,7 @@ class HTML_search {
 <?php
         }
 
-  function displayNewAdminOverView($type, $allrows, $allnames, $task, $alldval) {
+  function displayNewAdminOverView($allrows, $allnames, $task, $alldval) {
 
         global $mynodeshost, $db, $task;
         

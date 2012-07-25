@@ -96,8 +96,8 @@ class Component {
                   $allrows= array($rows_users, $rows_hosts, $rows_nodes);
                   $allnames= array($name_users, $name_hosts, $name_nodes);
                   $alldval= array($dval_users, $dval_hosts, $dval_nodes);
-
-                  HTML_Admin::displayNewAdminOverView($type, $allrows, $allnames, $task, $alldval);
+                  
+                  HTML_Admin::displayNewAdminOverView($allrows, $allnames, $task, $alldval);
 
 
 		  /* USERS/HOSTS/NODES  FORM */
