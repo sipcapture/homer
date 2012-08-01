@@ -55,6 +55,11 @@ if(!defined('APIURL')) define('APIURL', "http://".$_SERVER['SERVER_NAME']);
 
 $uri = APIURL.APILOC;
 
+$secondes = array();
+$asr = array();
+$sip100 = array();
+$sip401 = array();
+
 // INVITES
 $request = $uri."api.php?task=statscount&method=INVITE&hours=".$xhours;
 $jsondata = file_get_contents($request);

@@ -351,8 +351,8 @@ function getStatsUA() {
 
 	// Avoid empty set
 	if(empty($rows)){
-          $rows[useragent] = "none";
-          $rows[count] = "0";
+          $rows['useragent'] = "none";
+          $rows['count'] = "0";
         }
 
 	// Prepare JSON reply
