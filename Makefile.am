@@ -1,5 +1,4 @@
 EXTRA_DIST = \
-	scripts \
 	sql \
 	homer.spec
 
@@ -11,4 +10,5 @@ sql_DATA = \
 
 SUBDIRS = \
 	captagent \
+	scripts \
 	webhomer

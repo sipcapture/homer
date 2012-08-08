@@ -29,5 +29,6 @@ AC_CONFIG_FILES([
     Makefile
     captagent/Makefile
     webhomer/Makefile
+    scripts/Makefile
 ])
 AC_OUTPUT

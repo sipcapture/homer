@@ -33,11 +33,19 @@ $newparts = 2; #new partitions for 2 days. Anyway, start this script daily!
 @stepsvalues = (86400, 3600, 1800, 900); 
 $partstep = 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes 
 
+
 #Check it
 $partstep=0 if(!defined $stepsvalues[$partstep]);
 #Mystep
 $mystep = $stepsvalues[$partstep];
 #Coof
+
+# Optionally load override configuration. perl format
+$rc = "/etc/sysconfig/partrotaterc";
+if (-e $rc) {
+  do $rc;
+}
+
 $coof=int(86400/$mystep);
 
 #How much partitions
