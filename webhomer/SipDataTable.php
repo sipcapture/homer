@@ -525,7 +525,19 @@ class SipDataTable extends DataTable_DataTable
 
     // check if a search term was passed in
     if($request->hasSearch() || $request->hasColumnSearch()){
-      
+
+    	// get the total number of results (for pagination)
+    	$totalLength = $this->browserService->searchAll($request->getSearch(),
+    			$this->getSearchableColumnNames(),
+    			$request->getDisplayStart(),
+    			$request->getDisplayLength(),
+    			$sortProperty,
+    			$request->getSortDirection(),
+    			true,
+    			$request->getHomer(),
+    			$request->getSearchtColumns(),
+    			$this
+    	);
       
       // call the searchAll() service method
       $results = $this->browserService->searchAll($request->getSearch(), 
@@ -539,21 +551,17 @@ class SipDataTable extends DataTable_DataTable
                                                   $request->getSearchtColumns(),
                                                   $this
                                                   );
-      
-      // get the total number of results (for pagination)
-      $totalLength = $this->browserService->searchAll($request->getSearch(), 
-                                                      $this->getSearchableColumnNames(), 
-                                                      $request->getDisplayStart(), 
-                                                      $request->getDisplayLength(), 
-                                                      $sortProperty, 
-                                                      $request->getSortDirection(), 
-                                                      true,
-                                                      $request->getHomer(),
-                                                      $request->getSearchtColumns(),
-                                                      $this
-                                                      );
+
     
     } else {
+    	
+    	// get the total number of results (for pagination)
+    	$totalLength = $this->browserService->getAll($request->getDisplayStart(),
+    			$request->getDisplayLength(),
+    			$sortProperty,
+    			$request->getSortDirection(),
+    			true,
+    			$request->getHomer());
       
       // call the getAll() service method
       $results = $this->browserService->getAll($request->getDisplayStart(), 
@@ -563,13 +571,6 @@ class SipDataTable extends DataTable_DataTable
                                                false,
                                                $request->getHomer());
       
-      // get the total number of results (for pagination)
-      $totalLength = $this->browserService->getAll($request->getDisplayStart(), 
-                                                   $request->getDisplayLength(), 
-                                                   $sortProperty, 
-                                                   $request->getSortDirection(), 
-                                                   true,
-                                                   $request->getHomer());
     }
 
     // return the final result set

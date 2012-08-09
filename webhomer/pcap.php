@@ -156,7 +156,7 @@ else $cid = $cid_array;
 if(!$text) $buf=$pcap_packet;
 
 /* HOMER DB */
-if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$location[0]] : NULL))
+if(!$db->dbconnect_homer(isset($mynodes[$location[0]]) ? $mynodes[$location[0]] : NULL))
 {
     //No connect;
     exit;
@@ -182,9 +182,17 @@ if(isset($cid_array)) {
 	/* Detect second B-LEG ID */
 	if($b2b) {
 	    if(BLEGCID == "x-cid") {
-        	  $query = "SELECT callid FROM ".HOMER_TABLE." WHERE ".$where." AND callid_aleg='".$cid."'";
-	          $cid_aleg = $db->loadResult($query);
-	          $cid_array[] = $cid_aleg;
+	    	 foreach($location as $value) {
+	    	 	$db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
+	    		foreach ($mynodes[$value]->dbtables as $tablename){
+        	  		$query = "SELECT callid FROM ".$tablename." WHERE ".$where." callid_aleg='".$cid."'";
+	          		$cid_aleg = $db->loadResult($query);
+	          		$cid_array[] = $cid_aleg;
+	          		if (!empty($cid_aleg)){
+	          			break 2;
+	          		}
+	    		}
+	    	}
 	    }
 	    else if (BLEGCID == "-0") { 
 	          $cid_aleg = $cid.BLEGCID;
@@ -207,31 +215,32 @@ $results = array();
 
 foreach($location as $value) {
 
-        $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+        $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
 
         $tnode = "'".$value."' as tnode";
         if($unique) $tnode .= ", MD5(msg) as md5sum";
-
-        foreach($cid_array as $cid) {
-            
-            $local_where = $where." ( callid = '".$cid."' )";                               
-            
-            $query = "SELECT *, ".$tnode
-                     ."\n FROM ".HOMER_TABLE
-                     ."\n WHERE ".$local_where." order by micro_ts ASC limit ".$limit;
-
-            $result = $db->loadObjectArray($query);
-
-            // Check if we must show up only UNIQ messages. No duplicate!
-            //only unique
-            if($unique) {
-                foreach($result as $key=>$row) {
-                           if(isset($message[$row['md5sum']])) unset($result[$key]);
-                           else $message[$row['md5sum']] = $row['node'];
-                }
-            }
-
-            $results = array_merge($results,$result);
+        foreach ($mynodes[$value]->dbtables as $tablename){
+	        foreach($cid_array as $cid) {
+	            
+	            $local_where = $where." ( callid = '".$cid."' )";                               
+	            
+	            $query = "SELECT *, ".$tnode
+	                     ."\n FROM ".$tablename
+	                     ."\n WHERE ".$local_where." order by micro_ts ASC limit ".$limit;
+	
+	            $result = $db->loadObjectArray($query);
+	
+	            // Check if we must show up only UNIQ messages. No duplicate!
+	            //only unique
+	            if($unique) {
+	                foreach($result as $key=>$row) {
+	                           if(isset($message[$row['md5sum']])) unset($result[$key]);
+	                           else $message[$row['md5sum']] = $row['node'];
+	                }
+	            }
+	
+	            $results = array_merge($results,$result);
+	        }
         }
 }
 

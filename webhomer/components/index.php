@@ -17,7 +17,7 @@ if($task == "logout") {
 /* My Nodes */
 $mynodeshost = array();
 $mynodesname = array();
-$nodes = $db->getAliases('nodes');
+$nodes = $db->getNodes();
 foreach($nodes as $node) {
         $mynodeshost[$node->id] = $node->host;
         $mynodesname[$node->id] = $node->name;

@@ -63,13 +63,59 @@ else
     $userlevel = 'default';
 $header =  getVar('component', 0, '', 'int');
 
+
+class Node{
+	public $name;
+	public $host;
+	public $dbname;
+	public $dbusername;
+	public $dbpassword;
+	public $dbtablescnt;
+	public $dbtables;
+};
+
+$mynodes = array();
+
 /* My Nodes */
 $mynodeshost = array();
 $mynodesname = array();
-$nodes = $db->getAliases('nodes');
+$mynodesdbname = array();
+$mynodesdbtables = array();
+$mynodesdbusername = array();
+$mynodesdbpassword = array();
+
+$nodes = $db->getNodes();
 foreach($nodes as $node) {
-        $mynodeshost[$node->id] = $node->host;
-        $mynodesname[$node->id] = $node->name;
+
+	$mynodes[$node->id] = new Node();
+
+	$mynodeshost[$node->id] = $node->host;
+	$mynodesname[$node->id] = $node->name;
+	$mynodesdbname[$node->id] = $node->dbname;
+	$mynodes[$node->id]->dbtablescnt = array();
+	$mynodes[$node->id]->dbtables = array();
+
+	$tables = $node->dbtables;
+	$i = 0;
+	$tok = strtok ($tables, ", \t");
+	while ($tok !== false)
+	{
+		$mynodes[$node->id]->dbtables[$i] = $tok;
+		$mynodes[$node->id]->dbtablescnt[$i] = 0;
+		$tok = strtok(", \t");
+		$i = $i + 1 ;
+
+	}
+
+	$mynodesdbusername[$node->id] = $node->dbusername;
+	$mynodesdbpassword[$node->id] = $node->dbpassword;
+
+
+	$mynodes[$node->id]->dbname = $node->dbname;
+	$mynodes[$node->id]->host = $node->host;
+	$mynodes[$node->id]->dbusername = $node->dbusername;
+	$mynodes[$node->id]->dbpassword = $node->dbpassword;
+
 }
 
 /* SECURITY LEVEL: 1 - Admin, 2 - Manager, 3 - User, 4 - Guest*/

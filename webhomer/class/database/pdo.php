@@ -71,24 +71,29 @@ class HomerDB {
 	}
 
 	//connect to database
-	function dbconnect_homer($host){
-	        
-                if(!$host) $host = $this->hostname_homer;	                                             
+	function dbconnect_homer($node){
 	
-                try {                  
-                  $dbstring = DATABASE.":host=".$host.(($this->port_logon) ? ";port=".$this->port_logon : "" ).";dbname=".$this->database_homer;
-                  $this->connection = new PDO($dbstring, $this->username_homer, $this->password_homer);
-                } catch (PDOException $e){                    
-                    try {
-                          // if connection is not establish, use HOMER_HOSTNAME from configuration.php                 
-                          $host = $this->hostname_homer;                            
-                          $dbstring = DATABASE.":host=".$host.(($this->port_logon) ? ";port=".$this->port_logon : "" ).";dbname=".$this->database_homer;
-                          $this->connection = new PDO($dbstring, $this->username_homer, $this->password_homer);
-                     } catch (PDOException $e){
-                          die($e->getMessage());
-                     }                                                        
-                }                
-                
+		$host = isset ($node->host) ? $node->host : NULL;
+		$dbname = isset ($node->dbname) ? $node->dbname : NULL;
+		$dbusername = isset ($node->dbusername) ? $node->dbusername : NULL;
+		$dbpassword = isset ($node->dbpassword) ? $node->dbpassword : NULL;
+		 
+		if(!$host) $host = $this->hostname_homer;
+	
+		try {
+			$dbstring = DATABASE.":host=".$host.(($this->port_logon) ? ";port=".$this->port_logon : "" ).";dbname=".$dbname;
+			$this->connection = new PDO($dbstring, $dbusername, $dbpassword);
+		} catch (PDOException $e){
+			try {
+				// if connection is not establish, use HOMER_HOSTNAME from configuration.php
+				$host = $this->hostname_homer;
+				$dbstring = DATABASE.":host=".$host.(($this->port_logon) ? ";port=".$this->port_logon : "" ).";dbname=".$this->database_homer;
+				$this->connection = new PDO($dbstring, $this->username_homer, $this->password_homer);
+			} catch (PDOException $e){
+				die($e->getMessage());
+			}
+		}
+	
 		return true;
 	}
 		
@@ -127,14 +132,21 @@ class HomerDB {
         return $query;
   }
 	
-	function getAliases($table='hosts', $key=''){
-		//conect to DB
-		$this->dbconnect();
-		
-		$query = "SELECT id,host,name FROM homer_".$table." WHERE status = 1";
-		return $this->loadObjectList($query);		
-
-	}
+  function getNodes (){
+  	 
+  	$this->dbconnect();
+  	$query = "SELECT id,host,dbname,dbtables,dbusername,dbpassword,name FROM homer_nodes WHERE status = 1";
+  	return $this->loadObjectList($query);
+  	 
+  }
+  
+  function getAliases(){
+  	//conect to DB
+  	$this->dbconnect();
+  	$query = "SELECT id,host,name FROM homer_hosts WHERE status = 1";
+  	return $this->loadObjectList($query);
+  
+  }
 
 	function executeQuery($query) {			
 		//$result = mysql_query($query);

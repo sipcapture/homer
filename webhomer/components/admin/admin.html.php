@@ -55,6 +55,11 @@ class HTML_Admin {
 			categoryhost: 'adminajax.php?type=host&categoryId=',			
 			categoryname: 'adminajax.php?type=name&categoryId=',
 			categorystatus: 'adminajax.php?type=status&categoryId=',
+			categorydbport: 'adminajax.php?type=dbport&categoryId=',
+			categorydbname: 'adminajax.php?type=dbname&categoryId=',
+			categorydbusername: 'adminajax.php?type=dbusername&categoryId=',
+			categorydbpassword: 'adminajax.php?type=dbpassword&categoryId=',
+			categorydbtables: 'adminajax.php?type=dbtables&categoryId=',
 			categorypassword: 'adminajax.php?type=password&categoryId=',			
 			categoryuseremail: 'adminajax.php?type=useremail&categoryId=',
 			categoryuserlevel: 'adminajax.php?type=userlevel&categoryId=',			
@@ -189,7 +194,7 @@ class HTML_Admin {
 
 <!-- column2 start -->
 
-        <ul id="column2" class="column" style="margin: 0 0 0 0; min-height: 0px; height: 0px;" >
+        <ul id="column2" class="column" style="margin: 0 0 0 0; min-height: 0px; height: 0px; width: 55%" >
        
 
 	<!-- about widget -->
@@ -426,10 +431,20 @@ $userdef = get_defined_constants(true);
 		<input type="text" name="name" id="name" class="text ui-widget-content ui-corner-all" /> <br>
 		<label for="status">Status</label> 
 		<input type="text" name="status" id="status" class="text ui-widget-content ui-corner-all" value="1"/> <br> 
+		<label for="name">Database</label> 
+		<input type="text" name="dbname" id="dbname" class="text ui-widget-content ui-corner-all" /> <br>
+		<label for="name">Database port</label> 
+		<input type="text" name="dbport" id="dbport" class="text ui-widget-content ui-corner-all" /> <br>
+		<label for="name">Database user</label> 
+		<input type="text" name="dbusername" id="dbusername" class="text ui-widget-content ui-corner-all" /> <br>
+		<label for="name">Database password</label> 
+		<input type="text" name="dbtables" id="dbtables" class="text ui-widget-content ui-corner-all" /> <br>
+		<label for="name">Database tables</label> 
+		<input type="text" name="dbpassword" id="dbpassword" class="text ui-widget-content ui-corner-all" /> <br>
 	</fieldset> 
 	<input type="hidden" name="task" value="createnode">
 	<input type="hidden" name="component" value="admin">
-	<input type="hidden" name="returntask" value="<?php if (isset($task)) echo $task;?>">
+	<input type="hidden" name="returntask" value="<?php echo $task;?>">
 	</form> 
 </div> 
 

@@ -128,7 +128,7 @@ if (isset($flow_from_date, $flow_from_time, $flow_to_time, $flow_to_date))
 /* Prevent break SQL */
 if(isset($where)) $where.=" AND ";
 
-if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$location[0]] : NULL))
+if(!$db->dbconnect_homer(isset($mynodes[$location[0]]) ? $mynodes[$location[0]] : NULL))
 {
     //No connect;
     exit;
@@ -144,9 +144,17 @@ if(!$db->dbconnect_homer(isset($mynodeshost[$location[0]]) ? $mynodeshost[$locat
                default:
                         $cid_aleg = $cid;
                case "x-cid":
-                        $query = "SELECT callid FROM ".HOMER_TABLE
-                        ."\n WHERE ".$where." AND callid_aleg='".$cid."'";
-                        $cid_aleg = $db->loadResult($query);
+		               	foreach($location as $value) {
+		               		$db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
+		               		foreach ($mynodes[$value]->dbtables as $tablename){
+		                        		$query = "SELECT callid FROM ".$tablename
+		                        		."\n WHERE ".$where." callid_aleg='".$cid."'";
+		                        		$cid_aleg = $db->loadResult($query);
+		                        		if (!empty($cid_aleg))
+		                        			break 2;
+		               		}
+		               	}                       			
+                        break;		
 	       case "b2b":
                         if (BLEGTAIL) $cid_aleg = $cid.BLEGTAIL;
 
@@ -165,46 +173,50 @@ $statuscall=0;
 
 foreach($location as $value) {
 
-        $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
+        $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
 
         $tnode = "'".$value."' as tnode";
         if($unique) $tnode .= ", MD5(msg) as md5sum";
-
-        foreach($cid_array as $cid) {
-
-        	$local_where = $where." ( callid = '".$cid."' )";
-		/* Append B-LEG if set */
-		if (BLEGCID && $full == 1) $local_where .= " OR (callid='".$cid_aleg."')";
-
-	        $query = "SELECT *, ".$tnode
-        	  ."\n FROM ".HOMER_TABLE
-	          ."\n WHERE ".$local_where." order by micro_ts ASC limit 100";
-
-	          //$result = $db->loadObjectList($query);
-	        $result = $db->loadObjectArray($query);
-
-	        // Check if we must show up only UNIQ messages. No duplicate!
-	        //only unique
-	        if($unique) {
-	                foreach($result as $key=>$row) {
-        	                   if(isset($message[$row['md5sum']])) unset($result[$key]);
-                	           else $message[$row['md5sum']] = $row['node'];
-	                }
-	        }
-
-	        $results = array_merge($results,$result);	
-
-          /* 
-	        $querytd = "SELECT max(micro_ts) as max_ts, min(micro_ts) as min_ts "
-        	          ."\n FROM ".HOMER_TABLE
-                	  ."\n WHERE ".$local_where;
-
-	        $mm_ts_call = $db->loadObjectList($querytd);
-
-	        if($mm_ts_call[0]->max_ts > $max_ts) $max_ts = $mm_ts_call[0]->max_ts;
-	        if($min_ts == 0 || $min_ts > $mm_ts_call[0]->min_ts) $min_ts = $mm_ts_call[0]->min_ts;
-          */
-	}
+        foreach ($mynodes[$value]->dbtables as $tablename){
+        	 
+        	if ($mt_flag == 0 && count($mynodes[$value]->dbtables) > 1) $mt_flag = 1;
+        	
+	        foreach($cid_array as $cid) {
+	
+	        	$local_where = $where." ( callid = '".$cid."' )";
+			/* Append B-LEG if set */
+			if (BLEGCID && $full == 1) $local_where .= " OR (callid='".$cid_aleg."')";
+	
+				$query = "SELECT *, ".$tnode.",'".$tablename."' as tablename"
+	        	  ."\n FROM ".$tablename
+		          ."\n WHERE ".$local_where." order by micro_ts ASC limit 100";
+	
+		          //$result = $db->loadObjectList($query);
+		        $result = $db->loadObjectArray($query);
+	
+		        // Check if we must show up only UNIQ messages. No duplicate!
+		        //only unique
+		        if($unique) {
+		                foreach($result as $key=>$row) {
+	        	                   if(isset($message[$row['md5sum']])) unset($result[$key]);
+	                	           else $message[$row['md5sum']] = $row['node'];
+		                }
+		        }
+	
+		        $results = array_merge($results,$result);	
+	
+	          /* 
+		        $querytd = "SELECT max(micro_ts) as max_ts, min(micro_ts) as min_ts "
+	        	          ."\n FROM ".HOMER_TABLE
+	                	  ."\n WHERE ".$local_where;
+	
+		        $mm_ts_call = $db->loadObjectList($querytd);
+	
+		        if($mm_ts_call[0]->max_ts > $max_ts) $max_ts = $mm_ts_call[0]->max_ts;
+		        if($min_ts == 0 || $min_ts > $mm_ts_call[0]->min_ts) $min_ts = $mm_ts_call[0]->min_ts;
+	          */
+			}
+       }
 }
 
 if(count($results)==0) {
@@ -214,7 +226,8 @@ if(count($results)==0) {
 
 /* Sort it if we have more than 1 location*/
 //if(count($location) > 1) 
-usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
+if ($mt_flag == 1)
+	usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
 /* host:host check */
 if (CFLOW_HPORT) {
@@ -537,6 +550,7 @@ foreach($localdata as $data) {
   $cds[4] = nl2br(addslashes($data->id));
   $cds[5] = $data->date;
   $cds[6] = $data->tnode;
+  $cds[7] = $data->tablename;
   
   $click[] = $cds;
   
@@ -666,7 +680,8 @@ foreach($click as $cds) {
 
      $url = "utils.php?task=sipmessage&id=".$messg."&popuptype=".$popuptype;
      $url .= "&from_time=".$ft."&from_date=".$fd."&tnode=".$cds[6];
-
+     $url .= "&tablename=".$cds[7];
+     
      echo "<area shape='rect' href='javascript:popMessage2(".$popuptype.",\"".$messg."\",\"".$url."\")' coords='$cz' alt='Area'></area>\n";
 }
 

@@ -96,7 +96,7 @@ function getSession() {
 	if(isset($_GET['cid'])) {
  
 	//Set our variables
-	$cid = intval($_GET['cid']);
+	$cid = $_GET['cid'];
 	$cid2 = intval($_GET['cid2']);
 	$limit = (array_key_exists('limit', $_GET) ? $_GET['limit'] : 100);
   $tnode = getVar('tnode', 0, '', 'int');
@@ -104,22 +104,26 @@ function getSession() {
 	$setdate=setDate();
 	
 	// Proceed with Query
-        global $mynodeshost, $db;
+        global $mynodes, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
-
+        $all_rows = array();
+        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
+        	foreach ($mynodes[$tnode]->dbtables as $tablename){
                 $query = "SELECT * "
-                        ."\n FROM ".HOMER_TABLE
-                        ."\n WHERE callid=".$cid
-			 ."\n AND ".$setdate
-			."\n ORDER BY id DESC"
-			." limit ".$limit;
+                        ."\n FROM ".$tablename
+                        ."\n WHERE callid='".$cid
+			 ."'\n AND ".$setdate
+			 ."\n ORDER BY id DESC"
+			 ." limit ".$limit;
 
                 $rows = $db->loadObjectList($query);
+                $all_rows = array_merge($all_rows, $rows);
+        	}
+        	
         }
 
 	// Prepare JSON reply
-	$output = json_encode(array('session' => $rows));
+	$output = json_encode(array('session' => $all_rows));
 	 
 	// Output the result
 	echo $output;
@@ -140,21 +144,24 @@ function getMsg() {
 	$setdate=setDate();
 	
 	// Proceed with Query
-        global $mynodeshost, $db;
+        global $mynodes, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
-
+        $all_rows = array();
+        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
+        	foreach ($mynodes[$tnode]->dbtables as $tablename){
                 $query = "SELECT * "
-                        ."\n FROM ".HOMER_TABLE
+                        ."\n FROM ".$tablename
                         ."\n WHERE id=".$id
 			 ." AND ".$setdate
 			." limit 1";
 
                 $rows = $db->loadObjectList($query);
+                $all_rows = array_merge($all_rows, $rows);
+        	}
         }
 
 	// Prepare JSON reply
-	$output = json_encode(array('msg' => $rows));
+	$output = json_encode(array('msg' => $all_rows));
 	 
 	// Output the result
 	echo $output;
@@ -187,22 +194,25 @@ function getLast() {
         }
 
 	// Proceed with Query
-        global $mynodeshost, $db;
+        global $mynodes, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
-
+        $all_rows = array();
+        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
+        	foreach ($mynodes[$tnode]->dbtables as $tablename){
                 $query = "SELECT * "
-                        ."\n FROM ".HOMER_TABLE
+                        ."\n FROM ".$tablename
                         ."\n WHERE ".$where
 			."\n ORDER BY id DESC"
 			." limit 0,".$limit;
 			//." limit 1";
 
                 $rows = $db->loadObjectList($query);
+                $all_rows = array_merge($all_rows, $rows);
+        	}
         }
 
 	// Prepare JSON reply
-	$output = json_encode(array('last' => $rows));
+	$output = json_encode(array('last' => $all_rows));
 	 
 	// Output the result
 	echo $output;
@@ -225,26 +235,29 @@ function getLastPerf() {
 	$where = $setdate;
 
 	// Proceed with Query
-        global $mynodeshost, $db;
+        global $mynodes, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
-
-		$last = "SELECT MAX(id) FROM ".HOMER_TABLE;
+        $all_rows = array();
+        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
+        	foreach ($mynodes[$tnode]->dbtables as $tablename){
+				$last = "SELECT MAX(id) FROM ".$tablename;
                 $lastrows = $db->loadObjectList($last);
-		$counter = $last - $limit;
+				$counter = $last - $limit;
 
                 $query = "SELECT * "
-                        ."\n FROM ".HOMER_TABLE
+                        ."\n FROM ".$tablename
                         ."\n WHERE id > ".$counter
 			."\n ORDER BY id DESC"
 			." limit 0,".$limit;
 			//." limit 1";
 
                 $rows = $db->loadObjectList($query);
+                $all_rows = array_merge($all_rows, $rows);
+        	}
         }
 
 	// Prepare JSON reply
-	$output = json_encode(array('last' => $rows));
+	$output = json_encode(array('last' => $all_rows));
 	 
 	// Output the result
 	echo $output;
@@ -278,12 +291,13 @@ function getSearch() {
 	$where = $setdate;
 
 	// Proceed with Query
-        global $mynodeshost, $db;
+        global $mynodes, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
-
+        $all_rows = array();
+        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
+        	foreach ($mynodes[$tnode]->dbtables as $tablename){
                 $query = "SELECT * "
-                        ."\n FROM ".HOMER_TABLE
+                        ."\n FROM ".$tablename
                         ."\n WHERE ".$field." = '".$value."' "
 			//."\n AND ( `date` > UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$hours." HOUR) )"
 			."\n AND ( `date` > UNIX_TIMESTAMP(CURDATE() - INTERVAL ".$trange." MINUTE) )"
@@ -291,10 +305,11 @@ function getSearch() {
 			." limit ".$limit;
 
                 $rows = $db->loadObjectList($query);
+                $all_rows = array_merge($all_rows, $rows);
+        	}
         }
-
 	// Prepare JSON reply
-	$output = json_encode(array('session' => $rows));
+	$output = json_encode(array('session' => $all_rows));
 	 
 	// Output the result
 	echo $output;
@@ -337,9 +352,9 @@ function getStatsUA() {
 	$tnode = getVar('tnode', 0, '', 'int');   
   
 	// Proceed with Query
-        global $mynodeshost, $db;
+        global $mynodes, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
+        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
 
 	$query = "SELECT useragent, sum(total) as count from stats_useragent "
 		   ."where `from_date` > DATE_SUB( NOW() , INTERVAL ".$hours." HOUR ) "
@@ -347,6 +362,7 @@ function getStatsUA() {
 	if(isset($limit)) {$query .= " limit ".$limit; }
 
                 $rows = $db->loadObjectList($query);
+                
         }
 
 	// Avoid empty set
@@ -415,9 +431,9 @@ function getStatsCount() {
         }
 
 	// Proceed with Query
-        global $mynodeshost, $db;
+        global $mynodes, $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
+        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
 	// Methods & According Response Formats/Vars
 
 	if ($method == "INVITE") {

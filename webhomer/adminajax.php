@@ -42,7 +42,7 @@ $tmp = $_REQUEST['categoryId'];
 
 $task  = array("user","host","node");
 $tables  = array("logon","hosts","nodes");
-$types = array("userlevel","useremail","host","name","status","password");
+$types = array("userlevel","useremail","host","name","status","password","dbname", "dbport", "dbusername", "dbpassword","dbtables");
 $adminGroups = array("Admin" => 1, "Manager" => 2, "User" => 3, "Guest" => 4);
         
 foreach($task as $key=>$value) {                

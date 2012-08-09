@@ -71,6 +71,7 @@ class SipResult
   private $loctable;
   private $tnode;
   private $location;
+  private $tablename;
   private $unique = 0;
   
 
@@ -122,6 +123,7 @@ class SipResult
 
       $url = "utils.php?task=sipmessage&id=".$this->id."&popuptype=".$popuptype;
       $url .= "&from_time=".$ft."&from_date=".$fd."&tnode=".$this->tnode;
+      $url .= "&tablename=".$this->tablename;
       
       $rtpinfo = "";
       if(preg_match('/=/',$this->rtp_stat)) $rtpinfo = " <b>(R)</b>";     

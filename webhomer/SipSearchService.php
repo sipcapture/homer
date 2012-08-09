@@ -94,7 +94,7 @@ class SipSearchService implements ISipService
   public function getAll($offset, $num, $sort, $sortDirection = 'desc', $isCount = false, $homer)
   {
 
-     global $db, $mynodeshost, $mynodesname;             
+     global $db, $mynodes;             
     
      $sort = $this->propertyToColumnMapping[$sort];
 
@@ -166,23 +166,35 @@ class SipSearchService implements ISipService
       $count=0;
       foreach($location as $value) { 
 
-             $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
-             $captnode =  isset($node) ? " AND node='".$mynodesname[$value].":".$node."'" : "";
+             $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
+             $captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
               
-             if($limit) {                           
-                  /* COUNT LIMIT. Use it for BIG BIG TABLES */
-                  $query = "SELECT id "
-                       ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ". $where . $captnode ." LIMIT $limit;";
-                  $db->executeQuery($query);                               
-                  $count = max($count, $db->getResultCount());
+             if($limit) {
+             	$i = 0;
+             	/* COUNT LIMIT. Use it for BIG BIG TABLES */
+             	foreach ($mynodes[$value]->dbtables as $tablename){
+             		$query = "SELECT id "
+             				."\n FROM ".$tablename
+             				."\n WHERE ". $where . $captnode ." LIMIT $limit;";
+             		$db->executeQuery($query);
+             		$cnt = $db->getResultCount();
+             		$mynodes[$value]->dbtablescnt[$i] = $cnt;
+             		$count = $count + $cnt;
+             		$i++;
+             	}
              }
              else {
-                  $query = "SELECT count(id) as count"
-                      ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ". $where. $captnode.";";                      
-                  $count = max($count, $db->loadResult($query));                       
-             }                                       
+             	$i = 0;
+             	foreach ($mynodes[$value]->dbtables as $tablename){
+             		$query = "SELECT count(id) as count"
+             				."\n FROM ".$tablename
+             				."\n WHERE ". $where. $captnode.";";
+             		$cnt = $db->loadResult($query);
+             		$mynodes[$value]->dbtablescnt[$i] = $cnt;
+             		$count = $count + $cnt;
+             		$i++;
+             	}
+             }                                      
       }
 
       return $count;
@@ -195,27 +207,64 @@ class SipSearchService implements ISipService
 
 	foreach($location as $value) {
 	
-              $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
-              $captnode =  isset($node) ? " AND node='".$mynodesname[$value].":".$node."'" : "";
+              $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
+              $captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
               
               $tnode = "'".$value."' as tnode";
               if($unique) $tnode .= ", MD5(msg) as md5sum";
               
-              $query = "SELECT *,".$tnode
-                ."\n FROM ".HOMER_TABLE 
-                ."\n WHERE ". $where . $captnode
-                ."\n ORDER BY {$sort} {$sortDirection} "
-                ."\n limit {$offset}, {$num}";				
-                $result = $db->loadObjectArray($query);
-          // Check if we must show up only UNIQ messages. No duplicate!
-          //only unique
-          if($unique) {
-                    foreach($result as $key=>$row) {
-                           if(isset($message[$row['md5sum']])) unset($result[$key]);
-                           else $message[$row['md5sum']] = $row[node];                          
-                    }
-          }        
-          $results = array_merge($results,$result);	      
+              $first_table_no = 0;
+              $cnt = $mynodes[$value]->dbtablescnt[0];
+              $prev_cnt = 0;
+              while ($cnt <= $offset)
+              {
+              	$first_table_no++;
+              	if ($first_table_no >= count ($mynodes[$value]->dbtables))
+              		break;//caz anormal
+              	$prev_cnt = $cnt;
+              	$cnt = $cnt + $mynodes[$value]->dbtablescnt[$first_table_no];
+              
+              }
+              
+              
+              $from[$first_table_no] = $offset - $prev_cnt;
+              $count[$first_table_no] = min($cnt - $offset, $num);
+              
+              $last_table_no = $first_table_no;
+              
+              while ($cnt< $offset + $num)
+              {
+              	if ($last_table_no + 1 < count($mynodes[$value]->dbtablescnt))
+              		$last_table_no++;
+              	else
+              		break;
+              	$prev_cnt = $cnt;
+              	$cnt = $cnt + $mynodes[$value]->dbtablescnt[$last_table_no];
+              	$from[$last_table_no] = 0;
+              	$count[$last_table_no] = ($cnt < $offset + $num) ?($mynodes[$value]->dbtablescnt[$last_table_no] ) :$num;
+              }
+              
+              for($table_no = $first_table_no; $table_no <= $last_table_no; $table_no++) {
+              	 
+              	$tablename = $mynodes[$value]->dbtables[$table_no];
+              	 
+              
+              	$query = "SELECT *,".$tnode.",'".$tablename."' as tablename"
+              			."\n FROM ".$tablename
+              			."\n WHERE ". $where . $captnode
+              			."\n ORDER BY {$sort} {$sortDirection} "
+              			."\n limit {$from[$table_no]}, {$count[$table_no]}";
+              			$result = $db->loadObjectArray($query);
+              			// Check if we must show up only UNIQ messages. No duplicate!
+              			//only unique
+              			if($unique) {
+              			foreach($result as $key=>$row) {
+              			if(isset($message[$row['md5sum']])) unset($result[$key]);
+              			else $message[$row['md5sum']] = $row[node];
+              			}
+              			}
+              				$results = array_merge($results,$result);
+              			}     
 	}
 
         /* Sort it if we have more than 1 location*/
@@ -235,7 +284,7 @@ class SipSearchService implements ISipService
   public function searchAll($search, $columns, $offset, $num, $sort, $sortDirection = 'asc', $isCount = false, $homer, $searchtColumns, $parent)
   {
 
-     global $db, $mynodeshost, $mynodesname;
+     global $db, $mynodes;
      
      $whereSqlParts = array();
 
@@ -328,23 +377,36 @@ class SipSearchService implements ISipService
       $count=0;
       foreach($location as $value) {
 
-              $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
-              $captnode =  isset($node) ? " AND node='".$mynodesname[$value].":".$node."'" : "";
+              $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
+              $captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
 
-              if($limit) {                           
-                  /* COUNT LIMIT. Use it for BIG BIG TABLES */
-                  $query = "SELECT id "
-                       ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ". $where . $captnode ." LIMIT $limit;";
-                  $db->executeQuery($query);              
-                  $count = max($count, $db->getResultCount());              
+              if($limit) {
+              	$i = 0;
+              	/* COUNT LIMIT. Use it for BIG BIG TABLES */
+              	foreach ($mynodes[$value]->dbtables as $tablename){
+              		$query = "SELECT id "
+              				."\n FROM ".$tablename
+              				."\n WHERE ". $where . $captnode ." LIMIT $limit;";
+              		$db->executeQuery($query);
+              		$cnt = $db->getResultCount();
+              		$mynodes[$value]->dbtablescnt[$i] = $cnt;
+              		$count = $count + $cnt;
+              		$i++;
+              	}
               }
               else {
-                  $query = "SELECT count(id) as count"
-                      ."\n FROM ".HOMER_TABLE
-                      ."\n WHERE ({$whereSql})". $where . $captnode;                 
-                  $count = max($count, $db->loadResult($query));
-              }                            
+              	$i = 0;
+              	foreach ($mynodes[$value]->dbtables as $tablename){
+              		$query = "SELECT count(id) as count"
+              				."\n FROM ".$tablename
+              				."\n WHERE ({$whereSql})". $where . $captnode;
+              				$cnt = $db->loadResult($query);
+              		$mynodes[$value]->dbtablescnt[$i] = $cnt;
+              		$count = $count + $cnt;
+              		$i++;
+              	}
+              	 
+              }                           
       }
 
       return $count;
@@ -359,27 +421,62 @@ class SipSearchService implements ISipService
       
       foreach($location as $value) {
 
-              $db->dbconnect_homer(isset($mynodeshost[$value]) ? $mynodeshost[$value] : NULL);
-              $captnode =  isset($node) ? " AND node='".$mynodesname[$value].":".$node."'" : "";
+              $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
+              $captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
               
               $tnode = "'".$value."' as tnode";
               if($unique) $tnode .= ", MD5(msg) as md5sum";
               
-              $query = "SELECT *,".$tnode
-                                ."\n FROM ".HOMER_TABLE
-                                ."\n WHERE ({$whereSql}) ". $where . $captnode
-                                ."\n ORDER BY {$sort} {$sortDirection} "
-                                ."\n LIMIT {$offset}, {$num}"
-                                ;
-              $result = $db->loadObjectArray($query);               
-              // Check if we must show up only UNIQ messages. No duplicate!
-              if($unique) {
-                    foreach($result as $key=>$row) {
-                           if(isset($message[$row['md5sum']])) unset($result[$key]);
-                           else $message[$row['md5sum']] = $row[node];
-                    }
+              $first_table_no = 0;
+              $cnt = $mynodes[$value]->dbtablescnt[0];
+              $prev_cnt = 0;
+              while ($cnt <= $offset)
+              {
+              	$first_table_no++;
+              	if ($first_table_no >= count ($mynodes[$value]->dbtables))
+              		break;//caz anormal
+              	$prev_cnt = $cnt;
+              	$cnt = $cnt + $mynodes[$value]->dbtablescnt[$first_table_no];
+              
               }
+              
+              
+              $from[$first_table_no] = $offset - $prev_cnt;
+              $count[$first_table_no] = min($cnt - $offset, $num);
+              
+              $last_table_no = $first_table_no;
+              
+              while ($cnt< $offset + $num)
+              {
+              	if ($last_table_no + 1 < count($mynodes[$value]->dbtablescnt))
+              		$last_table_no++;
+              	else
+              		break;
+              	$prev_cnt = $cnt;
+              	$cnt = $cnt + $mynodes[$value]->dbtablescnt[$last_table_no];
+              	$from[$last_table_no] = 0;
+              	$count[$last_table_no] = ($cnt < $offset + $num) ?($mynodes[$value]->dbtablescnt[$last_table_no] ) :min($cnt - $offset, $num);
+              }
+              
+              for($table_no = $first_table_no; $table_no <= $last_table_no; $table_no++) {
+              
+              	$tablename = $mynodes[$value]->dbtables[$table_no];
+              	$query = "SELECT *,".$tnode.",'".$tablename."' as tablename"
+              			."\n FROM ".$tablename
+              			."\n WHERE ({$whereSql}) ". $where . $captnode
+              			."\n ORDER BY {$sort} {$sortDirection} "
+              			."\n LIMIT {$from[$table_no]}, {$count[$table_no]}"
+              			;
+              	$result = $db->loadObjectArray($query);
+              	// Check if we must show up only UNIQ messages. No duplicate!
+              	if($unique) {
+              		foreach($result as $key=>$row) {
+              			if(isset($message[$row['md5sum']])) unset($result[$key]);
+              			else $message[$row['md5sum']] = $row[node];
+              		}
+              	}
               $results = array_merge($results,$result);
+              }
         }
         
         /* Sort it if we have more than 1 location*/

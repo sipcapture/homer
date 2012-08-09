@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS `homer_hosts` (
   `id` int(10) NOT NULL AUTO_INCREMENT,
   `host` varchar(80) NOT NULL,
   `name` varchar(100) NOT NULL,
+  `dbtables` varchar(100) NOT NULL DEFAULT 'sip_capture',
   `status` tinyint(1) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `id` (`id`),
@@ -49,6 +50,11 @@ INSERT INTO `homer_logon` VALUES(NULL, 'test@test.com', MD5('test123'), 1);
 CREATE TABLE IF NOT EXISTS `homer_nodes` (
   `id` int(10) NOT NULL AUTO_INCREMENT,
   `host` varchar(80) NOT NULL,
+  `dbname` varchar(100) NOT NULL,
+  `dbport` varchar(100) NOT NULL,
+  `dbusername` varchar(100) NOT NULL,
+  `dbpassword` varchar(100) NOT NULL,
+  `dbtables` varchar(100) NOT NULL DEFAULT 'sip_capture',
   `name` varchar(100) NOT NULL,
   `status` tinyint(1) NOT NULL,
   PRIMARY KEY (`id`),
@@ -61,8 +67,8 @@ CREATE TABLE IF NOT EXISTS `homer_nodes` (
 -- Daten f Tabelle `homer_nodes`
 --
 
-INSERT INTO `homer_nodes` VALUES(1, '127.0.0.1', 'homer_db01', 1);
-INSERT INTO `homer_nodes` VALUES(2, '10.0.136.234', 'homer_db02', 1);
+INSERT INTO `homer_nodes` VALUES(1, '127.0.0.1', 'db1', '3306','root', '', 'node1', 1);
+INSERT INTO `homer_nodes` VALUES(2, '10.0.136.234', 'db2', '3306', 'root', '', 'node2',  1);
 
 --
 -- Table for search logging 

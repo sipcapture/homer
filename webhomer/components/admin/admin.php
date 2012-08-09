@@ -258,22 +258,28 @@ class Component {
           }
 
           function showCreateNode($type) {
-
-                  global $mynodeshost, $db, $task, $component;
-	
-                  $userid = $user->id;
-                  $returntask = getVar('returntask', NULL, '', 'string');
-                  $host = getVar('host', NULL, '', 'string');
-                  $name = getVar('name', NULL, '', 'string');
-                  $status = getVar('status', 1, '', 'int');
-
-                  $table = $type == 1 ? "homer_nodes" : "homer_hosts";	                      
-	                         		
-                  $db->qry("INSERT into $table set host='?', name='?', status='?'", $host, $name, $status);
-                  $this->myLocalRedirect("index.php?component={$component}");
-                  exit;	
-         }
           
+          	global $mynodeshost, $db, $task, $component;
+          
+          	$userid = $user->id;
+          	$returntask = getVar('returntask', NULL, '', 'string');
+          	$host = getVar('host', NULL, '', 'string');
+          	$name = getVar('name', NULL, '', 'string');
+          	$status = getVar('status', 1, '', 'int');
+          	$database = getVar('dbname', NULL, '', 'string');
+          	$port = getVar('dbport', NULL, '', 'string');
+          	$username = getVar('dbusername', NULL, '', 'string');
+          	$password = getVar('dbpassword', NULL, '', 'string');
+          
+          	$table = $type == 1 ? "homer_nodes" : "homer_hosts";
+          	if($type==1)
+          		$db->qry("INSERT into $table set host='?', name='?', status='?', dbname='?', dbport='?', dbusername='?', dbpassword='?'", $host, $name, $status, $database, $port, $username, $password);
+          	else
+          		$db->qry("INSERT into $table set host='?', name='?', status='?'", $host, $name, $status);
+          	$this->myLocalRedirect("index.php?component={$component}");
+          	exit;
+          }
+                    
 	 function myLocalRedirect( $url='') {
                 echo "<script>location.href='$url';</script>\n";
                 exit();

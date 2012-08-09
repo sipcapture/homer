@@ -78,8 +78,9 @@ function sipMessage() {
 	$id = getVar('id', 0, '', 'int');
 	$popuptype = getVar('popuptype', 1, '', 'int');
   $tnode = getVar('tnode', 0, '', 'int');
-
-	global $mynodeshost, $db;
+  $tablename = getVar('tablename', 0, '', 'string');
+  
+	global $mynodes, $db;
 
         $protos = array("UDP","TCP","TLS","SCTP");
         $family = array("IPv4", "IPv6");
@@ -97,10 +98,10 @@ function sipMessage() {
 
         $option = array(); //prevent problems
 
-        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
+        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
         
                 $query = "SELECT * "
-                        ."\n FROM ".HOMER_TABLE
+                        ."\n FROM ".TABLE_NAME
                         ."\n WHERE ".$where." id=$id limit 1";
 
                 $rows = $db->loadObjectList($query);
@@ -110,6 +111,8 @@ function sipMessage() {
 
         // bypass index.php and parse message body here
 
+        if (count($rows) == 0)
+        	exit;
 	      $row = $rows[0];
 	      $msgbody = $row->msg;
         $msgbody = preg_replace('/</', "&lt;", $msgbody);
@@ -185,11 +188,11 @@ function liveSearch() {
 
         $searchterm = getVar('term', NULL, '', 'string');
         $searchfield = getVar('field', NULL, '', 'string');
-        $tnode = getVar('tnode', 0, '', 'int');
+        $tnode = getVar('tnode', 1, '', 'int');
         // timedate limit
         $search['date'] = $timeparam->date = getVar('date', '', '', 'string');
-        $search['from_date'] = $timeparam->date = getVar('from_date', '', '', 'string');
-        $search['to_date'] = $timeparam->date = getVar('to_date', '', '', 'string');
+        $search['from_date'] = $timeparam->from_date = getVar('from_date', '', '', 'string');
+        $search['to_date'] = $timeparam->to_date = getVar('to_date', '', '', 'string');
         $search['from_time'] = $timeparam->from_time = getVar('from_time', NULL, '', 'string');
         $search['to_time'] = $timeparam->to_time = getVar('to_time', NULL, '', 'string');
 
@@ -206,24 +209,31 @@ function liveSearch() {
 
 	$return_arr = array();
 
-        global $mynodeshost, $db;
+        global $mynodes, $db;
 
         $option = array(); //prevent problems
-
-        if($db->dbconnect_homer(isset($mynodeshost[$tnode]) ? $mynodeshost[$tnode] : NULL)) {
-
+        $all_rows = array();
+      
+        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
+			foreach ($mynodes[$tnode]->dbtables as $tablename){
                 $query = "SELECT distinct ".$searchfield
-                        ."\n FROM ".HOMER_TABLE
+                        ."\n FROM ".$tablename
                         ."\n WHERE ".$searchfield." like '%".$searchterm."%' and ".$where." limit 5";
-
-                $rows = $db->loadObjectList($query);
+				
+                $rows = $db->loadObjectArray($query);                             
+                $all_rows = array_merge($all_rows, $rows);
+               }             
+                
         }
-
+        
+        //unique results
+		$all_rows = array_unique($all_rows);
+        
 	// DEBUG
 	//print_r($rows);
 
-	foreach($rows as $row) {
-		$result = $row->$searchfield;
+	foreach($all_rows as $row) {
+		$result = $row[$searchfield];
 		if ( substr( $result, 0, 1 ) == "+" ) { $result = substr( $result, 1 ); }
 		array_push($return_arr, $result);
 	}
