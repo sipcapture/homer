@@ -101,7 +101,7 @@ function sipMessage() {
         if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
         
                 $query = "SELECT * "
-                        ."\n FROM ".TABLE_NAME
+                        ."\n FROM ".$tablename
                         ."\n WHERE ".$where." id=$id limit 1";
 
                 $rows = $db->loadObjectList($query);
