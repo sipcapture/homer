@@ -81,7 +81,7 @@ body {
 	</td>
   </tr>
   <tr>
-    <td height="50" colspan="3" class="login" align="center">
+    <td height="50" colspan="3" class="login" align="center" id="logintext">
 
 <?php
         if(defined('AUTHENTICATION_TEXT') &&  "" != AUTHENTICATION_TEXT )

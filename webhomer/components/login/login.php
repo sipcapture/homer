@@ -37,11 +37,13 @@ class Component {
        function executeComponent () {
            global $auth, $task;
 
+           HTML_login::displayLoginForm();
+
            if($task == "do") {                      
              	   //do something on FAILED login
-             	   echo "<font color='red'>Bad Passwort!</font>";
+             	   // echo "<font color='red'>Authentication Failed!</font>";
+		   echo "<script> $('#logintext').prepend('<font color=red>Username/Password failure!<br></font>'); </script> ";	
 	   }
 	   
-           HTML_login::displayLoginForm();
 	}
 }
