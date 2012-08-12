@@ -65,13 +65,14 @@ $header =  getVar('component', 0, '', 'int');
 
 
 class Node{
-	public $name;
-	public $host;
-	public $dbname;
-	public $dbusername;
-	public $dbpassword;
-	public $dbtablescnt;
-	public $dbtables;
+        public $name;
+        public $host;
+        public $dbport;
+        public $dbname;
+        public $dbusername;
+        public $dbpassword;
+        public $dbtablescnt;
+        public $dbtables;
 };
 
 $mynodes = array();
@@ -87,36 +88,42 @@ $mynodesdbpassword = array();
 $nodes = $db->getNodes();
 foreach($nodes as $node) {
 
-	$mynodes[$node->id] = new Node();
+        $mynodes[$node->id] = new Node();
 
-	$mynodeshost[$node->id] = $node->host;
-	$mynodesname[$node->id] = $node->name;
-	$mynodesdbname[$node->id] = $node->dbname;
-	$mynodes[$node->id]->dbtablescnt = array();
-	$mynodes[$node->id]->dbtables = array();
+        $mynodeshost[$node->id] = $node->host;
+        $mynodesname[$node->id] = $node->name;
+        $mynodesdbname[$node->id] = $node->dbname;
+        $mynodes[$node->id]->dbtablescnt = array();
+        $mynodes[$node->id]->dbtables = array();
 
-	$tables = $node->dbtables;
-	$i = 0;
-	$tok = strtok ($tables, ", \t");
-	while ($tok !== false)
-	{
-		$mynodes[$node->id]->dbtables[$i] = $tok;
-		$mynodes[$node->id]->dbtablescnt[$i] = 0;
-		$tok = strtok(", \t");
-		$i = $i + 1 ;
+        $tables = $node->dbtables;
+        $i = 0;
+        $tok = strtok ($tables, ", \t");
+        while ($tok !== false)
+        {
+                $mynodes[$node->id]->dbtables[$i] = $tok;
+                $mynodes[$node->id]->dbtablescnt[$i] = 0;
+                $tok = strtok(", \t");
+                $i = $i + 1 ;
 
-	}
+        }
 
-	$mynodesdbusername[$node->id] = $node->dbusername;
-	$mynodesdbpassword[$node->id] = $node->dbpassword;
+        $mynodesdbusername[$node->id] = isset($node->dbusername) ? $node->dbusername : HOMER_USER;
+        $mynodesdbpassword[$node->id] = isset($node->dbpassword) ? $node->dbpassword : HOMER_PW;
 
 
-	$mynodes[$node->id]->dbname = $node->dbname;
-	$mynodes[$node->id]->host = $node->host;
-	$mynodes[$node->id]->dbusername = $node->dbusername;
-	$mynodes[$node->id]->dbpassword = $node->dbpassword;
+        if(count($mynodes[$node->id]->dbtables) == 0) $mynodes[$node->id]->dbtables = array(HOMER_TABLE);
+        if(count($mynodes[$node->id]->dbtablescnt) == 0) $mynodes[$node->id]->dbtablescnt = array(1);
+
+
+        $mynodes[$node->id]->dbname = isset($node->dbname) ? $node->dbname : HOMER_DB;
+        $mynodes[$node->id]->host = isset($node->host) ? $node->host : HOMER_HOST;
+        $mynodes[$node->id]->dbport = isset($node->dbport) ? $node->dbport : HOMER_PORT;
+        $mynodes[$node->id]->dbusername = isset($node->dbusername) ? $node->dbusername : HOMER_USER;
+        $mynodes[$node->id]->dbpassword = isset($node->dbusername) ? $node->dbpassword : HOMER_PW;
 
 }
+
 
 /* SECURITY LEVEL: 1 - Admin, 2 - Manager, 3 - User, 4 - Guest*/
 $components = array("search" => ACCESS_SEARCH, "toolbox" => ACCESS_TOOLBOX, "statistic" =>ACCESS_STATS, "admin" => ACCESS_ADMIN);
