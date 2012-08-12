@@ -135,7 +135,8 @@ class HomerDB {
   function getNodes (){
   	 
   	$this->dbconnect();
-  	$query = "SELECT id,host,dbname,dbtables,dbusername,dbpassword,name FROM homer_nodes WHERE status = 1";
+    //$query = "SELECT id,host,dbname,dbtables,dbusername,dbpassword,name FROM homer_nodes WHERE status = 1";
+    $query = "SELECT * FROM homer_nodes WHERE status = 1";
   	return $this->loadObjectList($query);
   	 
   }
