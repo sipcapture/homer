@@ -194,7 +194,7 @@ class HTML_Admin {
 
 <!-- column2 start -->
 
-        <ul id="column2" class="column" style="margin: 0 0 0 0; min-height: 0px; height: 0px; width: 55%" >
+        <ul id="column2" class="column" style="margin: 0 0 0 0; min-height: 0px; height: 0px; width: 40%" >
        
 
 	<!-- about widget -->
@@ -252,7 +252,7 @@ $userdef = get_defined_constants(true);
 
 	</ul>
 
-	<ul id="column3" class="column">
+	<ul id="column3" class="column" style="margin: 0 0 0 0; min-height: 0px; height: 0px; width: 40%">
 		
 <?php
 	}
