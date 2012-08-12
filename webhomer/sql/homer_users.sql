@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS `homer_hosts` (
 -- Daten f Tabelle `homer_hosts`
 --
 
-INSERT INTO `homer_hosts` VALUES(1, '192.168.0.30', 'proxy01', 1);
-INSERT INTO `homer_hosts` VALUES(2, '192.168.0.4', 'acme-234', 1);
+INSERT INTO `homer_hosts` VALUES(1, '192.168.0.30', 'proxy01', 'sip_capture', 1);
+INSERT INTO `homer_hosts` VALUES(2, '192.168.0.4', 'acme-234', 'sip_capture', 1);
 
 -- --------------------------------------------------------
 
@@ -67,8 +67,8 @@ CREATE TABLE IF NOT EXISTS `homer_nodes` (
 -- Daten f Tabelle `homer_nodes`
 --
 
-INSERT INTO `homer_nodes` VALUES(1, '127.0.0.1', 'db1', '3306','root', '', 'node1', 1);
-INSERT INTO `homer_nodes` VALUES(2, '10.0.136.234', 'db2', '3306', 'root', '', 'node2',  1);
+INSERT INTO `homer_nodes` VALUES(1, '127.0.0.1', 'db1', '3306','root', '', 'sip_capture', 'node1', 1);
+INSERT INTO `homer_nodes` VALUES(2, '10.0.136.234', 'db2', '3306', 'root', '', 'sip_capture', 'node2',  1);
 
 --
 -- Table for search logging 
