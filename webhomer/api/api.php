@@ -105,6 +105,8 @@ function getSession() {
 	
 	// Proceed with Query
         global $mynodes, $db;
+        
+        if($tnode == 0) $tnode = keys($mynodes);
         $option = array(); //prevent problems
         $all_rows = array();
         if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
@@ -145,6 +147,8 @@ function getMsg() {
 	
 	// Proceed with Query
         global $mynodes, $db;
+        
+        if($tnode == 0) $tnode = keys($mynodes);
         $option = array(); //prevent problems
         $all_rows = array();
         if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
@@ -195,6 +199,9 @@ function getLast() {
 
 	// Proceed with Query
         global $mynodes, $db;
+        
+        if($tnode == 0) $tnode = keys($mynodes);
+        
         $option = array(); //prevent problems
         $all_rows = array();
         if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
@@ -236,6 +243,8 @@ function getLastPerf() {
 
 	// Proceed with Query
         global $mynodes, $db;
+        if($tnode == 0) $tnode = keys($mynodes);
+        
         $option = array(); //prevent problems
         $all_rows = array();
         if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
@@ -292,6 +301,7 @@ function getSearch() {
 
 	// Proceed with Query
         global $mynodes, $db;
+        if($tnode == 0) $tnode = keys($mynodes);
         $option = array(); //prevent problems
         $all_rows = array();
         if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
@@ -353,6 +363,7 @@ function getStatsUA() {
   
 	// Proceed with Query
         global $mynodes, $db;
+        if($tnode == 0) $tnode = keys($mynodes);        
         $option = array(); //prevent problems
         if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
 
@@ -432,6 +443,7 @@ function getStatsCount() {
 
 	// Proceed with Query
         global $mynodes, $db;
+        if($tnode == 0) $tnode = keys($mynodes);        
         $option = array(); //prevent problems
         if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
 	// Methods & According Response Formats/Vars
