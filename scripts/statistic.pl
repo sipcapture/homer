@@ -35,6 +35,12 @@ $step = 300; # in seconds! for 5 minutes statistic. Script must start each 5 min
 #Crontab:
 #*/5 * * * * statistic.pl 2>&1 > /dev/null
 
+# Optionally load override configuration. perl format
+$rc = "/etc/sysconfig/statisticrc";
+if (-e $rc) {
+  do $rc;
+}
+
 my $db = DBI->connect("DBI:mysql:$mysql_dbname:$mysql_host:3306", $mysql_user, $mysql_password);
 
 #$db->{PrintError} = 0;
