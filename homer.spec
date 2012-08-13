@@ -1,6 +1,6 @@
 Name:           homer
 Version:        3.2.5
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        SIP capture server
 
 Group:          Applications/Communications
