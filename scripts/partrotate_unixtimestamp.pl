@@ -112,6 +112,16 @@ CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
 PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`)) (PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = MyISAM);
 ");
 
+#check if the table has partitions. If not, create one
+my $query = "SHOW TABLE STATUS FROM ".$mysql_dbname. " WHERE Name='".$mysql_table."'";
+$sth = $db->prepare($query);
+$sth->execute();
+my $tstatus = $sth->fetchrow_hashref()->{Create_options};
+if ($tstatus ne "partitioned") {
+   my $query = "ALTER TABLE ".$mysql_table. " PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`)) (PARTITION pmax VALUES LESS THAN MAXVALUE)";
+   $sth = $db->prepare($query);
+   $sth->execute();
+}
 
 my $query = "SELECT UNIX_TIMESTAMP(CURDATE() - INTERVAL 1 DAY)";
 $sth = $db->prepare($query);
