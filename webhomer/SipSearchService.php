@@ -386,7 +386,7 @@ class SipSearchService implements ISipService
               	foreach ($mynodes[$value]->dbtables as $tablename){
               		$query = "SELECT id "
               				."\n FROM ".$tablename
-              				."\n WHERE ". $where . $captnode ." LIMIT $limit;";
+              				."\n WHERE ({$whereSql})". $where . $captnode ." LIMIT $limit;";
               		$db->executeQuery($query);
               		$cnt = $db->getResultCount();
               		$mynodes[$value]->dbtablescnt[$i] = $cnt;
