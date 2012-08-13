@@ -77,11 +77,12 @@ class HomerDB {
 		$dbname = isset ($node->dbname) ? $node->dbname : NULL;
 		$dbusername = isset ($node->dbusername) ? $node->dbusername : NULL;
 		$dbpassword = isset ($node->dbpassword) ? $node->dbpassword : NULL;
-		 
+		$dbport = isset ($node->dbport) ? $node->dbport : NULL;
+		
 		if(!$host) $host = $this->hostname_homer;
 	
 		try {
-			$dbstring = DATABASE.":host=".$host.(($this->port_logon) ? ";port=".$this->port_logon : "" ).";dbname=".$dbname;
+			$dbstring = DATABASE.":host=".$host.(($dbport) ? ";port=".$dbport : "" ).";dbname=".$dbname;
 			$this->connection = new PDO($dbstring, $dbusername, $dbpassword);
 		} catch (PDOException $e){
 			try {
