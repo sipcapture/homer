@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS `homer_hosts` (
   `id` int(10) NOT NULL AUTO_INCREMENT,
   `host` varchar(80) NOT NULL,
   `name` varchar(100) NOT NULL,
-  `dbtables` varchar(100) NOT NULL DEFAULT 'sip_capture',
   `status` tinyint(1) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `id` (`id`),
@@ -18,8 +17,8 @@ CREATE TABLE IF NOT EXISTS `homer_hosts` (
 -- Daten f Tabelle `homer_hosts`
 --
 
-INSERT INTO `homer_hosts` VALUES(1, '192.168.0.30', 'proxy01', 'sip_capture', 1);
-INSERT INTO `homer_hosts` VALUES(2, '192.168.0.4', 'acme-234', 'sip_capture', 1);
+INSERT INTO `homer_hosts` VALUES(1, '192.168.0.30', 'proxy01', 1);
+INSERT INTO `homer_hosts` VALUES(2, '192.168.0.4', 'acme-234', 1);
 
 -- --------------------------------------------------------
 
