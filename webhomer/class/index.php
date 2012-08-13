@@ -78,21 +78,11 @@ class Node{
 $mynodes = array();
 
 /* My Nodes */
-$mynodeshost = array();
-$mynodesname = array();
-$mynodesdbname = array();
-$mynodesdbtables = array();
-$mynodesdbusername = array();
-$mynodesdbpassword = array();
-
 $nodes = $db->getNodes();
 foreach($nodes as $node) {
 
         $mynodes[$node->id] = new Node();
 
-        $mynodeshost[$node->id] = $node->host;
-        $mynodesname[$node->id] = $node->name;
-        $mynodesdbname[$node->id] = $node->dbname;
         $mynodes[$node->id]->dbtablescnt = array();
         $mynodes[$node->id]->dbtables = array();
 
@@ -107,9 +97,6 @@ foreach($nodes as $node) {
                 $i = $i + 1 ;
 
         }
-
-        $mynodesdbusername[$node->id] = isset($node->dbusername) ? $node->dbusername : HOMER_USER;
-        $mynodesdbpassword[$node->id] = isset($node->dbpassword) ? $node->dbpassword : HOMER_PW;
 
 
         if(count($mynodes[$node->id]->dbtables) == 0) $mynodes[$node->id]->dbtables = array(HOMER_TABLE);
