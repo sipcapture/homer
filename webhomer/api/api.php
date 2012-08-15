@@ -99,18 +99,17 @@ function getSession() {
 	$cid = $_GET['cid'];
 	$cid2 = intval($_GET['cid2']);
 	$limit = (array_key_exists('limit', $_GET) ? $_GET['limit'] : 100);
-  $tnode = getVar('tnode', 0, '', 'int');
 	
 	$setdate=setDate();
 	
 	// Proceed with Query
         global $mynodes, $db;
         
-        if($tnode == 0) $tnode = keys($mynodes);
         $option = array(); //prevent problems
         $all_rows = array();
-        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
-        	foreach ($mynodes[$tnode]->dbtables as $tablename){
+        $node = getNode();
+        if($db->dbconnect_homer($node)) {
+        	foreach ($node->dbtables as $tablename){
                 $query = "SELECT * "
                         ."\n FROM ".$tablename
                         ."\n WHERE callid='".$cid
@@ -140,19 +139,18 @@ function getMsg() {
 	if(isset($_GET['id'])) {
  
 	//Set our variables
-	$id = intval($_GET['id']);  
-  $tnode = getVar('tnode', 0, '', 'int');
+	$id = intval($_GET['id']);
 	
 	$setdate=setDate();
 	
 	// Proceed with Query
-        global $mynodes, $db;
+        global $db;
         
-        if($tnode == 0) $tnode = keys($mynodes);
         $option = array(); //prevent problems
         $all_rows = array();
-        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
-        	foreach ($mynodes[$tnode]->dbtables as $tablename){
+        $node = getNode();
+        if($db->dbconnect_homer($node)) {
+        	foreach ($node->dbtables as $tablename){
                 $query = "SELECT * "
                         ."\n FROM ".$tablename
                         ."\n WHERE id=".$id
@@ -184,7 +182,6 @@ function getLast() {
 	$method = (array_key_exists('method', $_GET) ? $_GET['method'] : NULL);
 	$quid = (array_key_exists('method', $_GET) ? $_GET['user'] : NULL);
 	$qip = (array_key_exists('ip', $_GET) ? $_GET['ip'] : NULL);
-  $tnode = getVar('tnode', 0, '', 'int');
 	
 	$setdate=setDate();
 	$where = $setdate;
@@ -198,14 +195,13 @@ function getLast() {
         }
 
 	// Proceed with Query
-        global $mynodes, $db;
-        
-        if($tnode == 0) $tnode = keys($mynodes);
-        
+        global $db;
+                
         $option = array(); //prevent problems
         $all_rows = array();
-        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
-        	foreach ($mynodes[$tnode]->dbtables as $tablename){
+        $node = getNode();
+        if($db->dbconnect_homer($node)) {
+        	foreach ($node->dbtables as $tablename){
                 $query = "SELECT * "
                         ."\n FROM ".$tablename
                         ."\n WHERE ".$where
@@ -228,6 +224,16 @@ function getLast() {
 
 }
 
+function getNode() {
+  global $mynodes;
+  $tnode = getVar('tnode', NULL, '', 'int');
+  if ($tnode == NULL) {
+    $nodes =  array_values($mynodes);
+    return $nodes[0];
+  }  
+  return (isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL);
+}
+
 function getLastPerf() {
 
 	// minimal query
@@ -236,19 +242,17 @@ function getLastPerf() {
 	//Set our variables
 	$limit = ($_GET['limit']);
 	$method = (array_key_exists('method', $_GET) ? $_GET['method'] : NULL);
-  $tnode = getVar('tnode', 0, '', 'int');
 	
 	$setdate=setDate();
 	$where = $setdate;
 
 	// Proceed with Query
-        global $mynodes, $db;
-        if($tnode == 0) $tnode = keys($mynodes);
-        
+        global $db;        
         $option = array(); //prevent problems
         $all_rows = array();
-        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
-        	foreach ($mynodes[$tnode]->dbtables as $tablename){
+        $node = getNode();
+        if($db->dbconnect_homer($node)) {
+        	foreach ($node->dbtables as $tablename){
 				$last = "SELECT MAX(id) FROM ".$tablename;
                 $lastrows = $db->loadObjectList($last);
 				$counter = $last - $limit;
@@ -286,7 +290,6 @@ function getSearch() {
 	$limit = (array_key_exists('limit', $_GET) ? $_GET['limit'] : 10);
 	$hours = (array_key_exists('hours', $_GET) ? $_GET['hours'] : NULL);
 	$minutes = (array_key_exists('minutes', $_GET) ? $_GET['minutes'] : 2);
-  $tnode = getVar('tnode', 0, '', 'int');   
 	
 	if(!isset($hours)) {
                 $minutes_h = 0;
@@ -300,12 +303,12 @@ function getSearch() {
 	$where = $setdate;
 
 	// Proceed with Query
-        global $mynodes, $db;
-        if($tnode == 0) $tnode = keys($mynodes);
+        global $db;
         $option = array(); //prevent problems
         $all_rows = array();
-        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
-        	foreach ($mynodes[$tnode]->dbtables as $tablename){
+        $node = getNode();
+        if($db->dbconnect_homer($node)) {
+        	foreach ($node->dbtables as $tablename){
                 $query = "SELECT * "
                         ."\n FROM ".$tablename
                         ."\n WHERE ".$field." = '".$value."' "
@@ -359,13 +362,12 @@ function getStatsUA() {
 	$method = (!empty($_GET['method']) ? $_GET['method'] : "INVITE");
 	$hours = (!empty($_GET['hours']) ? $_GET['hours'] : 24);
 	$limit = (array_key_exists('limit', $_GET) ? $_GET['limit'] : NULL);
-	$tnode = getVar('tnode', 0, '', 'int');   
   
 	// Proceed with Query
-        global $mynodes, $db;
-        if($tnode == 0) $tnode = keys($mynodes);        
+        global $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
+        $node = getNode();
+        if ($db->dbconnect_homer($node)) {
 
 	$query = "SELECT useragent, sum(total) as count from stats_useragent "
 		   ."where `from_date` > DATE_SUB( NOW() , INTERVAL ".$hours." HOUR ) "
@@ -432,7 +434,6 @@ function getStatsCount() {
 	$method = (array_key_exists('method', $_GET) ? $_GET['method'] : NULL);
 	$hours = (array_key_exists('hours', $_GET) ? $_GET['hours'] : NULL);
 	$measure = (!empty($_GET['measure']) ? $_GET['measure'] : NULL);
-  $tnode = getVar('tnode', 0, '', 'int');
   
 	if(!isset($method)||$method!="INVITE" && $method!="REGISTER" && $method!="CURRENT") {
                 $method =  "ALL";
@@ -442,10 +443,12 @@ function getStatsCount() {
         }
 
 	// Proceed with Query
-        global $mynodes, $db;
-        if($tnode == 0) $tnode = keys($mynodes);        
+        global $db;
         $option = array(); //prevent problems
-        if($db->dbconnect_homer(isset($mynodes[$tnode]) ? $mynodes[$tnode] : NULL)) {
+        $node = getNode();
+        if($db->dbconnect_homer($node)) {
+
+
 	// Methods & According Response Formats/Vars
 
 	if ($method == "INVITE") {
@@ -453,6 +456,7 @@ function getStatsCount() {
 		$query = "SELECT from_date,total,asr,ner from stats_method "
 		   ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
 		   ."AND method='".$method."' AND total !=0 order by id";
+
 		} else {
 		$query = "SELECT from_date,sum(total),avg(asr),avg(ner),sum(completed),sum(uncompleted) from stats_method "
                    ."where `from_date` > DATE_SUB(NOW(), INTERVAL ".$hours." HOUR) "
