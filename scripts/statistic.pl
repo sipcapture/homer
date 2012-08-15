@@ -32,6 +32,7 @@ $statsmethod = "stats_method";
 $statsuseragent = "stats_useragent";
 $keepdays = 100; #How long statistic must be keeped in DB
 $step = 300; # in seconds! for 5 minutes statistic. Script must start each 5 minutes 
+$utc = 0;
 #Crontab:
 #*/5 * * * * statistic.pl 2>&1 > /dev/null
 
@@ -45,8 +46,9 @@ my $db = DBI->connect("DBI:mysql:$mysql_dbname:$mysql_host:3306", $mysql_user, $
 
 #$db->{PrintError} = 0;
 
-@nowtime = localtime();
-@oldtime = localtime(time()-$step);
+@nowtime = $utc ? gmtime() : localtime();
+$oldtime_secs = time() - $step;
+@oldtime = $utc ? gmtime($oldtime_secs) : localtime($oldtime_secs);
 
 #($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime();
 
@@ -54,7 +56,7 @@ my $to_date = sprintf("'%04d-%02d-%02d %02d:%02d:00'",($nowtime[5]+=1900),(++$no
 my $from_date = sprintf("'%04d-%02d-%02d %02d:%02d:00'",($oldtime[5]+=1900),(++$oldtime[4]),$oldtime[3],$oldtime[2], $oldtime[1]);
 
 #QUERY
-my $mainquery = "FROM ".$mysql_table.$wheredata." WHERE `date` BETWEEN $from_date AND $to_date";
+my $mainquery = "FROM ".$mysql_table.$wheredata." WHERE date BETWEEN $from_date AND $to_date";
 #My ASR AND NER == 0 at this time;
 $ner = 0;
 $asr = 0;
