@@ -113,10 +113,11 @@ $flow_to_time = getVar('to_time', NULL, 'get', 'string');
 $flow_to_date = getVar('to_date', NULL, 'get', 'string');
 $location = getVar('location', array(0), 'get', 'array');
 
-foreach($location as $value) {
-	if ($value == 0) {
-			$location[] = key($mynodes);
-	}
+if ( count($location) <= 1 ) {
+        if ( key($location) == 0 && $location[0] == 0 ) {
+                                unset($location);
+                                $location[0] = key($mynodes);
+        }
 }
 
 /*PCAP will use the same QUERY STRING */
@@ -178,10 +179,6 @@ $min_ts = 0;
 $statuscall=0;
 
 foreach($location as $value) {
-
-	if ($value == 0) {
-	 		$value = key($mynodes);
-	 }
 
         $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
 
