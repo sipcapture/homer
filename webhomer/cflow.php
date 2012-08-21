@@ -243,13 +243,15 @@ if (CFLOW_HPORT) {
                         $data = (object) $row;
                         if($data->source_ip==$data->destination_ip){ $CFLOW_HPORT=1; }
                 } 
-	} else { $CFLOW_HPORT=1; }
+	} // else { $CFLOW_HPORT=1; }
 }
 
 /*Our LOOP */
 foreach($results as $row) {
 
+  if (!empty($data)) { $datapre = $data; }
   $data = (object) $row;
+
   
   /* Min ts */
   if(!$min_ts) $min_ts = $data->micro_ts;
@@ -260,7 +262,7 @@ foreach($results as $row) {
   /* LOCAL RESOLV to name */
   foreach($aliases as $alias) {
 	$aliasup = strtoupper($alias->host);
-        if (!empty($CFLOW_HPORT) && strpos($alias->host, ':') == false) {
+        if ($CFLOW_HPORT==1 && strpos($alias->host, ':') == false) {
         $aliasup .= ":5060";
         }
 
@@ -292,10 +294,21 @@ foreach($results as $row) {
   else if($data->method == "200" && preg_match('/INVITE/',$data->cseq)) $statuscall = 4;
   else if(preg_match('/[3][0-9][0-9]/',$data->method)) $statuscall = 5;
   
-  if (!empty($CFLOW_HPORT)) {
-  	$hosts[$data->source_ip.":".$data->source_port] = 1;
-  	$hosts[$data->destination_ip.":".$data->destination_port] = 1;
-	$ssrc = ":".$data->source_port;
+  if ( $CFLOW_HPORT==1 || $CFLOW_HPORT==2 ) {
+	// try to correlate replies from ephemeral ports
+	if (!empty($datapre) && $datapre->source_port == $data->destination_port && $datapre->source_ip == $data->destination_ip ) {
+			$data->original_port = $data->source_port;
+			$data->source_port=$datapre->destination_port;
+	  	$hosts[$data->source_ip.":".$data->source_port] = 1;
+	        $hosts[$data->destination_ip.":".$data->destination_port] = 1;
+	        $ssrc = ":".$datapre->destination_port;
+	        // $ssrc = ":".$data->source_port;
+		// print $data->source_ip.$ssrc."<br>";
+	} else {
+	  	$hosts[$data->source_ip.":".$data->source_port] = 1;
+	  	$hosts[$data->destination_ip.":".$data->destination_port] = 1;
+		$ssrc = ":".$data->source_port;
+	}
   } else {
   	$hosts[$data->source_ip] = 1;
   	$hosts[$data->destination_ip] = 1;
@@ -312,8 +325,6 @@ foreach($results as $row) {
                                  $tmparray = preg_split('/\;/', $data->rtp_stat);
    else $tmparray = preg_split('/\,/', $data->rtp_stat);
 
-  
-	 
    $newArray['PACKET']=$data->method.". SOURCE: ".$data->source_ip.":".$data->source_port;
 	
 	foreach ($tmparray as $lineNum => $line) {
@@ -479,7 +490,7 @@ foreach($localdata as $data) {
   $tstamp =  date("Y-m-d H:i:s.".$milliseconds." T",$data->micro_ts / 1000000);
 
 
-  if (!empty($CFLOW_HPORT)) {
+  if ($CFLOW_HPORT==1) {
   $fromip = $data->source_ip.":".$data->source_port;;
   $toip = $data->destination_ip.":".$data->destination_port;;
   } else {
@@ -487,8 +498,13 @@ foreach($localdata as $data) {
   $toip = $data->destination_ip;;
   }
 
-  $fromport = $data->source_port;  
-  $toport = $data->destination_port;
+   if ($data->original_port && !empty($data->original_port)) { 
+		$fromport = $data->original_port; 
+  		$toport = $data->destination_port;
+   } else {
+  		$fromport = $data->source_port;  
+  		$toport = $data->destination_port;
+  }
 
   //Direction
   if($COORD[$fromip] > $COORD[$toip]) 
