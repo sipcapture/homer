@@ -284,6 +284,7 @@ void usage(int8_t e) {
            "      -c  is checkout\n"
            "      -i  is capture identifity. Must be a 16-bit number. I.e: 101\n"
            "      -H  is HEP protocol version [1|2]. By default we use HEP version 1\n"
+           "      -q  is use vlan support in capture filter (if packets use 802.1q tag\n" 
            "--config  is config file to use to specify some options. Default location is [%s]\n"
            "", DEFAULT_PORT, DEFAULT_PIDFILE, DEFAULT_CONFIG);
 	exit(e);
@@ -305,6 +306,7 @@ void usage(int8_t e) {
            "   -c  is checkout\n"
            "   -i  is capture identifity. Must be a 16-bit number. I.e: 101\n"
            "   -H  is HEP protocol version [1|2]. By default we use HEP version 1\n"
+           "   -q  is use vlan support in capture filter (if packets use 802.1q tag\n"
            "", DEFAULT_PORT, DEFAULT_PIDFILE);
 	exit(e);
 
@@ -404,7 +406,7 @@ int main(int argc,char **argv)
         char* filter_file = NULL;
 	char filter_string[800] = {0};      
         FILE *filter_stream;  
-	uint16_t snaplen = 65535, promisc = 1, to = 100;
+	uint16_t snaplen = 65535, promisc = 1, to = 100, with_vlan = 0;
 	pid_t creator_pid = (pid_t) -1;
 
 	creator_pid = getpid();
@@ -422,9 +424,9 @@ int main(int argc,char **argv)
 	
 
         
-        while((c=getopt_long(argc, argv, "mvhncp:s:d:D:c:P:r:f:i:H:C:", long_options, NULL))!=-1) {
+        while((c=getopt_long(argc, argv, "mvhncqp:s:d:D:c:P:r:f:i:H:C:", long_options, NULL))!=-1) {
 #else
-        while((c=getopt(argc, argv, "mvhncp:s:d:D:c:P:r:f:i:H:C:"))!=EOF) {
+        while((c=getopt(argc, argv, "mvhncqp:s:d:D:c:P:r:f:i:H:C:"))!=EOF) {
 #endif
                 switch(c) {
 #ifdef USE_CONFFILE
@@ -480,7 +482,10 @@ int main(int argc,char **argv)
                         case 'H':
                                         hepversion = atoi(optarg);
 					heps=1;
-                                        break;                                                     
+                                        break;
+			case 'q':
+					with_vlan=1;
+					break;                                                     
 	                default:
                                         abort();
                 }
@@ -631,7 +636,8 @@ int main(int argc,char **argv)
         /* create filter string */
         /* snprintf(filter_expr, 1024, "udp port%s %s and not dst host %s %s", strchr(portrange,'-') ? "range": "" , portrange, capt_host, filter_string); */        
         /* please use the capture port not from SIP range. I.e. 9060 */
-        snprintf(filter_expr, 1024, "udp port%s %s and not dst port %s %s", strchr(portrange,'-') ? "range": "" , portrange, capt_port, filter_string);
+
+        snprintf(filter_expr, 1024, "%sudp port%s %s and not dst port %s %s", with_vlan ? "vlan and ":"", strchr(portrange,'-') ? "range": "" , portrange, capt_port, filter_string);
 
         /* compile filter expression (global constant, see above) */
         if (pcap_compile(sniffer, &filter, filter_expr, 0, 0) == -1) {
@@ -658,6 +664,7 @@ int main(int argc,char **argv)
                 fprintf(stdout,"Promisc     : [%i]\n", promisc);
                 fprintf(stdout,"Capture ID  : [%i]\n", captid);
                 fprintf(stdout,"HEP version : [%i]\n", hepversion);
+		fprintf(stdout,"VLAN        : [%i]\n", with_vlan);
                 fprintf(stdout,"Filter      : [%s]\n", filter_expr);
 #ifdef USE_CONFFILE
                 fprintf(stdout,"Config file : [%s]\n", conffile);
