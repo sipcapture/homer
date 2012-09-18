@@ -124,11 +124,13 @@ class HomerDB {
 	function makeQuery($query) {
 	      $this->dbconnect();
         $args  = func_get_args();
-        $query = array_shift($args);
+        $query = array_shift($args);        
         $query = str_replace("?", "%s", $query);        
         if(DATABASE == 'pgsql') $query = $this->toPgSql($query);        
         if (property_exists($this->connection, 'quote')) $args  = array_map($this->connection->quote, $args);
-        array_unshift($args,$query);
+        // Prevent sql injection. Thank Kai Oliver Quambusch for bug report.
+        $args = $this->custom_sql_escape($args);
+        array_unshift($args,$query);        
         $query = call_user_func_array('sprintf',$args);
         return $query;
   }
@@ -199,6 +201,18 @@ class HomerDB {
   function getResultCount(){
 		return $this->resultCount;
   }
+  
+  function custom_sql_escape($inp) {
+    if(is_array($inp))
+        return array_map(__METHOD__, $inp);
+ 
+    if(!empty($inp) && is_string($inp)) {
+        return str_replace(array('\\', "\0", "\n", "\r", "'", '"', "\x1a"), array('\\\\', '\\0', '\\n', '\\r', "\\'", '\\"', '\\Z'), $inp);
+    }
+ 
+    return $inp;
+  }
+  
 }
 
 ?>
