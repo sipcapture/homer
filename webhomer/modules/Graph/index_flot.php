@@ -120,7 +120,7 @@ jQuery(document).ready(function() {
  var d1 = [<?php echo join($secondes, ', ');?>];
  var d2 = [<?php echo join($sip100, ', ');?>];
  var d3 = [<?php echo join($sip401, ', ');?>];
- var allp = "<?php echo $sipTOT ?>";
+ var allp = "<?php if (isset($sipTOT)) echo $sipTOT; ?>";
  var asr = [<?php echo join($asr, ', ');?>];
 
 

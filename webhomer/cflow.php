@@ -177,6 +177,7 @@ $results = array();
 $max_ts = 0;
 $min_ts = 0;
 $statuscall=0;
+$mt_flag = 0;
 
 foreach($location as $value) {
 
@@ -237,13 +238,14 @@ if ($mt_flag == 1)
 	usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
 /* host:host check */
-if (CFLOW_HPORT) {
+if (defined('CFLOW_HPORT')) {
+        $CFLOW_HPORT = CFLOW_HPORT;
         if (CFLOW_HPORT==2) {
                 foreach($results as $row) {
                         $data = (object) $row;
                         if($data->source_ip==$data->destination_ip){ $CFLOW_HPORT=1; }
                 } 
-	} // else { $CFLOW_HPORT=1; }
+	} //else { $CFLOW_HPORT=1; }
 }
 
 /*Our LOOP */
@@ -498,7 +500,7 @@ foreach($localdata as $data) {
   $toip = $data->destination_ip;;
   }
 
-   if ($data->original_port && !empty($data->original_port)) { 
+   if (property_exists($data, 'original_port') && !empty($data->original_port)) { 
 		$fromport = $data->original_port; 
   		$toport = $data->destination_port;
    } else {
