@@ -1,6 +1,6 @@
 <?php
 
-define('CONFIG_VERSION', "1.0.9"); /* Please ALWAYS include CONFIGVERSION */
+define('CONFIG_VERSION', "1.0.10"); /* Please ALWAYS include CONFIGVERSION */
 define('WEBHOMER_VERSION', "3.3.0"); /* WEBHOMER VERSION */
 
 /* Search params */
@@ -54,6 +54,7 @@ define('ACCESS_SEARCH', 3); /* SEARCH FOR ALL:*/
 define('ACCESS_TOOLBOX', 1); /* TOLBOX FOR ADMIN */
 define('ACCESS_STATS', 3); /* STATS FOR ALL */
 define('ACCESS_ADMIN', 1); /* ADMIN FOR ADMIN */
+define('ACCESS_ACCOUNT', 3); /* ACCOUNT FOR ALL:*/
 
 /* WEBKIT ENABLE */
 define('WEBKIT_SPEECH', 1); /* enable:1 , disable: 0 */

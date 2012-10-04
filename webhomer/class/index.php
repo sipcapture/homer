@@ -113,7 +113,7 @@ foreach($nodes as $node) {
 
 
 /* SECURITY LEVEL: 1 - Admin, 2 - Manager, 3 - User, 4 - Guest*/
-$components = array("search" => ACCESS_SEARCH, "toolbox" => ACCESS_TOOLBOX, "statistic" =>ACCESS_STATS, "admin" => ACCESS_ADMIN);
+$components = array("search" => ACCESS_SEARCH, "toolbox" => ACCESS_TOOLBOX, "statistic" =>ACCESS_STATS, "admin" => ACCESS_ADMIN, "account" => ACCESS_ACCOUNT);
 
 /* Disable stats changing security level */
 if(detectIE()) {

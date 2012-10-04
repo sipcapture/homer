@@ -72,7 +72,8 @@ class HTML_mainhtml {
       }
             
       static function displayToolBar($datas, $selected, $uptime) {
-      global $task;   
+      global $task;
+      $editaccount = 0;
 ?>
 	<div id="banner"> 
 		<h1 class="logo"> 
@@ -88,14 +89,25 @@ class HTML_mainhtml {
                                 if($key == $selected) echo "class='selected'";
                                 echo ">";
                                 echo "<a href='index.php?component=".$key."'>".$value."</a>";
+                                if ($key == "account"): ?>
+                                <ul>
+					    			<li><a href="index.php?component=account">Edit</a></li>
+    								<li><a href="index.php?task=logout" title="You logged as: <?php echo $_SESSION['loggedin'];?>">Logout</a></li>
+								</ul>
+								<?php
+								$editaccount = 1;
+                                endif;
                                 echo "</li>";
-                            
                             }
+                            if ($editaccount ==0): ?>
+                                <li style="padding-left: 12px;"> 
+-                                       <div style="background: #555; width: 1px; height: 24px; position: absolute; left: 0px;"></div> 
+-                                       <a href="index.php?task=logout" title="You logged as: <?php echo $_SESSION['loggedin'];?>">Logout</a> 
+-                               </li> 
+<?php
+                            endif;
+                            
 ?>
-				<li style="padding-left: 12px;"> 
-					<div style="background: #555; width: 1px; height: 24px; position: absolute; left: 0px;"></div> 
-					<a href="index.php?task=logout" title="You logged as: <?php echo $_SESSION['loggedin'];?>">Logout</a> 
-				</li> 
 
 				<li <?php if($task!="off") echo "class='selected'"; ?>>
                                     <a href="#"><?php echo $uptime;?></a>

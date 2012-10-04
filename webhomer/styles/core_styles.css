@@ -366,6 +366,7 @@ h1.logo a span {
 	right: 2px;
 }
 
+
 #dock .left {
 	float: left;
 	width: 3px;
@@ -415,6 +416,43 @@ h1.logo a span {
 
 #dock ul li.selected a {
 	font-weight: bold;
+}
+
+#dock ul li:hover ul{
+	display: block;
+	background-color:#C0C0C0;
+    position: absolute;
+	left:0px;
+	top:24px;
+	height:50px;
+	width:70px;
+	border: 1px solid gray;
+}
+
+#dock ul li ul {
+	position: fixed;
+	left: -9999px;
+	height:50px;
+	list-style-type:none;
+}
+
+
+
+#dock ul li ul li a,
+#dock ul li.selected ul li a{
+	left-padding: 5px;
+	text-decoration: none;
+	font-size: 12px;
+	line-height: 22px;
+	color: #595959;
+	border-bottom:none;
+}
+
+#dock ul li ul li a:hover,
+#dock ul li ul li.selected a {
+	border-bottom:none;
+	font-weight: underline;
+	color:#fff;
 }
 
 #navigation {
@@ -492,3 +530,5 @@ h1.logo a span {
         -moz-box-shadow:0 0 10px #000;
         -webkit-box-shadow:0 0 10px #000;
 }
+
+

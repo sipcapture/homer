@@ -35,7 +35,7 @@ class HomerMain {
         
            global $userlevel, $task, $component, $components;
 
-           $titles = array("search" => "Search", "toolbox" => "ToolBox", "statistic" => "Stats", "admin" => "Admin");
+           $titles = array("search" => "Search", "toolbox" => "ToolBox", "statistic" => "Stats", "admin" => "Admin", "account" =>"Account");
 
            $mytoolbar = array();
            
