@@ -82,14 +82,14 @@ $ = jQuery;
 
 $(document).ready(function() {
 
-var asr1 = [ [0, <?php echo join($sipASR, ', ');?>] ];
-var ner1 = [ [1, <?php echo join($sipNER, ', ');?>] ];
+var asr1 = [ [0, <?php if (isset($sipASR)) echo join($sipASR, ', ');?>] ];
+var ner1 = [ [1, <?php if (isset($sipNER)) echo join($sipNER, ', ');?>] ];
 
-var cok1 = [ [0, <?php echo join($callOK, ', ');?>] ];
-var cko1 = [ [1, <?php echo join($callKO, ', ');?>] ];
+var cok1 = [ [0, <?php if (isset($callOK)) echo join($callOK, ', ');?>] ];
+var cko1 = [ [1, <?php if (isset($callOK)) echo join($callKO, ', ');?>] ];
 
-var rok1 = [ [0, <?php echo join($regOK, ', ');?>] ];
-var rko1 = [ [1, <?php echo join($regKO, ', ');?>] ];
+var rok1 = [ [0, <?php if (isset($regOK)) echo join($regOK, ', ');?>] ];
+var rko1 = [ [1, <?php if (isset($regKO)) echo join($regKO, ', ');?>] ];
 
 
   $.plot($("#chart5"),
