@@ -178,6 +178,8 @@ $max_ts = 0;
 $min_ts = 0;
 $statuscall=0;
 $mt_flag = 0;
+if(!isset($where)) $where = "";
+if(!isset($cid_aleg)) $cid_aleg = "";
 
 foreach($location as $value) {
 
