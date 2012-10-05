@@ -70,8 +70,8 @@ class Component {
                         $search = json_decode($_SESSION['homersearch'], true);
                   }
 
-                  if($type) HTML_search::displayAdvanceSearchForm(&$search, $mynodesname);
-                  else HTML_search::displaySearchForm(&$search, $mynodesname);
+                  if($type) HTML_search::displayAdvanceSearchForm($search, $mynodesname);
+                  else HTML_search::displaySearchForm($search, $mynodesname);
           }
 
           function showResultSearch() {
@@ -182,7 +182,7 @@ class Component {
                         foreach($abvis as $key=>$value) $showColumns[$key]["visible"] = $value;
                   }
                   
-                  HTML_search::displayResultSearch(&$datatable, $ft, $tt, $search, $showColumns);
+                  HTML_search::displayResultSearch($datatable, $ft, $tt, $search, $showColumns);
         }
 
         function showMessage()  {
@@ -207,7 +207,7 @@ class Component {
                       $rows = $db->loadObjectList($query);
                 }
 
-                HTML_search::displayMessage(&$rows);                
+                HTML_search::displayMessage($rows);                
         }
                                 
         function myLocalRedirect( $url='') {
