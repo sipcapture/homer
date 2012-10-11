@@ -333,7 +333,7 @@ foreach($results as $row) {
 	
 	foreach ($tmparray as $lineNum => $line) {
 		list($key, $value) = explode("=", $line);
-		$newArray[$key] = $value;
+		$newArray[trim($key)] = $value;
 	}			
 	$rtpinfo[] = $newArray;
   }  
