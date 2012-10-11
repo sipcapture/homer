@@ -64,23 +64,41 @@ class Component {
           		global $db;
           	
           		$this->editAccount();
+          		$oldpwd = getVar('old-pwd', NULL, 'post', 'string');
           		$pwd = getVar('password', NULL, 'post', 'string');
           		$retpwd = getVar('retype-pwd', NULL, 'post', 'string');
           		
           		$authtype = AUTHENTICATION;
           		if ($authtype != "internal"){
-          			echo "<script> $('#pwdtext').prepend('<font color=orange>Feature not supported for this authentication mode!<br></font>');</script>";
+          			echo "<script> $('#pwd-data').prepend('<font color=orange>Feature not supported for this authentication mode!<br></font>');</script>";
           		}
           		else if ($retpwd != $pwd){
-          			echo "<script> $('#pwdtext').prepend('<font color=red>The two passwords do not match!<br></font>');</script>";
+          			echo "<script> $('#pwd-data').prepend('<font color=red>The two passwords do not match!<br></font>');</script>";
           		}
           		
           		else {
-          			$test = $_SESSION['loggedin'];
-          			$aa = md5($pwd);
-          			$query = $db->makeQuery("update homer_logon SET password ='?' WHERE useremail = '?' limit 1;" , md5($pwd), $_SESSION['loggedin']);
-          			$db->executeQuery($query);
-          			echo "<script> $('#pwdtext').prepend('<font color=green>Password reset successfuly.<br></font>');</script>";
+          			$user = $_SESSION['loggedin'];
+          			$query = $db->makeQuery("select password from homer_logon where useremail = '?'", $user);
+          			$res = $db->loadObjectList($query);          			
+          			if (count($res) > 0){
+          				$pass_column = "password";
+          				$oldpwd_db = $res[0]->$pass_column;
+          				if ($oldpwd_db != md5($oldpwd))
+          				{
+          					echo "<script> $('#pwd-data').prepend('<font color=red>The old password is not correct!<br></font>');</script>";
+          					
+          				}
+          				else {
+          					$query = $db->makeQuery("update homer_logon SET password ='?' WHERE useremail = '?' limit 1;" , md5($pwd), $_SESSION['loggedin']);
+          					$db->executeQuery($query);
+          					echo "<script> $('#pwd-data').prepend('<font color=green>Password reset successfuly.<br></font>');</script>";
+          				}
+          			}
+          			
+          			else {
+          				echo "<script> $('#pwd-data').prepend('<font color=red>Logged user not found!<br></font>');</script>";
+          			}
+
           		}
           		
           }

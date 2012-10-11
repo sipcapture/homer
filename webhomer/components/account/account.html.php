@@ -54,47 +54,56 @@ class HTML_Account {
                 <div class="widget-head">
                     <h3>Change Password</h3>
                 </div>
-                <div class="widget-content">
-		 <table class="bodystyle" cellspacing="1"  height="100" width="95%">
-			 <tr></tr>
-			 <tr>
-			 	<td></td>
-			 	<td id="pwdtext">
-			 	Please enter the same value:
-			 	</td>
-			 </tr>
-			 <tr>
-	         	<td width="150" class="tablerow_two">
-	            	<label title="New Password">New Password</label>
-	
-	            </td>
-	            <td>
-	            	<input type="password" id="password" name ="password" class="textfieldstyle2" size="30"  />
-				</td>
-	            </tr>
-	         <tr>
-	         	<td width="150" class="tablerow_two">
-	            	<label title="Retype Password">Retype Password</label>
-	
-	            </td>                             
-	            <td>
-	            	<input type="password" id= "retype-pwd" name = "retype-pwd" class="textfieldstyle2" size="30"  />
-	
-	            </td>
-	         </tr>
-	         <tr>
-			 	<td>	
-				</td>
-	
-	            <td>
-					<input type="submit" style="background: transparent;" title="Reset Password" onclick="reset_pwd();"
-			 		value="Reset" role="button"  class="ui-button ui-widget ui-state-default ui-corner-all">
-	
-	            </td>
-			</tr>
-      	</table>
-
-     </ul>   
+                         			
+                <div id = "pwd-data" class="widget-content">
+          <br>
+					 <table class="bodystyle" cellspacing="1"  height="100" width="95%">	
+						 <tr>
+						 	<td width="150" class="tablerow_two">
+				            	<label title="Old Password">Old Password</label>	
+				            </td>
+				            <td>
+				            	<input type="password" id= "old-pwd" name = "old-pwd" class="textfieldstyle2" size="30"  />
+				
+				            </td>
+						 </tr>
+						 <tr>
+						 	<td></td>
+						 	<td id="pwdtext">
+						 	Please enter the same value:
+						 	</td>
+						 </tr>
+						 <tr>
+				         	<td width="150" class="tablerow_two">
+				            	<label title="New Password">New Password</label>	
+				            </td>
+				            <td>
+				            	<input type="password" id="password" name ="password" class="textfieldstyle2" size="30"  />
+							</td>
+				         </tr>
+				         <tr>
+				         	<td width="150" class="tablerow_two">
+				            	<label title="Retype Password">Retype Password</label>
+				
+				            </td>                             
+				            <td>
+				            	<input type="password" id= "retype-pwd" name = "retype-pwd" class="textfieldstyle2" size="30"  />
+				
+				            </td>
+				         </tr>
+				         <tr>
+						 	<td>	
+							</td>
+				
+				            <td>
+								<input type="submit" style="background: transparent;" title="Reset Password" onclick="reset_pwd();"
+						 		value="Reset" role="button"  class="ui-button ui-widget ui-state-default ui-corner-all">
+				
+				            </td>
+						</tr>
+			      	</table>
+				</div>
+     		</ul>   
 </div>
 <input type="hidden" name="task" id="task" value="resetpwd">
 <input type="hidden" name="component" id="component" value="account">
