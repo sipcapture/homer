@@ -31,7 +31,7 @@ defined( '_HOMEREXEC' ) or die( 'Restricted access' );
 
 require_once ('account.html.php');
 
-include("../../preferences.php");
+// include("../../preferences.php");
 
 class Component {
 
