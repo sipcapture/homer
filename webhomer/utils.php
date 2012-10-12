@@ -269,7 +269,7 @@ function LoadPcap() {
 
 			<?php
 				// optional HEP2 switch for captagent 0.8
-				if (!defined(PCAP_AGENT4) && PCAP_AGENT != '') 
+				if (!defined('PCAP_AGENT4') && PCAP_AGENT != '') 
 					{
 					echo '<input type="checkbox" name="HEP2" id="HEP2" value="1"> Preserve Timestamps';
 				   	}
