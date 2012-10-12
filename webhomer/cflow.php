@@ -245,9 +245,9 @@ if (defined('CFLOW_HPORT')) {
         if (CFLOW_HPORT==2) {
                 foreach($results as $row) {
                         $data = (object) $row;
-                        if($data->source_ip==$data->destination_ip){ $CFLOW_HPORT=1; }
+                        if($data->source_ip==$data->destination_ip){ $CFLOW_HPORT=1; break; }
                 } 
-	} //else { $CFLOW_HPORT=1; }
+	} // else { $CFLOW_HPORT=0; }
 }
 
 /*Our LOOP */
