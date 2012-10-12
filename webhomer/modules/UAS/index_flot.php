@@ -61,7 +61,9 @@ $response = json_decode($jsondata, true);
 //print_r( $response);
 foreach($response as $entry){
         foreach($entry as $uas){
-        $sipUA[] = '{ label: \''.$uas['useragent'].'\', data: '.$uas['count'].'}';
+	  if ($uas['useragent'] && $uas['count'] && is_numeric($uas['count']) ) {
+            $sipUA[] = '{ label: \''.$uas['useragent'].'\', data: '.$uas['count'].'}';
+	  }
         }
 }
 
@@ -69,8 +71,7 @@ foreach($response as $entry){
 ?>
 
 
-var uas1 = [ <?php echo join($sipUA, ', ');?> ];
-
+var uas1 = [ <?php if (!empty($sipUA)) { echo join($sipUA, ', '); } ?> ];
 
 $.plot($("#chart2"), uas1, 
 {
