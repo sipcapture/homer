@@ -666,7 +666,7 @@ class HTML_ToolBox {
 				<td>
 			
 			       <input type="button" style="background: transparent;" title="Generate PCAP" onclick="if($('#pcap_session').val() != ''){window.open('pcap.php?'+$('#pcap_match').val()+'='+$('#pcap_session').val()+'&from_date='+$('#from_date').val()+'&to_date='+$('#to_date').val()+'&from_time='+$('#from_time').val()+'&to_time='+$('#to_time').val() );} else {alert('no '+$('#pcap_match').val()+'!');}" value="Generate PCAP" role="button"  class="ui-button ui-widget ui-state-default ui-corner-all"></input>
-<?php if ( defined('PCAP_AGENT') && PCAP_AGENT != '' ) { ?>
+<?php if ( defined('PCAP_AGENT') && PCAP_AGENT != '' || defined('PCAP_AGENT4') && PCAP_AGENT4 != '' ) { ?>
 			       <input type="button" style="background: transparent;" title="Import PCAP" onclick="adminAction('pcapin','','Import PCAP'); return false;" value="Import PCAP" role="button"  class="ui-button ui-widget ui-state-default ui-corner-all"></input>
 <?php } ?>
 			       </td></tr>

@@ -266,7 +266,15 @@ function LoadPcap() {
 			<div id="pcapout">
 			<form id="pcapup"  target="FileUpload" action="utils.php?task=pcapin" method="post" enctype="multipart/form-data">
 			<input type="file" name="file" id="file" /> <br>
-			<input type="checkbox" name="HEP2" id="HEP2" value="1"> PCAP Timestamps
+
+			<?php
+				// optional HEP2 switch for captagent 0.8
+				if (!defined(PCAP_AGENT4) && PCAP_AGENT != '') 
+					{
+					echo '<input type="checkbox" name="HEP2" id="HEP2" value="1"> Preserve Timestamps';
+				   	}
+			?>
+
 			<br /><br />
 			<input type="submit" name="submit" value="Start Upload" onclick="$('#FileUpload').show();" /> <img src="images/pcap.png" align="middle" style="margin: -6 2 0 0;"> 
 			</form>
@@ -287,6 +295,7 @@ function LoadPcap() {
 				if ($fext != '.pcap') {echo $fext." != .PCAP"; exit;}
 				move_uploaded_file($_FILES["file"]["tmp_name"], $pcapin );
 				if (!file_exists($pcapin)) { echo "File Horror!"; } else {
+				   if (PCAP_AGENT) { // old captagent 0.8
 					exec(PCAP_AGENT.' -P /tmp/captagent_in.pid -s '.PCAP_HEP_IP.' -p '.PCAP_HEP_PORT.' -D '.$pcapin.' '.$hepv, $result, $status);
 		                        if ($status != 0) { echo "Agent Not Available. Install captagent";
 		                        } else { 
@@ -295,6 +304,17 @@ function LoadPcap() {
 						if ($hepv != "") { echo "<br>PCAP Time Preserved"; }
 						}
 					}
+				   } else if (PCAP_AGENT4) { // new captagent 4
+					exec(PCAP_AGENT4.' -D '.$pcapin, $result, $status);
+		                        if ($status != 0) { echo "CaptAgent v4 Not Available or Misconfigured.";
+		                        } else { 
+						if ($result[0]!='') { echo $result[0]; } else {
+						echo "PCAP streamed to ".PCAP_HEP_IP.":".PCAP_HEP_PORT; 
+						if ($hepv != "") { echo "<br>PCAP Time Preserved"; }
+						}
+					}
+
+				   }
 				}
 			} 
 			echo "</font>";

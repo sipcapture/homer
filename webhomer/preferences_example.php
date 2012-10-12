@@ -85,7 +85,10 @@ define('SKIPCFLOWAUTH', 0);
 /*DEFAULT SELECTED DB NODE */
 define('DEFAULTDBNODE',1);
   
-/* PCAP Import: Streams to your HEP capture socket, REQUIRES working captagent! specify path if needed */
+/* PCAP Import: Streams to your HEP capture socket - REQUIRES CAPTAGENT INSTALLED! */
+/* Use for CAPTAGENT 4.x */
+// define('PCAP_AGENT4', 'captagent'); /* REQUIRES existing captagent4 XML configuration! test manually using -D option */
+/* Use for old CAPTAGENT 0.x */
 // define('PCAP_AGENT', 'captagent');
 // define('PCAP_HEP_IP', "192.168.1.100");
 // define('PCAP_HEP_PORT', "5060");
