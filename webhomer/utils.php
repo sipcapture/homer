@@ -295,7 +295,7 @@ function LoadPcap() {
 				if ($fext != '.pcap') {echo $fext." != .PCAP"; exit;}
 				move_uploaded_file($_FILES["file"]["tmp_name"], $pcapin );
 				if (!file_exists($pcapin)) { echo "File Horror!"; } else {
-				   if (PCAP_AGENT) { // old captagent 0.8
+				   if (defined('PCAP_AGENT')) { // old captagent 0.8
 					exec(PCAP_AGENT.' -P /tmp/captagent_in.pid -s '.PCAP_HEP_IP.' -p '.PCAP_HEP_PORT.' -D '.$pcapin.' '.$hepv, $result, $status);
 		                        if ($status != 0) { echo "Agent Not Available. Install captagent";
 		                        } else { 
@@ -304,7 +304,7 @@ function LoadPcap() {
 						if ($hepv != "") { echo "<br>PCAP Time Preserved"; }
 						}
 					}
-				   } else if (PCAP_AGENT4) { // new captagent 4
+				   } else if (defined('PCAP_AGENT4')) { // new captagent 4
 					exec(PCAP_AGENT4.' -D '.$pcapin, $result, $status);
 		                        if ($status != 0) { echo "CaptAgent v4 Not Available or Misconfigured.";
 		                        } else { 
