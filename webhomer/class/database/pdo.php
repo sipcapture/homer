@@ -129,7 +129,7 @@ class HomerDB {
         if(DATABASE == 'pgsql') $query = $this->toPgSql($query);        
         if (property_exists($this->connection, 'quote')) $args  = array_map($this->connection->quote, $args);
         // Prevent sql injection. Thank Kai Oliver Quambusch for bug report.
-        $args = $this->custom_sql_escape($args);
+        //$args = $this->custom_sql_escape($args);
         array_unshift($args,$query);        
         $query = call_user_func_array('sprintf',$args);
         return $query;
