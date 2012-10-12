@@ -298,7 +298,7 @@ foreach($results as $row) {
   else if($data->method == "200" && preg_match('/INVITE/',$data->cseq)) $statuscall = 4;
   else if(preg_match('/[3][0-9][0-9]/',$data->method)) $statuscall = 5;
   
-  if ( $CFLOW_HPORT==1 || $CFLOW_HPORT==2 ) {
+  if ( $CFLOW_HPORT==1 ) {
 	// try to correlate replies from ephemeral ports
 	if (!empty($datapre) && $datapre->source_port == $data->destination_port && $datapre->source_ip == $data->destination_ip ) {
 			$data->original_port = $data->source_port;
