@@ -93,5 +93,7 @@ define('DEFAULTDBNODE',1);
 // define('PCAP_HEP_IP', "192.168.1.100");
 // define('PCAP_HEP_PORT', "5060");
 
+define('SESSION_NAME',"HOMERSESSID"); /* session ID name. */
+
 
 ?>
