@@ -29,13 +29,16 @@
 
 defined( '_HOMEREXEC' ) or die( 'Restricted access' );
 
-session_start();
-
 define('__ROOT__', dirname(dirname(__FILE__))); 
 
 /* global configuration file */
 if(!file_exists(__ROOT__."/configuration.php")) { die("Configuration not found. Please refer to the README file."); }
 else require_once(__ROOT__."/configuration.php");
+
+/* if defined session_name, set this */
+if(defined('SESSION_NAME')) session_name(SESSION_NAME);
+
+session_start();
 
 /* Changed to PDO */
 require_once("class/database/pdo.php");
