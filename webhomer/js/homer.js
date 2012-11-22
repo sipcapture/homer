@@ -296,9 +296,13 @@ function showCallFlow2(type, callid, url) {
 	        for(var i = 0; i < g.length; i++)
         	{
 	            if(g[i].checked) {
-			var cellText = $('#'+g[i].id).parent().parent().find("a[alt=\"callflow\"]").text();		
-			if(found == 0 && cellText != callid) {  url += "&cid[]="+cellText; found = 1; }
-                	g[i].checked=false;
+                 var cellText = $('#'+g[i].id).parent().parent().find("a[alt=\"callflow\"]").text();		
+                 /* if(found == 0 && cellText != callid) {  url += "&cid[]="+cellText; found = 1; } */                 
+                  /* g[i].checked=false;*/
+                 /* Add all unique cids selected when showing multiple call flows. Thanks Gareth Aeriandi */
+                 if(url.indexOf(cellText) === -1) {
+                       url += "&cid[]="+cellText;
+                 }
 	            }
         	}
 
