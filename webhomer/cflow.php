@@ -233,10 +233,8 @@ if(count($results)==0) {
     exit;
 }
 
-/* Sort it if we have more than 1 location*/
-//if(count($location) > 1) 
-if ($mt_flag == 1)
-	usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
+  / *Sort every time as multi call id flows need to be sorted.* /
+ usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"] ? 1 : -1;'));
 
 /* host:host check */
 if (defined('CFLOW_HPORT')) {
