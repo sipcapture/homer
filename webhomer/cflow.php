@@ -162,7 +162,7 @@ if(!$db->dbconnect_homer(isset($mynodes[$location[0]]) ? $mynodes[$location[0]] 
 		               	}                       			
                         break;		
 	       case "b2b":
-                        if (BLEGTAIL) $cid_aleg = $cid.BLEGTAIL;
+                        	$cid_aleg = $cid.BLEGTAIL;
 
            }
 
@@ -194,7 +194,11 @@ foreach($location as $value) {
 	
 	        	$local_where = $where." ( callid = '".$cid."' )";
 			/* Append B-LEG if set */
-			if (BLEGCID && $full == 1) $local_where .= " OR (callid='".$cid_aleg."')";
+			if (BLEGCID && $full == 1) {
+				
+				$eqlike = preg_match("/%/", $cid_aleg) ? " like " : " = ";
+				$local_where .= " OR (callid".$eqlike."'".$cid_aleg."')";
+			}
 	
 				$query = "SELECT *, ".$tnode.",'".$tablename."' as tablename"
 	        	  ."\n FROM ".$tablename
