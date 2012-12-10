@@ -22,7 +22,7 @@
 
 use DBI;
 
-$version = "0.2.2";
+$version = "0.2.3";
 $mysql_table = "sip_capture";
 $mysql_dbname = "homer_db";
 $mysql_user = "mysql_login";
@@ -32,6 +32,7 @@ $maxparts = 6; #6 days How long keep the data in the DB
 $newparts = 2; #new partitions for 2 days. Anyway, start this script daily!
 @stepsvalues = (86400, 3600, 1800, 900); 
 $partstep = 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes 
+$engine = "MyISAM";
 
 
 #Check it
@@ -108,8 +109,8 @@ CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   KEY `method` (`method`),
   KEY `source_ip` (`source_ip`),
   KEY `destination_ip` (`destination_ip`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1
-PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`)) (PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = MyISAM);
+) ENGINE=".$engine." DEFAULT CHARSET=latin1
+PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`)) (PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = ".$engine.");
 ");
 
 #check if the table has partitions. If not, create one
@@ -192,7 +193,7 @@ for(my $i=0; $i<$newparts; $i++) {
 
 	# Fix MAXVALUE. Thanks Dorn B. <djbinter@gmail.com> for report and fix.
         $query = "ALTER TABLE ".$mysql_table." REORGANIZE PARTITION pmax INTO (PARTITION ".$newpartname
-                                ."\n VALUES LESS THAN (".$curtstamp.") ENGINE = MyISAM, PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = MyISAM)";  
+                                ."\n VALUES LESS THAN (".$curtstamp.") ENGINE = ".$engine.", PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = ".$engine.")";  
 
         $db->do($query);
                     
