@@ -222,7 +222,7 @@ class SipSearchService implements ISipService
               {
               	$first_table_no++;
               	if ($first_table_no >= count ($mynodes[$value]->dbtables))
-              		break;//caz anormal
+              		return NULL;
               	$prev_cnt = $cnt;
               	$cnt = $cnt + $mynodes[$value]->dbtablescnt[$first_table_no];
               
@@ -439,7 +439,7 @@ class SipSearchService implements ISipService
               {
               	$first_table_no++;
               	if ($first_table_no >= count ($mynodes[$value]->dbtables))
-              		break;//caz anormal
+              		return NULL;
               	$prev_cnt = $cnt;
               	$cnt = $cnt + $mynodes[$value]->dbtablescnt[$first_table_no];
               
