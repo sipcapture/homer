@@ -338,11 +338,14 @@ class SipSearchService implements ISipService
                $callwhere.= $mkey.$eqlike.$mvalue;
      }
      
-      if($key == "callid" && $b2b) {
-                if(BLEGCID == "x-cid") $callwhere .= "OR callid_aleg ".$eqlike.$mvalue;
-                else if(BLEGCID == "-0") $callwhere .= " OR callid ".$eqlike."'".$value.BLEGCID."'";
-                $callwhere .= ") ";
-      }
+     if($key == "callid" && $b2b) {
+     	if(BLEGCID == "x-cid") $callwhere .= "OR callid_aleg ".$eqlike.$mvalue;
+        else if(BLEGCID == "b2b") {
+        	$eqlike_b2b = preg_match("/%/", $value.BLEGTAIL) ? " like " : " = ";
+        	$callwhere .= " OR callid ".$eqlike_b2b."'".$value.BLEGTAIL."'";
+        }
+     	$callwhere .= ") ";
+     }
 
 	    $s = 1;
     }
