@@ -39,8 +39,20 @@ class HTML_Statistic {
 
         <ul id="column2" class="column" style="width: 80%;">
             <li class="widget color-yellow" id="widget2">
-                <div class="widget-head">
-                    <h3>Capture Stats ( <?php echo STAT_RANGE; ?>H )</h3>
+                <div class="widget-head">                    
+                  <select name="rangeStats" id="rangeStatsId" onchange="$('#stats0').load('modules/Graph/index_flot.php?range='+this.value); $('#stats1').load('modules/QoS/index_flot.php?range='+this.value); $('#stats2').load('modules/UAS/index_flot.php?range='+this.value);">
+                    <option value="1">1 hour</option>
+                    <option value="2">2 hours</option>
+                    <option value="4">4 hours</option>
+                    <option value="8">8 hours</option>
+                    <option value="12">12 hours</option>
+                    <option value="24">24 hours</option>
+                    <option value="48">48 hours</option>
+                    <option value="72">72 hours</option>
+                    <option value="96">96 hours</option>
+                 </select>
+                 <h3>Capture Stats</h3>
+                    
                 </div>
                 <div class="widget-content">
 
