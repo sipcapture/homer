@@ -36,6 +36,7 @@ include('../../configuration.php');
 date_default_timezone_set(CFLOW_TIMEZONE);
 $offset = STAT_OFFSET;
 $xhours = STAT_RANGE;
+if(isset($_GET['range']) && intval($_GET['range']) <= 96 &&  intval($_GET['range']) >= 1) $xhours = intval($_GET['range']);
 
 ?>
 
