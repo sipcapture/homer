@@ -35,6 +35,7 @@ include('../../configuration.php');
 date_default_timezone_set(CFLOW_TIMEZONE);
 $offset = STAT_OFFSET;
 $hours = STAT_RANGE;
+if(isset($_GET['range']) && intval($_GET['range']) <= 96 &&  intval($_GET['range']) >= 1) $hours = intval($_GET['range']);
 
 if(!defined('APIURL')) define('APIURL', "http://".$_SERVER['SERVER_NAME']);
 
@@ -81,11 +82,17 @@ $ = jQuery;
 
 $(document).ready(function() {
 
+var asr1Display = [ [<?php if (isset($sipASR)) echo join($sipASR, ', ');?>] ];
 var asr1 = [ [0, <?php if (isset($sipASR)) echo join($sipASR, ', ');?>] ];
+var ner1Display = [ [<?php if (isset($sipNER)) echo join($sipNER, ', ');?>] ];
 var ner1 = [ [1, <?php if (isset($sipNER)) echo join($sipNER, ', ');?>] ];
 
+var cok1Display = [ [<?php if (isset($callOK)) echo join($callOK, ', ');?>] ];
 var cok1 = [ [0, <?php if (isset($callOK)) echo join($callOK, ', ');?>] ];
+var cko1Display = [ [<?php if (isset($callOK)) echo join($callKO, ', ');?>] ];
 var cko1 = [ [1, <?php if (isset($callOK)) echo join($callKO, ', ');?>] ];
+
+var cps = ((parseFloat(cok1Display)+parseFloat(cko1Display))/(3600*(<?php echo $hours ?>))) ;
 
 var rok1 = [ [0, <?php if (isset($regOK)) echo join($regOK, ', ');?>] ];
 var rko1 = [ [1, <?php if (isset($regKO)) echo join($regKO, ', ');?>] ];
@@ -93,8 +100,8 @@ var rko1 = [ [1, <?php if (isset($regKO)) echo join($regKO, ', ');?>] ];
 
   $.plot($("#chart5"),
                 [
-                { data: asr1, label: "ASR",  bars: { show: true }, color: '#0cacfc' },
-                { data: ner1, label: "NER",  bars: { show: true }, color: '#0363f3' },
+                { data: asr1, label: "ASR "+asr1Display,  bars: { show: true }, color: '#0cacfc' },
+                { data: ner1, label: "NER "+ner1Display,  bars: { show: true }, color: '#0363f3' },
                 ],
            {
                yaxes: [  { position: 'left' }                      ],
@@ -112,8 +119,9 @@ var rko1 = [ [1, <?php if (isset($regKO)) echo join($regKO, ', ');?>] ];
 
    $.plot($("#chart4"),
                 [
-                { data: cok1, label: "Calls",  bars: { show: true }, color: 'rgb(30, 180, 20)' },
-                { data: cko1, label: "Failed",  bars: { show: true }, color: 'rgb(200,20,30)' },
+                { data: cok1, label: "Calls "+cok1Display,  bars: { show: true }, color: 'rgb(30, 180, 20)' },
+                { data: cko1, label: "Failed "+cko1Display,  bars: { show: true }, color: 'rgb(200,20,30)' },
+                { data: cps, label: "CPS "+cps,  bars: { show: false}, color: 'rgb(21,20,200)' },
                 ],
            {
                yaxes: [  { position: 'left' }                    ],
