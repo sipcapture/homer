@@ -222,12 +222,14 @@ class SipSearchService implements ISipService
               {
               	$first_table_no++;
               	if ($first_table_no >= count ($mynodes[$value]->dbtables))
-              		return NULL;
+              		break;//this means that there is no result from this location; will continue to next one
               	$prev_cnt = $cnt;
               	$cnt = $cnt + $mynodes[$value]->dbtablescnt[$first_table_no];
               
               }
               
+              if ($first_table_no >= count ($mynodes[$value]->dbtables))
+              	continue;
               
               $from[$first_table_no] = $offset - $prev_cnt;
               $count[$first_table_no] = min($cnt - $offset, $num);
@@ -439,12 +441,14 @@ class SipSearchService implements ISipService
               {
               	$first_table_no++;
               	if ($first_table_no >= count ($mynodes[$value]->dbtables))
-              		return NULL;
+              		break;//this means that there is no result from this location; will continue to next one
               	$prev_cnt = $cnt;
               	$cnt = $cnt + $mynodes[$value]->dbtablescnt[$first_table_no];
               
               }
               
+              if ($first_table_no >= count ($mynodes[$value]->dbtables))
+              	continue;
               
               $from[$first_table_no] = $offset - $prev_cnt;
               $count[$first_table_no] = min($cnt - $offset, $num);
