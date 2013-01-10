@@ -22,7 +22,7 @@
 
 use DBI;
 
-$version = "0.2.3";
+$version = "0.2.4";
 $mysql_table = "sip_capture";
 $mysql_dbname = "homer_db";
 $mysql_user = "mysql_login";
@@ -118,7 +118,7 @@ my $query = "SHOW TABLE STATUS FROM ".$mysql_dbname. " WHERE Name='".$mysql_tabl
 $sth = $db->prepare($query);
 $sth->execute();
 my $tstatus = $sth->fetchrow_hashref()->{Create_options};
-if ($tstatus ne "partitioned") {
+if ($tstatus !~ /partitioned/) {
    my $query = "ALTER TABLE ".$mysql_table. " PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`)) (PARTITION pmax VALUES LESS THAN MAXVALUE)";
    $sth = $db->prepare($query);
    $sth->execute();
