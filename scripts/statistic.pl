@@ -65,6 +65,9 @@ $asr = 0;
 #ALL AND CURRENT PACKETS. ALL = ALL MESSAGES IN DB. CURRENT = MESSAGES IN THIS INTERVALL
 ##############################################################################################
 $all = loadResult("SELECT COUNT(*) FROM ".$mysql_table);
+#If user use InnoDB, select COUNT(*) will kill table, because query do full scan of the table. 
+#Better use IS, yes, it's not accuracy, but better as wait 5-10 minutes
+#$all = loadResult("select table_rows from information_schema.tables where table_schema='".$mysql_dbname."' and table_name='".$mysql_table."'");
 insertStat("stats_method","method='ALL',total='".$all."'");
 
 $current = loadResult("SELECT COUNT(*) ".$mainquery);
