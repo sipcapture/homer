@@ -95,8 +95,8 @@ define('DEFAULTDBNODE',1);
 
 define('SESSION_NAME',"HOMERSESSID"); /* session ID name. */
 
-  /* SQL SCHEMA VERSION */
-  define('SQL_SCHEMA_VERSION',1); /* SQL SCHEMA VERSION. Default 1 */
+/* SQL SCHEMA VERSION */
+define('SQL_SCHEMA_VERSION',1); /* SQL SCHEMA VERSION. Default 1 */
 
 
 ?>
