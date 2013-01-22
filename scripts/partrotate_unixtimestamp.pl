@@ -22,7 +22,7 @@
 
 use DBI;
 
-$version = "0.2.4";
+$version = "0.2.5";
 $mysql_table = "sip_capture";
 $mysql_dbname = "homer_db";
 $mysql_user = "mysql_login";
@@ -33,6 +33,8 @@ $newparts = 2; #new partitions for 2 days. Anyway, start this script daily!
 @stepsvalues = (86400, 3600, 1800, 900); 
 $partstep = 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes 
 $engine = "MyISAM";
+$sql_schema_version = 1;
+$auth_column = "auth";
 
 
 #Check it
@@ -55,6 +57,8 @@ $newparts*=$coof;
 
 my $db = DBI->connect("DBI:mysql:$mysql_dbname:$mysql_host:3306", $mysql_user, $mysql_password);
 
+$auth_column = "authorization" if($sql_schema_version == 1);
+
 #$db->{PrintError} = 0;
 
 my $sth = $db->do("
@@ -72,7 +76,7 @@ CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   `to_tag` varchar(64) NOT NULL,
   `pid_user` varchar(100) NOT NULL DEFAULT '',
   `contact_user` varchar(120) NOT NULL,
-  `auth_user` varchar(120) NOT NULL,
+  `".$auth_column."` varchar(120) NOT NULL,
   `callid` varchar(100) NOT NULL DEFAULT '',
   `callid_aleg` varchar(100) NOT NULL DEFAULT '',
   `via_1` varchar(256) NOT NULL,
