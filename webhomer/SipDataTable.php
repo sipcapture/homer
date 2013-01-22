@@ -246,7 +246,13 @@ class SipDataTable extends DataTable_DataTable
             ->setSortKey("authorization")
             ->setIsVisible(false)
             ->setIsSortable(true)
-            ->setIsSearchable(false);                        
+            ->setIsSearchable(false);   
+
+    /* SCHEMA */
+    if(SQL_SCHEMA_VERSION == 2) {
+    
+        $column23->setName("auth")->setSortKey("auth");        
+    }
 
     $column24 = new DataTable_Column();
     $column24->setName("user_agent")
