@@ -35,7 +35,7 @@ $partstep = 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes
 $engine = "MyISAM";
 $sql_schema_version = 1;
 $auth_column = "auth";
-
+$check_table = 1; #Check if table exists. For PostgreSQL change creation schema!
 
 #Check it
 $partstep=0 if(!defined $stepsvalues[$partstep]);
@@ -61,8 +61,7 @@ $auth_column = "authorization" if($sql_schema_version == 1);
 
 #$db->{PrintError} = 0;
 
-my $sth = $db->do("
-CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
+$sql = "CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
   `micro_ts` bigint(18) NOT NULL DEFAULT '0',
@@ -87,9 +86,9 @@ CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   `content_type` varchar(256) NOT NULL,
   `authorization` varchar(256) NOT NULL,
   `user_agent` varchar(256) NOT NULL,
-  `source_ip` varchar(50) NOT NULL DEFAULT '',
+  `source_ip` varchar(60) NOT NULL DEFAULT '',
   `source_port` int(10) NOT NULL,
-  `destination_ip` varchar(50) NOT NULL DEFAULT '',
+  `destination_ip` varchar(60) NOT NULL DEFAULT '',
   `destination_port` int(10) NOT NULL,
   `contact_ip` varchar(60) NOT NULL,
   `contact_port` int(10) NOT NULL,
@@ -114,8 +113,9 @@ CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   KEY `source_ip` (`source_ip`),
   KEY `destination_ip` (`destination_ip`)
 ) ENGINE=".$engine." DEFAULT CHARSET=latin1
-PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`)) (PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = ".$engine.");
-");
+PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`)) (PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = ".$engine.")";
+
+my $sth = $db->do($sql) if($check_table == 1);
 
 #check if the table has partitions. If not, create one
 my $query = "SHOW TABLE STATUS FROM ".$mysql_dbname. " WHERE Name='".$mysql_table."'";
