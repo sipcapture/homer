@@ -2,6 +2,8 @@
  * only for MYSQL >= 5.1.43
 */
 
+/* this SQL schema version # 2 */
+
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `sip_capture` (
