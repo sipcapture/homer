@@ -252,8 +252,8 @@ usort($results, create_function('$a, $b', 'return $a["micro_ts"] > $b["micro_ts"
 foreach($results as $val) {
 
         $row = (object) $val;
-
-	$data=$row->msg;
+        
+        $data = preg_replace('!\\\015\\\012!',"\r\n",$row->msg);
 	$size->data=strlen($data);
 	$pkt = '';
 
