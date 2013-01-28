@@ -43,8 +43,13 @@ class HomerAuthentication extends Authentication {
                       if ($result[0]) {
                           if (@ldap_bind( $ds, $result[0]['dn'], $password) ) {
                               if($result[0] != NULL) {
+                                    if (LDAP_GROUPDN != NULL) {
+                                        if (!$this->check_filegroup_membership($ds,$username)) {
+                                            return false;
+                                        }
+                                    }
                                     $_SESSION['loggedin'] = $username;
-                                    $_SESSION['userlevel'] = "3";  //All ldap clients are users                                                                                                    
+                                    $_SESSION['userlevel'] = LDAP_USERLEVEL;
                                     return true;
                               }
                           }                
@@ -52,6 +57,19 @@ class HomerAuthentication extends Authentication {
                 }
         }
 	return false;
+  }
+
+  /* posixGroup schema, rfc2307 */
+  function check_filegroup_membership($ds, $uid) {
+    $dn = LDAP_GROUPDN;
+    $attr = "memberUid";
+    $result = @ldap_compare($ds, $dn, $attr, $uid);
+
+    if ($result === true) {
+        return true;
+    } else {
+        return false;
+    }
   }
 }
 
