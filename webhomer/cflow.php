@@ -301,7 +301,7 @@ foreach($results as $row) {
   
   if ( $CFLOW_HPORT==1 ) {
 	// try to correlate replies from ephemeral ports
-	if (!empty($datapre) && $datapre->source_port == $data->destination_port && $datapre->source_ip == $data->destination_ip ) {
+	if ( (defined('CFLOW_EPORT') && CFLOW_EPORT == 1) && !empty($datapre) && $datapre->source_port == $data->destination_port && $datapre->source_ip == $data->destination_ip ) {
 			$data->original_port = $data->source_port;
 			$data->source_port=$datapre->destination_port;
 	  	$hosts[$data->source_ip.":".$data->source_port] = 1;

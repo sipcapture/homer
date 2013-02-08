@@ -17,6 +17,7 @@ define('CFLOW_DIRECTION', 0); /* Callflow Direction */
 define('CFLOW_FACTOR', 1);   /* IMAGE size factor. The value can be float */
 define('CFLOW_POPUP',1); /* Modal type: 1, Browser popup: 2 */
 define('CFLOW_HPORT', 0); /* Column/Host Mode = Plain: 0, +Port: 1, Auto-Select: 2 */
+define('CFLOW_EPORT', 0); /* Enable Ephemeral port detection, experimental */
 define('MESSAGE_POPUP',1); /* Modal type: 1, Browser popup: 2 */
 
 /* Modules Options */
