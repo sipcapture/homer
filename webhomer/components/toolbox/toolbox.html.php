@@ -216,7 +216,7 @@ class HTML_ToolBox {
 				var ddt = indata.date.split(" ");
 
 				var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";
-				url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+				url += "&from_time="+ddt[1]+"&from_date="+ddt[0]+"&tablename=<?php echo HOMER_TABLE; ?>";
 
 				var furl = "cflow.php?cid[]="+indata.callid+
 				"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
@@ -302,7 +302,7 @@ class HTML_ToolBox {
 			var diff=new Date();
 			ddx = diff.getHours();			
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
-	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0]+"&tablename=<?php echo HOMER_TABLE; ?>";
 
 			var furl = "cflow.php?cid[]="+indata.callid+
 			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
@@ -417,7 +417,7 @@ class HTML_ToolBox {
 			var diff=new Date();
 			ddx = diff.getHours();			
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
-	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0]+"&tablename=<?php echo HOMER_TABLE; ?>";
 
 			var furl = "cflow.php?cid[]="+indata.callid+
 			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
@@ -543,7 +543,7 @@ class HTML_ToolBox {
 			var diff=new Date();
 			ddx = diff.getHours();			
 			var url = "utils.php?task=sipmessage&id="+indata.id+"&popuptype=<?php echo MESSAGE_POPUP;?>";			
-	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0];
+	 	        url += "&from_time="+ddt[1]+"&from_date="+ddt[0]+"&tablename=<?php echo HOMER_TABLE; ?>";
 
 			var furl = "cflow.php?cid[]="+indata.callid+
 			"&from_time="+ddt[1]+"&to_time="+ddt[1]+"&from_date="+ddt[0]+"&to_date="+ddt[0]+
