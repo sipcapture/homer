@@ -51,7 +51,7 @@ if(isset($_GET['range']) && intval($_GET['range']) <= 96 &&  intval($_GET['range
 
 <?php
 
-if (inet_pton($_SERVER['SERVER_NAME']) == false) {
+if ( substr_count($_SERVER['SERVER_NAME'],":") < 2 ) {
         $localhomer = $_SERVER['SERVER_NAME'];
 } else {
         $localhomer = "[".$_SERVER['SERVER_NAME']."]";
