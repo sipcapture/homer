@@ -37,7 +37,12 @@ $offset = STAT_OFFSET;
 $hours = STAT_RANGE;
 if(isset($_GET['range']) && intval($_GET['range']) <= 96 &&  intval($_GET['range']) >= 1) $hours = intval($_GET['range']);
 
-if(!defined('APIURL')) define('APIURL', "http://".$_SERVER['SERVER_NAME']);
+if (inet_pton($_SERVER['SERVER_NAME']) == false) {
+        $localhomer = $_SERVER['SERVER_NAME'];
+} else {
+        $localhomer = "[".$_SERVER['SERVER_NAME']."]";
+}
+if(!defined('APIURL')) define('APIURL', "http://".$localhomer);
 
 $uri = APIURL.APILOC;
 

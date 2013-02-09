@@ -67,7 +67,12 @@ $('#live-stats').html('');
 
 <?php
 
-if(!defined('APIURL')) define('APIURL', "http://".$_SERVER['SERVER_NAME']);
+if (inet_pton($_SERVER['SERVER_NAME']) == false) {
+        $localhomer = $_SERVER['SERVER_NAME'];
+} else {
+        $localhomer = "[".$_SERVER['SERVER_NAME']."]";
+}
+if(!defined('APIURL')) define('APIURL', "http://".$localhomer);
 
 $uri = APIURL.APILOC;
 
