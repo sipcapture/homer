@@ -225,6 +225,8 @@ class HTML_ToolBox {
 				 else echo '"&popuptype='.CFLOW_POPUP.'"+';
 				 // if (!defined('BLEGDETECT')) echo '""+'; 
 				 // else echo '"&callid_bleg="+indata.callid+"'.BLEGCID.'"+';
+		 		 // add location[]
+                                 if(defined('DEFAULTDBNODE')) echo '"&location[]='.DEFAULTDBNODE.'"+';
 				?>
 				"";
 				                           
@@ -311,6 +313,8 @@ class HTML_ToolBox {
 			 else echo '"&popuptype='.CFLOW_POPUP.'"+';
 			  if (!defined('BLEGDETECT')) echo '""+'; 
 			  else echo '"&callid_aleg="+indata.callid+"'.BLEGCID.'"+';
+		 	  // add location[]
+                          if(defined('DEFAULTDBNODE')) echo '"&location[]='.DEFAULTDBNODE.'"+';
 			?>
 			"";
 
@@ -426,6 +430,9 @@ class HTML_ToolBox {
 			 else echo '"&popuptype='.CFLOW_POPUP.'"+';
 			  if (!defined('BLEGDETECT')) echo '""+'; 
 			  else echo '"&callid_aleg="+indata.callid+"'.BLEGCID.'"+';
+		          // add location[]
+                          if(defined('DEFAULTDBNODE')) echo '"&location[]='.DEFAULTDBNODE.'"+';
+
 			?>
 			"";
 
@@ -552,6 +559,9 @@ class HTML_ToolBox {
 			 else echo '"&popuptype='.CFLOW_POPUP.'"+';
 			  if (!defined('BLEGDETECT')) echo '""+'; 
 			  else echo '"&callid_aleg="+indata.callid+"'.BLEGCID.'"+';
+		 	  // add location[]
+                          if(defined('DEFAULTDBNODE')) echo '"&location[]='.DEFAULTDBNODE.'"+';
+
 			?>
 			"";
 
