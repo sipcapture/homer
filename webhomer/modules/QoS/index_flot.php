@@ -97,7 +97,7 @@ var cok1 = [ [0, <?php if (isset($callOK)) echo join($callOK, ', ');?>] ];
 var cko1Display = [ [<?php if (isset($callOK)) echo join($callKO, ', ');?>] ];
 var cko1 = [ [1, <?php if (isset($callOK)) echo join($callKO, ', ');?>] ];
 
-var cps = ((parseFloat(cok1Display)+parseFloat(cko1Display))/(3600*(<?php echo $hours ?>))) ;
+var cps = ((parseFloat(cok1Display)+parseFloat(cko1Display))/(3600*(<?php echo $hours ?>))).toFixed(3) ;
 
 var rok1 = [ [0, <?php if (isset($regOK)) echo join($regOK, ', ');?>] ];
 var rko1 = [ [1, <?php if (isset($regKO)) echo join($regKO, ', ');?>] ];
