@@ -402,7 +402,7 @@ class HTML_search {
                     <h3>User Details</h3>
                 </div>
                 <div class="widget-content">
-                   <table class="bodystyle" cellspacing="1"  height="135">
+                   <table class="bodystyle" cellspacing="1"  height="150">
 				<tr>
 					<td width="150" class="tablerow_two">
 						<label for="ruri_user" title="B-Number in Request URI user part">RURI User *</label>
@@ -493,7 +493,7 @@ class HTML_search {
                     <h3>Time & Date</h3>
                 </div>
                 <div class="widget-content">
-                    <table class="bodystyle" cellspacing="1" height="135">						
+                    <table class="bodystyle" cellspacing="1" height="150">						
 							<tr>
 							
 								<td width="20%" class="paramlist_key"><label for="location" title="Homer DB Node">DB Location</label></td>
