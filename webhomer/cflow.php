@@ -342,6 +342,8 @@ foreach($results as $row) {
   //Check user agent and generate type of UAC
   //Better to make it in DB.
 
+if ( !empty($data->user_agent) && empty($uac[$data->user_agent]) ) {
+
  // SIP SWITCHES
 
  if(preg_match('/asterisk/i', $data->user_agent)) {
@@ -384,11 +386,11 @@ foreach($results as $row) {
      $uac[$data->user_agent] = $data->user_agent;
  }
 
- else {
-      $uac[$data->source_ip.$ssrc] = "sipgateway";
-      $uac[$data->user_agent] = $data->user_agent;
- }
- 
+ 	else {
+ 	     $uac[$data->source_ip.$ssrc] = "sipgateway";
+ 	     $uac[$data->user_agent] = $data->user_agent;
+ 	}
+}
 
 }
 
