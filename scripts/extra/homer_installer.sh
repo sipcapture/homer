@@ -676,6 +676,10 @@ echo "modparam(\"sipcapture\", \"raw_socket_listen\", \"$capip:$capport\")" >> $
 
 #echo "/* IP and port for HEP */" >> $config
 #echo "/* listen=udp:$capip:$capport */" >> $config
+
+# Old schema fix
+echo "modparam(\"sipcapture\", \"authorization_column\", \"authorization\")" >> $config
+
 echo "NEXT: Configure switch to mirror/monitor all desired traffic to our port connected to $device"
                 ;;
           * ) 
