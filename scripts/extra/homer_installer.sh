@@ -7,7 +7,7 @@
 #
 # Thanks to all the good souls testing this! We SIPpreciate it!
 
-VERSION=0.6.4
+VERSION=0.6.5
 HOSTNAME=$(hostname)
 
 clear; 
@@ -403,12 +403,12 @@ fi
 		echo "Creating Users..."
 		mysql -u "$sqluser" -p"$sqlpassword" -e "GRANT ALL ON *.* TO '$sqlhomeruser'@'localhost' IDENTIFIED BY '$sqlhomerpassword'; FLUSH PRIVILEGES;";
 		echo "Creating Tables..."
-		mysql -u "$sqluser" -p"$sqlpassword" homer_db < sql/create_sipcapture.sql
+		mysql -u "$sqluser" -p"$sqlpassword" homer_db < sql/create_sipcapture_version_3.sql
 		mysql -u "$sqluser" -p"$sqlpassword" homer_db < webhomer/sql/statistics.sql
 		mysql -u "$sqluser" -p"$sqlpassword" homer_users < webhomer/sql/homer_users.sql
 	else
 		echo 
-		echo "homerWARNING: Existing/Conflicting database found!"
+		echo "WARNING: Existing/Conflicting database found!"
 		echo "         You MUST create your tables manually"
 		echo "         ------------------------------------"
 		echo 
@@ -505,7 +505,7 @@ else
 	  y|Y ) 
 		echo "Adding cronjob..."
 		statistic="/opt/statistic.pl 2>&1> /dev/null"
-		job1="5 * * * * $statistic"
+		job1="5 * * * * sudo $statistic"
 		crontab -l > /opt/cron.tmp
 		echo "$job1" >> /opt/cron.tmp
 		CRON=$(cat /opt/cron.tmp | crontab -)
@@ -521,7 +521,7 @@ else
 	        echo "Adding cronjob..."
 		# Set Cron: Partition Rotation 
 		rotate="/opt/partrotate_unixtimestamp.pl 2>&1> /dev/null"
-		job2="* 0 * * * $rotate"
+		job2="* 0 * * * sudo $rotate"
 		crontab -l > /opt/cron.tmp
 		echo "$job2" >> /opt/cron.tmp
 		CRON=$(cat /opt/cron.tmp | crontab - )
@@ -612,10 +612,10 @@ modparam("sipcapture", "raw_sock_children", 6)
 	echo
 	echo "We are now going to configure the capture options:"
 	echo
-	echo "       1: HEP encapsulation socket"
+	echo "       1: HEP encapsulation socket (suggested)"
 	echo "       2: IPIP encapsulation socket"
 	echo "       3: RAW Port Monitoring/Mirroring"
-	echo "       *: Manual Configuration (see HOWTO & FAQ)"
+	echo "       *: Manual Configuration (using HOWTO & FAQ)"
 	echo 
 
 	# Set choice
@@ -678,7 +678,7 @@ echo "modparam(\"sipcapture\", \"raw_socket_listen\", \"$capip:$capport\")" >> $
 #echo "/* listen=udp:$capip:$capport */" >> $config
 
 # Old schema fix
-echo "modparam(\"sipcapture\", \"authorization_column\", \"authorization\")" >> $config
+# echo 'modparam("sipcapture", "authorization_column", "authorization")' >> $config
 
 echo "NEXT: Configure switch to mirror/monitor all desired traffic to our port connected to $device"
                 ;;
