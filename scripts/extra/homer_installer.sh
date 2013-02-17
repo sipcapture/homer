@@ -1,11 +1,39 @@
 #!/bin/sh
 #
-# BETA STATUS! TESTING ONLY! NO GUARANTEES! DO NOT USE ON EXISTING SYSTEMS!
-# --------------------------------------------------------------------------
-# Homer/SipCapture installation script for CentOS/Debian/SUSE based distros
-# Copyleft (c) 2011-2012 SIPCAPTURE.ORG - http://support@sipcapture.org
+# --------------------------------------------------------------------------------
+# HOMER/SipCapture automated installation script for Debian/CentOs/OpenSUSE (BETA)
+# --------------------------------------------------------------------------------
+# This script is only intended as a quickstart to test and get familiar with HOMER.
+# It is not suitable for high-traffic nodes, complex capture scenarios, clusters.
+# The HOW-TO should be ALWAYS followed for a fully controlled, manual installation!
+# --------------------------------------------------------------------------------
 #
-# Thanks to all the good souls testing this! We SIPpreciate it!
+#  Copyright notice:
+#
+#  (c) 2011-2013 Lorenzo Mangani <lorenzo.mangani@gmail.com>
+#  (c) 2011-2013 Alexandr Dubovikov <alexandr.dubovikov@gmail.com>
+#
+#  All rights reserved
+#
+#  This script is part of the HOMER project (http://sipcapture.org)
+#  The HOMER project is free software; you can redistribute it and/or 
+#  modify it under the terms of the GNU General Public License as 
+#  published by the Free Software Foundation; either version 2 of 
+#  the License, or (at your option) any later version.
+#
+#  The GNU General Public License can be found at
+#  http://www.gnu.org/copyleft/gpl.html. A copy is found in the 
+#  textfile GPL.txt and important notices to the license from the 
+#  author is found in LICENSE.txt distributed with these scripts.
+#
+#  This script is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  This copyright notice MUST APPEAR in all copies of the script!
+#
+
 
 VERSION=0.6.5
 HOSTNAME=$(hostname)
@@ -23,8 +51,8 @@ echo "  ;;;;      ;;;;   WARNING: This installer is intended for   "
 echo "  ;;;;  ;;  ;;;;   dedicated/vanilla OS setups without any   "
 echo "  ,;;;  ;;  ;;;;   customization and with default settings   "
 echo "   ;;;;;;;;;;;;                                              "
-echo "    :;;;;;;;;;     THIS SCRIPT IS FOR TESTING PURPOSES ONLY  "
-echo "     ;;;;;;;;      USE AT YOUR *OWN* RISK AND READ THE DOCS  "
+echo "    :;;;;;;;;;     THIS SCRIPT IS PROVIDED AS-IS, USE AT     "
+echo "     ;;;;;;;;      YOUR *OWN* RISK, REVIEW LICENSE & DOCS    "
 echo "                                                             "
 echo "*************************************************************"
 echo;
@@ -100,7 +128,7 @@ if [ ! $1 ] || [ -z "$1" ] ; then
      # Prompt for installation directory or do default
      echo "This script will download, compile and install the requirements for Homer automatically."
      echo
-     echo "Enter SIPCAPTURE/Kamailio install path or 'abort' [/usr/local/kamailio]: "
+     echo "Enter HOMER/Kamailio install path, press enter for default or 'abort' [/usr/local/kamailio]: "
      read  destination
      [ "$destination" = "abort" ] && return
      [ "$destination" = "" ] && destination="/usr/local/kamailio"
@@ -108,7 +136,7 @@ else
      destination=$1
 fi
 
-echo "SIPCAPTURE/Kamailio will be installed to '$destination'"
+echo "HOMER/Kamailio will be installed to '$destination'"
 echo
 # Set full path, check if local
 SETUP_ENV=$destination
@@ -122,7 +150,7 @@ echo "**************************************************************"
 echo " INSTALLING OS PACKAGES AND DEPENDENCIES FOR HOMER SIPCAPTURE"
 echo "**************************************************************"
 echo
-echo "This might take a while. Please stand by...."
+echo "This might take a while depending on system/network speed. Please stand by...."
 echo
 
 case $DIST in
