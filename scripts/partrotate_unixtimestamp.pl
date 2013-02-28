@@ -22,7 +22,7 @@
 
 use DBI;
 
-$version = "0.2.5";
+$version = "0.2.5p1";
 $mysql_table = "sip_capture";
 $mysql_dbname = "homer_db";
 $mysql_user = "mysql_login";
@@ -75,7 +75,7 @@ $sql = "CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   `to_tag` varchar(64) NOT NULL,
   `pid_user` varchar(100) NOT NULL DEFAULT '',
   `contact_user` varchar(120) NOT NULL,
-  `".$auth_column."` varchar(120) NOT NULL,
+  `auth_user` varchar(120) NOT NULL,  
   `callid` varchar(100) NOT NULL DEFAULT '',
   `callid_aleg` varchar(100) NOT NULL DEFAULT '',
   `via_1` varchar(256) NOT NULL,
@@ -84,7 +84,7 @@ $sql = "CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   `diversion` varchar(256) NOT NULL,
   `reason` varchar(200) NOT NULL,
   `content_type` varchar(256) NOT NULL,
-  `authorization` varchar(256) NOT NULL,
+  `".$auth_column."` varchar(120) NOT NULL,
   `user_agent` varchar(256) NOT NULL,
   `source_ip` varchar(60) NOT NULL DEFAULT '',
   `source_port` int(10) NOT NULL,
