@@ -84,6 +84,7 @@ $nodes = $db->getNodes();
 foreach($nodes as $node) {
 
         $mynodes[$node->id] = new Node();
+	$mynodes[$node->id]->name = $node->name;
 
         $mynodes[$node->id]->dbtablescnt = array();
         $mynodes[$node->id]->dbtables = array();
