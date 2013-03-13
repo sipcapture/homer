@@ -684,7 +684,7 @@ $(document).ready(function(){
     <input id="s3" type="button" value="TEXT" onclick="window.open('pcap.php?<?php echo $pcapurl; ?>&text=1');" style="background: transparent;"/>
 <?php  if (isset($flow_from_date)) { ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
-    <input type="button" value="Expand Seach" style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?<?php echo $complete_url ?>&full=1');"/>
+    <input type="button" value="Expand Search" style="opacity: 1; background: transparent;" onclick="$(this).parent().parent().load('cflow.php?<?php echo $complete_url ?>&full=1');"/>
 <?php } else {  ?>
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
 <?php   }  ?>
@@ -693,7 +693,8 @@ $(document).ready(function(){
 <?php } ?>
 </div>
 <center>
-<div id="callflow<?php echo $winid; ?>" style="overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;">
+<!-- <div id="callflow<?php echo $winid; ?>" style="margin-top:5px;overflow:hidden;width:<?php echo $size_x;?>px;height:<?php echo $size_y;?>px;"> -->
+<div id="callflow<?php echo $winid; ?>" style="margin-top:5px;overflow:hidden;width:<?php echo $size_x;?>px;height:80%;"> 
 <img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map<?php echo $winid; ?>' id="image<?php echo $winid; ?>">
 <map name='map<?php echo $winid; ?>' id='map<?php echo $winid; ?>'>
 <?php
