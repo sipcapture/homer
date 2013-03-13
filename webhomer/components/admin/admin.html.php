@@ -149,8 +149,9 @@ class HTML_Admin {
 	     
         	   foreach ($columns as $key=>$value) {
           	    if($key == "id" || $key == "userid") continue;
+          	    if($key == "status") { $cwid="50px";} else {$cwid="auto";}
 			$ktitle = strtoupper($key);
-                    echo "<th>$ktitle</th>";                
+                    echo "<th style=\"width:".$cwid.";\">$ktitle</th>";                
                 }        
 		echo "</tr>";
 
@@ -383,15 +384,18 @@ $userdef = get_defined_constants(true);
 <!-- </div> -->
 
 <div id="createuser-form" title="Create new user"> 
-	<p class="validateTips">All form fields are required.</p> 
+	<p class="validateTips" style="margin:10px;">
+	New HOMER Account<br>
+	All form fields are required.
+	</p> 
  	<br>
 	<form action="index.php" name="createuser" id="createuser">
 	<fieldset> 		
-		<label for="email">Email/ID &nbsp;</label> 
+		<label style="width:40%;display:block;float:left;" for="email">Email/ID &nbsp;</label> 
 		<input type="text" name="email" id="email" value="" class="text ui-widget-content ui-corner-all" /><br> 
-		<label for="password">Password</label> 
+		<label style="width:40%;display:block;float:left;" for="password">Password</label> 
 		<input type="password" name="password" id="password" value="" class="text ui-widget-content ui-corner-all" /><br> 
-		<label for="name">UserLevel</label> 
+		<label style="width:40%;display:block;float:left;" for="name">UserLevel</label> 
 		<select name=level" id="level" class="text ui-widget-content ui-corner-all">
 			<option value="1">Admin</option>
 			<option value="2">Manager</option>
@@ -406,14 +410,20 @@ $userdef = get_defined_constants(true);
 </div> 
 
 <div id="createhost-form" title="Create new host alias"> 
+	<p class="validateTips" style="margin:10px;">
+	New HOST Alias<br>
+	</p> 
 	<form action="index.php" name="createhost" id="createhost">
 	<fieldset> 		
-		<label for="email">Host</label> 
+		<label style="width:40%;display:block;float:left;" for="email">Host IP</label> 
 		<input type="text" name="host" id="host" value="" class="text ui-widget-content ui-corner-all" /><br> 
-		<label for="name">Name</label> 
+		<label style="width:40%;display:block;float:left;" for="name">Host Name</label> 
 		<input type="text" name="name" id="name" class="text ui-widget-content ui-corner-all" /> <br>
-		<label for="status">Status</label> 
-		<input type="text" name="status" id="status" class="text ui-widget-content ui-corner-all" value="1" /><br> 
+		<label style="width:40%;display:block;float:left;" for="status">Status</label>
+		<select name="status" id="status" class="text ui-widget-content ui-corner-all" selected="1">
+  			<option value="1">Active</option>
+  			<option value="0">Disabled</option>
+		</select> 
 	</fieldset> 
 	<input type="hidden" name="task" value="createhost">
 	<input type="hidden" name="component" value="admin">
@@ -422,23 +432,29 @@ $userdef = get_defined_constants(true);
 </div> 
 
 <div id="createnode-form" title="Create new node"> 
+	<p class="validateTips" style="margin:10px;">
+	New DATABASE Node<br>
+	</p> 
 	<form action="index.php" name="createnode" id="createnode">
 	<fieldset> 		
-		<label for="email">Host</label> 
+		<label style="width:40%;display:block;float:left;" for="email">Host</label> 
 		<input type="text" name="host" id="host" value="" class="text ui-widget-content ui-corner-all" /> <br>
-		<label for="name">Name</label> 
+		<label style="width:40%;display:block;float:left;" for="name">Name</label> 
 		<input type="text" name="name" id="name" class="text ui-widget-content ui-corner-all" /> <br>
-		<label for="status">Status</label> 
-		<input type="text" name="status" id="status" class="text ui-widget-content ui-corner-all" value="1"/> <br> 
-		<label for="name">Database</label> 
+		<label style="width:40%;display:block;float:left;" for="status">Status</label>
+		<select name="status" id="status" class="text ui-widget-content ui-corner-all" selected="1">
+  			<option value="1">Active</option>
+  			<option value="0">Disabled</option>
+		</select>  <br>
+		<label style="width:40%;display:block;float:left;" for="name">Database</label> 
 		<input type="text" name="dbname" id="dbname" class="text ui-widget-content ui-corner-all" /> <br>
-		<label for="name">Database port</label> 
+		<label style="width:40%;display:block;float:left;" for="name">Database Port</label> 
 		<input type="text" name="dbport" id="dbport" class="text ui-widget-content ui-corner-all" /> <br>
-		<label for="name">Database user</label> 
+		<label style="width:40%;display:block;float:left;" for="name">Database User</label> 
 		<input type="text" name="dbusername" id="dbusername" class="text ui-widget-content ui-corner-all" /> <br>
-		<label for="name">Database password</label> 
+		<label style="width:40%;display:block;float:left;" for="name">Database Password</label> 
 		<input type="text" name="dbtables" id="dbtables" class="text ui-widget-content ui-corner-all" /> <br>
-		<label for="name">Database tables</label> 
+		<label style="width:40%;display:block;float:left;" for="name">Database Tables</label> 
 		<input type="text" name="dbpassword" id="dbpassword" class="text ui-widget-content ui-corner-all" /> <br>
 	</fieldset> 
 	<input type="hidden" name="task" value="createnode">
