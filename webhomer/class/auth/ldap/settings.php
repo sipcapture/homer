@@ -8,7 +8,7 @@ define('LDAP_USERLEVEL',3); //All ldap clients are user
 
 // To define Admin-User while using LDAP Auth. 
 // Should be added to LDAP Directory later on
-define('LDAP_ADMINLEVEL',1); //All ldap clients are user
+define('LDAP_ADMINLEVEL',1); 
 define('LDAP_ADMIN_USER',"user1,user2,user3,user4");
 
 // If not defined, Password my be commited unencrypted to ldap server
