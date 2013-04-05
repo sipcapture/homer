@@ -37,10 +37,8 @@ class HomerAuthentication extends Authentication {
 
 	if ($username != "" && $password != "") {
   
-		// Documentation says - set to never 
-		putenv('LDAPTLS_REQCERT=never') or die('Failed to setup the env');
-
-        	$ds=@ldap_connect(LDAP_HOST,LDAP_PORT);
+	  
+    $ds=@ldap_connect(LDAP_HOST,LDAP_PORT);
 		
 		// Set LDAP Version, Default is Version 2
 		@ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, ( LDAP_VERSION) ? LDAP_VERSION : 2);
@@ -50,7 +48,11 @@ class HomerAuthentication extends Authentication {
 	        
 		// Enable TLS Encryption
 		if(LDAP_ENCRYPTION == "tls") {
-	        	@ldap_start_tls($ds);
+      
+	        	  // Documentation says - set to never
+		          putenv('LDAPTLS_REQCERT=never') or die('Failed to setup the env');
+
+              @ldap_start_tls($ds);
 	        }
 		
                 $r=@ldap_search( $ds, LDAP_BASEDN, 'uid=' . $username);
