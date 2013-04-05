@@ -34,13 +34,30 @@ require("class/auth/ldap/settings.php");
 class HomerAuthentication extends Authentication {
 
   function login($username, $password) {
-    
+
 	if ($username != "" && $password != "") {
+  
+		// Documentation says - set to never 
+		putenv('LDAPTLS_REQCERT=never') or die('Failed to setup the env');
+
         	$ds=@ldap_connect(LDAP_HOST,LDAP_PORT);
-                $r = @ldap_search( $ds, LDAP_BASEDN, 'uid=' . $username);
+		
+		// Set LDAP Version, Default is Version 2
+		@ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, ( LDAP_VERSION) ? LDAP_VERSION : 2);
+		
+		// Referrals are disabled
+		@ldap_set_option($ds, LDAP_OPT_REFERRALS, 0 );
+	        
+		// Enable TLS Encryption
+		if(LDAP_ENCRYPTION == "tls") {
+	        	@ldap_start_tls($ds);
+	        }
+		
+                $r=@ldap_search( $ds, LDAP_BASEDN, 'uid=' . $username);
                 if ($r) {
-                      $result = @ldap_get_entries( $ds, $r);
-                      if ($result[0]) {
+                     $result = @ldap_get_entries( $ds, $r);
+                      
+			if ($result[0]) {
                           if (@ldap_bind( $ds, $result[0]['dn'], $password) ) {
                               if($result[0] != NULL) {
                                     if (LDAP_GROUPDN != NULL) {
@@ -48,8 +65,18 @@ class HomerAuthentication extends Authentication {
                                             return false;
                                         }
                                     }
+				    // Default each user has normal User Privs
                                     $_SESSION['loggedin'] = $username;
                                     $_SESSION['userlevel'] = LDAP_USERLEVEL;
+				   
+				    // Assigne Admin Privs, should be read from the LDAP Directory in the future 
+				    $ADMIN_USER = split(",", LDAP_ADMIN_USER);
+				    foreach($ADMIN_USER as &$value) {
+							
+					if ($value == $username) {
+					  $_SESSION['userlevel'] = 1; # LDAP_ADMINLEVEL;
+					}
+				    }
                                     return true;
                               }
                           }                
@@ -63,6 +90,7 @@ class HomerAuthentication extends Authentication {
   function check_filegroup_membership($ds, $uid) {
     $dn = LDAP_GROUPDN;
     $attr = "memberUid";
+
     $result = @ldap_compare($ds, $dn, $attr, $uid);
 
     if ($result === true) {
