@@ -1,0 +1,101 @@
+@charset "UTF-8";
+/* CSS Document */
+
+
+
+.small {
+font-size: 12px!important;
+padding-right: 10px;
+}
+
+.textareastyle {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	line-height: 15px;
+	background-color: #FF9;
+	padding-left: 5px;
+	/*height: 16px;*/
+	/* width: 330px; */
+	border: 1px solid #999;
+}
+
+
+.textfieldstyle {
+	font-family: Arial, Helvetica, sans-serif;
+        font-size: 12px;
+	line-height: 15px;
+	background-color: #FFF;
+	padding-left: 5px;
+	height: 16px;
+	/* width: 180px; */
+	border: 1px solid #999;
+}
+
+.textfieldstyle2 {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	line-height: 15px;
+	background-color: #FFF;
+	padding-left: 5px;
+	height: 16px;
+	/*width: 180px;*/
+	border: 1px solid #999;
+}
+
+.textfieldstyle-in {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	line-height: 15px;
+	background-color: #FFF;
+	padding-left: 5px;
+	height: 16px;
+	width: 90%;
+	/*width: 180px;*/
+	border: 1px solid #999;
+}
+
+.textfieldstyle3 {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	line-height: 15px;
+	background-color: #FFF;
+	padding-left: 5px;
+	height: 16px;
+	/*width: 180px;*/
+	border: 1px solid #999;
+	width:130px; float:left; clear:none; margin-left:49px; margin-top:-20px;
+}
+
+.dropdownstyle {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	line-height: 15px;
+	background-color: #FFF;
+	padding-left: 5px;
+	height: 20px;
+	/*width: 180px;*/
+	border: 1px solid #999;
+}
+
+td.message {
+	color: #BADDFF;
+	font-weight: bold;
+	padding-top: 8px;
+}
+
+td.message2 {
+	color: #000;
+	font-weight: bold;
+	padding-top: 8px;
+}
+
+
+.calender {
+	float:left;
+	margin-left:140px!important;
+	margin-top:-19px!important;
+	}
+#order_form table tr td a, #order_form table tr td a:link, #order_form table tr td a:visited {
+	color: #FFF;
+	text-decoration: underline;
+}

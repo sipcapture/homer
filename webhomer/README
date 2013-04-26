@@ -1,0 +1,68 @@
+
+WEBHOMER 3.x is a modular interface for HOMER/SIPCAPTURE DB
+-----------------------------------------------------------
+
+
+Requirements:
+
+	- PHP 5.2+ (w/ pecl/json, php-gd) 
+	- MySQL 5.1.48+ (w/ partitioning support)
+	- Apache/Lighttpd or other modern webserver
+	- HOMER/SIPCAPTURE Core (latest git)
+
+
+Upgrade/Existing Users:
+
+	- update "configuration.php" with any new parameters from "configuration_example.php"
+	- update "preferences.php" with any new parameters from "preferences_example.php"
+	- create homer_statistics db (statistics.sql)
+  - schedule cronjob for stat collection every 5 minutes, add db auth (statistic.pl)
+	- Copy webhomer in your webfolder and carry your existing configuration.php/preferences.php
+
+
+Setup/New Users:
+
+	- customize "configuration_example.php" and rename it to "configuration.php"
+  - customize "preferences_example.php" and rename it to "preferences.php"
+	- create homer_users db (homer_users.sql)
+	- insert all your home nodes into homer_nodes table (see HOWTO)
+	- create homer_statistics db (statistics.sql)
+	- schedule cronjob for stat collection every 5 minutes, add db auth (statistic.pl)
+	- point your browser at WEBHOMER's url and login as: test@test.com/test123
+	
+----------------------------------------
+
+New Features in 3.x:
+
+	- Drag & Drop UI with inline elements & cookie positioning prefs
+	- Time & Date controls with graph/zoom selection & interaction
+	- Statistics (Highcharts OR Flot) with search integration (click & select) 
+	- Improved Admin section with user levels, settings and service overview
+	- Toolbox page with SIP Message & PCAP generator & Looking-Glass Widgets
+	- API functions for widget development and integration with other tools
+	- Extensible Alarm Class for notifications and alert dispatching
+	- Extensible Authentication Class supporting Internal, LDAP, Radius
+  - Full Database PDO supporting MySQL, Postgres, MSSQL, etc
+	- Custom Size for Call Flow image size/ratio
+  - Popups as Inline/Modal or New Windows (multi-monitor setups, etc)  
+	- IE7/8/9 Support
+
+
+Usage Notes:
+
+	- All searches are obeying the time/date parameters set in search page
+	  (Example: Autosearch, Search, Call-Flow)
+
+Notes:
+
+	- UI Glitches? Clear browser cookies (top right TRASH icon) and try again
+
+
+------------ BUGS, SUPPORT & FEEDBACK  --------------
+
+* For bug reports, support and feedback: support@sipcapture.org or create a ticket (http://code.google.com/p/homer/issues)
+
+- Visit us at http://sipcapture.org 
+- Follow code updates on twitter @sipcapture
+
+
