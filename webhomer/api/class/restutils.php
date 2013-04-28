@@ -130,7 +130,8 @@ class RestRequest
 	
 	public function setRURI($ruri)
 	{
-		$this->ruri = preg_replace('/\/api\//', '', strtolower($ruri));
+
+    $this->ruri = preg_replace('/.*\/api\//', '', strtolower($ruri));
 		if(preg_match('/\?/', $this->ruri)) $this->ruri = preg_replace('/\?(.*)$/', '', $this->ruri);
 	}
 
