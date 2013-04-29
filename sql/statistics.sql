@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS `stats_method` (
   `totag` tinyint(1) NOT NULL,
   `total` int(20) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `datemethod` (`to_date`,`method`,`auth`,`totag`),
+  UNIQUE KEY `datemethod` (`to_date`,`method`,`auth`,`totag`,`cseq`),
   KEY `from_date` (`from_date`),
   KEY `to_date` (`to_date`),
   KEY `method` (`method`),
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS `stats_method_mem` (
   `totag` tinyint(1) NOT NULL,
   `total` int(20) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `datemethod` (`method`,`auth`,`totag`),
+  UNIQUE KEY `datemethod` (`method`,`auth`,`totag`, `cseq`),
   KEY `from_date` (`create_date`),
   KEY `method` (`method`),
   KEY `completed` (`cseq`)
