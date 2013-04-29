@@ -1,10 +1,9 @@
-
 -- --------------------------------------------------------
 
 --
 -- Table structure for table `alarm_data`
 --
-
+DROP TABLE IF EXISTS alarm_data;
 CREATE TABLE IF NOT EXISTS `alarm_data` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `create_date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
@@ -23,7 +22,7 @@ CREATE TABLE IF NOT EXISTS `alarm_data` (
 --
 -- Table structure for table `alarm_data_mem`
 --
-
+DROP TABLE IF EXISTS alarm_data_mem;
 CREATE TABLE IF NOT EXISTS `alarm_data_mem` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `create_date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
@@ -43,6 +42,7 @@ CREATE TABLE IF NOT EXISTS `alarm_data_mem` (
 --
 -- Table structure for table `stats_data`
 --
+DROP TABLE IF EXISTS stats_data;
 
 CREATE TABLE IF NOT EXISTS `stats_data` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS `stats_data` (
 --
 -- Table structure for table `stats_ip`
 --
-
+DROP TABLE IF EXISTS stats_ip;
 CREATE TABLE IF NOT EXISTS `stats_ip` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `from_date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS `stats_ip` (
 --
 -- Table structure for table `stats_ip_mem`
 --
-
+DROP TABLE IF EXISTS stats_ip_mem;
 CREATE TABLE IF NOT EXISTS `stats_ip_mem` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `create_date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS `stats_ip_mem` (
 --
 -- Table structure for table `stats_method`
 --
-
+DROP TABLE IF EXISTS stats_method;
 CREATE TABLE IF NOT EXISTS `stats_method` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `from_date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS `stats_method` (
 --
 -- Table structure for table `stats_method_mem`
 --
-
+DROP TABLE IF EXISTS stats_method_mem;
 CREATE TABLE IF NOT EXISTS `stats_method_mem` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `create_date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS `stats_method_mem` (
 --
 -- Table structure for table `stats_useragent`
 --
-
+DROP TABLE IF EXISTS stats_useragent;
 CREATE TABLE IF NOT EXISTS `stats_useragent` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `from_date` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS `stats_useragent` (
 --
 -- Table structure for table `stats_useragent_mem`
 --
-
+DROP TABLE IF EXISTS stats_useragent_mem;
 CREATE TABLE IF NOT EXISTS `stats_useragent_mem` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `create_date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
