@@ -22,7 +22,7 @@
 
 use DBI;
 
-$version = "0.2.5p1";
+$version = "0.2.6";
 $mysql_table = "sip_capture";
 $mysql_dbname = "homer_db";
 $mysql_user = "mysql_login";
@@ -32,7 +32,8 @@ $maxparts = 6; #6 days How long keep the data in the DB
 $newparts = 2; #new partitions for 2 days. Anyway, start this script daily!
 @stepsvalues = (86400, 3600, 1800, 900); 
 $partstep = 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes 
-$engine = "MyISAM";
+$engine = "InnoDB"; #MyISAM or InnoDB
+$compress = "ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8"; #Enable this if you want use barracuda format or set var to empty.
 $sql_schema_version = 1;
 $auth_column = "auth";
 $check_table = 1; #Check if table exists. For PostgreSQL change creation schema!
@@ -112,7 +113,7 @@ $sql = "CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   KEY `method` (`method`),
   KEY `source_ip` (`source_ip`),
   KEY `destination_ip` (`destination_ip`)
-) ENGINE=".$engine." DEFAULT CHARSET=latin1
+) ENGINE=".$engine." DEFAULT CHARSET=utf8 $compress
 PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`)) (PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = ".$engine.")";
 
 my $sth = $db->do($sql) if($check_table == 1);
