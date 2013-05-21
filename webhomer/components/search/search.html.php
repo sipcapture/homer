@@ -294,37 +294,6 @@ class HTML_search {
 		</div>
 	</li>
 
-
-<?php 
-	// dynamic modules
-	if (MODULES != 0 && IERROR != 1) {
-	
-	// Set chart engine
-                        $chart="data";
-                        echo "<script type=\"text/javascript\" src=\"js/jquery.flot.js\"></script>";
-                        echo "<script type=\"text/javascript\" src=\"js/jquery.flot.pie.js\"></script>";
-			echo "<script type=\"text/javascript\" src=\"js/jquery.flot.threshold.js\"></script>";
-
-	// Scan Modules directory and display
-	$submodules = array_filter(glob('modules/*'), 'is_dir');
-	$modcount = 0;
-	  foreach( $submodules as $key => $value){
-?>
-	   <li class="widget color-yellow" id="dyn-widget<?php echo $key ?>">
-                <div class="widget-head">
-                    <h3><?php echo $value ?></h3>
-                </div>
-                <div class="widget-content">
-                <?php include($value."/index_".$chart.".php"); ?>
-                                </div>
-            </li>
-<?php
-	  $modcount++;
-	  }
-
-	 }
-
-?>
 <!--
 	 <li class="widget color-green" id="alarms-widget">
                 <div class="widget-head">
@@ -875,7 +844,6 @@ class HTML_search {
 
 <?php
 
-        // Scan Modules directory and display
         $submodules = array_filter(glob('modules/*'), 'is_dir');
         $modcount = 0;
         foreach( $submodules as $key => $value){
