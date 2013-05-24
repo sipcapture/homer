@@ -165,29 +165,43 @@ if($auth->logincheck() == false){
 
 function getVar($name, $default, $request, $type) {
 
-        $val = isset($request[$name]) ? $request[$name] : $default;
+	$val = isset($request[$name]) ? $request[$name] : $default;
 
-        $type = strtoupper($type);
+	$type = strtolower($type);
 
-        #INT
-        if(strcmp($type,"int") == 0) intval($val);
-        #Float
-        if(strcmp($type,"float") == 0) floatval($val);
-        #String
-        else if(strcmp($type,"string") == 0) {
-                #Strip slashes
-                if(get_magic_quotes_gpc()) $val = stripslashes($val);        
-                return strval($val);
-        }
-        #Datetime
-        else if(strcmp($type,"datetime") == 0) return date("Y-m-d H:i:s", strtotime($val));
-        #Date
-        else if(strcmp($type,"date") == 0) return date("Y-m-d H:i:s", strtotime($val));
-        #Time
-        else if(strcmp($type,"time") == 0) return date("H:i:s", strtotime($val));
-        #Array
-        else return $val;
-}   
+	#INT
+	if(strcmp($type,"int") == 0) {
+		return intval($val);
+	}
+	#Float
+	elseif(strcmp($type,"float") == 0) {
+		return floatval($val);
+	}
+	#String
+	elseif(strcmp($type,"string") == 0) {
+		#Strip slashes
+		if(get_magic_quotes_gpc()) {
+			$val = stripslashes($val);
+		}        
+		return strval($val);
+	}
+	#Datetime
+	elseif(strcmp($type,"datetime") == 0) {
+		return date("Y-m-d H:i:s", strtotime($val));
+	}
+	#Date
+	elseif(strcmp($type,"date") == 0) {
+		return date("Y-m-d H:i:s", strtotime($val));
+	}
+	#Time
+	elseif(strcmp($type,"time") == 0) {
+		return date("H:i:s", strtotime($val));
+	}
+	#Other
+	else {
+		return $val;
+	}
+}
 
 function detectIE()
 {

@@ -363,7 +363,9 @@ class Search {
            return 1;
     } 
     
-    
+    /* Function commented because there is already a global function
+     * which has been fixed and this one doesn't appear to be used.
+     * Travis Hegner
     function getVar($name, $default, $request, $type) {
 
         $val = isset($request[$name]) ? $request[$name] : $default;
@@ -389,6 +391,6 @@ class Search {
         #Array
         else return $val;
     }
-         
+    */
        
 }
