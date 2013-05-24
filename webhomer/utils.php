@@ -90,8 +90,8 @@ function sipMessage() {
         $types = array("REQUEST", "RESPONSE");
  
         //Crop Search Parameters, if any
-        $flow_from_date = getVar('from_date', NULL, 'get', 'string');
-        $flow_from_time =  getVar('from_time', NULL, 'get', 'string');
+        $flow_from_date = getVar('from_date', NULL, $_REQUEST, 'string');
+        $flow_from_time =  getVar('from_time', NULL, $_REQUEST, 'string');
  
         if (isset($flow_from_date, $flow_from_time))
         {
