@@ -3,3 +3,6 @@ aclocal.m4
 autom4te.cache/*
 config/*
 configure
+webhomer/preferences.php
+webhomer/configuration.php
+webhomer/tmp
