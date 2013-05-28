@@ -1,5 +1,7 @@
 <?php
 
+define('HOMER_TIMEZONE', "Amirica/Detroit"); /* Set a global application default timezone */
+
 define('CONFIG_VERSION', "1.0.10"); /* Please ALWAYS include CONFIGVERSION */
 define('WEBHOMER_VERSION', "3.5.0"); /* WEBHOMER VERSION */
 
@@ -12,7 +14,7 @@ define('AJAXTIMEOUT',60000); /* AJAX timeout request. Milliseconds! */
 
 /* CFLOW Options */
 define('CFLOW_CLEANUP', 1); /* Automatic Cleanup of old Cflow images */
-define('CFLOW_TIMEZONE', "Europe/Amsterdam"); /* Timezone that will display in Call Flow Ladder Diagram */
+define('CFLOW_TIMEZONE', HOMER_TIMEZONE); /* Timezone that will display in Call Flow Ladder Diagram */
 define('CFLOW_DIRECTION', 0); /* Callflow Direction */
 define('CFLOW_FACTOR', 1);   /* IMAGE size factor. The value can be float */
 define('CFLOW_POPUP',1); /* Modal type: 1, Browser popup: 2 */

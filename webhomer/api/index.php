@@ -27,9 +27,10 @@
 */
 
 define('_HOMEREXEC', "1");
+require_once("../preferences.php");
 
-date_default_timezone_set('Europe/Berlin');
-ini_set('date.timezone', 'Europe/Berlin');
+date_default_timezone_set(HOMER_TIMEZONE);
+ini_set('date.timezone', HOMER_TIMEZONE);
 
 
 /* MAIN CLASS modules */

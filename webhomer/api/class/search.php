@@ -45,7 +45,7 @@ class Search {
 
     function showMessageAll($param, $type) {
 
-           date_default_timezone_set('Europe/Berlin');
+           date_default_timezone_set(HOMER_TIMEZONE);
            
            $mydb = $this->db;                            
            
@@ -90,7 +90,7 @@ class Search {
 
     function statisticMethod($param, $total) {
 
-           date_default_timezone_set('Europe/Berlin');
+           date_default_timezone_set(HOMER_TIMEZONE);
            
            $mydb = $this->db;                            
            $skip_keys = array('location','max_records','from_datetime', 'to_datetime', 'unique','b2b','limit','node','logic_or');
@@ -139,7 +139,7 @@ class Search {
 
     function statisticData($param, $total) {
 
-           date_default_timezone_set('Europe/Berlin');
+           date_default_timezone_set(HOMER_TIMEZONE);
            
            $mydb = $this->db;                            
            $skip_keys = array('location','max_records','from_datetime', 'to_datetime', 'unique','b2b','limit','node','logic_or');
@@ -194,7 +194,7 @@ class Search {
 
     function statisticIP($param, $total) {
 
-           date_default_timezone_set('Europe/Berlin');
+           date_default_timezone_set(HOMER_TIMEZONE);
            
            $mydb = $this->db;                            
 
@@ -240,7 +240,7 @@ class Search {
 
     function statisticUserAgent($param, $total) {
 
-           date_default_timezone_set('Europe/Berlin');
+           date_default_timezone_set(HOMER_TIMEZONE);
            
            $mydb = $this->db;                            
            $skip_keys = array('location','max_records','from_datetime', 'to_datetime', 'unique','b2b','limit','node','logic_or');
@@ -283,7 +283,7 @@ class Search {
     
     function alarmData($param, $total) {
 
-           date_default_timezone_set('Europe/Berlin');
+           date_default_timezone_set(HOMER_TIMEZONE);
            
            $mydb = $this->db;                            
 
@@ -331,7 +331,7 @@ class Search {
 
     function replaceAlarm($param) {
 
-           date_default_timezone_set('Europe/Berlin');
+           date_default_timezone_set(HOMER_TIMEZONE);
            
            $mydb = $this->db;                            
            
@@ -351,7 +351,7 @@ class Search {
 
     function deleteAlarm($param) {
 
-           date_default_timezone_set('Europe/Berlin');
+           date_default_timezone_set(HOMER_TIMEZONE);
            
            $mydb = $this->db;                                       
            $reqdata = (array) $param;           
