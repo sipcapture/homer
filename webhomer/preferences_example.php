@@ -1,6 +1,6 @@
 <?php
 
-define('HOMER_TIMEZONE', "Amirica/Detroit"); /* Set a global application default timezone */
+define('HOMER_TIMEZONE', "America/Detroit"); /* Set a global application default timezone */
 
 define('CONFIG_VERSION', "1.0.10"); /* Please ALWAYS include CONFIGVERSION */
 define('WEBHOMER_VERSION', "3.5.0"); /* WEBHOMER VERSION */
