@@ -156,7 +156,7 @@ class HTML_mainhtml {
 
 				<li <?php if($task!="off") echo "class='selected'"; ?>>
                                     <!-- <a href="#"><?php echo $uptime;?></a> -->
-                                    <a href="#" title="<?php echo $_SERVER['HOST_NAME']; ?><br>Date: <?php echo date('d/m/Y');?><br>Server <?php echo $uptime ?>"><div id="realclock">. . .</div></a>
+                                    <a href="#" title="<?php echo $_SERVER['SERVER_NAME']; ?><br>Date: <?php echo date('d/m/Y');?><br>Server <?php echo $uptime ?>"><div id="realclock">. . .</div></a>
                                 </li>
 
                           </ul> 
