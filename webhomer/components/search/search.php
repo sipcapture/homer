@@ -167,6 +167,16 @@ class Component {
                         $db->executeQuery($query);
                   }
                   
+ 									/* Since the search array is sent down to the page, and back as an ajax request
+ 									 * we must urlencode() any of our search parameters which may contain special (url) chars.
+ 									 * Take note that this encoding must be AFTER storing the search data to the session, or the
+ 									 * users session data may become corrupt with multiple levels of encoding as they browse around the site.
+ 									 * Travis Hegner
+ 									 */
+ 									$search['ruri_user'] = urlencode($search['ruri_user']);
+									$search['to_user'] = urlencode($search['to_user']);
+									$search['from_user'] = urlencode($search['from_user']);
+                  
                   $datatable->setSearchRequest($search);
                   
                   $columns = $datatable->getColumns();
