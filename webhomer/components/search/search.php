@@ -173,10 +173,12 @@ class Component {
  									 * users session data may become corrupt with multiple levels of encoding as they browse around the site.
  									 * Travis Hegner
  									 */
- 									$search['ruri_user'] = urlencode($search['ruri_user']);
+									$search['ruri_user'] = urlencode($search['ruri_user']);
 									$search['to_user'] = urlencode($search['to_user']);
 									$search['from_user'] = urlencode($search['from_user']);
-                  
+									$search['pid_user'] = urlencode($search['pid_user']);
+									$search['contact_user'] = urlencode($search['contact_user']);
+
                   $datatable->setSearchRequest($search);
                   
                   $columns = $datatable->getColumns();
