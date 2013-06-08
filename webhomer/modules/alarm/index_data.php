@@ -258,24 +258,31 @@ jQuery(document).ready(function($) {
 	                    "mData": "create_date",
                             "mRender": function ( data, type, full ) {
         	                     // return "<center>"+data+"</center>";
-				     // render date + link (wip)
-				     var time = data.split(/\s+/g);
-				     var nt = time[1].split(':');
-				     var diff = 1; // minutes
-					// from 
-					if ( nt[1] >= 1 && nt[1] < 59 ) {
-					 var ntime = nt[0]+":"+(parseInt(nt[1])-diff)+":"+nt[2];
-					} else {
-					 var ntime = (parseInt(nt[0])-diff)+":59:"+nt[2];
-					}
-					// to 
-					if ( nt[1] >= 1 && nt[1] < 58 ) {
-					 var ttime = nt[0]+":"+(parseInt(nt[1])+diff)+":"+nt[2];
-					} else {
-					 var ttime = (parseInt(nt[0])+diff)+":59:"+nt[2];
-					}
-					console.log(time[1]+" "+ttime);
-        	                     return "<center><a href='?source_ip=&location[]=1&node=&from_date="+time[0]+"&from_time="+ntime+"&to_date="+time[0]+"&to_time="+ttime+"&limit=100&task=result&component=search'>"+data+"</a></center>";   
+                               // render date + link (wip)
+                               var time = data.split(/\s+/g);
+                               var nt = time[1].split(':');
+                               var diff = 1; // minutes
+                               var diff2 = 0;
+                               var source_ip = "";
+                               var method = "";
+
+                               // from 
+                               if ( nt[1] >= 1 && nt[1] < 59 ) {
+                                      var ntime = nt[0]+":"+(parseInt(nt[1])-diff)+":"+nt[2];
+                               } else {
+                                      var ntime = (parseInt(nt[0])-diff)+":59:"+nt[2];
+                               }
+                               // to 
+                               if ( nt[1] >= 1 && nt[1] < 58 ) {
+                                      var ttime = nt[0]+":"+(parseInt(nt[1])+diff2)+":"+nt[2];
+                               } else {
+                                      var ttime = (parseInt(nt[0])+diff2)+":59:"+nt[2];
+                               }
+                               //console.log(time[1]+" "+ttime);
+                               if(full.source_ip != "0.0.0.0") source_ip="source_ip="+full.source_ip+"&";
+                               if(full.type.indexOf("Too Many ") !== -1) method="method="+full.type.substring(9)+"&";
+
+                            return "<center><a href='?"+method+source_ip+"location[]=1&node=&from_date="+time[0]+"&from_time="+ntime+"&to_date="+time[0]+"&to_time="+ttime+"&limit=100&task=result&component=search'>"+data+"</a></center>";   
         	             }
 	                },
 	                { 
