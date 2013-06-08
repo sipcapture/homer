@@ -172,7 +172,7 @@ function updateAlarm(status,id) {
                 });
 
                 // return temp;
-                return true;
+                //return true;
 }
 
 function deleteAlarm(id) {
@@ -210,7 +210,7 @@ function deleteAlarm(id) {
                 });
 
                 // return temp;
-                return true;
+              //return true;
 }
 
 
