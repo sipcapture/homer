@@ -154,7 +154,7 @@ class Export {
                $b2b = getVar('b2b', NULL, $reqdata, 'string');
                $from_user = getVar('from_user', NULL, $reqdata, 'string');
                $to_user = getVar('to_user', NULL, $reqdata, 'string');
-               $limit = getVar('limit', NULL, $reqdata, 'string');
+               $limit = getVar('limit', 100, $reqdata, 'int');
                // Get time & date if available
                $flow_from_date = getVar('from_date', NULL, $reqdata, 'string');
                $flow_to_date = getVar('to_date', NULL, $reqdata, 'string');
