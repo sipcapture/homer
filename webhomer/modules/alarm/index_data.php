@@ -85,54 +85,54 @@ var result;
 $.fn.dataTableExt.oApi.fnReloadAjax = function ( oSettings, sNewSource, fnCallback, bStandingRedraw )
 {
     if ( sNewSource !== undefined && sNewSource !== null ) {
-        oSettings.sAjaxSource = sNewSource;
+        oSettings.sAjaxSource = sNewSource;
     }
- 
+ 
     // Server-side processing should just call fnDraw
-    if ( oSettings.oFeatures.bServerSide ) {
-        this.fnDraw();
-        return;
-    }
- 
-    this.oApi._fnProcessingDisplay( oSettings, true );
-    var that = this;
-    var iStart = oSettings._iDisplayStart;
-    var aData = [];
- 
-    this.oApi._fnServerParams( oSettings, aData );
- 
-    oSettings.fnServerData.call( oSettings.oInstance, oSettings.sAjaxSource, aData, function(json) {
-        /* Clear the old information from the table */
-        that.oApi._fnClearTable( oSettings );
- 
-        /* Got the data - add it to the table */
-        var aData =  (oSettings.sAjaxDataProp !== "") ?
-            that.oApi._fnGetObjectDataFn( oSettings.sAjaxDataProp )( json ) : json;
- 
-        for ( var i=0 ; i<aData.length ; i++ )
-        {
-            that.oApi._fnAddData( oSettings, aData[i] );
-        }
-         
-        oSettings.aiDisplay = oSettings.aiDisplayMaster.slice();
- 
-        that.fnDraw();
- 
-        if ( bStandingRedraw === true )
-        {
-            oSettings._iDisplayStart = iStart;
-            that.oApi._fnCalculateEnd( oSettings );
-            that.fnDraw( false );
-        }
- 
-        that.oApi._fnProcessingDisplay( oSettings, false );
- 
-        /* Callback user function - for event handlers etc */
-        if ( typeof fnCallback == 'function' && fnCallback !== null )
-        {
-            fnCallback( oSettings );
-        }
-    }, oSettings );
+    if ( oSettings.oFeatures.bServerSide ) {
+        this.fnDraw();
+        return;
+    }
+ 
+    this.oApi._fnProcessingDisplay( oSettings, true );
+    var that = this;
+    var iStart = oSettings._iDisplayStart;
+    var aData = [];
+ 
+    this.oApi._fnServerParams( oSettings, aData );
+ 
+    oSettings.fnServerData.call( oSettings.oInstance, oSettings.sAjaxSource, aData, function(json) {
+        /* Clear the old information from the table */
+        that.oApi._fnClearTable( oSettings );
+ 
+        /* Got the data - add it to the table */
+        var aData =  (oSettings.sAjaxDataProp !== "") ?
+            that.oApi._fnGetObjectDataFn( oSettings.sAjaxDataProp )( json ) : json;
+ 
+        for ( var i=0 ; i<aData.length ; i++ )
+        {
+            that.oApi._fnAddData( oSettings, aData[i] );
+        }
+         
+        oSettings.aiDisplay = oSettings.aiDisplayMaster.slice();
+ 
+        that.fnDraw();
+ 
+        if ( bStandingRedraw === true )
+        {
+            oSettings._iDisplayStart = iStart;
+            that.oApi._fnCalculateEnd( oSettings );
+            that.fnDraw( false );
+        }
+ 
+        that.oApi._fnProcessingDisplay( oSettings, false );
+ 
+        /* Callback user function - for event handlers etc */
+        if ( typeof fnCallback == 'function' && fnCallback !== null )
+        {
+            fnCallback( oSettings );
+        }
+    }, oSettings );
 };
 
 function updateAlarm(status,id) {
@@ -235,7 +235,7 @@ function loadAlarmData(ft, tt, status, interval) {
         
             alert('Autorefresh active');
             refreshIntervalId =  setInterval(function() {
-                    oTable.fnReloadAjax(url+sendData);            
+                    oTable.fnReloadAjax(url+sendData);            
             },(interval*1000));                
             
         }                        
@@ -253,8 +253,8 @@ jQuery(document).ready(function($) {
 	        "sAjaxDataProp": "data",
 	        "iDisplayLength": 50,
  	        "aoColumns": [
-                        { "mData": "id"},
-	                { 
+                        { "mData": "id"},
+	                { 
 	                    "mData": "create_date",
                             "mRender": function ( data, type, full ) {
         	                     // return "<center>"+data+"</center>";
@@ -275,37 +275,37 @@ jQuery(document).ready(function($) {
 					 var ttime = (parseInt(nt[0])+diff)+":59:"+nt[2];
 					}
 					console.log(time[1]+" "+ttime);
-        	                     return "<center><a href='/?source_ip=&location[]=1&node=&from_date="+time[0]+"&from_time="+ntime+"&to_date="+time[0]+"&to_time="+ttime+"&limit=100&task=result&component=search'>"+data+"</a></center>";   
+        	                     return "<center><a href='?source_ip=&location[]=1&node=&from_date="+time[0]+"&from_time="+ntime+"&to_date="+time[0]+"&to_time="+ttime+"&limit=100&task=result&component=search'>"+data+"</a></center>";   
         	             }
 	                },
-	                { 
+	                { 
                             "mData": "type",
                             "mRender": function ( data, type, full ) {
                                     return "<center>"+data+"</center>";
                             }
 	                },
-	                { 
+	                { 
 	                    "mData": "source_ip",
                             "mRender": function ( data, type, full ) {
         	                     return "<center>"+data+"</center>";   
         	             }
 	                },
-	                { 
+	                { 
 	                    "mData": "total",
         	            "mRender": function ( data, type, full ) {
         	                     return "<center>"+data+"</center>";   
         	             }
 	                },
-	                { "mData": "description" },
-	                { "mData": "status",
+	                { "mData": "description" },
+	                { "mData": "status",
                           "mRender": function ( data, type, full ) {
                                   if(data == 1) {   
-                                      return '<a href="javascript:updateAlarm(0,'+full.id+');"><font color="red">New</font></a>';
+                                      return '<a href="javascript:updateAlarm(0,'+full.id+');"><font color="red">New</font></a>';
                                   }
                                   else {
                                       return '<a href="javascript:updateAlarm(1,'+full.id+');">Old</a>';
                                   }
-                           }
+                           }
 	                },
 	                { "mData": "status",
                           "mRender": function ( data, type, full ) {
