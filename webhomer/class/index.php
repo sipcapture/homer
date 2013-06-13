@@ -36,6 +36,9 @@ set_include_path(get_include_path() . PATH_SEPARATOR . __ROOT__);
 if(!file_exists(__ROOT__."/configuration.php")) { die("Configuration not found. Please refer to the README file."); }
 else require_once(__ROOT__."/configuration.php");
 
+  /* time zone */
+date_default_timezone_set(HOMER_TIMEZONE);
+
 /* if defined session_name, set this */
 if(defined('SESSION_NAME')) session_name(SESSION_NAME);
 
