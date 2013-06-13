@@ -26,6 +26,8 @@
  *
 */
 
+date_default_timezone_set(HOMER_TIMEZONE);
+
 require_once ('search.html.php');
 
 class Component {
