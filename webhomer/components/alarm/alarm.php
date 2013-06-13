@@ -28,6 +28,8 @@
 
 defined( '_HOMEREXEC' ) or die( 'Restricted access' );
 
+date_default_timezone_set(HOMER_TIMEZONE);
+
 require_once ('alarm.html.php');
 
 class Component {
