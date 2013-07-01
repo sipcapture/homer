@@ -138,7 +138,9 @@ class SipSearchService implements ISipService
            if(preg_match("/;/", $value)) {
               $dda = array();
               foreach(preg_split("/;/", $value) as $k=>$v) $dda[] = "`".$key."`".$eqlike."'".$v."'";
-              $callwhere.="( ". ($eqlike == " = ") ? implode(" OR ",$dda) : implode(" AND ",$dda)." )";
+              $callwhere.= " ( ";
+              $callwhere.=($eqlike == " = ") ? implode(" OR ",$dda) : implode(" AND ",$dda);
+              $callwhere.= " = ";
            }
            else {
                $mkey = "`".$key."`";
@@ -332,7 +334,9 @@ class SipSearchService implements ISipService
      if(preg_match("/;/", $value)) {
               $dda = array();
               foreach(preg_split("/;/", $value) as $k=>$v) $dda[] = "`".$key."`".$eqlike."'".$v."'";
-              $callwhere.="( ". ($eqlike == " = ") ? implode(" OR ",$dda) : implode(" AND ",$dda)." )";
+              $callwhere.= " ( ";
+              $callwhere.=($eqlike == " = ") ? implode(" OR ",$dda) : implode(" AND ",$dda);
+              $callwhere.= " ) ";
      }
      else {
                $mkey = "`".$key."`";
