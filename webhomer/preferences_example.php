@@ -32,6 +32,7 @@ define('ADMIN_NETSTAT', 0);  /* Display network packets in admin page */
 /* Search Results Options */
 define('RESULTS_ORDER', "asc"); 
 define('AUTOCOMPLETE', 0);  /* Enables autocomplete in FROM & TO fiels- WARNING: db intensive */
+define('FORMAT_DATE_RESULT', "H:i:s"); /* Controls the Date/Time output in search results, ie: "m-d H:i:s"  */
 
 /* BLEG DETECTION */
 define('BLEGDETECT', 0); /* always detect BLEG leg in CFLOW/PCAP*/
