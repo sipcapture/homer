@@ -101,7 +101,9 @@ class SipResult
       $seconds = intval($this->micro_ts / 1000000);  //4
       $ms = $this->micro_ts - ($seconds*1000000); //4      
       //return date("H:i:s", strtotime($this->date));  
-      return date("H:i:s", $seconds).".".$ms;
+      if(!defined('FORMAT_DATE_RESULT')) $format_date = "H:i:s";
+      else $format_date = FORMAT_DATE_RESULT;
+      return date($format_date, $seconds).".".$ms;
       //return $this->date;
   }
   
