@@ -118,6 +118,17 @@ function sipMessage() {
         	exit;
 	      $row = $rows[0];
 	      $msgbody = $row->msg;
+        
+  /*
+    deflate SDP  
+        if (preg_match("/e: deflate/i", $msgbody)) {
+            $sipdeflate = preg_split("/\r\n\r\n/", $msgbody, 2);    
+            if(count($sipdeflate) > 0) {
+                $decomp = gzuncompress($sipdeflate[1]);
+                if(strlen($decomp) > 0) $msgbody = $sipdeflate[0]."\r\n\r\n".$decomp;
+            }
+        }
+  */
         $msgbody = preg_replace('/</', "&lt;", $msgbody);
         $msgbody = preg_replace('/>/', "&#62;", $msgbody);
         $msgbody = preg_replace('/\n/', "\n<BR>", $msgbody);
