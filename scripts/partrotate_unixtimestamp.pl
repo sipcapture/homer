@@ -141,7 +141,9 @@ $sth = $db->prepare($query);
 $sth->execute();
 my ($partcount) = $sth->fetchrow_array();
 
-while($partcount > $maxparts ) {
+$totalparts = ($maxparts+$newparts);
+
+while($partcount > $totalparts ) {
 
     $query = "SELECT PARTITION_NAME, MIN(PARTITION_DESCRIPTION)"
              ."\n FROM INFORMATION_SCHEMA.PARTITIONS WHERE TABLE_NAME='".$mysql_table."'"
