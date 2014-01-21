@@ -162,14 +162,14 @@ class HTML_Stats {
 	        	    <tr>
         	        	    <td width="120" class="tablerow_two" VALIGN="top"><label for="date" title="Start">Start:</label></td>
 	                	    <td class="tableinputs">
-	                	        <input size="8" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php echo date("d-m-Y");?> ">
+	                	        <input size="8" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php echo date("Y-m-d");?> ">
                                         <input type="text" name="from_time" id="from_time" class="textfieldstyle2 timepicker1" size="6" value="<?php echo $ft;?>" />
                                     </td>
                             </tr>
                             <tr>
                                     <td width="120" class="tablerow_two" VALIGN="top"><label for="time" title="End">End:</label></td>
                                     <td class="tableinputs">
-                                        <input size="8" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php echo date("d-m-Y");?> ">
+                                        <input size="8" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php echo date("Y-m-d");?> ">
                                         <input type="text" name="to_time" id="to_time" class="textfieldstyle2 timepicker1" size="6" value="<?php echo $tt; ?>" />
                                     </td>
                             </tr> 

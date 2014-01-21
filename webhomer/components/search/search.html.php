@@ -508,7 +508,7 @@ class HTML_search {
 							<tr>
 								<td width="20%" class="paramlist_key"><label for="date" title="Searching from this date">From Date</label></td>
 								<td class="tablerow_two">
-									<input size="8" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo date("d-m-Y");?> ">
+									<input size="8" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo date("Y-m-d");?> ">
 								&nbsp;-&nbsp;
 								        <input type="text" name="from_time" id="from_time" class="textfieldstyle2 timepicker1" size="5" value="<?php if(isset($search['from_time'])) echo $search['from_time']; else echo $ft;?>" />
 									
@@ -517,7 +517,7 @@ class HTML_search {
 							<tr>
 								<td width="20%" class="paramlist_key"><label for="time" title="Searching up to this date">To Date</label></td>
 								<td class="tablerow_two">
-                                                                      <input size="8" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("d-m-Y");?> ">
+                                                                      <input size="8" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("Y-m-d");?> ">
                                                                       &nbsp;-&nbsp;
 								      <input type="text" name="to_time" id="to_time" class="textfieldstyle2 timepicker2" size="5" value="<?php if(isset($search['to_time'])) echo $search['to_time']; else echo $tt; ?>" />
 								</td>
@@ -639,7 +639,7 @@ class HTML_search {
   <input type="text" id="delta_result" name="Display3" align="right" size="10" class="textfieldstyle2"> &micro;
 </div>
 <div style="display: inline; float: right ; width: auto; font-weight: bold; padding: 5px;">
-<i>Result</i>: [<?php echo date("d-m-Y H:i:s", strtotime($ft));?> - <?php echo date("d-m-Y H:i:s", strtotime($tt));?>].
+<i>Result</i>: [<?php echo date("Y-m-d H:i:s", strtotime($ft));?> - <?php echo date("Y-m-d H:i:s", strtotime($tt));?>].
 <?php
                 $ignore =  array('from_date', 'to_date', 'from_time', 'to_time');
                 $mydata = array();

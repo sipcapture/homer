@@ -640,7 +640,7 @@ class HTML_ToolBox {
 			 	<tr>
 				        <td width="150" class="tablerow_two paramlist_key"><label for="date" title="From this date">From Date</label></td>
 				        <td class="tablerow_two">
-				        <input size="11" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo date("d-m-Y");?> ">
+				        <input size="11" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo date("Y-m-d");?> ">
 				        &nbsp;-&nbsp;
 				        <input type="text" name="from_time" id="from_time" class="textfieldstyle2 timepicker1" size="6" value="<?php if(isset($search['from_time'])) echo $search['from_time']; else echo $ft;?>" /> 
 				        </td>
@@ -648,7 +648,7 @@ class HTML_ToolBox {
 				        <tr>
 				        <td width="40%" class="tablerow_two paramlist_key"><label for="time" title="Up to this date">To Date</label></td>
 				        <td class="tablerow_two">
-				        <input size="11" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("d-m-Y");?> ">
+				        <input size="11" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("Y-m-d");?> ">
 				        &nbsp;-&nbsp;
 				        <input type="text" name="to_time" id="to_time" class="textfieldstyle2 timepicker2" size="6" value="<?php if(isset($search['to_time'])) echo $search['to_time']; else echo $tt; ?>" />
 				        </td>

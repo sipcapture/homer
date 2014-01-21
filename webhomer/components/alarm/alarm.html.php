@@ -97,12 +97,12 @@ class HTML_Stats {
                             $tt = date("H:i:s");
                         ?>
                         <label for="date" title="From date">From Date:</label>
-                        <input size="10" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php echo date("d-m-Y");?> ">
+                        <input size="10" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php echo date("Y-m-d");?> ">
                                             &nbsp;-&nbsp;  
                         <input type="text" name="from_time" id="from_time" class="textfieldstyle2 timepicker1" size="8" value="<?php echo $ft;?>" />
 
                         <label for="time" title="To Date" style="margin-left: 20px;" >To Date:</label>
-                                        <input size="10" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php echo date("d-m-Y");?> ">
+                                        <input size="10" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php echo date("Y-m-d");?> ">
                                             &nbsp;-&nbsp;
                                         <input type="text" name="to_time" id="to_time" class="textfieldstyle2 timepicker2" size="8" value="<?php echo $tt; ?>" />
                         <label for="time" title="NewAlarm" style="margin-left: 20px;">Type:</label>
