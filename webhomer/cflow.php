@@ -732,35 +732,100 @@ if(count($rtpinfo) == 0) echo "No rtp info available for this call";
 //https://supportforums.cisco.com/servlet/JiveServlet/downloadBody/18784-102-3-46597/spaPhoneP-RTP-Stat_09292011.pdf
 foreach ($rtpinfo as $key=>$data) {
   echo "Info # ".($key+1)." FROM:". $data['PACKET']."<table border='1'>";
-	//PS = <packet sent>
-	if(isset($data['PS'])) echo "<tr><td>Packets sent:</td><td>".$data['PS']."</td></tr>";
-	//OS = <packet recieved>
-	if(isset($data['OS'])) echo "<tr><td>Octets sent:</td><td>".$data['OS']."</td></tr>";
-	//PR = <octet recieved>
-	if(isset($data['PR'])) echo "<tr><td>Packets recieved:</td><td>".$data['PR']."</td></tr>";
-	//OR = <octet recieved>
-	if(isset($data['OR'])) echo "<tr><td>Octets recieved:</td><td>".$data['OR']."</td></tr>";
-	//PL = <packet lost>
-	if(isset($data['PL'])) {
-		$perc = 0;
-		if(isset($data['PL']) && $date['PL']<=0 ) $perc = floor($data['PL'] * 100 / $data['PR'] * 1000) / 1000;		
-		echo "<tr><td>Packet lost:</td><td>".$data['PL']." ( $perc %)</td></tr>";		
-	}
-	//JI = <jitter ms>
-	if(isset($data['JI'])) echo "<tr><td>Jitter ms:</td><td>".$data['JI']." ms.</td></tr>";
-	//LA = <delay ms>
-	if(isset($data['LA'])) echo "<tr><td>Delay ms:</td><td>".$data['LA']." ms.</td></tr>";
-	//DU = <call duration seconds>
-	if(isset($data['DU'])) {
-		$total = $data['DU'];
-		$minutes = intval(($total / 60) % 60); 
-		$seconds = intval($total % 60); 
-		echo "<tr><td>Call duration:</td><td>".$data['DU']." seconds. ($minutes min. $seconds sec.)</td></tr>";
-	}
-	//EN = <encoder>
-	if(isset($data['EN'])) echo "<tr><td>Encoder:</td><td>".$data['EN']."</td></tr>";
-	//DE = <decoder>
-	if(isset($data['DE'])) echo "<tr><td>Decoder:</td><td>".$data['DE']."</td></tr>";
+        //PS = <packet sent>
+        if(isset($data['PS'])) echo "<tr><td>Packets sent:</td><td>".$data['PS']."</td></tr>";
+        //PSC = <packet sent>
+        if(isset($data['PSC'])) echo "<tr><td>Packets sent (RTCP):</td><td>".$data['PSC']."</td></tr>";
+        //OS = <packet recieved>
+        if(isset($data['OS'])) echo "<tr><td>Octets sent:</td><td>".$data['OS']."</td></tr>";
+        //OSC = <packet recieved>
+        if(isset($data['OSC'])) echo "<tr><td>Octets sent (RTCP):</td><td>".$data['OSC']."</td></tr>";
+        //PR = <octet recieved>
+        if(isset($data['PR'])) echo "<tr><td>Packets recieved:</td><td>".$data['PR']."</td></tr>";
+        //PRC = <octet recieved>
+        if(isset($data['PRC'])) echo "<tr><td>Packets recieved (RTCP):</td><td>".$data['PRC']."</td></tr>";
+        //PD = <packet discarded>
+        if(isset($data['PD'])) echo "<tr><td>Packets discarded:</td><td>".$data['PD']."</td></tr>";
+        //OR = <octet recieved>
+        if(isset($data['OR'])) echo "<tr><td>Octets recieved:</td><td>".$data['OR']."</td></tr>";
+        //ORC = <octet recieved>
+        if(isset($data['ORC'])) echo "<tr><td>Octets recieved (RTCP):</td><td>".$data['ORC']."</td></tr>";
+        //PL = <packet lost>
+        if(isset($data['PL'])) {
+                $perc = 0;
+                if(isset($data['PL']) && $date['PL']<=0 ) $perc = floor($data['PL'] * 100 / $data['PR'] * 1000) / 1000;
+                echo "<tr><td>Packet lost:</td><td>".$data['PL']." ( $perc %)</td></tr>";
+        }
+        //CPL = <Consecutive packet loss>
+        if(isset($data['CPL'])) echo "<tr><td>Consecutive packet loss:</td><td>".$data['CPL']."</td></tr>";
+        //CGP = <Consecutive good packets>
+        if(isset($data['CGP'])) echo "<tr><td>Consecutive good packets:</td><td>".$data['CGP']."</td></tr>";
+
+        //IE = <Impairments>
+        if(isset($data['IE'])) echo "<tr><td>Impairments from PL:</td><td>".$data['IE']."</td></tr>";
+
+        //SS = <Number of Silence Suppression Activations>
+        if(isset($data['SS'])) echo "<tr><td>Silence Suppression Activations:</td><td>".$data['SS']."</td></tr>";
+        //TCLW = <Telephone Echo Signal Attenuation in dB>
+        if(isset($data['TCLW'])) echo "<tr><td>Telephone Echo Signal Attenuation in dB:</td><td>".$data['TCLW']."</td></tr>";
+
+        //JI = <jitter ms>
+        if(isset($data['JI'])) echo "<tr><td>Jitter ms:</td><td>".$data['JI']." ms.</td></tr>";
+        //LA = <delay ms>
+        if(isset($data['LA'])) echo "<tr><td>Delay ms:</td><td>".$data['LA']." ms.</td></tr>";
+        //DU = <call duration seconds>
+        if(isset($data['DU'])) {
+                $total = $data['DU'];
+                $minutes = intval(($total / 60) % 60);
+                $seconds = intval($total % 60);
+                echo "<tr><td>Call duration:</td><td>".$data['DU']." seconds. ($minutes min. $seconds sec.)</td></tr>";
+        }
+        //EN = <encoder>
+        if(isset($data['EN'])) echo "<tr><td>Encoder:</td><td>".$data['EN']."</td></tr>";
+        //DE = <decoder>
+        if(isset($data['DE'])) echo "<tr><td>Decoder:</td><td>".$data['DE']."</td></tr>";
+
+        //MT = <media type>
+        if(isset($data['MT'])) echo "<tr><td>Media Type:</td><td>".$data['MT']."</td></tr>";
+
+        //IPL = <IP address local>
+        if(isset($data['IPL'])) echo "<tr><td>IP address (local):</td><td>".$data['IPL']."</td></tr>";
+        //PTL = <Port # local>
+        if(isset($data['PTL'])) echo "<tr><td>Port (local):</td><td>".$data['PTL']."</td></tr>";
+        //IPR = <IP address local>
+        if(isset($data['IPR'])) echo "<tr><td>IP address (remote):</td><td>".$data['IPR']."</td></tr>";
+        //PTR = <Port # local>
+        if(isset($data['PTR'])) echo "<tr><td>Port (remote):</td><td>".$data['PTR']."</td></tr>";
+
+        //SRCS = <RTP stream ID sent>
+        if(isset($data['SRCS'])) echo "<tr><td>RTP stream ID sent:</td><td>".$data['SRCS']."</td></tr>";
+        //SRCR = <RTP stream ID rcvd>
+        if(isset($data['SRCR'])) echo "<tr><td>RTP stream ID rcvd:</td><td>".$data['SRCR']."</td></tr>";
+
+        //SRCS = <RTP Relay Error IN>
+        if(isset($data['ER'])) echo "<tr><td>RTP Errors IN:</td><td>".$data['ER']."</td></tr>";
+        //SRCR = <RTP Relay Error OUT>
+        if(isset($data['ES'])) echo "<tr><td>RTP Errors OUT:</td><td>".$data['ES']."</td></tr>";
+
+        // TB = <Date and time of the beginning of the report period>
+        if(isset($data['TB'])) {
+                   // echo "<tr><td>Begin Report Date and Time:</td><td>".$data['TB']."</td></tr>";
+                   $total = $data['TB'];
+                   $hh = substr($total, 0, 2);
+                   $mm = substr($total, 2, 2);
+                   $ss = substr($total, 4, 5);
+                   echo "<tr><td>Report Begin:</td><td>".$hh.":".$mm.":".$ss."  ".$data['DU']."</td></tr>";
+        }
+        // TE = <Date and time of the end of the report period>
+        if(isset($data['TE'])) {
+                   // echo "<tr><td>End Report Date and Time:</td><td>".$data['TE']."</td></tr>";
+                   $total = $data['TE'];
+                   $hh = substr($total, 0, 2);
+                   $mm = substr($total, 2, 2);
+                   $ss = substr($total, 4, 5);
+                   echo "<tr><td>Report End:</td><td>".$hh.":".$mm.":".$ss."  ".$data['DU']."</td></tr>";
+        }
+
   echo "</table><BR>";
 }
 ?>
