@@ -225,8 +225,8 @@ class HTML_Admin {
 	<li  class="widget color-green" id="widget-prefs">
 		<div class="widget-head"><h3>License Status</h3></div>
                 <div class="widget-content"><br>
-		<br><h1>SERVER LICENSE: FREE/UNSUPPORTED</h1><br>
-		Please obtain a FREE license at <a href='http://sipcapture.org'>sipcapture.org</a><br>
+                  <br><h1>SERVER LICENSE: none/free</h1><br>
+		Please register your server to obtain a free support license at <a href='http://sipcapture.org'>sipcapture.org</a><br>
 
 <?php
 
