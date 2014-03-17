@@ -26,7 +26,7 @@ CREATE TABLE `sip_capture` (
   `via_1` varchar(256) NOT NULL,
   `via_1_branch` varchar(80) NOT NULL,
   `cseq` varchar(25) NOT NULL,
-  `diversion` varchar(256) NOT NULL,
+  `diversion` varchar(256) NOT NULL DEFAULT '',
   `reason` varchar(200) NOT NULL,
   `content_type` varchar(256) NOT NULL,
   `auth` varchar(256) NOT NULL,
