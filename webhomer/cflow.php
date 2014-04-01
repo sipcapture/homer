@@ -123,7 +123,17 @@ if ( count($location) <= 1 ) {
 $pcapurl = $_SERVER["QUERY_STRING"];
 $pcapjson = json_encode($_REQUEST);
 
-$complete_url = preg_replace('/to_time=(.*)\&callid/', 'callid', $_SERVER["QUERY_STRING"]);
+  //$complete_url = preg_replace('/to_time=(.*)\&callid/', 'callid', $_SERVER["QUERY_STRING"]);
+parse_str ($_SERVER["QUERY_STRING"], $vr);
+foreach($vr as $key=>$value) {
+        if($key == "to_time" || $key == "to_date") continue;
+        if(gettype($value) == "array") {
+            foreach ($value as $k=>$d) $complete_url .= $key ."[]=".$d."&";
+        }
+        else $complete_url .= $key ."=".$value."&";
+
+}
+
 
 if (isset($flow_from_date, $flow_from_time, $flow_to_time, $flow_to_date))
 {
