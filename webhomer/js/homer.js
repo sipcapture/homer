@@ -745,6 +745,334 @@ function mktime() {
     return Math.floor(d.getTime()/1000);
 }
 
+function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec) {
+
+	var sendData;
+             var mydata = {
+                from_datetime: from_time,
+                to_datetime: to_time,
+                correlation_id: corr_id
+	};
+                
+	var url = apiurl + "rtcp/report/all";
+		  
+	var jitter = new Array();
+	var packetlost = new Array();
+	var mosarray = new Array();
+	
+	if(mydata != null) sendData = 'data=' + $.toJSON(mydata);
+
+        // Send
+        $.ajax({ 
+                    url: url,
+                    type: 'GET',
+                    async: false,
+                    dataType: 'json',
+                    data: sendData,
+                    success: function (msg,code) {
+                                //Success
+                            $('#rtcpinfodata'+winid).empty();      
+                                             
+                            var table = "";
+                            table +='Report:<BR><table border="1" id="data" cellspacing="0" width="95%" style="background: #f9f9f9;">';     
+                            table += "<tr>";
+                            table += "<th>ID&nbsp;</th>";
+                            table += "<th>Type&nbsp;</th>";
+                            table += "<th>TS&nbsp;</th>";
+                            table += "<th>Jitter&nbsp;</th>";
+                            table += "<th>Packetloss&nbsp;</th>";
+                            table += "<th>Fraction PL&nbsp;</th>";
+                            table += "<th>Packets&nbsp;</th>";
+                            table += "<th>MOS</th>";
+                            table += "</tr>";
+                            if(msg.status == 'ok') {    
+                                 var data = msg.data;
+                                 $('#callflow'+winid).hide(400);
+                                 $('#rtpinfo'+winid).hide(400);                           
+                                 $('#rtcpinfo'+winid).show(400);                                                            
+                                 console.log(msg.data); 
+                                 $.each( data, function( index, val ) {
+                                   //table += val.id+':<BR>');
+                                   //table += val.msg+'<BR>');
+                                   
+                                   var rtcpobj = jQuery.parseJSON( val.msg );
+                                   var ts;
+                                   var totalpkts;
+				   var si = rtcpobj.sender_information;
+				   if(si) {
+				   	ts = parseInt((si.ntp_timestamp_sec * 1000000 + si.ntp_timestamp_usec)/1000);
+				   	totalpkts = si.packets;
+				   }
+				   else {
+				   	ts = parseInt((msg.micro_ts)/1000);
+				   	totalpkts = 0;
+				   }
+				   var rp = rtcpobj.report_blocks;
+				   
+				   console.log(rp[0]);
+				   
+				   if(rp[0]) {
+				       var pl = rp[0].packets_lost;
+				       var frpl = rp[0].fraction_lost;
+				       var jt = rp[0].ia_jitter;
+				       var type = rtcpobj.type;
+				       //FAKE!!! We need to have real RTT. here is RTCP round trip
+				       var rtt = parseInt(rp[0].dlsr/65536);
+
+				       packetlost.push([ts, frpl]);
+				       jitter.push([ts, jt]);				       				       
+				
+				       //var mos = calculateMOS(jt, pl, rtt, 120)
+				       var mos = calculatePlMos(frpl, codec);
+                                       mosarray.push([ts, mos]);				       				       				       
+                                       
+                                       color = "green";
+                                       if(mos < 3) color="red";
+                                                                                
+                                       table += "<tr>";
+                                       table += "<td align='center'>"+val.id+"</td>";
+                                       table += "<td align='center'>"+type+"</td>";
+                                       table += "<td align='center'>"+ts+"</td>";
+                                       table += "<td align='center'>"+jt+"</td>";
+                                       table += "<td align='center'>"+pl+"</td>";
+                                       table += "<td align='center'>"+frpl+"</td>";
+                                       table += "<td align='center'>"+totalpkts+"</td>";
+                                       table += "<td align='center'><font color='"+color+"'>"+mos+"</font></td>";
+                                       table += "</tr>";
+                                   }
+                                                                      
+                                 });                                                                  
+                                 
+                                 table += "</table>";
+                                 $('#rtcpinfodata'+winid).html(table);      
+
+                                 makeRtcpChart(winid, jitter, packetlost, mosarray);
+                                 
+                            }
+                            else {
+                                console.log('ERROR:' +msg.status);
+                                alert("No data");
+                            }
+                    },  //Error
+                    error: function (xhr, str) {
+                          // alert("Error");
+                    }
+        });
+}
+
+function showCdrInfo(corr_id, from_time, to_time, apiurl, winid, codec) {
+
+	var sendData;
+             var mydata = {
+                from_datetime: from_time,
+                to_datetime: to_time,
+                correlation_id: corr_id
+	};
+                
+	var url = apiurl + "cdr/report/all";
+		  
+	var jitter = new Array();
+	var packetlost = new Array();
+	var mosarray = new Array();
+	
+	if(mydata != null) sendData = 'data=' + $.toJSON(mydata);
+
+        // Send
+        $.ajax({ 
+                    url: url,
+                    type: 'GET',
+                    async: false,
+                    dataType: 'json',
+                    data: sendData,
+                    success: function (msg,code) {
+                                //Success
+                            $('#cdrinfodata'+winid).empty();                       
+                            var table = "";
+                            
+                            table +='Report:<BR><table border="1" id="data" cellspacing="0" width="95%" style="background: #f9f9f9;">';     
+                            table +="<tr>";
+                            table +="<th>ID&nbsp;</th>";
+                            table +="<th>Type&nbsp;</th>";
+                            table +="<th>Value&nbsp;</th>";
+                            table +="</tr>";
+                            if(msg.status == 'ok') {    
+                                 var data = msg.data;
+                                 $('#callflow'+winid).hide(400);
+                                 $('#rtpinfo'+winid).hide(400);                           
+                                 $('#rtcpinfo'+winid).hide(400);                                                            
+                                 $('#cdrinfo'+winid).show(400);                                                            
+                                 console.log(msg.data); 
+                                 $.each( data, function( index, val ) {
+
+                                   var rtcpobj = jQuery.parseJSON( val.msg );
+                                   
+				   var i = 0;
+                                   $.each( rtcpobj, function( ix, dt ) {
+                                   
+					i++;
+					color = "black";	
+					if(ix == "credit") color="red";
+                                        table +="<tr>";
+                                        table +="<td>"+i+"</td>";
+                                        table +="<td><font color='"+color+"'>"+ix+"</font></td>";
+                                        table +="<td align='center'><font color='"+color+"'>"+dt+"</font></td>";
+                                        table +="</tr>";
+
+                                   });
+
+                                 });
+
+                                 table += "</table>";
+                                 $('#cdrinfodata'+winid).html(table);
+                            }
+                            else {
+                                console.log('ERROR:' +msg.status);
+                                // alert("Error: " + msg.status);
+                                alert("No data");
+                            }
+                    },  //Error
+                    error: function (xhr, str) {
+                          // alert("Error");
+                    }
+        });
+}
+
+
+
+function makeRtcpChart(winid, jitter, packetloss, mos) {
+	
+
+      jitter.sort(function(a,b) { return a[0] - b[0] } );
+      
+      packetloss.sort(function(a,b) { return a[0] - b[0] } );
+      
+      mos.sort(function(a,b) { return a[0] - b[0] } );
+      
+
+      var asr1 = [[0, jitter]];
+      var asr1Display = jitter;
+      console.log(jitter);
+
+        // registration	
+
+      $.plot($("#rtcpjitterchart"+winid),
+                [{
+                	data: jitter,
+                	lines: { show: true, fill: true },                	
+                	//series: { points: { show: true, radius: 3} },                	                        
+                	points: { show: true },
+                	label: "Jitter MS", 
+                	color: "#333"
+                }],
+           {           	
+               xaxis: { mode: "time" }
+          });
+
+
+      $.plot($("#rtcppacketlosschart"+winid),
+                [{
+                	data: packetloss,
+                	lines: { show: true, fill: true},
+                	points: { show: true },
+                	label: "Packet Loss %", 
+                	color: "rgb(200, 20, 30)",
+			grid: {
+                               hoverable: true,
+                                clickable: true
+                        }
+                }],                
+                
+                
+           {
+               xaxis: { mode: "time" }
+          });
+
+
+      $.plot($("#rtcpmoschart"+winid),
+                [{
+                	data: mos,
+                	lines: { show: true, steps: true},
+                	label: "MOS", 
+			color: "rgb(30, 180, 20)",
+                	threshold: {
+				below: 3,
+				color: "rgb(200, 20, 30)"
+			}
+                }],                                
+           {
+               xaxis: { mode: "time" }
+          });
+
+
+}
+
+
+
+/* formula from www.voiptroubleshooter.com. Thanks for sharing. */
+function calculatePlMos(ppl, codec)
+{
+	var ie;
+	var rate;
+	var frame;
+	switch ( codec ) {
+  	case "g711":
+		ie = 0;
+		bpl = 10;
+		rate = 64000;
+		break;
+	case "g711plc":
+		ie = 0;
+		bpl = 34;
+		rate = 64000;
+		break;
+	case "g723153":
+		ie = 19;
+		bpl = 24;
+		rate = 5300;
+		frame = 30;
+		break;
+	case "g723163":
+		ie = 15;
+		bpl = 20;
+		rate = 6300;
+		frame = 30;
+		break;
+	case "g729":
+		ie = 10;
+		bpl = 17;
+		rate = 8000;
+		if( frame < 10 ) frame = 10;
+		break;
+	case "g729a":
+		ie = 11;
+		bpl = 17;
+		rate = 8000;
+		if( frame < 10 ) frame = 10;
+		break;
+	case "ilbc13":
+		ie = 10;
+		bpl = 28;
+		rate = 13300;
+		frame = 30;
+		break;
+	case "ilbc15":
+		ie = 12;
+		bpl = 28;
+		rate = 15200;
+		frame = 20;
+		break;
+
+	default :
+		ie = 0;
+		bpl = 10;
+		rate = 64000;
+	}
+
+	var ie_eff = (ie + (95.0 - ie) * ppl / (ppl + bpl));
+	var rlq = (93.2 - ie_eff);
+	var mos = String(Math.round(10*(1 + rlq * 0.035 + rlq * (100 - rlq) * (rlq - 60) * 0.000007))/10);
+	return mos;
+}
 
 
 
