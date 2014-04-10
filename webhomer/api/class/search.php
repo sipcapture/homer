@@ -85,6 +85,96 @@ class Search {
     }              
 
 
+    function showRtcpAll($param, $type) {
+
+           date_default_timezone_set(HOMER_TIMEZONE);
+           
+           $mydb = $this->db;                            
+           
+           $reqdata = (array) $param;           
+           $search = array();
+           $callwhere = array();
+
+           // SEARCH
+           $search['id'] = getVar('id', NULL, $reqdata, 'string');           
+           $search['correlation_id'] = getVar('correlation_id', NULL, $reqdata, 'string');         
+           $search['source_ip'] = getVar('source_ip', NULL, $reqdata, 'string');
+           $search['source_port'] = getVar('source_port', NULL, $reqdata, 'string');         
+           $search['destination_ip'] = getVar('destination_ip', NULL, $reqdata, 'string');
+           $search['destination_port'] = getVar('destination_port', NULL, $reqdata, 'string');         
+           $search['node'] = getVar('node', NULL, $reqdata, 'string');         
+           $limit = getVar('limit', 200, $reqdata, 'int');
+
+           // UTILS    
+           $utils['from_datetime'] = getVar('from_datetime', date("Y-m-d H:i:s", (time() - 900)), $reqdata, 'datetime');
+           $utils['to_datetime'] = getVar('to_datetime', date("Y-m-d H:i:s"), $reqdata, 'datetime');
+
+           $query = "SELECT * FROM ".$mydb->database_homer.".rtcp_capture WHERE (`date` BETWEEN '".$utils['from_datetime']."' AND '".$utils['to_datetime']."' )";
+
+           $callwhere = array();
+           
+           if($search['correlation_id'] != NULL) $callwhere[] = "correlation_id = ".$mydb->quote($search['correlation_id']); 
+           if($search['id'] != NULL) $callwhere[] = "id = ".$mydb->quote($search['id']); 
+           if($search['source_port'] != NULL) $callwhere[] = "source_port = ".$mydb->quote($search['source_port']); 
+           if($search['destination_port'] != NULL) $callwhere[] = "destination_port = ".$mydb->quote($search['destination_port']); 
+           if($search['node'] != NULL) $callwhere[] = "node = ".$mydb->quote($search['node']); 
+           if($search['source_ip'] != NULL) $callwhere[] = "source_ip = ".$mydb->quote($search['source_ip']); 
+           if($search['destination_ip'] != NULL) $callwhere[] = "destination_ip = ".$mydb->quote($search['destination_ip']); 
+           
+           if(count($callwhere)) $query .= " AND ( " .implode(" AND ", $callwhere). ")";
+
+           $order = " order by id DESC LIMIT ".$limit;
+
+           $rows = $mydb->loadObjectList($query.$order);           
+                      
+           return $rows;
+    }         
+    
+    function showCdrAll($param, $type) {
+
+           date_default_timezone_set(HOMER_TIMEZONE);
+           
+           $mydb = $this->db;                            
+           
+           $reqdata = (array) $param;           
+           $search = array();
+           $callwhere = array();
+
+           // SEARCH
+           $search['id'] = getVar('id', NULL, $reqdata, 'string');           
+           $search['correlation_id'] = getVar('correlation_id', NULL, $reqdata, 'string');         
+           $search['source_ip'] = getVar('source_ip', NULL, $reqdata, 'string');
+           $search['source_port'] = getVar('source_port', NULL, $reqdata, 'string');         
+           $search['destination_ip'] = getVar('destination_ip', NULL, $reqdata, 'string');
+           $search['destination_port'] = getVar('destination_port', NULL, $reqdata, 'string');         
+           $search['node'] = getVar('node', NULL, $reqdata, 'string');         
+           $limit = getVar('limit', 10, $reqdata, 'int');
+
+           // UTILS    
+           $utils['from_datetime'] = getVar('from_datetime', date("Y-m-d H:i:s", (time() - 900)), $reqdata, 'datetime');
+           $utils['to_datetime'] = getVar('to_datetime', date("Y-m-d H:i:s"), $reqdata, 'datetime');
+
+           $query = "SELECT * FROM ".$mydb->database_homer.".logs_capture WHERE (`date` BETWEEN '".$utils['from_datetime']."' AND '".$utils['to_datetime']."' )";
+
+           $callwhere = array();
+           
+           if($search['correlation_id'] != NULL) $callwhere[] = "correlation_id = ".$mydb->quote($search['correlation_id']); 
+           if($search['id'] != NULL) $callwhere[] = "id = ".$mydb->quote($search['id']); 
+           if($search['source_port'] != NULL) $callwhere[] = "source_port = ".$mydb->quote($search['source_port']); 
+           if($search['destination_port'] != NULL) $callwhere[] = "destination_port = ".$mydb->quote($search['destination_port']); 
+           if($search['node'] != NULL) $callwhere[] = "node = ".$mydb->quote($search['node']); 
+           if($search['source_ip'] != NULL) $callwhere[] = "source_ip = ".$mydb->quote($search['source_ip']); 
+           if($search['destination_ip'] != NULL) $callwhere[] = "destination_ip = ".$mydb->quote($search['destination_ip']); 
+           
+           if(count($callwhere)) $query .= " AND ( " .implode(" AND ", $callwhere). ")";
+
+           $order = " order by id DESC LIMIT ".$limit;
+           
+
+           $rows = $mydb->loadObjectList($query.$order);           
+                                 
+           return $rows;
+    }            
     
 /********************************** STATISTIC *********************************************/
 
