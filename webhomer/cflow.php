@@ -191,6 +191,12 @@ $mt_flag = 0;
 if(!isset($where)) $where = "";
 if(!isset($cid_aleg)) $cid_aleg = "";
 
+$rtcpinfo = 0;
+$cdrinfo = 1;
+$correlation_id = "";
+$codec = "g711";
+
+
 foreach($location as $value) {
 
         $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
@@ -309,7 +315,12 @@ foreach($results as $row) {
   else if($data->method == "BYE") $statuscall = 3;
   else if($data->method == "200" && preg_match('/INVITE/',$data->cseq)) $statuscall = 4;
   else if(preg_match('/[3][0-9][0-9]/',$data->method)) $statuscall = 5;
-  
+
+  if(preg_match('/^PJSIP/',$data->correlation_id)) {
+      $rtcpinfo = 1;
+      $correlation_id = $data->correlation_id;
+  }
+
   if ( $CFLOW_HPORT==1 ) {
 	// try to correlate replies from ephemeral ports
 	if ( (defined('CFLOW_EPORT') && CFLOW_EPORT == 1) && !empty($datapre) && $datapre->source_port == $data->destination_port && $datapre->source_ip == $data->destination_ip ) {
@@ -409,6 +420,9 @@ if(!$max_ts) $max_ts = $data->micro_ts;
 
 /* And total duraion now: */
 $totdur = gmdate("H:i:s", intval(($max_ts- $min_ts) / 1000000));
+
+$rtcp_from_date = date("Y-m-d H:i:s",($min_ts / 1000000) - 100);
+$rtcp_to_date = date("Y-m-d H:i:s",($max_ts / 1000000) + 100);
 
 
 // Calculate size of image:
@@ -675,9 +689,12 @@ else $statuscolor="white";
 <script language="javascript">
 $(document).ready(function(){
 
-      $('input:button').button();
+     $('input:button').button();
       $('#rtpinfo<?php echo $winid; ?>').hide();
+      $('#rtcpinfo<?php echo $winid; ?>').hide();
+      $('#cdrinfo<?php echo $winid; ?>').hide();
       $('#image<?php echo $winid; ?>').zoomable();
+
 
 //      $(this).find('a.ui-dialog-titlebar-close').parent().append( $('#ybuttons') );
 
@@ -689,6 +706,7 @@ $(document).ready(function(){
 </head>
 
 <div id="ybuttons" align="center" style="margin-right: 5%; width: 100%;">
+    <input id="front" type="button" value="Call Flow" onclick="$('#callflow<?php echo $winid; ?>').show(400);$('#cdrinfo<?php echo $winid; ?>').hide(400);$('#rtpinfo<?php echo $winid; ?>').hide(400);$('#rtcpinfo<?php echo $winid; ?>').hide(400);" title="Call flow"  style="background: transparent;" />
     <input id="z1" type="button" value="+" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomIn')" title="Zoom in"  style="background: transparent;" />
     <input id="z2" type="button" value="-" onclick="$('#image<?php echo $winid; ?>').zoomable('zoomOut')" title="Zoom out"  style="background: transparent;" />
     <input id="r1" type="button" value="Reset" onclick="$('#image<?php echo $winid; ?>').zoomable();$('#image<?php echo $winid; ?>').width('<?php echo $size_x;?>').height('<?php echo $size_y;?>');"  style="background: transparent;" />
@@ -702,7 +720,13 @@ $(document).ready(function(){
     <input type="button" value="Duration: <?php echo $totdur ?>" style="opacity: 1; background: transparent; background-color: <?php echo $statuscolor; ?>" disabled />
 <?php   }  ?>
 <?php if(count($rtpinfo) != 0) { ?>
-    <input type="button" value="RTP info" style="opacity: 1; background: transparent;" onclick="$('#callflow<?php echo $winid; ?>').toggle(400);$('#rtpinfo<?php echo $winid; ?>').toggle(400);" />
+    <input type="button" value="RTP info" style="opacity: 1; background: transparent;" onclick="$('#callflow<?php echo $winid; ?>').toggle(400);$('#cdrinfo<?php echo $winid; ?>').hide(400);$('#rtpinfo<?php echo $winid; ?>').toggle(400);$('#rtcpinfo<?php echo $winid; ?>').toggle(400);" />
+<?php } ?>
+<?php if($rtcpinfo) { ?>
+    <input type="button" value="RTCP info" style="opacity: 1; background: transparent;" onclick="showRtcpStats('<?php echo $correlation_id;?>','<?php echo $rtcp_from_date;?>','<?php echo $rtcp_to_date?>', '<?php echo APILOC;?>', '<?php echo $winid;?>', '<?php echo $codec?>');" />
+<?php } ?>
+<?php if($cdrinfo) { ?>
+    <input type="button" value="CDR info" style="opacity: 1; background: transparent;" onclick="showCdrInfo('<?php echo $cid;?>','<?php echo $rtcp_from_date;?>','<?php echo $rtcp_to_date?>', '<?php echo APILOC;?>', '<?php echo $winid;?>', '<?php echo $codec?>');" />
 <?php } ?>
 </div>
 <center>
@@ -711,6 +735,7 @@ $(document).ready(function(){
 <img border='0' src='<?php echo WEBPCAPLOC.$file?>' usemap='#map<?php echo $winid; ?>' id="image<?php echo $winid; ?>">
 <map name='map<?php echo $winid; ?>' id='map<?php echo $winid; ?>'>
 <?php
+
 
 if(!defined('MESSAGE_POPUP')) $popuptype = 1;
 else $popuptype = MESSAGE_POPUP;
@@ -839,6 +864,17 @@ foreach ($rtpinfo as $key=>$data) {
   echo "</table><BR>";
 }
 ?>
+</div>
+<div id="rtcpinfo<?php echo $winid; ?>">
+<br>
+    <div id="rtcpjitterchart<?php echo $winid; ?>" style="min-width: 90px; width: 90%; margin-left: 1px; float: center; height: 220px;"><br></div>
+    <div id="rtcppacketlosschart<?php echo $winid; ?>" style="min-width: 90px; width: 90%; margin-left: 1px; float: center; height: 220px;"><br></div>
+    <div id="rtcpmoschart<?php echo $winid; ?>" style="min-width: 90px; width: 90%; margin-left: 1px; float: center; height: 220px;"><br></div>
+    <div id="rtcpinfodata<?php echo $winid; ?>"><br></div>
+</div>
+<div id="cdrinfo<?php echo $winid; ?>">
+<br>
+    <div id="cdrinfodata<?php echo $winid; ?>"><br></div>
 </div>
 </center>
 </body>
