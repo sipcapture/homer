@@ -188,6 +188,31 @@ function basicFeautures($type, $data) {
 
                       break;
 
+                case 'rtcp/report/all':
+                      if($resp = $search->showRtcpAll($data, 0)) {
+                              $answer['status'] = 'ok';
+                              $answer['data'] = $resp;
+                      }
+                      else {
+                              $answer['status'] = 'not good';
+                              $answer['data'] = array();
+                      }                      
+
+                      break;
+              
+                case 'cdr/report/all':
+                      if($resp = $search->showCdrAll($data, 0)) {
+                              $answer['status'] = 'ok';
+                              $answer['data'] = $resp;
+                      }
+                      else {
+                              $answer['status'] = 'not good';
+                              $answer['data'] = array();
+                      }                      
+
+                      break;
+
+
                 /* statistic */
                 
                 case 'statistic/method/all':
