@@ -231,7 +231,7 @@ class Component {
             	        }
 		 	exec('bwm-ng -o plain -c 1 | grep eth', $result, $status);
 		        if ($status != 0) {
-			        $bwstats[RATE] = "Not Available. Install bwn-ng";
+			        $bwstats[RATE] = "Not Available. Install bwm-ng";
 		        } else {
 				foreach ($result as $result2) {
                     		$cstats = preg_split('/  +/', trim($result2));
