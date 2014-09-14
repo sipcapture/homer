@@ -1,0 +1,98 @@
+#! /bin/sh
+#
+### BEGIN INIT INFO
+# Provides: kamailio
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Required-Start: $local_fs $network
+# Required-Stop:
+# Short-Description: Kamailio
+### END INIT INFO
+
+DAEMON=/usr/local/kamailio/sbin/kamailio
+prog=kamailio
+pidfile=/var/run/kamailio/$prog.pid
+lockfile=/var/lock/$prog
+RETVAL=0
+CONF=/usr/local/kamailio/etc/kamailio/kamailio.cfg
+OPTIONS="-P $pidfile -f $CONF"
+
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+start() {
+	echo -n "Starting $prog: "
+	if [ -e $pidfile ]; then
+		echo "[OK] Kamailio is already running with PID: `cat $pidfile`"
+	else
+
+		# there is something at end of this output which is needed to
+		# report proper [ OK ] status in CentOS scripts
+		daemon $DAEMON $OPTIONS
+		RETVAL=$?
+		echo
+		[ $RETVAL = 0 ] && touch $lockfile
+	fi
+}
+
+stop() {
+	echo -n "Stopping $prog: "
+	if [ -e $pidfile ]; then
+		killproc $DAEMON -QUIT
+		RETVAL=$?
+		echo
+		[ $RETVAL = 0 ] && rm -f $lockfile $pidfile
+	else
+		RETVAL=1
+		echo
+		[ $RETVAL = 1 ] && rm -f $lockfile $pidfile
+		echo "[FAILED] Kamailio is not running"
+                
+	fi
+}
+
+
+status() {
+	RETVAL=0
+        if [ -e $pidfile ]; then
+                        echo "[OK] Kamailio is running with PID: `cat /var/run/kamailio.pid`"
+        else
+                        echo "[FAILED] Kamailio is not running"
+                        RETVAL=1
+        fi
+        
+	return $RETVAL
+}
+
+
+
+
+
+# See how we were called.
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		stop
+		;;
+	status)
+		status
+		;;
+	restart)
+		stop
+		start
+		;;
+	condrestart)
+		if [ -f $pidfile ] ; then
+			stop
+			start
+		fi
+		;;
+	*)
+		echo $"Usage: $prog {start|stop|restart|condrestart|status|help}"
+		exit 1
+esac
+
+exit $RETVAL

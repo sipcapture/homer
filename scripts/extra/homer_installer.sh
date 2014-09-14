@@ -42,6 +42,14 @@
 VERSION=0.7.2
 HOSTNAME=$(hostname)
 
+logfile=/tmp/homer_installer.log
+
+# LOG INSTALLER OUTPUT TO $logfile
+mkfifo ${logfile}.pipe
+tee < ${logfile}.pipe $logfile &
+exec &> ${logfile}.pipe
+rm ${logfile}.pipe
+
 clear; 
 echo "*************************************************************"
 echo "                                                             "
@@ -516,7 +524,7 @@ fi
    	echo "Creating Users..."
    	mysql -u "$sqluser" -p"$sqlpassword" -e "GRANT ALL ON *.* TO '$sqlhomeruser'@'localhost' IDENTIFIED BY '$sqlhomerpassword'; FLUSH PRIVILEGES;";
    	echo "Creating Tables..."
-   	mysql -u "$sqluser" -p"$sqlpassword" homer_db < sql/create_sipcapture_version_3.sql
+   	mysql -u "$sqluser" -p"$sqlpassword" homer_db < sql/create_sipcapture_version_4.sql
    	mysql -u "$sqluser" -p"$sqlpassword" homer_db < webhomer/sql/statistics.sql
    	mysql -u "$sqluser" -p"$sqlpassword" homer_users < webhomer/sql/homer_users.sql
    	mysql -u "$sqluser" -p"$sqlpassword" homer_users -e "TRUNCATE TABLE homer_nodes;"
@@ -1516,5 +1524,6 @@ echo " For our capture agent, visit http://captagent.googlecode.com "
 echo " For more help and informations visit: http://sipcapture.org "
 echo
 echo "**************************************************************"
+echo " Installer Log saved to: $logfile "
 echo 
 exit 0

@@ -34,7 +34,7 @@ $newparts = 2; #new partitions for 2 days. Anyway, start this script daily!
 $partstep = 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes 
 $engine = "InnoDB"; #MyISAM or InnoDB
 $compress = "ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8"; #Enable this if you want use barracuda format or set var to empty.
-$sql_schema_version = 4;
+$sql_schema_version = 2;
 $auth_column = "auth";
 $check_table = 1; #Check if table exists. For PostgreSQL change creation schema!
 
@@ -96,7 +96,6 @@ $sql = "CREATE TABLE IF NOT EXISTS `".$mysql_table."` (
   `contact_port` int(10) NOT NULL,
   `originator_ip` varchar(60) NOT NULL DEFAULT '',
   `originator_port` int(10) NOT NULL,
-  `correlation_id` varchar(256) NOT NULL,
   `proto` int(5) NOT NULL,
   `family` int(1) DEFAULT NULL,
   `rtp_stat` varchar(256) NOT NULL,
