@@ -22,16 +22,16 @@
 
 use DBI;
 
-$version = "0.3.2";
-$mysql_table = "sip_capture";
+$version = "0.3.3";
+$mysql_table = $ARGV[0] // "sip_capture";
 $mysql_dbname = "homer_db";
 $mysql_user = "mysql_login";
 $mysql_password = "mysql_password";
 $mysql_host = "localhost";
-$maxparts = 6; #6 days How long keep the data in the DB
+$maxparts = $ARGV[2] // 6; #6 days How long keep the data in the DB
 $newparts = 2; #new partitions for 2 days. Anyway, start this script daily!
 @stepsvalues = (86400, 3600, 1800, 900); 
-$partstep = 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes 
+$partstep = $ARGV[1] // 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes 
 $engine = "InnoDB"; #MyISAM or InnoDB
 $compress = "ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8"; #Enable this if you want use barracuda format or set var to empty.
 $sql_schema_version = 2;
