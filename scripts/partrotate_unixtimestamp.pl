@@ -34,9 +34,6 @@ $newparts = 2; #new partitions for 2 days. Anyway, start this script daily!
 $partstep = $ARGV[1] // 0; # 0 - Day, 1 - Hour, 2 - 30 Minutes, 3 - 15 Minutes 
 $engine = "InnoDB"; #MyISAM or InnoDB
 $compress = "ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8"; #Enable this if you want use barracuda format or set var to empty.
-$sql_schema_version = 2;
-$auth_column = "auth";
-$check_table = 1; #Check if table exists. For PostgreSQL change creation schema!
 
 #Check it
 $partstep=0 if(!defined $stepsvalues[$partstep]);
@@ -59,12 +56,14 @@ $totalparts = ($maxparts+$newparts);
 
 my $db = DBI->connect("DBI:mysql:$mysql_dbname:$mysql_host:3306", $mysql_user, $mysql_password);
 
-$auth_column = "authorization" if($sql_schema_version == 1);
-
 #$db->{PrintError} = 0;
 
 #we have now multiple tables with different schema. Better do it in sql script 
-#
+
+#Name of part key
+if( $mysql_table =~/alarm_/) { $part_key = "create_date"; }
+elsif( $mysql_table =~/stats_/) { $part_key = "from_date"; }
+else { $part_key = "date"; }
 
 #check if the table has partitions. If not, create one
 my $query = "SHOW TABLE STATUS FROM ".$mysql_dbname. " WHERE Name='".$mysql_table."'";
@@ -72,7 +71,7 @@ $sth = $db->prepare($query);
 $sth->execute();
 my $tstatus = $sth->fetchrow_hashref()->{Create_options};
 if ($tstatus !~ /partitioned/) {
-   my $query = "ALTER TABLE ".$mysql_table. " PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`)) (PARTITION pmax VALUES LESS THAN MAXVALUE)";
+   my $query = "ALTER TABLE ".$mysql_table. " PARTITION BY RANGE ( UNIX_TIMESTAMP(`".$part_key."`)) (PARTITION pmax VALUES LESS THAN MAXVALUE)";
    $sth = $db->prepare($query);
    $sth->execute();
 }
@@ -83,8 +82,6 @@ $sth->execute();
 my ($curtstamp) = $sth->fetchrow_array();
 $curtstamp+=0; 
 $todaytstamp+=0;
-
-
 
 my %PARTS;
 #Geting all partitions
@@ -123,10 +120,9 @@ if($partcount > $maxparts)
     }
 }
 
-
+#Delete all partitions
 if($#partsremove > 0)   
 {
-
     $query = "ALTER TABLE ".$mysql_table." DROP PARTITION ".join(',', @partsremove);
     $db->do($query);
     if (!$db->{Executed}) {
