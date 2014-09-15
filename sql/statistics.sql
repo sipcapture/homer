@@ -15,8 +15,9 @@ CREATE TABLE IF NOT EXISTS `alarm_data` (
   PRIMARY KEY (`id`),
   KEY `to_date` (`create_date`),
   KEY `method` (`type`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
-
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
+/*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`create_date`))
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
 -- --------------------------------------------------------
 
 --
@@ -54,8 +55,10 @@ CREATE TABLE IF NOT EXISTS `stats_data` (
   KEY `from_date` (`from_date`),
   KEY `to_date` (`to_date`),
   KEY `method` (`type`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
-
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
+/*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`from_date`))
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+-
 -- --------------------------------------------------------
 
 --
@@ -74,8 +77,9 @@ CREATE TABLE IF NOT EXISTS `stats_ip` (
   KEY `from_date` (`from_date`),
   KEY `to_date` (`to_date`),
   KEY `method` (`method`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
-
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
+/*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`from_date`))
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
 -- --------------------------------------------------------
 
 --
@@ -113,8 +117,9 @@ CREATE TABLE IF NOT EXISTS `stats_method` (
   KEY `to_date` (`to_date`),
   KEY `method` (`method`),
   KEY `completed` (`cseq`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
-
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
+/*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`from_date`))
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
 -- --------------------------------------------------------
 
 --
@@ -156,8 +161,9 @@ CREATE TABLE IF NOT EXISTS `stats_useragent` (
   KEY `useragent` (`useragent`),
   KEY `method` (`method`),
   KEY `total` (`total`)
-) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
-
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
+/*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`from_date`))
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
 -- --------------------------------------------------------
 
 --
