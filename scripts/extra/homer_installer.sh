@@ -34,12 +34,12 @@
 
 #####################################################################
 #                                                                   #
-#  WARNING: THIS SCRIPT IS NOW UPDATED TO SUPPORT HOMER 3.5+        #
+#  WARNING: THIS SCRIPT IS NOW UPDATED TO SUPPORT HOMER 3.6+        #
 #           PLEASE USE WITH CAUTION AND HELP US BY REPORTING BUGS!  #
 #                                                                   #
 #####################################################################
 
-VERSION=0.7.2
+VERSION=0.7.3
 HOSTNAME=$(hostname)
 
 logfile=/tmp/homer_installer.log
