@@ -212,6 +212,10 @@ case $DIST in
      if [ "$VERS" = "6" ]
         then
             yum -y install $COMMON_PKGS git php-mysql php-devel php-gd
+            chkconfig mysql on
+            chkconfig apache2 on
+            /etc/init.d/mysql start
+            mysql_secure_installation
      if [ ! "$?" == "0" ]; then
    	    echo 
    	    echo "HALT! Something went wrong. Please resolve the errors above and try again."
@@ -461,6 +465,7 @@ fi
             #cp /usr/src/kamailio-devel/kamailio/pkg/kamailio/rpm/kamailio.init /etc/init.d/kamailio
             cp /usr/src/homer-git/homer/scripts/extra/kamailio/kamailio.centos.init /etc/init.d/kamailio
             chmod 755 /etc/init.d/kamailio
+            chkconfig kamailio on
             # Patch Init scripts - DAEMON
              #orig="KAM=/usr/sbin/kamailio"
              #dest="KAM=$REAL_PATH/sbin/kamailio"
@@ -603,7 +608,7 @@ fi
 ### START APACHE2 ####
 
 # set FQDN name variable
-localweb=$(ip addr show dev eth0  | grep inet -w | awk '{ print $2 }' | sed s#/.*##g )
+localweb=$(ip addr show dev $MAINIF  | grep inet -w | awk '{ print $2 }' | sed s#/.*##g )
 echo -n "Enter webserver IP/FQDN (leave blank for '$localweb'): "
 read dname
 if [ "$dname" = "" ] ; then
@@ -853,9 +858,9 @@ modparam("sipcapture", "raw_sock_children", 6)
 ' >> $config
 
 # Local IP/PORT candidates
-#read -p "Please confirm the local network device: [eth0]: " device
+#read -p "Please confirm the local network device: [$MAINIF]: " device
  if [ "$device" = "" ] ; then
-   device="eth0"
+   device="$MAINIF"
  fi
    localip=$(ip addr show dev $device  | grep inet -w | awk '{ print $2 }' | sed s#/.*##g )
    if [ -z "$localip" ] || [ $localip == "" ]; then 
@@ -899,7 +904,7 @@ echo "NEXT: Configure a remote HEP Capture Agent (captagent OR integrated in Fre
    	echo
 echo '
 /* Name of interface to bind on raw socket */
-modparam("sipcapture", "raw_interface", "eth0")
+modparam("sipcapture", "raw_interface", "$MAINIF")
 /* activate IPIP capturing */
 modparam("sipcapture", "raw_ipip_capture_on", 1)
 ' >> $config
@@ -919,7 +924,7 @@ echo "NEXT: Configure a remote IPIP Capture Agent (ACME Packet SBC, HAUWEI SBC, 
 
 echo '
 /* Name of interface to bind on raw socket */
-modparam("sipcapture", "raw_interface", "eth0")
+modparam("sipcapture", "raw_interface", "$MAINIF")
 /* activate monitoring/mirroring port capturing. Linux only */
 modparam("sipcapture", "raw_moni_capture_on", 1)
 /* Promiscious mode RAW socket. Mirroring port. Linux only */
