@@ -212,9 +212,9 @@ case $DIST in
      if [ "$VERS" = "6" ]
         then
             yum -y install $COMMON_PKGS git php-mysql php-devel php-gd
-            chkconfig mysql on
-            chkconfig apache2 on
-            /etc/init.d/mysql start
+            chkconfig mysqld on
+            chkconfig httpd on
+            /etc/init.d/mysqld start
             mysql_secure_installation
      if [ ! "$?" == "0" ]; then
    	    echo 
