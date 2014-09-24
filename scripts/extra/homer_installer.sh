@@ -480,7 +480,7 @@ fi
    	mysql -u "$sqluser" -p"$sqlpassword" homer_users < webhomer/sql/homer_users.sql
    	mysql -u "$sqluser" -p"$sqlpassword" homer_users -e "TRUNCATE TABLE homer_nodes;"
      echo "Creating local DB Node..."
-     mysql -u "$sqluser" -p"$sqlpassword" homer_users -e "INSERT INTO homer_nodes VALUES(1,'localhost','homer_db','3306','"$sqluser"','"$sqlpassword"','sip_capture','node1', 1);"
+     mysql -u "$sqluser" -p"$sqlpassword" homer_users -e "INSERT INTO homer_nodes VALUES(1,'127.0.0.1','homer_db','3306','"$sqlhomeruser"','"$sqlhomerpassword"','sip_capture','node1', 1);"
    else
    	echo 
    	echo "WARNING: Existing/Conflicting database found!"
@@ -521,12 +521,12 @@ else
    
    if  [ "$DIST" == "CENTOS" ]; then
      # Fix path for CentOS httpd
-         orig="define('APILOC',"/webhomer/api/");"
-         dest="define('APILOC',"/api/");"
+         orig="define('APILOC',\"/webhomer/api/\");"
+         dest="define('APILOC',\"/api/\");"
          sed -i -e "s#$orig#$dest#g" $WEBROOT/webhomer/configuration.php
          
-         orig="define('WEBPCAPLOC',"/webhomer/tmp/");"
-         dest="define('WEBPCAPLOC',"/tmp/");"
+         orig="define('WEBPCAPLOC',\"/webhomer/tmp/\");"
+         dest="define('WEBPCAPLOC',\"/tmp/\");"
          sed -i -e "s#$orig#$dest#g" $WEBROOT/webhomer/configuration.php
          
    fi
