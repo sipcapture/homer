@@ -427,7 +427,10 @@ else
    adduser -r -d /var/run/kamailio --shell /sbin/nologin kamailio
    iptables -D INPUT -p tcp --dport 80 -j ACCEPT
    iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-   iptables-save
+   sudo iptables -I INPUT 4 -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT
+   sudo iptables -I INPUT 4 -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
+   # iptables-save
+   /sbin/service iptables save 
    chown kamailio:kamailio /var/run/kamailio
 fi
 
@@ -729,6 +732,7 @@ case $DIST in
         sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
         sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
         sudo iptables-save
+        sudo /sbin/service iptables save 
         ;;
 esac
 
@@ -1466,7 +1470,12 @@ route[TIMER_STATS] {
 
 EOF
 
-
+# Open HEP port for traffic
+        sudo iptables -I INPUT -p tcp --dport $capport -j ACCEPT
+        sudo iptables -I INPUT -p udp --dport $capport -j ACCEPT
+        sudo iptables-save
+        sudo /sbin/service iptables save 
+        
 # set new configuration in place
    mv $config $REAL_PATH/etc/kamailio/kamailio.cfg
    echo "Kamailio configuration ready!"
