@@ -513,7 +513,12 @@ else
    dest="define('CFLOW_HPORT', 2);"
    sed -i -e "s#$orig#$dest#g" $WEBROOT/webhomer/preferences.php
    
-   tzone=$(cat /etc/timezone);
+   if  [ "$DIST" == "CENTOS" ]; then
+     tzone=$(cat /etc/sysconfig/clock | awk -F '"' '{print $2}')
+   else  
+     tzone=$(cat /etc/timezone);
+   fi
+
    if [ ! "$tzone" = "" ] ; then
         echo "Setting timezone to '$tzone'..."
          # Configure system Timezone
@@ -1544,7 +1549,7 @@ echo "     * Start/stop Homer SIP Capture:"
 echo "         '$REAL_PATH/sbin/kamctl start|stop'"
 echo
 echo "     * Access webHomer UI:"
-echo "         http://$HOSTNAME/webhomer"
+echo "         http://$HOSTNAME/webhomer or http://$HOSTNAME"
 echo "         [default login: test@test.com/test123]"
 echo
 echo "**************************************************************"
