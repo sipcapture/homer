@@ -110,6 +110,8 @@ case $BITS in
    ;;
 esac
 
+MAINIF=$( route -n | grep '^0\.0\.0\.0' | head -n 1 | awk '{print $NF}' )
+MAINIP=$( ifconfig $MAINIF | { IFS=' :';read r;read r r a r;echo $a; } )
 
 func_netcheck() {
 # Check connectivity
