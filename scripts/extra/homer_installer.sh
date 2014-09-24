@@ -39,7 +39,7 @@
 #                                                                   #
 #####################################################################
 
-VERSION=0.7.3
+VERSION=0.7.4
 HOSTNAME=$(hostname)
 
 logfile=/tmp/homer_installer.log
