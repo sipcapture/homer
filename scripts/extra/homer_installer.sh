@@ -431,62 +431,6 @@ else
    chown kamailio:kamailio /var/run/kamailio
 fi
 
-   # Setup Kamailio init scripts?
-   echo
-   read -p "Would you like to install Kamailio's init/defaults scripts? (y/N): " choice
-   case "$choice" in 
-     y|Y ) 
-        if [ "$DIST" == "DEBIAN" ]; then
-           # INIT SCRIPTS
-             #cp /usr/src/kamailio-devel/kamailio/pkg/kamailio/deb/debian/kamailio.init /etc/init.d/kamailio
-             cp /usr/src/homer-git/homer/scripts/extra/kamailio/kamailio.debian.init /etc/init.d/kamailio
-             chmod 755 /etc/init.d/kamailio 
-           # Patch Init scripts - DAEMON
-             #orig="DAEMON=/usr/sbin/kamailio"
-             #dest="DAEMON=/usr/local/sbin/kamailio"
-             #sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
-           # Patch Init scripts = CFGFILE
-             #orig="CFGFILE=/etc/kamailio/kamailio.cfg"
-             #dest="CFGFILE=$REAL_PATH/etc/kamailio/kamailio.cfg"
-             #sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
-           # Patch Init scripts - RUN_KAMAILIO (needed?)
-           #    orig="RUN_KAMAILIO=no"
-           #    dest="RUN_KAMAILIO=yes"
-           #    sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
-           # DEFAULTS
-             #cp /usr/src/kamailio-devel/kamailio/pkg/kamailio/deb/debian/kamailio.default /etc/default/kamailio
-           # Patch Init scripts - RUN_KAMAILIO
-             #orig="#RUN_KAMAILIO=yes"
-             #dest="RUN_KAMAILIO=yes"
-             #sed -i -e "s#\$orig#$dest#g" /etc/default/kamailio
-
-        elif  [ "$DIST" == "CENTOS" ]; then
-           # INIT SCRIPTS
-            #cp /usr/src/kamailio-devel/kamailio/pkg/kamailio/rpm/kamailio.init /etc/init.d/kamailio
-            cp /usr/src/homer-git/homer/scripts/extra/kamailio/kamailio.centos.init /etc/init.d/kamailio
-            chmod 755 /etc/init.d/kamailio
-            chkconfig kamailio on
-            # Patch Init scripts - DAEMON
-             #orig="KAM=/usr/sbin/kamailio"
-             #dest="KAM=$REAL_PATH/sbin/kamailio"
-             #sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
-           # Patch Init scripts = CFGFILE
-             #orig="KAMCFG=/etc/kamailio/kamailio.cfg"
-             #dest="KAMCFG=$REAL_PATH/etc/kamailio/kamailio.cfg"
-             #sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
-           # DEFAULTS
-            #cp /usr/src/kamailio-devel/kamailio/pkg/kamailio/rpm/kamailio.default /etc/default/kamailio
-            # RUN_KAMAILIO already yes in RPM
-        else
-           echo "Sorry, $DIST init scripts not *yet* supported! (feel free to contribute it!)"
-        fi
-   	   ;;
-     n|N|* ) 
-   	   echo "skipping..."
-   	   ;;
-   esac
-
-
 # START: WEBHOMER
 # Setup Kamailio/Sipcapture from GIT
 echo
@@ -616,6 +560,62 @@ else
    fi
 
 fi
+
+# Setup Kamailio init scripts?
+   echo
+   read -p "Would you like to install Kamailio's init/defaults scripts? (y/N): " choice
+   case "$choice" in 
+     y|Y ) 
+        if [ "$DIST" == "DEBIAN" ]; then
+           # INIT SCRIPTS
+             #cp /usr/src/kamailio-devel/kamailio/pkg/kamailio/deb/debian/kamailio.init /etc/init.d/kamailio
+             cp /usr/src/homer-git/homer/scripts/extra/kamailio/kamailio.debian.init /etc/init.d/kamailio
+             chmod 755 /etc/init.d/kamailio 
+           # Patch Init scripts - DAEMON
+             #orig="DAEMON=/usr/sbin/kamailio"
+             #dest="DAEMON=/usr/local/sbin/kamailio"
+             #sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
+           # Patch Init scripts = CFGFILE
+             #orig="CFGFILE=/etc/kamailio/kamailio.cfg"
+             #dest="CFGFILE=$REAL_PATH/etc/kamailio/kamailio.cfg"
+             #sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
+           # Patch Init scripts - RUN_KAMAILIO (needed?)
+           #    orig="RUN_KAMAILIO=no"
+           #    dest="RUN_KAMAILIO=yes"
+           #    sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
+           # DEFAULTS
+             #cp /usr/src/kamailio-devel/kamailio/pkg/kamailio/deb/debian/kamailio.default /etc/default/kamailio
+           # Patch Init scripts - RUN_KAMAILIO
+             #orig="#RUN_KAMAILIO=yes"
+             #dest="RUN_KAMAILIO=yes"
+             #sed -i -e "s#\$orig#$dest#g" /etc/default/kamailio
+
+        elif  [ "$DIST" == "CENTOS" ]; then
+           # INIT SCRIPTS
+            #cp /usr/src/kamailio-devel/kamailio/pkg/kamailio/rpm/kamailio.init /etc/init.d/kamailio
+            cp /usr/src/homer-git/homer/scripts/extra/kamailio/kamailio.centos.init /etc/init.d/kamailio
+            chmod 755 /etc/init.d/kamailio
+            chkconfig kamailio on
+            # Patch Init scripts - DAEMON
+             #orig="KAM=/usr/sbin/kamailio"
+             #dest="KAM=$REAL_PATH/sbin/kamailio"
+             #sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
+           # Patch Init scripts = CFGFILE
+             #orig="KAMCFG=/etc/kamailio/kamailio.cfg"
+             #dest="KAMCFG=$REAL_PATH/etc/kamailio/kamailio.cfg"
+             #sed -i -e "s#$orig#$dest#g" /etc/init.d/kamailio
+           # DEFAULTS
+            #cp /usr/src/kamailio-devel/kamailio/pkg/kamailio/rpm/kamailio.default /etc/default/kamailio
+            # RUN_KAMAILIO already yes in RPM
+        else
+           echo "Sorry, $DIST init scripts not *yet* supported! (feel free to contribute it!)"
+        fi
+   	   ;;
+     n|N|* ) 
+   	   echo "skipping..."
+   	   ;;
+   esac
+
 
 ### START APACHE2 ####
 
