@@ -575,6 +575,18 @@ else
          sed -i -e "s#$orig#$dest#g" $WEBROOT/webhomer/preferences.php
    fi
    
+   if  [ "$DIST" == "CENTOS" ]; then
+     # Fix path for CentOS httpd
+         orig="define('APILOC',"/webhomer/api/");"
+         dest="define('APILOC',"/api/");"
+         sed -i -e "s#$orig#$dest#g" $WEBROOT/webhomer/configuration.php
+         
+         orig="define('WEBPCAPLOC',"/webhomer/tmp/");"
+         dest="define('WEBPCAPLOC',"/tmp/");"
+         sed -i -e "s#$orig#$dest#g" $WEBROOT/webhomer/configuration.php
+         
+   fi
+   
 
    # Define DB Access Credentials
    orig="'USER', \"root\""
