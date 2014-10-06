@@ -1,5 +1,9 @@
 <?php
 
+if(!defined('HOMER_PREFERENCES')):
+
+define('HOMER_PREFERENCES', 1);
+
 define('HOMER_TIMEZONE', "America/Detroit"); /* Set a global application default timezone */
 
 define('CONFIG_VERSION', "1.0.10"); /* Please ALWAYS include CONFIGVERSION */
@@ -104,5 +108,7 @@ define('SESSION_NAME',"HOMERSESSID"); /* session ID name. */
 /* SQL SCHEMA VERSION */
 define('SQL_SCHEMA_VERSION',1); /* SQL SCHEMA VERSION. Default 1 */
 
+
+endif;
 
 ?>
