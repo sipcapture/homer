@@ -1,5 +1,9 @@
 <?php
 
+if(!defined('HOMER_CONFIGURATION')):
+
+define('HOMER_CONFIGURATION', 1);
+
 /*********************************************************************************/
 /* Access db of homer */
 define('HOST', "localhost");
@@ -33,5 +37,7 @@ define('APILOC',"/webhomer/api/");
 /* INCLUDE preferences */
 
 include("preferences.php");
+
+endif;
 
 ?>
