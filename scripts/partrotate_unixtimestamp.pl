@@ -92,6 +92,8 @@ $sth = $db->prepare($query);
 $sth->execute();
 my @oldparts;
 my @partsremove;
+my @partsadd;
+
 while(my @ref = $sth->fetchrow_array())
 {
    my $minpart = $ref[0];
@@ -133,8 +135,6 @@ if($#partsremove > 0)
 
 # < condition
 $curtstamp+=(86400);
-
-#Create new partitions
 for(my $i=0; $i<$newparts; $i++) {
 
     $oldstamp = $curtstamp;
@@ -146,13 +146,19 @@ for(my $i=0; $i<$newparts; $i++) {
     $newpartname.= sprintf("%02d", $min) if($partstep > 1);
 
     if(!defined $PARTS{$newpartname."_".$curtstamp}) {
-
-        # Fix MAXVALUE. Thanks Dorn B. <djbinter@gmail.com> for report and fix.
-        $query = "ALTER TABLE ".$mysql_table." REORGANIZE PARTITION pmax INTO (PARTITION ".$newpartname
-                                ."\n VALUES LESS THAN (".$curtstamp.") ENGINE = ".$engine.", PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = ".$engine.")";
-        $db->do($query);
-        if (!$db->{Executed}) {
-             print "Couldn't add partition: $newpartname\n";
-        }
+        $query = "\nPARTITION ".$newpartname." VALUES LESS THAN (".$curtstamp.")";
+        push(@partsadd,$query);
     }    
+}
+ 
+if($#partsadd > 0)
+{
+    # Fix MAXVALUE. Thanks Dorn B. <djbinter@gmail.com> for report and fix.
+    $query = "ALTER TABLE ".$mysql_table." REORGANIZE PARTITION pmax INTO (".join(',', @partsadd)
+                                ."\n, PARTITION pmax VALUES LESS THAN MAXVALUE)";
+    $db->do($query);
+    if (!$db->{Executed}) {
+           print "Couldn't drop partition: $minpart\n";
+           break;
+    }
 }
