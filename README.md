@@ -1,3 +1,5 @@
+# MIGRATION IN PROGRESS! PLEASE STANDBY!
+
 ![Logo](http://sipcapture.org/data/images/sipcapture_header.png)
 
 ## HOMER
