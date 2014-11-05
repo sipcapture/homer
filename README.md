@@ -7,9 +7,13 @@
 
 HOMER is a robust, carrier-grade, scalable SIP Capture system and Monitoring Application with HEP, IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling protocol.
 
-HOMER is already used by large voice networks, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. Contact the team for your basic and advanced needs or leverage the experience of our great community by joining our mailing list. 
+HOMER is already used by large voice networks, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. Contact the team for your basic and advanced needs or leverage the experience of our great community by joining our [mailing-list](http://groups.google.com/group/homer-discuss). 
 
+### Support
 For support, customizations or commercial requests please visit: http://www.sipcapture.org
+
+### Developers
+Contributions to our project are always welcome! If you intend to participate and help us improve HOMER, we simply ask you to contact us at support@sipcapture.org to arrange your participation and coordinate at best with the existing team/roadmap. Developers coordinate via the [homer-dev](http://groups.google.com/group/homer-dev) mailing list.
 
 ![HomerFlow](http://i.imgur.com/U7UBI.png)
 
