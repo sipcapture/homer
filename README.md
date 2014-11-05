@@ -14,7 +14,7 @@ For support, installations, customizations or commercial requests please contact
 
 ![HomerFlow](http://i.imgur.com/U7UBI.png)
 
-##### HOMER's [CaptAngent](http://github.com/sipcapture/captagent) is also available on [github](http://github.com/sipcapture/captagent)
+##### HOMER's [Captagent](http://github.com/sipcapture/captagent) is now also available on [Github](http://github.com/sipcapture/captagent)
 
 ### Developers
 Contributions to our project are always welcome! If you intend to participate and help us improve HOMER, we kindly ask you to sign a CLA (Contributor License Agreement) and coordinate at best with the existing team via the [homer-dev](http://groups.google.com/group/homer-dev) mailing list.
