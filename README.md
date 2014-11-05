@@ -1,6 +1,3 @@
-homer
-=====
-
 ![Logo](http://sipcapture.org/data/images/sipcapture_header.png)
 
 ## HOMER :: 100% Open-Source SIP Capture Server & Agent
