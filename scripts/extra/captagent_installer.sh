@@ -41,7 +41,7 @@ echo "  ;;;;^    ^;;;;   <------------ (HEP INVITE) ------------   "
 echo "  ;;;;  ;;  ;;;;    -------------(HEP 200 OK) ------------>  "
 echo "  ;;;;  ;;;;;;;;                                             " 
 echo "  ;;;;  ;;;;;;;;                                             "
-echo "  ;;;;  ;;  ;;;;   Project: http://captagent.googlecode.com  "
+echo "  ;;;;  ;;  ;;;;   Project Home: http://github.com/sipcapture"
 echo "  ,;;;,    ,;;;;                                             "
 echo "   ;;;;;;;;;;;;                                              "
 echo "    :;;;;;;;;;     THIS SCRIPT IS PROVIDED AS-IS, USE AT     "
@@ -74,7 +74,7 @@ else
     echo "ERROR:"
     echo "Sorry, this Installer supports Debian, CentOS, SUSE based systems only!"
     echo "Please follow instructions in the HOW-TO for manual installation & setup"
-    echo "available at https://code.google.com/p/captagent/wiki/HOWTO"
+    echo "available at https://github.com/sipcapture/homer/wiki"
     echo
     exit 1
 fi
@@ -101,7 +101,7 @@ if [ ! -s /tmp/net.check ]; then
     echo "This installer requires internet connectivity to proceed further successfully."
     echo "Check or adjust your settings temporarly. If your setup does not allow this,"
     echo "please follow instructions in the HOW-TO for manual installation & setup"
-    echo "available at https://code.google.com/p/captagent/wiki/HOWTO"
+    echo "available at https://github.com/sipcapture/homer/wiki"
     echo
     #exit 1
 else
@@ -135,7 +135,7 @@ echo
 SETUP_ENV=$destination
 echo "$SETUP_ENV" |grep '^/' -q && REAL_PATH=$SETUP_ENV || REAL_PATH=$PWD/$SETUP_ENV
 
-GITREPO="https://code.google.com/p/captagent/ captagent"
+GITREPO="https://github.com/sipcapture/captagent/ captagent"
 LOCALDIR=`pwd`
 
 # Setup Kamailio-DEV w/ sipcapture module from GIT
@@ -278,7 +278,7 @@ echo "A default XML example has been installed on your system :"
 echo
 echo "     - $destination/captagent.xml "
 echo
-echo "For instructions: https://code.google.com/p/captagent/wiki/HOWTO"
+echo "For instructions: https://github.com/sipcapture/homer/wiki"
 echo
 echo "-------------------------------------------------------------------"
 
