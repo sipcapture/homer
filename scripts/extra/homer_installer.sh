@@ -39,7 +39,7 @@
 #                                                                   #
 #####################################################################
 
-VERSION=0.7.4
+VERSION=0.7.5
 HOSTNAME=$(hostname)
 
 logfile=/tmp/homer_installer.log
@@ -93,7 +93,7 @@ else
     echo "ERROR:"
     echo "Sorry, this Installer supports Debian, CentOS, SUSE based systems only!"
     echo "Please follow instructions in the HOW-TO for manual installation & setup"
-    echo "available at http://sipcapture.org or http://homer.googlecode.com"
+    echo "available at http://sipcapture.org"
     echo
     exit 1
 fi
@@ -122,7 +122,7 @@ if [ ! -s /tmp/net.check ]; then
     echo "This installer requires internet connectivity to proceed further successfully."
     echo "Check or adjust your settings temporarly. If your setup does not allow this,"
     echo "please follow instructions in the HOW-TO for manual installation & setup"
-    echo "available at http://sipcapture.org or http://homer.googlecode.com"
+    echo "available at http://sipcapture.org"
     echo
     #exit 1
 else
@@ -445,7 +445,7 @@ mkdir -p /usr/src/homer-git
 cd /usr/src/homer-git
 if [ ! -d "/usr/src/homer-git/homer" ]; then
    echo "GIT: Cloning webHomer..."
-   git clone https://code.google.com/p/homer/
+   git clone https://github.com/sipcapture/homer/
    cd homer
 else
    echo "GIT: Updating webHomer..."
@@ -1555,8 +1555,8 @@ echo
 echo "**************************************************************"
 echo
 echo " IMPORTANT: Do not forget to send Homer node some traffic! ;) "
-echo " For our capture agent, visit http://captagent.googlecode.com "
-echo " For more help and informations visit: http://sipcapture.org "
+echo " For our capture agents, visit http://github.com/sipcapture "
+echo " For more help and information visit: http://sipcapture.org "
 echo
 echo "**************************************************************"
 echo " Installer Log saved to: $logfile "
