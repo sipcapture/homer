@@ -41,7 +41,7 @@ require_once("api/class/search.php");
 
 
 //if((!defined("SKIPAUTH") || $component != "login") && $auth->logincheck() == false){
-if($auth->logincheck() == false){
+if(!defined('NOAUTH') && $auth->logincheck() == false){
 
       $answer['sid'] = session_id();
       $answer['auth'] = 'false';                                
