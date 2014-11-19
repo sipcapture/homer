@@ -809,6 +809,8 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec) {
 				   }
 				   var rp = rtcpobj.report_blocks;
 				   
+				   var msgts = parseInt(msg.data[index].micro_ts/1000);
+				   
 				   console.log(rp[0]);
 				   
 				   if(rp[0]) {
@@ -819,12 +821,12 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec) {
 				       //FAKE!!! We need to have real RTT. here is RTCP round trip
 				       var rtt = parseInt(rp[0].dlsr/65536);
 
-				       packetlost.push([ts, frpl]);
-				       jitter.push([ts, jt]);				       				       
+				       packetlost.push([msgts, frpl]);
+				       jitter.push([msgts, jt]);				       				       
 				
 				       //var mos = calculateMOS(jt, pl, rtt, 120)
 				       var mos = calculatePlMos(frpl, codec);
-                                       mosarray.push([ts, mos]);				       				       				       
+                                       mosarray.push([msgts, mos]);				       				       				       
                                        
                                        color = "green";
                                        if(mos < 3) color="red";
