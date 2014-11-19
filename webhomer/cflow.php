@@ -316,9 +316,12 @@ foreach($results as $row) {
   else if($data->method == "200" && preg_match('/INVITE/',$data->cseq)) $statuscall = 4;
   else if(preg_match('/[3][0-9][0-9]/',$data->method)) $statuscall = 5;
 
+  $rtcpinfo = 1;
   if(preg_match('/^PJSIP/',$data->correlation_id)) {
-      $rtcpinfo = 1;
       $correlation_id = $data->correlation_id;
+  }
+  else {
+      $correlation_id = $data->callid;
   }
 
   if ( $CFLOW_HPORT==1 ) {
