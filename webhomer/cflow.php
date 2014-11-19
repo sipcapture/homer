@@ -877,11 +877,11 @@ foreach ($rtpinfo as $key=>$data) {
 }
 ?>
 </div>
-<div id="rtcpinfo<?php echo $winid; ?>">
+<div id="rtcpinfo<?php echo $winid; ?>" style="width:100%;min-width:100%;">
 <br>
-    <div id="rtcpjitterchart<?php echo $winid; ?>" style="min-width: 90px; width: 90%; margin-left: 1px; float: center; height: 220px;"><br></div>
-    <div id="rtcppacketlosschart<?php echo $winid; ?>" style="min-width: 90px; width: 90%; margin-left: 1px; float: center; height: 220px;"><br></div>
-    <div id="rtcpmoschart<?php echo $winid; ?>" style="min-width: 90px; width: 90%; margin-left: 1px; float: center; height: 220px;"><br></div>
+    <div id="rtcpjitterchart<?php echo $winid; ?>" style="min-width: 90px; width: 90%; margin-left: 1px; float: center; height: 120px;"><br></div>
+    <div id="rtcppacketlosschart<?php echo $winid; ?>" style="min-width: 90px; width: 90%; margin-left: 1px; float: center; height: 120px;"><br></div>
+    <div id="rtcpmoschart<?php echo $winid; ?>" style="min-width: 90px; width: 90%; margin-left: 1px; float: center; height: 120px;"><br></div>
     <div id="rtcpinfodata<?php echo $winid; ?>"><br></div>
 </div>
 <div id="cdrinfo<?php echo $winid; ?>">
