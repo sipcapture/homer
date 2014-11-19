@@ -55,6 +55,10 @@ class HTML_mainhtml {
             <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
             <script type="text/javascript" src="js/jquery.tools.min.js"></script>
             <script type="text/javascript" src="js/jquery.json-2.3.min.js"></script>
+            <script type="text/javascript" src="js/jquery.flot.js"></script>
+            <script type="text/javascript" src="js/jquery.flot.resize.js"></script>
+            <script type="text/javascript" src="js/jquery.flot.threshold.js"></script>
+
 	    <script type="text/javascript">
                 jQuery(document).ready( function($) {
                   $("[title]").tooltip({ offset: [90, 10], effect: "slide"});
