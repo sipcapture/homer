@@ -49,10 +49,15 @@ class HomerAuthentication extends Authentication {
 		// Enable TLS Encryption
 		if(LDAP_ENCRYPTION == "tls") {
       
-	        	  // Documentation says - set to never
-		          putenv('LDAPTLS_REQCERT=never') or die('Failed to setup the env');
-
-              @ldap_start_tls($ds);
+                     // Documentation says - set to never
+		     putenv('LDAPTLS_REQCERT=never') or die('Failed to setup the env');
+                     @ldap_start_tls($ds);
+	        }
+		
+		if (defined('LDAP_BIND_USER') && defined('LDAP_ADMIN_USER')) {
+	              if (!@ldap_bind( $ds, LDAP_BIND_USER, LDAP_BIND_PASSWORD)) {
+	                    return false;
+	               }
 	        }
 		
                 $r=@ldap_search( $ds, LDAP_BASEDN, 'uid=' . $username);
@@ -62,7 +67,8 @@ class HomerAuthentication extends Authentication {
 			if ($result[0]) {
                           if (@ldap_bind( $ds, $result[0]['dn'], $password) ) {
                               if($result[0] != NULL) {
-                                    if (LDAP_GROUPDN != NULL) {
+                                    //if (LDAP_GROUPDN != NULL) {
+                                     if (defined(LDAP_GROUPDN)) {
                                         if (!$this->check_filegroup_membership($ds,$username)) {
                                             return false;
                                         }
