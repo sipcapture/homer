@@ -600,7 +600,7 @@ foreach($localdata as $data) {
   } else if(preg_match('/^20/', $method_text)) {
     $msgcol = "green";
   } else if(preg_match('/^10/', $method_text)) {
-    $msgcol = "grey";
+    $msgcol = "gray1";
   } else {  $msgcol = 'blue';}
 
      

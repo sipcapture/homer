@@ -267,7 +267,7 @@ class SipSearchService implements ISipService
               			if($unique) {
               			foreach($result as $key=>$row) {
               			if(isset($message[$row['md5sum']])) unset($result[$key]);
-              			else $message[$row['md5sum']] = $row[node];
+              			else $message[$row['md5sum']] = $row['node'];
               			}
               			}
               				$results = array_merge($results,$result);

@@ -36,7 +36,7 @@ define('APILOC',"/webhomer/api/");
 
 /* INCLUDE preferences */
 
-include("preferences.php");
+include_once("preferences.php");
 
 endif;
 

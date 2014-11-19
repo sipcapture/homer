@@ -237,6 +237,7 @@ class Search {
            $reqdata = (array) $param;           
            $search = array();
 	   $callwhere = array();
+	   $order = "";
 
 	   // SEARCH
            $search['type'] = getVar('type', NULL, $reqdata, 'string');           
@@ -259,9 +260,7 @@ class Search {
            if($search['type'] != NULL) $callwhere[] = "type = ".$mydb->quote($search['type']); 
            
            if(count($callwhere)) $query .= " AND ( " .implode(" AND ", $callwhere). ")";
-           
-           $order = "";
-         
+                    
            if($search['type'] == "asr" || $search['type'] == "ner") $order.=" AND total != 0";
            
            if($total == 1) $order .= " GROUP BY type";                   	   
@@ -291,6 +290,7 @@ class Search {
            $reqdata = (array) $param;           
            $search = array();
 	   $callwhere = array();
+	   $order = "";
 
 	   // SEARCH
            $search['source_ip'] = getVar('source_ip', NULL, $reqdata, 'string');           
@@ -316,7 +316,7 @@ class Search {
            
            if(count($callwhere)) $query .= " AND ( " .implode(" AND ", $callwhere). ")";
            
-           $order = "";
+
 
            if($total == 1) $order .= " GROUP BY source_ip ORDER by total DESC";                   	   
 	   else $order .= " order by total DESC";
