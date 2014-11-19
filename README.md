@@ -22,7 +22,7 @@ For support, installations, customizations or commercial requests please contact
 ##### HOMER's [Captagent](http://github.com/sipcapture/captagent) is now also available on [Github](http://github.com/sipcapture/captagent)
 
 ### Developers
-Contributions to our project are always welcome! If you intend to participate and help us improve HOMER, we kindly ask you to sign a CLA (Contributor License Agreement) and coordinate at best with the existing team via the [homer-dev](http://groups.google.com/group/homer-dev) mailing list.
+Contributions to our project are always welcome! If you intend to participate and help us improve HOMER, we kindly ask you to sign a ![CLA (Contributor License Agreement)](http://cla.qxip.net) and coordinate at best with the existing team via the [homer-dev](http://groups.google.com/group/homer-dev) mailing list.
 
 
 
