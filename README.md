@@ -1,5 +1,5 @@
 
-![Logo](http://sipcapture.org/data/images/sipcapture_header.png)
+[![Logo](http://sipcapture.org/data/images/sipcapture_header.png)](http://sipcapture.org)
 
 ## HOMER
 #### 100% Open-Source SIP Capture Server & Agent
@@ -17,7 +17,7 @@ For installation instructions and How-To's please refer to our [Wiki](https://gi
 ### Need Support?
 For support, installations, customizations or commercial requests please contact: support@sipcapture.org
 
-![HomerFlow](http://i.imgur.com/U7UBI.png)
+[![HomerFlow](http://i.imgur.com/U7UBI.png)](http://sipcapture.org)
 
 ##### HOMER's [Captagent](http://github.com/sipcapture/captagent) is now also available on [Github](http://github.com/sipcapture/captagent)
 
@@ -25,9 +25,18 @@ For support, installations, customizations or commercial requests please contact
 Contributions to our project are always welcome! If you intend to participate and help us improve HOMER, we kindly ask you to sign a CLA (Contributor License Agreement) and coordinate at best with the existing team via the [homer-dev](http://groups.google.com/group/homer-dev) mailing list.
 
 
-*(C) QXIP BV - webHomer is released under GNU AGPLv3 license*
+
+
+
+#### If you use HOMER in production, please consider supporting us with a [donation](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
+
+[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
+
+
+### License & Copyright
+
+*webHomer is released under GNU AGPLv3 license*
 
 *Captagent is released under GNU GPLv2 license*
 
-
-If you use HOMER in production, please consider supporting us with a [donation](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
+*(C) QXIP BV*
