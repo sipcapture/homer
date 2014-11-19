@@ -500,6 +500,7 @@ class HTML_search {
                            </td>
              </tr>                    
 							<?php
+							                $fd = date("d-m-Y", strtotime("-1 hour"));
 									$ft = date("H:i:s", strtotime("-1 hour"));
 									$tt = date("H:i:s");
 							
@@ -508,7 +509,7 @@ class HTML_search {
 							<tr>
 								<td width="20%" class="paramlist_key"><label for="date" title="Searching from this date">From Date</label></td>
 								<td class="tablerow_two">
-									<input size="8" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo date("Y-m-d");?> ">
+								<input size="8" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php if(isset($search['from_date'])) echo $search['from_date']; else echo $fd;?> ">
 								&nbsp;-&nbsp;
 								        <input type="text" name="from_time" id="from_time" class="textfieldstyle2 timepicker1" size="5" value="<?php if(isset($search['from_time'])) echo $search['from_time']; else echo $ft;?>" />
 									

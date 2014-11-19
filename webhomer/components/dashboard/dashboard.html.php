@@ -156,13 +156,14 @@ class HTML_Stats {
 		    <td width="50%" valign="top">
             		<table width="100%" style="border: 1px solid #cfcfcf; border-radius: 5px; -moz-border-radius: 5px; padding: 5px;" >
                         <?php
+                            $fd = date("d-m-Y", strtotime("-1 hour"));
                             $ft = date("H:i:s", strtotime("-1 hour"));
                             $tt = date("H:i:s");
         		?>
 	        	    <tr>
         	        	    <td width="120" class="tablerow_two" VALIGN="top"><label for="date" title="Start">Start:</label></td>
 	                	    <td class="tableinputs">
-	                	        <input size="8" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php echo date("Y-m-d");?> ">
+	                	        <input size="8" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php echo $fd;?> ">
                                         <input type="text" name="from_time" id="from_time" class="textfieldstyle2 timepicker1" size="6" value="<?php echo $ft;?>" />
                                     </td>
                             </tr>

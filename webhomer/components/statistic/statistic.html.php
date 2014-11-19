@@ -89,11 +89,12 @@ class HTML_Stats {
                 <div class="widget-content">
                 <br>
                         <?php
+                            $fd = date("d-m-Y", strtotime("-1 hour"));
                             $ft = date("H:i:s", strtotime("-1 hour"));
                             $tt = date("H:i:s");
         		?>
         	        	    <label for="date" title="From date">From Date:</label>
-	                	    <input size="10" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php echo date("Y-m-d");?> ">
+	                	    <input size="10" type="text" id="from_date"  class="textfieldstyle2" name="from_date" value="<?php echo $fd;?> ">
 	        	                    &nbsp;-&nbsp;
                                         <input type="text" name="from_time" id="from_time" class="textfieldstyle2 timepicker1" size="8" value="<?php echo $ft;?>" />
                                     
