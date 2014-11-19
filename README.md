@@ -37,6 +37,6 @@ Contributions to our project are always welcome! If you intend to participate an
 
 *webHomer is released under GNU AGPLv3 license*
 
-*Captagent is released under GNU GPLv2 license*
+*Captagent is released under GNU GPLv3 license*
 
 *(C) QXIP BV*
