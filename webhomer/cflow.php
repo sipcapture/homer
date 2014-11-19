@@ -151,6 +151,8 @@ if(!$db->dbconnect_homer(isset($mynodes[$location[0]]) ? $mynodes[$location[0]] 
     exit;
 }
 
+$cids_aleg = array();
+
 /* CID */
 
 //$b2b = 0;
@@ -159,7 +161,8 @@ if(!$db->dbconnect_homer(isset($mynodes[$location[0]]) ? $mynodes[$location[0]] 
 	if($b2b) {
            switch (BLEGCID) {
                default:
-                        $cid_aleg = $cid;
+                      array_push($cids_aleg, $cid);
+                      //$cid_aleg = $cid;
                case "x-cid":
 		               	foreach($location as $value) {
 		               		$db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
@@ -173,7 +176,9 @@ if(!$db->dbconnect_homer(isset($mynodes[$location[0]]) ? $mynodes[$location[0]] 
 		               	}                       			
                         break;		
 	       case "b2b":
-                        	$cid_aleg = $cid.BLEGTAIL;
+	             array_push($cids_aleg, $cid.BLEGTAIL);
+                     //$cid_aleg = $cid.BLEGTAIL;
+                     break;
 
            }
 
@@ -189,7 +194,7 @@ $min_ts = 0;
 $statuscall=0;
 $mt_flag = 0;
 if(!isset($where)) $where = "";
-if(!isset($cid_aleg)) $cid_aleg = "";
+//if(!isset($cid_aleg)) $cid_aleg = "";
 
 $rtcpinfo = 0;
 $cdrinfo = 1;
@@ -213,11 +218,15 @@ foreach($location as $value) {
 			/* Append B-LEG if set */
 			if (BLEGCID && $full == 1) {
 				
-				$eqlike = preg_match("/%/", $cid_aleg) ? " like " : " = ";
-				$local_where .= " OR (callid".$eqlike."'".$cid_aleg."')";
+				//$eqlike = preg_match("/%/", $cid_aleg) ? " like " : " = ";
+				//$local_where .= " OR (callid".$eqlike."'".$cid_aleg."')";
+				foreach ($cids_aleg as $cid_aleg) {
+					$eqlike = preg_match("/%/", $cid_aleg) ? " like " : " = ";
+					$local_where .= " OR (callid".$eqlike."'".$cid_aleg."')";
+				}
 			}
 	
-				$query = "SELECT *, ".$tnode.",'".$tablename."' as tablename"
+			$query = "SELECT *, ".$tnode.",'".$tablename."' as tablename"
 	        	  ."\n FROM ".$tablename
 		          ."\n WHERE ".$local_where." order by micro_ts ASC limit 100";
 	
