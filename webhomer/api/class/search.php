@@ -113,7 +113,7 @@ class Search {
 
            $callwhere = array();
            
-           if($search['correlation_id'] != NULL) $callwhere[] = "correlation_id = ".$mydb->quote($search['correlation_id']); 
+           if($search['correlation_id'] != NULL) $callwhere[] = "(correlation_id = ".$mydb->quote($search['correlation_id'])." OR correlation_id = ".$mydb->quote(substr($search['correlation_id'], 0, -1)).")";
            if($search['id'] != NULL) $callwhere[] = "id = ".$mydb->quote($search['id']); 
            if($search['source_port'] != NULL) $callwhere[] = "source_port = ".$mydb->quote($search['source_port']); 
            if($search['destination_port'] != NULL) $callwhere[] = "destination_port = ".$mydb->quote($search['destination_port']); 
