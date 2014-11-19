@@ -1,4 +1,3 @@
-# MIGRATION IN PROGRESS! PLEASE STANDBY!
 
 ![Logo](http://sipcapture.org/data/images/sipcapture_header.png)
 
@@ -26,6 +25,6 @@ For support, installations, customizations or commercial requests please contact
 Contributions to our project are always welcome! If you intend to participate and help us improve HOMER, we kindly ask you to sign a CLA (Contributor License Agreement) and coordinate at best with the existing team via the [homer-dev](http://groups.google.com/group/homer-dev) mailing list.
 
 
-*(C) QXIP BV - Homer and webHomer are released under GNU AGPLv3 license*
+*(C) QXIP BV - Homer, webHomer and Captagent are released under GNU AGPLv3 license*
 
 If you use HOMER in production, please consider supporting us with a [donation](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
