@@ -17,6 +17,8 @@ For installation instructions and How-To's please refer to our [Wiki](https://gi
 ### Need Support?
 For support, installations, customizations or commercial requests please contact: support@sipcapture.org
 
+For community updates, user discussion and experience exchange please join our users   [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss)
+
 [![HomerFlow](http://i.imgur.com/U7UBI.png)](http://sipcapture.org)
 
 ##### HOMER's [Captagent](http://github.com/sipcapture/captagent) is now also available on [Github](http://github.com/sipcapture/captagent)
