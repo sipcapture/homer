@@ -1,5 +1,0 @@
-webhomer/ - web interface to Homer's DB. webhomer 3.x
-scripts/ - service scripts for webhomer 3.x
-sql/ - sql setup files for webhomer 3.x
-configs/ - example of kamailio/opensips configs
-DONE
