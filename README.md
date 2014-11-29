@@ -35,7 +35,7 @@ Contributions to our project are always welcome! If you intend to participate an
 
 *Captagent is released under GNU GPLv3 license*
 
-*(C) QXIP BV*
+*(C) 2008-2014 QXIP BV*
 
 ----------
 
