@@ -59,7 +59,7 @@ class HomerMain {
            HTML_mainhtml::displayBackground($bglogo);
 
            /* For login we do nothing */
-           if(!defined('NOAUTH' && $component == "login")) return;
+           if(!defined('NOAUTH') || NOAUTH == 0) && $component == "login") return;
                   
            /* Check userlevel */   
            foreach($components as $key=>$value) {             
