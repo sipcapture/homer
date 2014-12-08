@@ -108,6 +108,7 @@ define('SESSION_NAME',"HOMERSESSID"); /* session ID name. */
 /* SQL SCHEMA VERSION */
 define('SQL_SCHEMA_VERSION',1); /* SQL SCHEMA VERSION. Default 1 */
 
+define('NOAUTH', 0); /* set to 1, if you don't want to make auth  */
 
 endif;
 
