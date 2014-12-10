@@ -49,7 +49,9 @@ CREATE TABLE IF NOT EXISTS `sip_capture` (
   KEY `auth_user` (`auth_user`),
   KEY `callid_aleg` (`callid_aleg`),
   KEY `date` (`date`),
-  KEY `callid` (`callid`)
+  KEY `callid` (`callid`),
+  KEY `source_ip` (`source_ip`),
+  KEY `dest_ip` (`destination_ip`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
 /*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`date`))
 (PARTITION p2013082901 VALUES LESS THAN (1377734400) ENGINE = InnoDB,
