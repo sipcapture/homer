@@ -212,9 +212,9 @@ class HTML_Admin {
 		<br></center>
 		</td><td><br>
 		<div style="margin-left:2em">
-		- <a href="http://homer.googlecode.com" target="_blank">Homer GIT Repository</a><br>
-		- <a href="https://code.google.com/p/homer/wiki/FAQ" target="_blank">Frequently Asked Questions</a><br>
-		- <a href="https://code.google.com/p/homer/issues/list" target="_blank">Open Issues/Tickets</a><br>
+		- <a href="https://github.com/sipcapture/homer" target="_blank">Homer GIT Repository</a><br>
+		- <a href="https://github.com/sipcapture/homer/wiki" target="_blank">Frequently Asked Questions</a><br>
+		- <a href="https://github.com/sipcapture/homer/issues" target="_blank">Open Issues/Tickets</a><br>
 		- <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest" target="_blank">Donate to Homer Project</a><br>
 		</div></td></tr></table>
 
