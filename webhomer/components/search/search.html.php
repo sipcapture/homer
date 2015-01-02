@@ -518,7 +518,7 @@ class HTML_search {
 							<tr>
 								<td width="20%" class="paramlist_key"><label for="time" title="Searching up to this date">To Date</label></td>
 								<td class="tablerow_two">
-                                                                      <input size="8" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("Y-m-d");?> ">
+                                                                      <input size="8" type="text" id="to_date"  class="textfieldstyle2" name="to_date" value="<?php if(isset($search['to_date'])) echo $search['to_date']; else echo date("d-m-Y");?> ">
                                                                       &nbsp;-&nbsp;
 								      <input type="text" name="to_time" id="to_time" class="textfieldstyle2 timepicker2" size="5" value="<?php if(isset($search['to_time'])) echo $search['to_time']; else echo $tt; ?>" />
 								</td>
