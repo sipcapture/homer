@@ -438,9 +438,12 @@ class HTML_ToolBox {
 			?>
 			"";
 
+			var durl = encodeURIComponent(furl.replace(/'/g, "%27"));
+			var dcid = encodeURIComponent(indata.callid.replace(/'/g, "%27"));
+
                         var div_data =
                         "<p align=left>"+ddt[1]+ 
-			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+indata.callid+"','"+furl+
+			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+dcid+"','"+durl+
 			"');>#</a>] <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+escape(indata.id)+"','"+url+"');>"+indata.method+
                         "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
                         $(div_data).appendTo("#livetool");

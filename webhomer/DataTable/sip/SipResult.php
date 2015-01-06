@@ -188,14 +188,31 @@ class SipResult
    if(!defined('CFLOW_POPUP')) $popuptype = 1;
    else $popuptype = CFLOW_POPUP;
       
+   
+   /*
+   $az = new stdclass();
+   $az->from_time = $search->from_time;
+   $az->to_time = $search->to_time;
+   $az->from_date = date("Y-m-d", strtotime($search->from_date));
+   $az->to_date = date("Y-m-d", strtotime($search->to_date));   
+   $az->cid = $this->callid;
+   $az->callid_aleg = $search->b2b;
+   $az->popuptype = $popuptype;
+   $az->unique = $search->unique;
+   $az->location = $search->location;   
+   $url = "cflow.php";
+   $az->test="asasa's'";
+   $decode = json_encode((array) $az);
+   */
+      
    $fd = date("Y-m-d", strtotime($search->from_date));
    $td = date("Y-m-d", strtotime($search->to_date));   
-   $url = "cflow.php?cid[]=".$this->callid;
-   $url .= "&from_time=".$search->from_time."&to_time=".$search->to_time."&from_date=".$fd."&to_date=".$td;
+   $url = "cid[]=".$this->callid;
+   $url .= "&from_time=".$search->from_time."&to_time=".$search->to_time."&from_date=".$fd."&aa=a1'a&to_date=".$td;
    $url .= "&callid_aleg=".$search->b2b."&popuptype=".$popuptype."&unique=".$search->unique."&location[]=".implode("&location[]=", $search->location);
-
-   return "<a alt='callflow' href=\"javascript:showCallFlow2($popuptype, '".$this->callid."','".$url."');\">".$this->callid."</a>";
-
+   
+   return "<a alt='callflow' href=\"javascript:showCallFlow2($popuptype, '".mysql_real_escape_string($this->callid)."','cflow.php?".mysql_real_escape_string($url)."');\">".$this->callid."</a>";
+   //return "<A>".urlencode($decode)."</a>";   
   }  
   
   public function getCallIdTag()
