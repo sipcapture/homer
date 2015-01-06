@@ -208,7 +208,7 @@ class SipResult
    $fd = date("Y-m-d", strtotime($search->from_date));
    $td = date("Y-m-d", strtotime($search->to_date));   
    $url = "cid[]=".$this->callid;
-   $url .= "&from_time=".$search->from_time."&to_time=".$search->to_time."&from_date=".$fd."&aa=a1'a&to_date=".$td;
+   $url .= "&from_time=".$search->from_time."&to_time=".$search->to_time."&from_date=".$fd."&to_date=".$td;
    $url .= "&callid_aleg=".$search->b2b."&popuptype=".$popuptype."&unique=".$search->unique."&location[]=".implode("&location[]=", $search->location);
    
    return "<a alt='callflow' href=\"javascript:showCallFlow2($popuptype, '".mysql_real_escape_string($this->callid)."','cflow.php?".mysql_real_escape_string($url)."');\">".$this->callid."</a>";
