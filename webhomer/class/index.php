@@ -150,7 +150,7 @@ if($component == "login" && $task == "do") {
 }
 
 //if((!defined("SKIPAUTH") || $component != "login") && $auth->logincheck() == false){
-if(!defined('NOAUTH') && $auth->logincheck() == false){
+if((!defined('NOAUTH') || NOAUTH == 0) && $auth->logincheck() == false){
   if((!defined('SKIPCFLOWAUTH') || SKIPCFLOWAUTH == 0) && preg_match('/(cflow.php|pcap.php)$/', $_SERVER['PHP_SELF'])) die('Login at first');
 	$component = "login";	
 	$security = 1;
