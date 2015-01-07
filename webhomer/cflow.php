@@ -124,6 +124,7 @@ $pcapurl = $_SERVER["QUERY_STRING"];
 $pcapjson = json_encode($_REQUEST);
 
   //$complete_url = preg_replace('/to_time=(.*)\&callid/', 'callid', $_SERVER["QUERY_STRING"]);
+$complete_url = "";
 parse_str ($_SERVER["QUERY_STRING"], $vr);
 foreach($vr as $key=>$value) {
         if($key == "to_time" || $key == "to_date") continue;
