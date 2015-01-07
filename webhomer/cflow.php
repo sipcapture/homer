@@ -108,8 +108,8 @@ if(BLEGDETECT == 1 && $full == 1) { $b2b = 1; } else { $b2b = 0; }
 //Crop Search Parameters, if any
 $flow_from_date = getVar('from_date', NULL, $_REQUEST, 'string');
 $flow_from_time = getVar('from_time', NULL, $_REQUEST, 'string');
-$flow_to_time = getVar('to_time', NULL, $_REQUEST, 'string');
-$flow_to_date = getVar('to_date', NULL, $_REQUEST, 'string');
+$flow_to_time = getVar('to_time', date("H:i:s"), $_REQUEST, 'string');
+$flow_to_date = getVar('to_date', date("Y-m-d"), $_REQUEST, 'string');
 $location = getVar('location', array(0), $_REQUEST, 'array');
 
 if ( count($location) <= 1 ) {
