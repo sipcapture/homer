@@ -210,8 +210,10 @@ class SipResult
    $url = "cid[]=".$this->callid;
    $url .= "&from_time=".$search->from_time."&to_time=".$search->to_time."&from_date=".$fd."&to_date=".$td;
    $url .= "&callid_aleg=".$search->b2b."&popuptype=".$popuptype."&unique=".$search->unique."&location[]=".implode("&location[]=", $search->location);
-   
-   return "<a alt='callflow' href=\"javascript:showCallFlow2($popuptype, '".mysql_real_escape_string($this->callid)."','cflow.php?".mysql_real_escape_string($url)."');\">".$this->callid."</a>";
+   $search = array("\\",  "\x00", "\n",  "\r",  "'",  '"', "\x1a");
+   $replace = array("\\\\","\\0","\\n", "\\r", "\'", '\"', "\\Z");
+
+   return "<a alt='callflow' href=\"javascript:showCallFlow2($popuptype, '".str_replace($search, $replace, $this->callid)."','cflow.php?".str_replace($search, $replace, $url)."');\">".$this->callid."</a>";
    //return "<A>".urlencode($decode)."</a>";   
   }  
   
