@@ -60,7 +60,7 @@ class HomerAuthentication extends Authentication {
 	               }
 	        }
 		
-                $r=@ldap_search( $ds, LDAP_BASEDN, 'uid=' . $username);
+                $r=@ldap_search( $ds, LDAP_BASEDN, LDAP_USERNAME_ATTRIBUTE . '=' . $username);
                 if ($r) {
                      $result = @ldap_get_entries( $ds, $r);
                       

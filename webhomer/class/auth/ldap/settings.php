@@ -4,6 +4,7 @@ define('LDAP_HOST',"localhost");
 define('LDAP_PORT',NULL);
 define('LDAP_BASEDN',"dc=example,dc=com");
 define('LDAP_REALM',"My Realm");
+define('LDAP_USERNAME_ATTRIBUTE',"uid");
 define('LDAP_USERLEVEL',3); //All ldap clients are user
 
 // To define Admin-User while using LDAP Auth. 
