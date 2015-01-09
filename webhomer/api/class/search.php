@@ -94,6 +94,7 @@ class Search {
            $reqdata = (array) $param;           
            $search = array();
            $callwhere = array();
+           $order = "";
 
            // SEARCH
            $search['id'] = getVar('id', NULL, $reqdata, 'string');           
@@ -338,6 +339,8 @@ class Search {
            $reqdata = (array) $param;           
            $search = array();
 	   $callwhere = array();
+	   $order = "";
+
 
 	   // SEARCH
            $search['useragent'] = getVar('useragent', NULL, $reqdata, 'string');           
@@ -380,6 +383,8 @@ class Search {
            $reqdata = (array) $param;           
            $search = array();
 	   $callwhere = array();
+	   $order = "";
+
 
 	   // SEARCH
            $search['type'] = getVar('type', NULL, $reqdata, 'string');           
@@ -428,6 +433,7 @@ class Search {
            $reqdata = (array) $param;           
            $search = array();
 	   $callwhere = array();
+           $order = "";
 
 	   // SEARCH
            $status = getVar('status', NULL, $reqdata, 'int');
