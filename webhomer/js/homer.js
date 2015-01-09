@@ -280,7 +280,7 @@ function sipSendForm() {
 function sipKillVic() {
 
 	var sipvic_ip = $('#vicious_ip').val();var sipvic_port = $('#vicious_port').val();
-	console.log('svcrash.py -d '+sipvic_ip+' -p '+sipvic_port);
+	//console.log('svcrash.py -d '+sipvic_ip+' -p '+sipvic_port);
 	adminAction('sipVic', 'dest='+sipvic_ip+'&port='+sipvic_port);
 }
 
@@ -790,7 +790,7 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec) {
                                  $('#callflow'+winid).hide(400);
                                  $('#rtpinfo'+winid).hide(400);                           
                                  $('#rtcpinfo'+winid).show(400);                                                            
-                                 console.log(msg.data); 
+                                 //console.log(msg.data); 
                                  $.each( data, function( index, val ) {
                                    //table += val.id+':<BR>');
                                    //table += val.msg+'<BR>');
@@ -811,7 +811,7 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec) {
 				   
 				   var msgts = parseInt(msg.data[index].micro_ts/1000);
 				   
-				   console.log(rp[0]);
+				   //console.log(rp[0]);
 				   
 				   if(rp[0]) {
 				       var pl = rp[0].packets_lost;
@@ -852,7 +852,7 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec) {
                                  
                             }
                             else {
-                                console.log('ERROR:' +msg.status);
+                                //console.log('ERROR:' +msg.status);
                                 alert("No data");
                             }
                     },  //Error
@@ -903,7 +903,7 @@ function showCdrInfo(corr_id, from_time, to_time, apiurl, winid, codec) {
                                  $('#rtpinfo'+winid).hide(400);                           
                                  $('#rtcpinfo'+winid).hide(400);                                                            
                                  $('#cdrinfo'+winid).show(400);                                                            
-                                 console.log(msg.data); 
+                                 //console.log(msg.data); 
                                  $.each( data, function( index, val ) {
 
                                    var rtcpobj = jQuery.parseJSON( val.msg );
@@ -928,7 +928,7 @@ function showCdrInfo(corr_id, from_time, to_time, apiurl, winid, codec) {
                                  $('#cdrinfodata'+winid).html(table);
                             }
                             else {
-                                console.log('ERROR:' +msg.status);
+                                //console.log('ERROR:' +msg.status);
                                 // alert("Error: " + msg.status);
                                 alert("No data");
                             }
@@ -953,7 +953,7 @@ function makeRtcpChart(winid, jitter, packetloss, mos) {
 
       var asr1 = [[0, jitter]];
       var asr1Display = jitter;
-      console.log(jitter);
+      //console.log(jitter);
 
         // registration	
 
