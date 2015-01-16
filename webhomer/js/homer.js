@@ -745,12 +745,13 @@ function mktime() {
     return Math.floor(d.getTime()/1000);
 }
 
-function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec) {
+function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
 
 	var sendData;
              var mydata = {
                 from_datetime: from_time,
                 to_datetime: to_time,
+                location: loc,
                 correlation_id: corr_id
 	};
                 
@@ -862,12 +863,13 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec) {
         });
 }
 
-function showCdrInfo(corr_id, from_time, to_time, apiurl, winid, codec) {
+function showCdrInfo(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
 
 	var sendData;
              var mydata = {
                 from_datetime: from_time,
-                to_datetime: to_time,
+                to_datetime: to_time,                
+                location: loc,
                 correlation_id: corr_id
 	};
                 
