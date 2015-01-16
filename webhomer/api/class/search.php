@@ -88,6 +88,7 @@ class Search {
     function showRtcpAll($param, $type) {
 
            date_default_timezone_set(HOMER_TIMEZONE);
+           global $mynodes;
            
            $mydb = $this->db;                            
            
@@ -105,6 +106,7 @@ class Search {
            $search['destination_port'] = getVar('destination_port', NULL, $reqdata, 'string');         
            $search['node'] = getVar('node', NULL, $reqdata, 'string');         
            $limit = getVar('limit', 200, $reqdata, 'int');
+           $loc = getVar('location', 0, $reqdata, 'int');
 
            // UTILS    
            $utils['from_datetime'] = getVar('from_datetime', date("Y-m-d H:i:s", (time() - 900)), $reqdata, 'datetime');
@@ -125,7 +127,11 @@ class Search {
            if(count($callwhere)) $query .= " AND ( " .implode(" AND ", $callwhere). ")";
 
            $order = " order by id DESC LIMIT ".$limit;
-
+	   if(!$mydb->dbconnect_homer(isset($mynodes[$loc]) ? $mynodes[$loc] : NULL))
+           {
+                exit;
+           }
+           
            $rows = $mydb->loadObjectList($query.$order);           
                       
            return $rows;
@@ -134,7 +140,9 @@ class Search {
     function showCdrAll($param, $type) {
 
            date_default_timezone_set(HOMER_TIMEZONE);
-           
+
+           global $mynodes;
+
            $mydb = $this->db;                            
            
            $reqdata = (array) $param;           
@@ -150,6 +158,7 @@ class Search {
            $search['destination_port'] = getVar('destination_port', NULL, $reqdata, 'string');         
            $search['node'] = getVar('node', NULL, $reqdata, 'string');         
            $limit = getVar('limit', 10, $reqdata, 'int');
+           $loc = getVar('location', 0, $reqdata, 'int');
 
            // UTILS    
            $utils['from_datetime'] = getVar('from_datetime', date("Y-m-d H:i:s", (time() - 900)), $reqdata, 'datetime');
@@ -170,7 +179,12 @@ class Search {
            if(count($callwhere)) $query .= " AND ( " .implode(" AND ", $callwhere). ")";
 
            $order = " order by id DESC LIMIT ".$limit;
-           
+
+           if(!$mydb->dbconnect_homer(isset($mynodes[$loc]) ? $mynodes[$loc] : NULL))     
+           {
+                //No connect;
+                exit;
+           }
 
            $rows = $mydb->loadObjectList($query.$order);           
                                  
