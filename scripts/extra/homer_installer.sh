@@ -778,7 +778,7 @@ else
            echo "Adding cronjob..."
    	# Set Cron: Partition Rotation 
    	rotate="/opt/partrotate_unixtimestamp.pl 2>&1> /dev/null"
-   	job2="* 0 * * * sudo $rotate"
+   	job2="0 0 * * * sudo $rotate"
    	crontab -l > /opt/cron.tmp
    	echo "$job2" >> /opt/cron.tmp
    	CRON=$(cat /opt/cron.tmp | crontab - )
