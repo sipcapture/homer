@@ -179,3 +179,17 @@ CREATE TABLE IF NOT EXISTS `stats_useragent_mem` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `useragent` (`useragent`,`method`)
 ) ENGINE=MEMORY DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `alarm_config`
+--
+DROP TABLE IF EXISTS alarm_config;
+CREATE TABLE IF NOT EXISTS `alarm_config` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `create_date` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `type` varchar(50) CHARACTER SET utf8 NOT NULL,
+  `value` int(5) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `type` (`type`)
+) ENGINE=InnoDB  DEFAULT CHARSET=latin1 AUTO_INCREMENT=1 ;
