@@ -775,7 +775,7 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
                             $('#rtcpinfodata'+winid).empty();      
                                              
                             var table = "";
-                            table +='Report:<BR><table border="1" id="data" cellspacing="0" width="95%" style="background: #f9f9f9;">';     
+                            table +='Report:<BR><div style="width:600px;height:300px;overflow:auto;"><table border="1" id="data" cellspacing="0" width="95%" style="background: #f9f9f9;">';     
                             table += "<tr>";
                             table += "<th>ID&nbsp;</th>";
                             table += "<th>Type&nbsp;</th>";
@@ -854,7 +854,7 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
                                                                       
                                  });                                                                  
                                  
-                                 table += "</table>";
+                                 table += "</table></div>";
                                  $('#rtcpinfodata'+winid).html(table);      
 
                                  makeRtcpChart(winid, jitter, packetlost, mosarray);
