@@ -797,6 +797,7 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
                                    //table += val.msg+'<BR>');
                                    
                                    var rtcpobj = jQuery.parseJSON( val.msg );
+                                   if (!rtcpobj) { return 1; }
                                    var ts;
                                    var totalpkts;
 				   var si = rtcpobj.sender_information;
