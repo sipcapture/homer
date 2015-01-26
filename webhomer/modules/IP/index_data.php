@@ -134,6 +134,7 @@ $from_date = date("Y-m-d H:i:s", time() - ( $hours * 3600 ) );
         	},
 	        legend: {
         	    show: true,
+        	    noColumns: 2,
 	            labelFormatter: function(label, series) {
                 	 return ' ' + label.slice(0,30) + ' ('+Math.round(series.percent)+'%)';
 	                }
@@ -164,6 +165,7 @@ $from_date = date("Y-m-d H:i:s", time() - ( $hours * 3600 ) );
                 },
 	        legend: {
         	    show: true,
+        	    noColumns: 2,
 	            labelFormatter: function(label, series) {
                 	 return ' ' + label.slice(0,30) + ' ('+Math.round(series.percent)+'%)';
 	                }
