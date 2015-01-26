@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS `stats_data` (
   `type` varchar(50) NOT NULL DEFAULT '',
   `total` int(20) NOT NULL,
   PRIMARY KEY (`id`,`from_date`),
+  UNIQUE KEY `datemethod` (`from_date`,`to_date`,`type`),
   KEY `from_date` (`from_date`),
   KEY `to_date` (`to_date`),
   KEY `method` (`type`)
