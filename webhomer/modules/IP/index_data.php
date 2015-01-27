@@ -114,8 +114,21 @@ $from_date = date("Y-m-d H:i:s", time() - ( $hours * 3600 ) );
 
 	
 	var ip_reg = getIPData(ftime, ttime, 'REGISTER','<?php echo APILOC;?>statistic/ip/total');
+	var GRAPH_SLICES = '<?php echo GRAPH_SLICES;?>';
+        console.log('GRAPH_SLICES : '+GRAPH_SLICES);
 
-	$.plot($("#chart10"), ip_reg,
+        if(GRAPH_SLICES>0){
+                var dataSeriesReg = ip_reg.slice(0,GRAPH_SLICES);
+        }else{
+                var dataSeriesReg = ip_reg;
+        }
+        var sum = 0;
+        for(var i=0;i<ip_reg.length;i++){
+                //console.log('ip_inv['+i+'] '+ip_reg[i].data);
+                sum += ip_reg[i].data;
+        }
+
+	$.plot($("#chart10"), dataSeriesReg,
 	{
         	series: {
 	            pie: {
@@ -136,8 +149,10 @@ $from_date = date("Y-m-d H:i:s", time() - ( $hours * 3600 ) );
         	    show: true,
         	    noColumns: 2,
 	            labelFormatter: function(label, series) {
-                	 return ' ' + label.slice(0,30) + ' ('+Math.round(series.percent)+'%)';
-	                }
+                	 //return ' ' + label.slice(0,30) + ' ('+Math.round(series.percent)+'%)';
+	                return '' + label.slice(0,30) + ' ('+Math.round(series.data[0][1]/sum*100)+'%, '+series.data[0][1]+' MSG)';
+	            	
+	            }
         	}
 	});
 	
@@ -146,8 +161,21 @@ $from_date = date("Y-m-d H:i:s", time() - ( $hours * 3600 ) );
 <?php if(!defined('DASHBOARD_VIEW')): ?>
     
         var ip_inv = getIPData(ftime,ttime,'INVITE','<?php echo APILOC;?>statistic/ip/total');
+	var GRAPH_SLICES = '<?php echo GRAPH_SLICES;?>';
+        console.log('GRAPH_SLICES : '+GRAPH_SLICES);
 
-	$.plot($("#chart12"), ip_inv,
+        if(GRAPH_SLICES>0){
+                var dataSeriesInv = ip_inv.slice(0,GRAPH_SLICES);
+        }else{
+                var dataSeriesInv = ip_inv;
+        }
+        var sum = 0;
+        for(var i=0;i<ip_inv.length;i++){
+                //console.log('ip_inv['+i+'] '+ip_inv[i].data);
+                sum += ip_inv[i].data;
+        }
+	
+	$.plot($("#chart12"), dataSeriesInv,
 	{
         	series: {
 	            pie: {
@@ -167,8 +195,10 @@ $from_date = date("Y-m-d H:i:s", time() - ( $hours * 3600 ) );
         	    show: true,
         	    noColumns: 2,
 	            labelFormatter: function(label, series) {
-                	 return ' ' + label.slice(0,30) + ' ('+Math.round(series.percent)+'%)';
-	                }
+                	 //return ' ' + label.slice(0,30) + ' ('+Math.round(series.percent)+'%)';
+	                return '' + label.slice(0,30) + ' ('+Math.round(series.data[0][1]/sum*100)+'%, '+series.data[0][1]+' MSG)';
+	            	
+	            }
         	}
 	});
 	
