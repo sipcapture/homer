@@ -34,6 +34,11 @@ define('WEBPCAPLOC',"/webhomer/tmp/");
 define('APIURL',"http://localhost");
 define('APILOC',"/webhomer/api/");
 
+/* Modify the following value to choose how many slices you want in your IP Graphs
+If not defined, graphs will be shown with all available values */
+define('GRAPH_SLICES',"10");
+
+
 /* INCLUDE preferences */
 
 include_once("preferences.php");
