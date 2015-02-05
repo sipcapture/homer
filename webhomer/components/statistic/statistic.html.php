@@ -137,6 +137,7 @@ class HTML_Stats {
                 Packets: <input type="checkbox" class="checkboxdstyle2" name="chart_packets" id="chart_packets" value="1" onClick="javascript:showStats('dataCharts');" checked>
                 Calls: <input type="checkbox" class="checkboxdstyle2" name="chart_calls" id="chart_calls" value="1" onClick="javascript:showStats('dataCharts');" checked>
                 ASR: <input type="checkbox" class="checkboxdstyle2" name="chart_asr" id="chart_asr" value="1" onClick="javascript:showStats('dataCharts');" checked>
+                NER: <input type="checkbox" class="checkboxdstyle2" name="chart_ner" id="chart_ner" value="1" onClick="javascript:showStats('dataCharts');" checked>
                         
                 </div>
                 <div class="widget-content">
