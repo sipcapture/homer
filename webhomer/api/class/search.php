@@ -472,6 +472,24 @@ class Search {
            $mydb->executeQuery($query);           
            return 1;
     } 
+
+    #Added by Kevin MATHY
+    #Deletes only acknowledged alarms
+    function deleteAllAlarms() {
+           date_default_timezone_set(HOMER_TIMEZONE);
+           $mydb = $this->db;
+           $query = "DELETE FROM ".$mydb->database_homer.".alarm_data WHERE status='0'";
+           $mydb->executeQuery($query);
+           return 1;
+    }
+
+    function ackAllAlarms() {
+	   date_default_timezone_set(HOMER_TIMEZONE);
+           $mydb = $this->db;
+           $query = "UPDATE ".$mydb->database_homer.".alarm_data SET status='0' WHERE status='1'";
+           $mydb->executeQuery($query);
+           return 1;
+    }
     
     /* Function commented because there is already a global function
      * which has been fixed and this one doesn't appear to be used.

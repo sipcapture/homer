@@ -194,6 +194,7 @@ function basicFeautures($type, $data) {
                               $answer['data'] = $resp;
                       }
                       else {
+                              //$answer['status'] = 'not good';
                               $answer['status'] = 'not good';
                               $answer['data'] = array();
                       }                      
@@ -337,6 +338,33 @@ function basicFeautures($type, $data) {
                               $answer['status'] = 'not good';
                               $answer['data'] = array();
                       }                      
+
+                      break;
+
+		case 'alarm/delete/all':
+
+                      if($resp = $search->deleteAllAlarms()) {
+                              $answer['status'] = 'ok';
+                              $answer['data'] = $resp;
+                      }
+                      else {
+                              $answer['status'] = 'not good';
+                              $answer['data'] = array();
+                      }
+
+                      break;
+
+		case 'alarm/ack/all':
+		      console.log("Want to ACK all alarms");
+
+                      if($resp = $search->ackAllAlarms()) {
+                              $answer['status'] = 'ok';
+                              $answer['data'] = $resp;
+                      }
+                      else {
+                              $answer['status'] = 'not good';
+                              $answer['data'] = array();
+                      }
 
                       break;
 

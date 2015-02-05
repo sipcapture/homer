@@ -124,6 +124,8 @@ class HTML_Stats {
                                             </select>                                     
 		         <br><br>
                           <input type="button" size="50" style="margin-left: 20px;" value="Show Alarms" onClick="showAlarms('all');" class="ui-button ui-widget ui-state-default ui-corner-all">
+                          <input type="button" size="50" style="margin-left: 20px;" value="Acknowledge All Alarms" onClick="ackAllAlarms('all');" class="ui-button ui-widget ui-state-default ui-corner-all">
+                          <input type="button" size="50" style="margin-left: 20px;" value="Delete Acknowledged Alarms" onClick="deleteAllAlarms('all');" class="ui-button ui-widget ui-state-default ui-corner-all">
                 <?php
                         include("modules/alarm/index_data.php");
                 ?>
