@@ -795,7 +795,15 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
                                  $.each( data, function( index, val ) {
                                    //table += val.id+':<BR>');
                                    //table += val.msg+'<BR>');
-                                   
+
+				   try {
+    					var jsonData = $.parseJSON(val.msg);
+				   } catch (e) {
+					console.log("it's not ok"); 
+					console.log(val.msg);  
+					return 1;
+				   }	
+
                                    var rtcpobj = jQuery.parseJSON( val.msg );
                                    if (!rtcpobj) { return 1; }
                                    var ts;
