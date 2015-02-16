@@ -17,7 +17,7 @@
 
 	$ds=@ldap_connect(LDAP_HOST,LDAP_PORT);
 		
-	// Set LDAP Version, Default is Velrsion 2
+	// Set LDAP Version, Default is Version 2
 	@ldap_set_option($ds, LDAP_OPT_PROTOCOL_VERSION, ( LDAP_VERSION) ? LDAP_VERSION : 2);
 		
 	// Referrals are disabled
@@ -32,7 +32,8 @@
 	
 	if (defined('LDAP_BIND_USER') && defined('LDAP_ADMIN_USER')) {
               if (!@ldap_bind( $ds, LDAP_BIND_USER, LDAP_BIND_PASSWORD)) {
-                    return false;
+                    echo "BAD BIND!\n";
+                    exit(0);
                }
         }
 	
@@ -42,11 +43,7 @@
 		if ($result[0]) {
                           if (@ldap_bind( $ds, $result[0]['dn'], $password) ) {
                               if($result[0] != NULL) {
-                                    if (defined(LDAP_GROUPDN)) {
-                                        if (!$this->check_filegroup_membership($ds,$username)) {
-                                            return false;
-                                        }
-                                    }
+                                   
                                     $_SESSION['loggedin'] = $username;
                                     $_SESSION['userlevel'] = LDAP_USERLEVEL;
 				   
