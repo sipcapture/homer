@@ -226,8 +226,8 @@ class Search {
            
            if($search['method'] != NULL) $callwhere[] = "method = ".$mydb->quote($search['method']); 
            if($search['cseq'] != NULL) $callwhere[] = "cseq = ".$mydb->quote($search['cseq']); 
-           if($search['auth'] != NULL) $callwhere[] = "auth = ".$search['auth']; 
-           if($search['totag'] != NULL) $callwhere[] = "totag = ".$search['totag']; 
+           $callwhere[] = "auth = ".$search['auth']; 
+           $callwhere[] = "totag = ".$search['totag']; 
            
            if(count($callwhere)) $query .= " AND ( " .implode(" AND ", $callwhere). ")";
 
