@@ -9,7 +9,7 @@
 	define('LDAP_ADMIN_USER',"test");
 	define('LDAP_BIND_USER', "Homer");	
 	define('LDAP_BIND_PASSWORD', "<password>");
-	define('LDAP_ENCRYPTION', "tls");	
+	define('LDAP_ENCRYPTION', "none");	
 
 	$username = "yourname";
 	$password = yourpassword;
