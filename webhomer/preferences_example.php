@@ -110,6 +110,10 @@ define('SQL_SCHEMA_VERSION',1); /* SQL SCHEMA VERSION. Default 1 */
 
 define('NOAUTH', 0); /* set to 1, if you don't want to make auth  */
 
+/* set to 1 if you want search RTCP and LOG records on all nodes */
+define('HOMER_MULTINODE', 0);
+
+
 endif;
 
 ?>

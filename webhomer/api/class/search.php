@@ -127,12 +127,20 @@ class Search {
            if(count($callwhere)) $query .= " AND ( " .implode(" AND ", $callwhere). ")";
 
            $order = " order by id DESC LIMIT ".$limit;
-	   if(!$mydb->dbconnect_homer(isset($mynodes[$loc]) ? $mynodes[$loc] : NULL))
-           {
-                exit;
+           $rows = array();
+
+           if(defined('HOMER_MULTINODE') && HOMER_MULTINODE == 1) 
+           {                      
+              foreach($mynodes as $dbnode) {              
+                   if(!$mydb->dbconnect_homer($dbnode)) continue;
+                   $noderows = $mydb->loadObjectList($query.$order);           
+                   $rows = array_merge($rows,$noderows);                        
+               }
            }
-           
-           $rows = $mydb->loadObjectList($query.$order);           
+           else {
+   	        if(!$mydb->dbconnect_homer(isset($mynodes[$loc]) ? $mynodes[$loc] : NULL)) exit;
+                $rows = $mydb->loadObjectList($query.$order);           
+           }
                       
            return $rows;
     }         
@@ -180,15 +188,21 @@ class Search {
 
            $order = " order by id DESC LIMIT ".$limit;
 
-           if(!$mydb->dbconnect_homer(isset($mynodes[$loc]) ? $mynodes[$loc] : NULL))     
-           {
-                //No connect;
-                exit;
+           if(defined('HOMER_MULTINODE') && HOMER_MULTINODE == 1) 
+           {                      
+              foreach($mynodes as $dbnode) {              
+                   if(!$mydb->dbconnect_homer($dbnode)) continue;
+                   $noderows = $mydb->loadObjectList($query.$order);           
+                   $rows = array_merge($rows,$noderows);                        
+               }
            }
-
-           $rows = $mydb->loadObjectList($query.$order);           
-                                 
+           else {
+   	        if(!$mydb->dbconnect_homer(isset($mynodes[$loc]) ? $mynodes[$loc] : NULL)) exit;
+                $rows = $mydb->loadObjectList($query.$order);           
+           }
+                      
            return $rows;
+
     }            
     
 /********************************** STATISTIC *********************************************/
