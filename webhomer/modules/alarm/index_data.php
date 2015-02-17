@@ -33,10 +33,9 @@ include('../../configuration.php');
 
 // Get Nodes IDs and create location GET parameter
 $db = new HomerDB;
-$mynodesid = array();
 $nodes = $db->getNodes();
 foreach($nodes as $node) {
-        $locationsGetParameter .= "location[]=$node->id&";
+	$locationsGetParameter .= "location[]=$node->id&";
 }
 
 date_default_timezone_set(CFLOW_TIMEZONE);
@@ -248,6 +247,20 @@ function loadAlarmData(ft, tt, status, interval) {
         }                        
 }
 
+function ackAllAlarms() {
+        var sendData;
+        var url = '<?php echo APILOC."alarm/ack/all"?>';
+        oTable.fnReloadAjax(url);
+	loadAlarmData();
+}
+
+function deleteAllAlarms() {
+        var sendData;
+        var url = '<?php echo APILOC."alarm/delete/all"?>';
+        oTable.fnReloadAjax(url);
+	loadAlarmData();
+}
+
 jQuery(document).ready(function($) {
 
 	// get new API charts
@@ -287,23 +300,24 @@ jQuery(document).ready(function($) {
                                       var ttime = (parseInt(nt[0])+diff2)+":59:"+nt[2];
                                }
                                //console.log(time[1]+" "+ttime);
-                           
-                               
-                               if(full.type.indexOf("Too Many ") !== -1){
-                                        method="method="+full.type.substring(9)+"&";
-                               }
+                               //if(full.source_ip != "0.0.0.0") source_ip="destination_ip="+full.source_ip+"&";
+                               //if((full.type.indexOf("Too Many ") !== -1)&&(full.source_ip != "0.0.0.0")){ 
+                               if(full.type.indexOf("Too Many ") !== -1){ 
+					method="method="+full.type.substring(9)+"&";
+			       }
+			     
+			       if(full.source_ip !== "0.0.0.0"){
+					ipfilter="destination_ip="+full.source_ip+"&";
+			       }
 
-                               if(full.source_ip !== "0.0.0.0"){
-                                        ipfilter="destination_ip="+full.source_ip+"&";
-                               }
+			       if(full.type.indexOf("scanner") !== -1){
+					ipfilter="source_ip="+full.source_ip+"&";
+			       }
 
-                               if(full.type.indexOf("scanner") !== -1){
-                                        ipfilter="source_ip="+full.source_ip+"&";
-                               }
-                               
-                               var locationsParameter = '<?php echo $locationsGetParameter; ?>';
+			       var locationsParameter = '<?php echo $locationsGetParameter; ?>';
 
-                            return "<center><a href='?"+method+ipfilter+locationsParameter+"node=&from_date="+time[0]+"&from_time="+ntime+"&to_date="+time[0]+"&to_time="+ttime+"&limit=100&task=result&component=search'>"+data+"</a></center>";
+                            //return "<center><a href='?"+method+source_ip+locationsParameter+"node=&from_date="+time[0]+"&from_time="+ntime+"&to_date="+time[0]+"&to_time="+ttime+"&limit=100&task=result&component=search'>"+data+"</a></center>";   
+                            return "<center><a href='?"+method+ipfilter+locationsParameter+"node=&from_date="+time[0]+"&from_time="+ntime+"&to_date="+time[0]+"&to_time="+ttime+"&limit=100&task=result&component=search'>"+data+"</a></center>";   
         	             }
 	                },
 	                { 

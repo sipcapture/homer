@@ -177,6 +177,12 @@ $xhours = STAT_RANGE;
                  results.push({data: asr, label: "ASR", yaxis: 1,  lines: { show: true, steps: true }, 
                       color: "rgb(30, 180, 20)", threshold: { below: 60, color: "rgb(200, 20, 30)" }});
             }
+
+	    if ($('#chart_ner').is(':checked')) {
+                 var ner = getChartData(ftime, ttime, 'ner', 0, '', 0, '<?php echo APILOC;?>statistic/data/all', 1);
+                 results.push({data: ner, label: "NER", yaxis: 1,  lines: { show: true, steps: true },
+                      color: "rgb(33, 45, 110)", threshold: { below: 70, color: "rgb(200, 20, 30)" }});
+            }
             
 	    $('#chart1').empty();	   	    
             
