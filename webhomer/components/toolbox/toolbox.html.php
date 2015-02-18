@@ -232,7 +232,7 @@ class HTML_ToolBox {
 			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+indata.callid+"','"+furl+
 			"');>#</a>] <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+escape(indata.id)+"','"+url+"');>"+indata.method+
 			//        " <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+indata.id+"','"+url+"');>"+indata.method+
-                        	"</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                        	"</a> from: <b>"+indata.from_user+"</b> to: <b>"+unescape(indata.to_user)+"</b></p>";
                         	$(div_data).appendTo("#live");
                         	});
                           });
@@ -320,7 +320,7 @@ class HTML_ToolBox {
                         "<p align=left>"+ddt[1]+ 
 			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+indata.callid+"','"+furl+
 			"');>#</a>] <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+escape(indata.id)+"','"+url+"');>"+indata.method+
-                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+unescape(indata.to_user)+"</b></p>";
                         $(div_data).appendTo("#livecalls");
                         });
                         }
@@ -382,6 +382,7 @@ class HTML_ToolBox {
 		<input id="sipcode3" size="6" value=""  style="border: 1;  margin-left: 6; height: 18;" class="ui-corner-all ui-widget2">
 		<select id="timer3"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 18;" >
 			<option value="0">0</option>
+			<option value="10">10</option>
 			<option value="15">15</option>
 			<option value="30">30</option>
 			<option value="60">60</option>
@@ -445,7 +446,7 @@ class HTML_ToolBox {
                         "<p align=left>"+ddt[1]+ 
 			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+dcid+"','"+durl+
 			"');>#</a>] <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+escape(indata.id)+"','"+url+"');>"+indata.method+
-                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+unescape(indata.to_user)+"</b></p>";
                         $(div_data).appendTo("#livetool");
                         });
                         }
@@ -510,6 +511,7 @@ class HTML_ToolBox {
 		<input id="sipcode4" size="15" value=""  style="border: 1;  margin-left: 6; height: 18;" class="ui-corner-all ui-widget2">
 		<select id="timer4"  style="width: 45; border: 0; float: right;  margin-left: 5; height: 18;" >
 			<option value="0">0</option>
+			<option value="10">10</option>
 			<option value="15">15</option>
 			<option value="30">30</option>
 			<option value="60">60</option>
@@ -579,7 +581,7 @@ class HTML_ToolBox {
                         "<p align=left>"+ddt[1]+ 
 			" [<a href=javascript:showCallFlow2(<?php echo MESSAGE_POPUP;?>,'"+indata.callid+"','"+furl+
 			"');>#</a>] <a href=javascript:popMessage2(<?php echo MESSAGE_POPUP;?>,'"+escape(indata.id)+"','"+url+"');>"+indata.method+
-                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+indata.to_user+"</b></p>";
+                        "</a> from: <b>"+indata.from_user+"</b> to: <b>"+unescape(indata.to_user)+"</b></p>";
                         $(div_data).appendTo("#livecalls");
                         });
                         }
