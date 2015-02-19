@@ -142,42 +142,56 @@ function loadQoSData(ftime, ttime) {
         var qos_2 = getQoSData(ftime,ttime, 'ner', '<?php echo APILOC;?>statistic/data/total', '', -1, -1, 1);
         var reg_qos = getQoSData(ftime,ttime,'REGISTER','<?php echo APILOC;?>statistic/method/total', '', -1, -1, 0);
 
-        var call1_qos = getQoSData(ftime,ttime,'INVITE','<?php echo APILOC;?>statistic/method/total', '', -1, -1, 0);
-        var call2_qos = getQoSData(ftime,ttime,'200','<?php echo APILOC;?>statistic/method/total','INVITE', -1, -1, 0);
-        var call3_qos = getQoSData(ftime,ttime,'407','<?php echo APILOC;?>statistic/method/total','INVITE', -1, -1, 0);
+         var call1_wott_qos = getQoSData(ftime,ttime,'INVITE','<?php echo APILOC;?>statistic/method/total', '', -1, 0, 0);
+        var call1_auth_qos = getQoSData(ftime,ttime,'INVITE','<?php echo APILOC;?>statistic/method/total', '', 1, 0, 0);
+        var call_keep_qos = getQoSData(ftime,ttime,'INVITE','<?php echo APILOC;?>statistic/method/total', '', -1, 1, 0);
+        var call200_qos = getQoSData(ftime,ttime,'200','<?php echo APILOC;?>statistic/method/total','INVITE', 0, 0, 0);
+        var call407_qos = getQoSData(ftime,ttime,'407','<?php echo APILOC;?>statistic/method/total','INVITE', 0, 0, 0);
 
-	/*
-	var qos_1 = getQoSData(ftime,ttime, 'asr', '<?php echo APILOC;?>statistic/data/total', '', 0, 0, 1);
-	var qos_2 = getQoSData(ftime,ttime, 'ner', '<?php echo APILOC;?>statistic/data/total', '', 0, 0, 1);
-	var reg_qos = getQoSData(ftime,ttime,'REGISTER','<?php echo APILOC;?>statistic/method/total', '', 0, 0, 0);
+        console.log('QoS stats');
 
-	var call1_qos = getQoSData(ftime,ttime,'INVITE','<?php echo APILOC;?>statistic/method/total', '', 0, 0, 0);
-	var call2_qos = getQoSData(ftime,ttime,'200','<?php echo APILOC;?>statistic/method/total','INVITE', 0, 0, 0);
-	var call3_qos = getQoSData(ftime,ttime,'407','<?php echo APILOC;?>statistic/method/total','INVITE', 0, 0, 0);
-	*/
-	
-	console.log('QoS stats');
+        // asr + ner
+        if (! qos_1["asr"] ) { qos_1["asr"] = 0; }
+        if (! qos_2["ner"] ) { qos_2["ner"] = 0; }
+        var asr1 = [[0, qos_1["asr"]]];
+        var ner1 = [[1, qos_2["ner"]]];
+        var asr1Display = qos_1["asr"];
+        var ner1Display = qos_2["ner"];
 
-	// asr + ner
-	if (! qos_1["asr"] ) { qos_1["asr"] = 0; }
-	if (! qos_2["ner"] ) { qos_2["ner"] = 0; }
-	var asr1 = [[0, qos_1["asr"]]];
-	var ner1 = [[1, qos_2["ner"]]];
-	var asr1Display = qos_1["asr"];
-	var ner1Display = qos_2["ner"];
+        // registration
+        var rok1 = [[0, reg_qos["auth"]]];
+        var rko1 = [[1, reg_qos["authfail"]]];
 
-	// registration
-	var rok1 = [[0, reg_qos["auth"]]];
-	var rko1 = [[1, reg_qos["authfail"]]];
+        // invites
+        if (! call407_qos["subvite"] ) { call407_qos["subvite"] = 0; }
+        if (! call200_qos["subvite"] ) { call200_qos["subvite"] = 0; }
+        if (! call1_wott_qos["invite"] ) { call1_wott_qos["invite"] = 0; }
+        if (! call1_auth_qos["invite"] ) { call1_auth_qos["invite"] = 0; }
+        if (! call_keep_qos["invite"] ) { call_keep_qos["invite"] = 0; }
+        
+        var calls_200ok = parseInt(call200_qos["subvite"]);
+        var calls_407ok = parseInt(call407_qos["subvite"]);
+        var calls_INVwott = parseInt(call1_wott_qos["invite"]);
+        var calls_INVauth = parseInt(call1_auth_qos["invite"]);
+        var calls_INVkeep = parseInt(call_keep_qos["invite"]);
 
-	// invites
-	if (! call3_qos["subvite"] ) { call3_qos["subvite"] = 0; }
-	if (! call2_qos["subvite"] ) { call2_qos["subvite"] = 0; }
-	if (! call1_qos["invite"] ) { call1_qos["invite"] = 0; }
-	var calls_ok = parseInt(call2_qos["subvite"]);
-	var calls_diff = parseInt(call1_qos["invite"]) - parseInt(call3_qos["subvite"]);
-	var calls_ko = calls_ok - calls_diff;
-	if(calls_ko < 0) calls_ko = 0;
+        if(calls_INVkeep > 0) { 
+           if(calls_INVkeep < calls_200ok) calls_200ok = calls_200ok - calls_INVkeep;
+           else calls_200ok = 0;
+        }       
+                
+        calls_ok = calls_INVwott + calls_INVauth;
+        calls_ko = 0;
+
+        if(calls_407ok > 0) {        
+              calls_ok = calls_ok - calls_407ok;
+        }
+
+        if(calls_200ok < calls_ok) {
+            calls_ko = calls_ok - calls_200ok;
+            calls_ok = calls_200ok;
+        }
+
 	console.log(calls_ok + " - " + calls_ko);
 	var cok1Display = calls_ok;
 	var cok1 = [[0, calls_ok]];
