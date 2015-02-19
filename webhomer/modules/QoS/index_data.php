@@ -138,6 +138,15 @@ $from_date = date("Y-m-d H:i:s", time() - ( $hours * 3600 ) );
 
 function loadQoSData(ftime, ttime) {
 
+	var qos_1 = getQoSData(ftime,ttime, 'asr', '<?php echo APILOC;?>statistic/data/total', '', -1, -1, 1);
+        var qos_2 = getQoSData(ftime,ttime, 'ner', '<?php echo APILOC;?>statistic/data/total', '', -1, -1, 1);
+        var reg_qos = getQoSData(ftime,ttime,'REGISTER','<?php echo APILOC;?>statistic/method/total', '', -1, -1, 0);
+
+        var call1_qos = getQoSData(ftime,ttime,'INVITE','<?php echo APILOC;?>statistic/method/total', '', -1, -1, 0);
+        var call2_qos = getQoSData(ftime,ttime,'200','<?php echo APILOC;?>statistic/method/total','INVITE', -1, -1, 0);
+        var call3_qos = getQoSData(ftime,ttime,'407','<?php echo APILOC;?>statistic/method/total','INVITE', -1, -1, 0);
+
+	/*
 	var qos_1 = getQoSData(ftime,ttime, 'asr', '<?php echo APILOC;?>statistic/data/total', '', 0, 0, 1);
 	var qos_2 = getQoSData(ftime,ttime, 'ner', '<?php echo APILOC;?>statistic/data/total', '', 0, 0, 1);
 	var reg_qos = getQoSData(ftime,ttime,'REGISTER','<?php echo APILOC;?>statistic/method/total', '', 0, 0, 0);
@@ -145,7 +154,8 @@ function loadQoSData(ftime, ttime) {
 	var call1_qos = getQoSData(ftime,ttime,'INVITE','<?php echo APILOC;?>statistic/method/total', '', 0, 0, 0);
 	var call2_qos = getQoSData(ftime,ttime,'200','<?php echo APILOC;?>statistic/method/total','INVITE', 0, 0, 0);
 	var call3_qos = getQoSData(ftime,ttime,'407','<?php echo APILOC;?>statistic/method/total','INVITE', 0, 0, 0);
-
+	*/
+	
 	console.log('QoS stats');
 
 	// asr + ner
