@@ -159,7 +159,7 @@ $xhours = STAT_RANGE;
             var results = new Array();
 	    
             if ($('#chart_authfail').is(':checked')) {            
-                 var d3 = getChartData(ftime, ttime,'407', 0, 'INVITE', 0, '<?php echo APILOC;?>statistic/method/all', 0);
+                 var d3 = getChartData(ftime, ttime,'407', -1, 'INVITE', -1, '<?php echo APILOC;?>statistic/method/all', 0);
                  results.push({data: d3, label: "AuthFail", yaxis: 1,  bars: { show: true } });                 
             }
             
@@ -169,7 +169,7 @@ $xhours = STAT_RANGE;
             }
             
             if ($('#chart_packets').is(':checked')) {            
-                 var d2 = getChartData(ftime, ttime, 'ALL', 0, '', 0, '<?php echo APILOC;?>statistic/method/all', 0);
+                 var d2 = getChartData(ftime, ttime, 'ALL', -1, '', -1, '<?php echo APILOC;?>statistic/method/all', 0);
                  results.push({data: d2, label: "Packets", lines: { show: true, fill: true }});
             }
             
