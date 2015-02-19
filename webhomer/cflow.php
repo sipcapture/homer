@@ -104,7 +104,7 @@ if(is_array($cid_array)) $cid = $cid_array[0];
 else $cid = $cid_array;
 
 if(BLEGDETECT == 1 && $full == 1) { $b2b = 1; } else { $b2b = 0; }
-
+
 //Crop Search Parameters, if any
 $flow_from_date = getVar('from_date', NULL, $_REQUEST, 'string');
 $flow_from_time = getVar('from_time', NULL, $_REQUEST, 'string');
@@ -697,6 +697,8 @@ else $statuscolor="white";
 <?php if($popuptype == 2): ?>
 <script src="js/homer.js" type="text/javascript"></script>
 <script src="js/jquery-1.6.4.min.js" type="text/javascript"></script>
+<script src="js/jquery.json-2.3.min.js" type="text/javascript"></script>
+<script src="js/jquery.flot.js" type="text/javascript"></script>
 <script type="text/javascript" src="js/jquery-ui-1.8.16.custom.min.js"></script>
 <?php endif; ?>
 <title>CallFlow <?php echo $cid;?></title>
