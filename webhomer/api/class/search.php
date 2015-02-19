@@ -240,9 +240,9 @@ class Search {
            
            if($search['method'] != NULL) $callwhere[] = "method = ".$mydb->quote($search['method']); 
            if($search['cseq'] != NULL) $callwhere[] = "cseq = ".$mydb->quote($search['cseq']); 
-           $callwhere[] = "auth = ".$search['auth']; 
-           $callwhere[] = "totag = ".$search['totag']; 
-           
+	   if($search['auth'] != -1) $callwhere[] = "auth = ".$search['auth'];
+           if($search['totag'] != -1) $callwhere[] = "totag = ".$search['totag'];
+
            if(count($callwhere)) $query .= " AND ( " .implode(" AND ", $callwhere). ")";
 
            $order = "";
