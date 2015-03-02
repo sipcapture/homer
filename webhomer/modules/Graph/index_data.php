@@ -66,8 +66,13 @@ $xhours = STAT_RANGE;
                 var x = item.datapoint[0];
                 var y = item.datapoint[1];                
                 console.log(item);
+                var a = new Date(item.datapoint[0]);
+                var this_date = pad(a.getDate())+'-'+pad(a.getMonth()+1)+'-'+a.getFullYear();
+                var this_time = pad(a.getUTCHours())+':'+pad(a.getUTCMinutes())+':'+pad(a.getUTCSeconds());
+
                 showTooltip(item.pageX, item.pageY,
-                  Date(item.datapoint[0]).toString()  + "<br/>" + "<strong>" + y + "</strong> (" + item.series.label + ")");
+                 // Date(item.datapoint[0]).toString()  + "<br/>" + "<strong>" + y + "</strong> (" + item.series.label + ")");
+                 this_time  + "<br/>" + this_date + "<br/>" + "<strong>" + y + "</strong> (" + item.series.label + ")");
             }
         }
        	 else {
