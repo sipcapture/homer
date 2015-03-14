@@ -481,6 +481,7 @@ fi
    	mysql -u "$sqluser" -p"$sqlpassword" homer_db < sql/create_sipcapture_version_4.sql
    	mysql -u "$sqluser" -p"$sqlpassword" homer_db < webhomer/sql/statistics.sql
    	mysql -u "$sqluser" -p"$sqlpassword" homer_users < webhomer/sql/homer_users.sql
+   	mysql -u "$sqluser" -p"$sqlpassword" homer_db < sql/create_rtcp_version_1.sql
    	mysql -u "$sqluser" -p"$sqlpassword" homer_users -e "TRUNCATE TABLE homer_nodes;"
      echo "Creating local DB Node..."
      mysql -u "$sqluser" -p"$sqlpassword" homer_users -e "INSERT INTO homer_nodes VALUES(1,'127.0.0.1','homer_db','3306','"$sqlhomeruser"','"$sqlhomerpassword"','sip_capture','node1', 1);"
