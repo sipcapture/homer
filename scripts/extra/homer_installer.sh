@@ -177,7 +177,6 @@ case $DIST in
         apt-get -y install autoconf automake autotools-dev binutils bison build-essential cpp curl flex g++ gcc git-core libxml2 libxml2-dev lynx m4 make mcrypt ncftp nmap openssl sox ssl-cert ssl-cert unzip zip zlib1g-dev zlib1g-dev libjpeg-dev sox mysql-server mysql-client libmysqlclient15-dev libcurl4-openssl-dev apache2 php5 php5-cli php5-gd php-pear php5-dev php5-mysql php5-json php-services-json sudo
         # pear channel-update pear.php.net
         # pear install pecl/json
-        apt-get -y install php-services-json
         ;;
     'SUSE')
    WEBROOT="/srv/www/htdocs/"
