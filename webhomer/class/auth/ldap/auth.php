@@ -68,8 +68,8 @@ class HomerAuthentication extends Authentication {
                           if (@ldap_bind( $ds, $result[0]['dn'], $password) ) {
                               if($result[0] != NULL) {
                                     //if (LDAP_GROUPDN != NULL) {
-                                     if (defined(LDAP_GROUPDN)) {
-                                        if (!$this->check_filegroup_membership($ds,$username)) {
+                                     if (defined("LDAP_GROUPDN")) {
+                                        if (!$this->check_filegroup_membership($ds,$result[0]['dn'])) {
                                             return false;
                                         }
                                     }
@@ -97,7 +97,7 @@ class HomerAuthentication extends Authentication {
   /* posixGroup schema, rfc2307 */
   function check_filegroup_membership($ds, $uid) {
     $dn = LDAP_GROUPDN;
-    $attr = "memberUid";
+    $attr = LDAP_GROUP_ATTRIBUTE;
 
     $result = @ldap_compare($ds, $dn, $attr, $uid);
 
