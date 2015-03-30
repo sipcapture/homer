@@ -151,7 +151,8 @@ for(my $i=0; $i<$newparts; $i++) {
     }    
 }
  
-if($#partsadd > 0)
+my $parts_count=scalar @partsadd;
+if($parts_count > 0)
 {
     # Fix MAXVALUE. Thanks Dorn B. <djbinter@gmail.com> for report and fix.
     $query = "ALTER TABLE ".$mysql_table." REORGANIZE PARTITION pmax INTO (".join(',', @partsadd)
