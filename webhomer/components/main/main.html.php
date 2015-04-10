@@ -64,7 +64,9 @@ class HTML_mainhtml {
                   $("[title]").tooltip({ offset: [90, 10], effect: "slide"});
 
 		// clock 
-		var thetime = '<?=date('H:i:s');?>';
+		// var thetime = '<?=date('H:i:s');?>';
+                var thetime = '<?php echo date('H:i:s');?>';
+
 		// this would be something like:
 		// var thetime = '<?=date('H:i:s');?>';
 		var arr_time = thetime.split(':');
