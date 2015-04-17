@@ -9,6 +9,5 @@ sql_DATA = \
 	sql/create_sipcapture.sql
 
 SUBDIRS = \
-	captagent \
 	scripts \
 	webhomer

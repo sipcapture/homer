@@ -27,7 +27,6 @@ AC_ARG_WITH([lighttpd],
 
 AC_CONFIG_FILES([
     Makefile
-    captagent/Makefile
     webhomer/Makefile
     scripts/Makefile
 ])
