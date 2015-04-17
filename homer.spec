@@ -1,3 +1,5 @@
+%define debug_package %{nil}
+
 Name:           homer
 Version:        3.2.5
 Release:        2%{?dist}
@@ -90,6 +92,7 @@ HOMER is a robust, carrier-grade, scalable SIP Capture system and Monitoring App
 %prep
 %setup -q
 
+autoreconf -if
 %build
 %configure
 make %{?_smp_mflags}
@@ -104,11 +107,9 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %defattr(-,root,root,-)
 %doc
-%attr(755,root,root) %{_bindir}/captagent
 %attr(755,root,root) %{_libexecdir}/*
-%{_sysconfdir}/captagent/captagent.ini
 %dir %attr(755,apache,apache) %{webroot}/webhomer/tmp
-%dir %attr(755,apache,apache) %{webroot}/webhomer/tmp/colors
+%attr(755,apache,apache) %{webroot}/webhomer/tmp/colors
 %{webroot}/webhomer/modules/*
 %{webroot}/webhomer/php-sip/*
 %{webroot}/webhomer/js/*
@@ -125,5 +126,7 @@ rm -rf $RPM_BUILD_ROOT
 %{webroot}/webhomer/*.ttf
 
 %changelog
+* Fri Apr 17 2015 Konstantin S. Vishnivetsky <voip-projects@vishnivetsky.ru>
+- Fixed RPM buil for RHEL7, CentOS7, OEL7.
 * Fri Mar 9 2012 Douglas Hubler <douglas@hubler.us>
 - Initial version.
