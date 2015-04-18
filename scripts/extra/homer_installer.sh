@@ -668,7 +668,7 @@ case $DIST in
 
         # Indexes + Directory Root.
         DirectoryIndex index.php index.html index.htm
-        DocumentRoot $WEBROOT/webhomer
+        DocumentRoot $WEBROOT
 
         <Directory />
                 Options FollowSymLinks
