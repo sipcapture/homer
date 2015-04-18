@@ -674,7 +674,7 @@ case $DIST in
                 Options FollowSymLinks
                 AllowOverride None
         </Directory>
-        <Directory $WEBROOT/webhomer>
+        <Directory $WEBROOT/ >
                 Options Indexes FollowSymLinks MultiViews
                 AllowOverride all
                 Order allow,deny
