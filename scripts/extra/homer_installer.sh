@@ -358,6 +358,10 @@ if [ ! -d "/usr/src/kamailio-devel" ]; then
    cd /usr/src/kamailio-devel
    echo "GIT: Cloning Kamailio..."
    git clone --depth 1 git://git.sip-router.org/sip-router kamailio
+   if [ ! -d "/usr/src/kamailio-devel/kamailio" ]; then
+    echo "HALT! GIT failure to clone kamailio. Exiting..."
+    exit 1
+   fi
    cd kamailio
    echo "Configuring Kamailio configuration flavour & enabling modules"
    make PREFIX=$REAL_PATH FLAVOUR=kamailio include_modules="db_mysql sipcapture pv textops rtimer xlog sqlops htable sl siputils" cfg
