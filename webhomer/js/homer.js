@@ -745,7 +745,7 @@ function mktime() {
     return Math.floor(d.getTime()/1000);
 }
 
-function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
+function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc, offset) {
 
 	var sendData;
              var mydata = {
@@ -756,6 +756,12 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
 	};
                 
 	var url = apiurl + "rtcp/report/all";
+
+	//Remove the " hours" string in STAT_OFFSET value
+	offset = offset.replace(/ hours/,'');
+	offset_sign = offset.charAt(0);
+	offset_value = offset.substr(1);
+
 		  
 	var jitter = new Array();
 	var packetlost = new Array();
@@ -807,6 +813,8 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
                                    var rtcpobj = jQuery.parseJSON( val.msg );
                                    if (!rtcpobj) { return 1; }
                                    var ts;
+
+
                                    var totalpkts;
 				   var si = rtcpobj.sender_information;
 				   if(si) {
@@ -827,6 +835,9 @@ function showRtcpStats(corr_id, from_time, to_time, apiurl, winid, codec, loc) {
 				   }
 				   
 				   var msgts = parseInt(msg.data[index].micro_ts/1000);
+				   msgts_offset_calc = msgts+offset_sign+'('+offset_value+'*3600*1000)';
+				   msgts = eval(msgts_offset_calc)
+				   //msgts=parseInt(msgts+str(offset_sign)+(offset_value*3600*1000));
 				   
 				   //console.log(rp[0]);
 				   
@@ -967,7 +978,6 @@ function makeRtcpChart(winid, jitter, packetloss, mos) {
       packetloss.sort(function(a,b) { return a[0] - b[0] } );
       
       mos.sort(function(a,b) { return a[0] - b[0] } );
-      
 
       var asr1 = [[0, jitter]];
       var asr1Display = jitter;

@@ -740,7 +740,7 @@ $(document).ready(function(){
     <input type="button" value="RTP info" style="opacity: 1; background: transparent;" onclick="$('#callflow<?php echo $winid; ?>').toggle(400);$('#cdrinfo<?php echo $winid; ?>').hide(400);$('#rtpinfo<?php echo $winid; ?>').toggle(400);$('#rtcpinfo<?php echo $winid; ?>').toggle(400);" />
 <?php } ?>
 <?php if($rtcpinfo) { ?>
-    <input type="button" value="RTCP info" style="opacity: 1; background: transparent;" onclick="showRtcpStats('<?php echo $correlation_id;?>','<?php echo $rtcp_from_date;?>','<?php echo $rtcp_to_date?>', '<?php echo APILOC;?>', '<?php echo $winid;?>', '<?php echo $codec?>', '<?php echo $mylocation?>');" />
+    <input type="button" value="RTCP info" style="opacity: 1; background: transparent;" onclick="showRtcpStats('<?php echo $correlation_id;?>','<?php echo $rtcp_from_date;?>','<?php echo $rtcp_to_date?>', '<?php echo APILOC;?>', '<?php echo $winid;?>', '<?php echo $codec?>', '<?php echo $mylocation?>', '<?php echo STAT_OFFSET ?>');" />
 <?php } ?>
 <?php if($cdrinfo) { ?>
     <input type="button" value="CDR info" style="opacity: 1; background: transparent;" onclick="showCdrInfo('<?php echo $cid;?>','<?php echo $rtcp_from_date;?>','<?php echo $rtcp_to_date?>', '<?php echo APILOC;?>', '<?php echo $winid;?>', '<?php echo $codec?>', '<?php echo $mylocation?>');" />
