@@ -171,7 +171,8 @@ class SipSearchService implements ISipService
       foreach($location as $value) { 
 
              $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
-             $captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
+             //$captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
+             $captnode =  isset($node) ? " AND node='".$node."'" : "";
               
              if($limit) {
              	$i = 0;
@@ -213,7 +214,8 @@ class SipSearchService implements ISipService
 	foreach($location as $value) {
 	
               $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
-              $captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
+              //$captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
+              $captnode =  isset($node) ? " AND node='".$node."'" : "";
               
               $tnode = "'".$value."' as tnode";
               if($unique) $tnode .= ", MD5(msg) as md5sum";
@@ -390,7 +392,8 @@ class SipSearchService implements ISipService
       foreach($location as $value) {
 
               $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
-              $captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
+              //$captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
+              $captnode =  isset($node) ? " AND node='".$node."'" : "";
 
               if($limit) {
               	$i = 0;
@@ -434,7 +437,8 @@ class SipSearchService implements ISipService
       foreach($location as $value) {
 
               $db->dbconnect_homer(isset($mynodes[$value]) ? $mynodes[$value] : NULL);
-              $captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
+              //$captnode =  isset($node) ? " AND node='".$mynodes[$value]->name.":".$node."'" : "";
+              $captnode =  isset($node) ? " AND node='".$node."'" : "";
               
               $tnode = "'".$value."' as tnode";
               if($unique) $tnode .= ", MD5(msg) as md5sum";
