@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS `alarm_data` (
   KEY `method` (`type`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
 /*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`create_date`))
-( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */;
 -- --------------------------------------------------------
 
 --
@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS `stats_data` (
   KEY `method` (`type`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
 /*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`from_date`))
-( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
--
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */;
+
 -- --------------------------------------------------------
 
 --
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS `stats_ip` (
   KEY `method` (`method`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
 /*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`from_date`))
-( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */;
 -- --------------------------------------------------------
 
 --
@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS `stats_method` (
   KEY `completed` (`cseq`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
 /*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`from_date`))
-( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */;
 -- --------------------------------------------------------
 
 --
@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS `stats_useragent` (
   KEY `total` (`total`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=8
 /*!50100 PARTITION BY RANGE ( UNIX_TIMESTAMP(`from_date`))
-( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */
+( PARTITION pmax VALUES LESS THAN MAXVALUE ENGINE = InnoDB) */;
 -- --------------------------------------------------------
 
 --
