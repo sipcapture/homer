@@ -43,7 +43,8 @@ Homer 5 is composed of separate elements:
 
 #### HTTP Server:
 * Create a folder for HOMER vhost _($WEB)_
-* Configure Apache2 or nginx for HOMER vhost _(see $GIT/homer-api/examples/web/)_
+* Configure Apache2 (or nginx) for HOMER vhost _(see $GIT/homer-api/examples/web/)_
+* Enable mod rewrite
 * Install Homer 5 web components
 	* Copy HOMER-UI Contents to vhost directory
 	* Copy HOMER-API/api directory to vhost directory
