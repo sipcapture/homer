@@ -72,7 +72,7 @@ Homer 5 is composed of separate elements:
 * Clone and Install Kamailio
 
 		# git clone --depth 1 git://git.sip-router.org/sip-router kamailio
-		# cd kamailio; make PREFIX=$REAL_PATH FLAVOUR=kamailio include_modules="db_mysql sipcapture pv textops rtimer xlog sqlops htable sl siputils" cfg
+		# cd kamailio; make FLAVOUR=kamailio include_modules="db_mysql sipcapture pv textops rtimer xlog sqlops htable sl siputils" cfg
 		# make all && make install
 
 		
