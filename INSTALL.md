@@ -96,3 +96,33 @@ Homer 5 is composed of separate elements:
 ### Enjoy Homer5
 
 ![H5_dash](http://i.imgur.com/CT1BBGD.png)
+
+### Need Support?
+For support, installations, customizations or commercial requests please contact: support@sipcapture.org
+
+For community updates, user discussion and experience exchange please join our users   [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss)
+
+[![HomerFlow](http://i.imgur.com/U7UBI.png)](http://sipcapture.org)
+
+##### HOMER's [Captagent](http://github.com/sipcapture/captagent) is now also available on [Github](http://github.com/sipcapture/captagent)
+
+### Developers
+Contributors and Contributions to our project are always welcome! If you intend to participate and help us improve HOMER by sending patches, we kindly ask you to sign a standard [CLA (Contributor License Agreement)](http://cla.qxip.net) which enables us to distribute your code alongside the project without restrictions present or future. It doesn’t require you to assign to us any copyright you have, the ownership of which remains in full with you. Developers can coordinate with the existing team via the [homer-dev](http://groups.google.com/group/homer-dev) mailing list. If you'd like to join our internal team and volounteer to help with the project's many needs, feel free to contact us anytime!
+
+
+
+
+### License & Copyright
+
+*Homer components are released under GNU AGPLv3 license*
+
+*Captagent is released under GNU GPLv3 license*
+
+*(C) 2008-2015 SIPCAPTURE & QXIP BV*
+
+----------
+
+##### If you use HOMER in production, please consider supporting the project with a [Donation](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
+
+[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
+
