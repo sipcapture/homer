@@ -60,7 +60,7 @@ Homer 5 is composed of separate elements:
 	* Edit _$WEB/configuration.php_ with the required Database access details
 
 * Configure & Install rotation script:
-	* Copy the scripts/ directory on your system _(ie: /opt/sipcapture/)_
+	* Copy and ```chmod +x``` the scripts/ directory on your system _(ie: /opt/sipcapture/)_
 	* Add rotation script to cron once a day _(scripts/rotate.sh)_
 	
 #### KAMAILIO:
