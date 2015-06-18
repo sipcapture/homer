@@ -5,7 +5,7 @@
 
 HOMER is a robust, carrier-grade, scalable SIP Capture system and Monitoring Application with HEP, IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling protocol.
 
-Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modules/sipcapture.html) Module for industry-standard [Kamailio](http://kamailio.org), HOMER provides virtually unlimited scope for granular capture [configuration](https://github.com/sipcapture/homer/blob/master/configs/kamailio.cfg) either stand-alone or using our companion [Capture Agent](https://github.com/sipcapture/captagent) Project.
+Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modules/sipcapture.html) Module for industry-standard [Kamailio](http://kamailio.org), HOMER provides virtually unlimited scope for granular capture [configuration](https://github.com/sipcapture/homer-api/blob/master/examples/sipcapture/kamailio.cfg) either stand-alone or using our companion [Capture Agent](https://github.com/sipcapture/captagent) Project.
 
 HOMER 5 User-Interface is developed using standard Angular JS, easily extensible and with all functionality moved to specialized and customizable widgets feeding and displaying correlated data from internal and external data sources such as InfluxDB and Elasticsearch. HOMER allows users to define and generate statistic from its capture dialplan including fully programmable threshold triggering and alarming, providing plenty of space for tailored configurations and logic customizations.
 
