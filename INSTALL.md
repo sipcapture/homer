@@ -5,8 +5,8 @@
 ## Installation
 
 Homer 5 is composed of separate elements:
- * [homer-api](https://github.com/sipcapture/homer-api): API Server and Backend Component
- * [homer-ui](https://github.com/sipcapture/homer-ui):  User-Interface and Frontend Component
+ * [HOMER-API](https://github.com/sipcapture/homer-api): API Server and Backend Component
+ * [HOMER-UI](https://github.com/sipcapture/homer-ui):  User-Interface and Frontend Component
 
 ## Setup Guide
 
