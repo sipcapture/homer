@@ -92,4 +92,7 @@ Homer 5 is composed of separate elements:
 	* _homer-api/examples/dashboards/_1430318378410.json_
 * Import the _SIP Search Dashboard_ and perform a test search
 	* _homer-api/examples/dashboards/_1431943495.json_
-	
+
+### Enjoy Homer5
+
+![H5_dash](http://i.imgur.com/CT1BBGD.png)
