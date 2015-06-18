@@ -9,7 +9,9 @@ Homer 5 is composed of separate elements:
  * [homer-api](https://github.com/sipcapture/homer-api): API Server and Backend Component
  * [homer-ui](https://github.com/sipcapture/homer-ui):  User-Interface and Frontend Component
 
-An automated installer & proper documentation are upcoming but all elements are fully functional and ready to be manually installed, used and tested ;) 
+For installation instructions follow this link: [HOMER 5 Setup Guide](https://github.com/sipcapture/homer/blob/homer5/INSTALL.md)
+
+An automated installer is upcoming ;) 
 
 *This repository still provides Homer 3.x branch until full switchover*
 
