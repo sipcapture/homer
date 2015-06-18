@@ -64,7 +64,9 @@ Homer 5 is composed of separate elements:
 * Configure & Install rotation script:
 	* Copy and ```chmod +x``` the scripts/ directory on your system _(ie: /opt/sipcapture/)_
 	* Configure Database credentials in both perl scripts based on your system
-	* Add rotation script to cron once a day _(scripts/rotate.sh)_
+	* Add rotation script to cron once a day _(scripts/rotate.sh)_ at low traffic time
+
+	```30     3     *     *     *       /opt/sipcapture/rotate.sh > /dev/null 2>&1```
 	
 #### KAMAILIO:
 * Clone and Install Kamailio
