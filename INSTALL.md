@@ -99,6 +99,8 @@ Homer 5 is composed of separate elements:
 * Import the _SIP Search Dashboard_ and perform a test search
 	* _homer-api/examples/dashboards/_1431943495.json_
 
+* Configure Admin > Nodes to point to your MySQL instances w/ authentication
+
 ### Enjoy Homer5!
 
 Where is everything? Things moved around in Homer 5 - Here's a quick visual reference:
