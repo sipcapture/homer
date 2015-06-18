@@ -93,7 +93,9 @@ Homer 5 is composed of separate elements:
 * Import the _SIP Search Dashboard_ and perform a test search
 	* _homer-api/examples/dashboards/_1431943495.json_
 
-### Enjoy Homer5
+### Enjoy Homer5!
+
+Where is everything? Things moved around in Homer 5 - Here's a quick visual reference:
 
 ![H5_dash](http://i.imgur.com/CT1BBGD.png)
 
