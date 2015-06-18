@@ -3,7 +3,7 @@
 # HOMER 5 
 This documents outlines the installation process for SIPCAPTURE HOMER version 5.x
 
-[![H5](http://i.imgur.com/G5LF1Wl.png)]
+![H5](http://i.imgur.com/G5LF1Wl.png)
 
 ## Installation
 
