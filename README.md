@@ -13,15 +13,15 @@ HOMER is already used by large voice networks, voip service providers and traffi
 The HOMER Application is composed by:
 * Kamailio Dev
   * Sipcapture HEP Capture Server _(sipcapture module)_
-* Homer-API
+* [Homer-API](https://github.com/sipcapture/homer-api)
   * Sipcapture Backend connector and API Component
-* Homer-UI
+* [Homer-UI](https://github.com/sipcapture/homer-ui)
   * Sipcapture Frontend & JS User-Interface Component
 
 
 ## Installation
 
-
+Please follow our [Setup Guide](https://github.com/sipcapture/homer/blob/homer5/INSTALL.md) to get started.
 
 
 ### Need Support?
