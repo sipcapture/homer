@@ -82,10 +82,13 @@ Homer 5 is composed of separate elements:
 -----------------
 
 ### Login to Homer-UI
-	* Default: admin / test123 _(see $GIT/homer-api/sql/schema_configuration.sql)_
+
+* Default: admin / test123 _(see $GIT/homer-api/sql/schema_configuration.sql)_
 
 ### Configure Homer-UI
 
-	* Import the Example Admin Dashboard _(homer-api/examples/dashboards/_1430318378410.json)_ and customize Nodes, Users, Aliases
-	* Import the SIP Search Dashboard _(homer-api/examples/dashboards/_1431943495.json)_ and perform a test search
+* Import the Example Admin Dashboard and customize Nodes, Users, Aliases
+	* _homer-api/examples/dashboards/_1430318378410.json_
+* Import the SIP Search Dashboard and perform a test search
+	* _homer-api/examples/dashboards/_1431943495.json_
 	
