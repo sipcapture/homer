@@ -26,6 +26,7 @@ Homer 5 is composed of separate elements:
 ## Locations
 
 * $WEB: Homer web folder
+* $GIT: Git source clone folder
 
 #### HOMER:
 
@@ -39,7 +40,7 @@ Homer 5 is composed of separate elements:
 
 #### HTTP Server:
 * Create a folder for HOMER vhost _($WEB)_
-* Configure Apache2 or nginx for HOMER vhost _(see examples/web/)_
+* Configure Apache2 or nginx for HOMER vhost _(see $GIT/homer-api/examples/web/)_
 * Install Homer 5 web components
 	* Copy HOMER-UI Contents to vhost directory
 	* Copy HOMER-API/api directory to vhost directory
@@ -47,14 +48,14 @@ Homer 5 is composed of separate elements:
 
 #### MYSQL:
 * Create MySQL databases:
-	* create database homer_data _( < homer-api/sql/schema_capture.sql)_
-	* create database homer_configuration _( < homer-api/sql/schema_configuration.sql)_
-	* create database homer_statistics _( < homer-api/sql/schema_statistics.sql)_
+	* create database homer_data _( < $GIT/homer-api/sql/schema_capture.sql)_
+	* create database homer_configuration _( < $GIT/homer-api/sql/schema_configuration.sql)_
+	* create database homer_statistics _( < $GIT/homer-api/sql/schema_statistics.sql)_
 	* create sipcapture user with access rights on new databases
 
 * Configure HOMER-API:
-	* Move example file _homer-api/api/preferences_example.php_ to _$WEB/preferences.php_
-	* Move example file _homer-api/api/configuration_example.php_ to _$WEB/configuration.php_
+	* Move example file _$GIT/homer-api/api/preferences_example.php_ to _$WEB/preferences.php_
+	* Move example file _$GIT/homer-api/api/configuration_example.php_ to _$WEB/configuration.php_
 	* Edit _$WEB/configuration.php_ with the required Database access details
 
 * Configure & Install rotation script:
@@ -69,7 +70,7 @@ Homer 5 is composed of separate elements:
 		# make all && make install
 
 		
-* Move and Customize the provided sipcapture kamailio.cfg
+* Copy and Customize the provided sipcapture _kamailio.cfg_
 
 		# cp homer-api/examples/sipcapture/kamailio.cfg /usr/local/etc/kamailio/kamailio.cfg
 		
@@ -80,7 +81,7 @@ Homer 5 is composed of separate elements:
 -----------------
 
 ### Login to Homer-UI
-	* Default Credentials: admin / test123 (see the schema_configuration.sql)
+	* Default: admin / test123 _(see $GIT/homer-api/sql/schema_configuration.sql)_
 
 ### Configure Homer-UI
 
