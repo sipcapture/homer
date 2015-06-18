@@ -21,6 +21,9 @@ Homer 5 is composed of separate elements:
 		- [CaptAgent](https://github.com/sipcapture/captagent)
 		- [Kamailio](https://github.com/kamailio/kamailio), [OpenSIPS](http://opensips.org/), [FreeSwitch](http://freeswitch.org/), [Asterisk](http://www.asterisk.org/)
 
+## Locations
+
+* $WEB: Homer web folder
 
 #### HOMER:
 
@@ -32,6 +35,14 @@ Homer 5 is composed of separate elements:
 	 
 	 ```# git clone https://github.com/sipcapture/homer-ui.git```
 
+#### HTTP Server:
+* Create a folder for HOMER vhost _($WEB)_
+* Configure Apache2 or nginx for HOMER vhost _(see examples/web/)_
+* Install Homer 5 web components
+	* Copy HOMER-UI Contents to vhost directory
+	* Copy HOMER-API/api directory to vhost directory
+
+
 #### MYSQL:
 * Create MySQL databases:
 	* create database homer_data _( < homer-api/sql/schema_capture.sql)_
@@ -40,9 +51,9 @@ Homer 5 is composed of separate elements:
 	* create sipcapture user with access rights on new databases
 
 * Configure HOMER-API:
-	* Move example file _homer-api/api/preferences_example.php_ to _preferences.php_
-	* Move example file _homer-api/api/configuration_example.php_ to _configuration.php_
-	* Edit _configuration.php_ with the required Database access details
+	* Move example file _homer-api/api/preferences_example.php_ to _$WEB/preferences.php_
+	* Move example file _homer-api/api/configuration_example.php_ to _$WEB/configuration.php_
+	* Edit _$WEB/configuration.php_ with the required Database access details
 
 * Configure & Install rotation script:
 	* Copy the scripts/ directory on your system _(ie: /opt/sipcapture/)_
@@ -63,11 +74,6 @@ Homer 5 is composed of separate elements:
 * Start Kamailio
 	* Start a remote Capture Agent to send HEP packets to the selected HEP socket
 
-#### HTTP Server:
-* Configure Apache2 or nginx with a Homer vhost _(see examples/web/)_
-* Install Homer 5 web components
-	* Copy HOMER-UI Contents to vhost directory
-	* Copy HOMER-API/api directory to vhost directory
 
 -----------------
 
@@ -76,6 +82,6 @@ Homer 5 is composed of separate elements:
 
 ### Configure Homer-UI
 
-	* Import the Example Admin Dashboard (_1430318378410.json) and customize Nodes, Users, Aliases
-	* Import the SIP Search Dashboard (_1431943495.json) and perform a test search
+	* Import the Example Admin Dashboard _(homer-api/examples/dashboards/_1430318378410.json)_ and customize Nodes, Users, Aliases
+	* Import the SIP Search Dashboard _(homer-api/examples/dashboards/_1431943495.json)_ and perform a test search
 	
