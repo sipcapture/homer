@@ -1,8 +1,9 @@
-[![Logo](http://sipcapture.org/data/images/sipcapture_header.png)](http://sipcapture.org)
+![Logo](http://sipcapture.org/data/images/sipcapture_header.png)
 
 # HOMER 5 
 This documents outlines the installation process for SIPCAPTURE HOMER version 5.x
 
+[![H5](http://i.imgur.com/G5LF1Wl.png)]
 
 ## Installation
 
