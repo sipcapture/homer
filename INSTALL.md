@@ -29,6 +29,8 @@ Homer 5 is composed of separate elements:
 * $WEB: Homer web folder
 * $GIT: Git source clone folder
 
+## Components
+
 #### HOMER:
 
 * Clone repository of [Homer-API](https://github.com/sipcapture/homer-api)
