@@ -54,7 +54,7 @@ Homer 5 is composed of separate elements:
 * Create MySQL databases:
 	* create database homer_data _( < $GIT/homer-api/sql/schema_capture.sql)_
 	* create database homer_configuration _( < $GIT/homer-api/sql/schema_configuration.sql)_
-	* create database homer_statistics _( < $GIT/homer-api/sql/schema_statistics.sql)_
+	* create database homer_statistic _( < $GIT/homer-api/sql/schema_statistics.sql)_
 	* create sipcapture user with access rights on new databases
 
 * Configure HOMER-API:
