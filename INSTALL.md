@@ -58,8 +58,8 @@ Homer 5 is composed of separate elements:
 	* create sipcapture user with access rights on new databases
 
 * Configure HOMER-API:
-	* Move example file _$GIT/homer-api/api/preferences_example.php_ to _$WEB/preferences.php_
-	* Move example file _$GIT/homer-api/api/configuration_example.php_ to _$WEB/configuration.php_
+	* Move example file _$GIT/homer-api/api/preferences_example.php_ to _$WEB/api/preferences.php_
+	* Move example file _$GIT/homer-api/api/configuration_example.php_ to _$WEB/api/configuration.php_
 	* Edit _$WEB/configuration.php_ with the required Database access details
 
 * Configure & Install rotation script:
