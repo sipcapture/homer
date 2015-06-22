@@ -70,7 +70,8 @@ Homer 5 is composed of separate elements:
         crontab -e -u root:
 	```30     3     *     *     *       /opt/sipcapture/rotate.sh > /dev/null 2>&1```
 
-	or as file /etc/cront.d/sipcapture
+	or as file /etc/cront.d/sipcapture:
+	
 	```30     3     *     *     *     root  /opt/sipcapture/rotate.sh > /dev/null 2>&1```
 
 	N.B. please run rotate.sh manual before send traffic to homer. The script should create capture tables also for current day.
