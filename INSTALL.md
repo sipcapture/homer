@@ -22,6 +22,7 @@ Homer 5 is composed of separate elements:
 * Remote Requirements:
 	- HEP3 Capture Agent
 		- [CaptAgent](https://github.com/sipcapture/captagent)
+			- Even if you plan capture traffic on same machine as Kamailio don't use raw_socket on Kamailio instead use CaptAgent and send via HEP, otherwise your packets will be out of order
 		- [Kamailio](https://github.com/kamailio/kamailio), [OpenSIPS](http://opensips.org/), [FreeSwitch](http://freeswitch.org/), [Asterisk](http://www.asterisk.org/)
 
 * Special Charts Requirements: (Dangerous Demo, ElasticSearch)
