@@ -24,6 +24,10 @@ Homer 5 is composed of separate elements:
 		- [CaptAgent](https://github.com/sipcapture/captagent)
 		- [Kamailio](https://github.com/kamailio/kamailio), [OpenSIPS](http://opensips.org/), [FreeSwitch](http://freeswitch.org/), [Asterisk](http://www.asterisk.org/)
 
+* Special Charts Requirements: (Dangerous Demo, ElasticSearch)
+	- InfluxDB
+	- ElasticSearch
+
 ## Locations
 
 * $WEB: Homer web folder
