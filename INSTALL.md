@@ -67,7 +67,7 @@ Homer 5 is composed of separate elements:
 	* Configure Database credentials in both perl scripts based on your system
 	* Add rotation script to cron once a day _(scripts/rotate.sh)_ at low traffic time
 
-        # crontab -e -u root:
+        crontab -e -u root:
         
 	```30     3     *     *     *       /opt/sipcapture/rotate.sh > /dev/null 2>&1```
 
