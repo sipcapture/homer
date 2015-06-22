@@ -67,8 +67,12 @@ Homer 5 is composed of separate elements:
 	* Configure Database credentials in both perl scripts based on your system
 	* Add rotation script to cron once a day _(scripts/rotate.sh)_ at low traffic time
 
+        crontab -e -u root:
 	```30     3     *     *     *       /opt/sipcapture/rotate.sh > /dev/null 2>&1```
-	
+
+	or as file /etc/cront.d/sipcapture
+	```30     3     *     *     *     root  /opt/sipcapture/rotate.sh > /dev/null 2>&1```
+
 	N.B. please run rotate.sh manual before send traffic to homer. The script should create capture tables also for current day.
 	
 #### KAMAILIO:
