@@ -71,7 +71,7 @@ Homer 5 is composed of separate elements:
         
 	```30     3     *     *     *       /opt/sipcapture/rotate.sh > /dev/null 2>&1```
 
-	or as file /etc/cront.d/sipcapture:
+	or as file /etc/cron.d/sipcapture:
 	
 	```30     3     *     *     *     root  /opt/sipcapture/rotate.sh > /dev/null 2>&1```
 
