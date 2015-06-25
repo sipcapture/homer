@@ -49,7 +49,7 @@ Homer 5 is composed of separate elements:
 #### HTTP Server:
 * Create a folder for HOMER vhost _($WEB)_
 * Configure Apache2 (or nginx) for HOMER vhost _(see $GIT/homer-api/examples/web/)_
-* Enable mod rewrite
+* Enable mod rewrite (please check if you set AllowOverride All for api dir. https://github.com/sipcapture/homer/wiki/webHomer-settings#apache-mod_rewrite)
 * Install Homer 5 web components
 	* Copy HOMER-UI Contents to vhost directory
 		* Make sure store/dashboard writable by Apache
