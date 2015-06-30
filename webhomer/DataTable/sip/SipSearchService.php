@@ -140,7 +140,7 @@ class SipSearchService implements ISipService
               foreach(preg_split("/;/", $value) as $k=>$v) $dda[] = "`".$key."`".$eqlike."'".$v."'";
               $callwhere.= " ( ";
               $callwhere.=($eqlike == " = ") ? implode(" OR ",$dda) : implode(" AND ",$dda);
-              $callwhere.= " = ";
+              $callwhere.= " ) ";
            }
            else {
                $mkey = "`".$key."`";
