@@ -3,11 +3,13 @@
 
 
 
-#### Looking for Homer 5?
+#### Looking for latest Homer 5?
 
-Homer 5 is composed of separate elements:
+Homer 5 is currently in Beta stage! The project is now composed of separate elements:
  * [homer-api](https://github.com/sipcapture/homer-api): API Server and Backend Component
  * [homer-ui](https://github.com/sipcapture/homer-ui):  User-Interface and Frontend Component
+
+Detailed information is available in our [Development Branch](https://github.com/sipcapture/homer/tree/homer5)
 
 For installation instructions follow this link: [HOMER 5 Setup Guide](https://github.com/sipcapture/homer/blob/homer5/INSTALL.md)
 
