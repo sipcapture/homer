@@ -1,6 +1,6 @@
 %define name		kamailio
 %define ver		4.3.0
-%define rel		ftc0.0%{dist}
+%define rel		0.0%{dist}
 %define _prefix		/opt
 %define LIBDIR		%{_prefix}/lib64
 %define DATADIR		%{_prefix}/share
