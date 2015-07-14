@@ -97,7 +97,6 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 %{_sysconfdir}/sysconfig/sipcapture
 %if 0%{?el7}
 %{_unitdir}/sipcapture.service
-%{_sysconfdir}/systemd/system/multi-user.target.wants/sipcapture.service
 %endif
 %{_sysconfdir}/rsyslog.d/sipcapture.conf
 %{_sysconfdir}/logrotate.d/sipcapture
@@ -169,12 +168,10 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 %{__install} -D -m 644 api/examples/web/%name.conf.httpd %{buildroot}%{_sysconfdir}/httpd/conf.d/%name.conf
 %{__install} -D -m 644 api/examples/web/%{name}5.nginx %{buildroot}%{_sysconfdir}/nginx/conf.d/%name.conf
 # Kamailio in sipcapture role config directories and files
-%{__mkdir} -p %{buildroot}%{_sysconfdir}/systemd/system/multi-user.target.wants
 %{__mkdir} -p %{buildroot}%{_localstatedir}/run/sipcapture
 %{__install} -D -m644 api/examples/sipcapture/el%{rhel}/sipcapture.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/sipcapture
 %if 0%{?el7}
 %{__install} -D -m644 api/examples/sipcapture/el%{rhel}/sipcapture.service %{buildroot}%{_unitdir}/sipcapture.service
-%{__ln_s} -f %{_unitdir}/sipcapture.service %{buildroot}%{_sysconfdir}/systemd/system/multi-user.target.wants/sipcapture.service
 %endif
 %{__install} -D -m644 api/examples/sipcapture/kamailio.cfg %{buildroot}%{_sysconfdir}/kamailio/kamailio-sipcapture.cfg
 %{__install} -D -m644 api/examples/sipcapture/sipcapture.rsyslogd %{buildroot}%{_sysconfdir}/rsyslog.d/sipcapture.conf
@@ -203,14 +200,15 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 %post
 
 systemctl daemon-reload
+systemctl enable sipcapture
 systemctl restart rsyslog
 
 %preun
 
 systemctl stop sipcapture
+systemctl disable sipcapture
 
 %postun
 
 systemctl daemon-reload
 systemctl restart rsyslog
-
