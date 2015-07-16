@@ -1,9 +1,9 @@
 [submodule "api"]
 	path = api
-	url = https://github.com/kvishnivetsky/homer-api.git
+	url = https://github.com/sipcapture/homer-api.git
 [submodule "ui"]
 	path = ui
-	url = https://github.com/kvishnivetsky/homer-ui.git
+	url = https://github.com/sipcapture/homer-ui.git
 [submodule "captagent"]
 	path = captagent
 	url = https://github.com/sipcapture/captagent.git
