@@ -1,0 +1,196 @@
+# Initial Version Copyright (C) 2010 eZuce, Inc., All Rights Reserved.
+# Licensed to the User under the LGPL license.
+#
+#
+# Copyright (C) Homer Project 2012-2015 (http://www.sipcapture.org).
+# Licensed to the User under the GPL license.
+#
+
+MOCK_CONFIG_DIR = mak/mock
+MOCK_TARGET_PLATFORM = $(DISTRO)
+# avoids https://bugzilla.redhat.com/show_bug.cgi?id=490613 hit by *some* fedora 14 machines
+SRPM_DEFS = --define "_source_filedigest_algorithm md5"
+DOWNLOAD_LIB_CACHE = @DOWNLOAD_LIB_CACHE@
+ALL_DISTROS = @ALL_DISTROS@
+CENTOS_RSYNC_URL = @CENTOS_RSYNC_URL@
+MOCK_CHECK_PRODUCT = @PACKAGE_NAME@
+
+# variable not used here, but can be used in */.@PACKAGE_NAME@ files
+RPM_DIST = @RPM_DIST@
+
+# trick lets you create centos compatible repos from any other distro
+CREATEREPO_OPTS = $(CREATEREPO_OPTS_$(DISTRO_OS))
+RPM_DIST_DIR = @RPM_DIST_DIR@
+MOCK_RESULTS_DIR = $(RPM_DIST_DIR)/$(DISTRO_RESULTS_DIR)/$(DISTRO_ARCH)
+MOCK_SRPM_DIR = $(RPM_DIST_DIR)/$(DISTRO_RESULTS_DIR)/source
+MOCK_OPTS = \
+	  --configdir=$(MOCK_CONFIG_DIR) \
+	  -r $(MOCK_TARGET_PLATFORM) \
+	  --resultdir=$(MOCK_RESULTS_DIR)
+
+# If this file exists, then repo-init target was successful. File selected essentially at random
+MOCK_INIT_TEST = \
+	mock/$(MOCK_TARGET_PLATFORM)/root/etc/issue
+
+# Define @PACKAGE_NAME@ SRPMS and tarball files. Cannot define RPM files however as one specfile may generate many rpms
+$(foreach P,$(@PACKAGE_NAME@),$(eval $(P)_SRPM = $$(call lowercase,$(P))-$(PACKAGE_VERSION)-$$(DIST_REV).src.rpm))
+DIST_REV = $(shell tar -O -xzf $(PROJ)/$(proj)-$(PACKAGE_VERSION).tar.gz $(proj)-$(PACKAGE_VERSION)/.tarball-revision)
+
+# Allows to target other distros other than the default
+help.*.rpm = Build single rpm for $(DISTRO).
+help.@PACKAGE_NAME@.rpm = Builds all @PACKAGE_NAME@ rpms for $(DISTRO).
+help.lib.rpm = Builds all dependencies needed for @PACKAGE_NAME@ for building for $(DISTRO).
+$(foreach D,$(ALL_DISTROS),$(eval help-more.$(D).*.rpm = Build single rpm for $(D).))
+$(foreach D,$(ALL_DISTROS),$(eval help-more.$(D).@PACKAGE_NAME@.rpm = Builds all @PACKAGE_NAME@ rpms for $(D).))
+$(foreach D,$(ALL_DISTROS),$(eval help-more.$(D).lib.rpm = Builds all dependencies needed for @PACKAGE_NAME@ for building for $(D).))
+help-more.distros.* = Build rpm(s) for all distributions: $(ALL_DISTROS).
+$(ALL_DISTROS:=.%) : SUB_DISTRO=$(word 1,$(subst ., ,$@))
+$(ALL_DISTROS:=.%) : SUBMAKE_VARS=DISTRO=$(SUB_DISTRO)
+distro.all.% distros.% :
+# split into separate bash commands so each command gets separate make environment. 
+# Use command && command && true to ensure a failure in one aborts the build
+	$(foreach D,$(ALL_DISTROS),$(MAKE) $(D).$* &&) true
+
+# NOTE: 'eval' because 'make a b' when makefile is
+#   a.% b.% :; x
+# only makes x once. usually not what you want and not what we want here
+$(foreach D,$(ALL_DISTROS), $(eval $(D).% :; $$(MAKE) $$* $$(SUBMAKE_VARS)))
+
+DownloadSourceFile = \
+	  if [ ! -f $1 ]; then \
+	    curl -f -o $1 @DOWNLOAD_LIB_URL@/$(notdir $1); \
+	  fi
+
+CopySourceFile = \
+	if [ -f $1 ]; then \
+	  cp $1 $2; \
+	else \
+	  if [ ! -f @DOWNLOAD_LIB_CACHE@/$(notdir $1) ]; then \
+	    curl -f -o @DOWNLOAD_LIB_CACHE@/$(notdir $1) @DOWNLOAD_LIB_URL@/$(notdir $1); \
+	  fi ;\
+	  cp @DOWNLOAD_LIB_CACHE@/$(notdir $1) $2; \
+	fi; \
+
+$(DOWNLOAD_LIB_CACHE)/% :
+	curl -f -o $@ @DOWNLOAD_LIB_URL@/$(notdir $@)
+
+# calling repo-update before each build is important to ensure older rpms are
+# removed before compiling anything new.  It takes ~ 20secs which is annoying
+# but this allieviates a fairly annoying problem of building against older
+# packages. A problem that may not always show at compile time but could cause
+# core dumps at run time if a c++ header file does not updated properly before
+# a relying project gets compiled.
+@PACKAGE_NAME@.rpm : repo-update $(@PACKAGE_NAME@:=.rpm.if-changed);
+
+lib.rpm : repo-update $(lib:=.rpm.if-changed);
+
+@PACKAGE_NAME@.rpm.changes lib.rpm.changes : %.rpm.changes :
+	@echo $(foreach P,$($*),\
+	   $(shell $(SRC)/tools/dep check $(DISTRO).$(P).rpm $(SRC)/$(P) \
+	       $(foreach D,$($(P)_DEPS),$(DISTRO).$(D).rpm)))
+
+$(@PACKAGE_NAME@:=.rpm.changes) $(lib:=.rpm.changes) :
+	$(SRC)/tools/dep changes $(DISTRO).$(PROJ).rpm $(SRC)/$(PROJ) \
+	       $(foreach D,$($(PROJ)_DEPS),$(DISTRO).$(D).rpm)
+
+.SECONDEXPANSION:
+$(@PACKAGE_NAME@:=.rpm.if-changed) $(lib:=.rpm.if-changed) : %.rpm.if-changed : $$($$*_GIT_SUBMODULE) $(addprefix $(SRC)/,$(custommodules))
+	@echo -n 'checking for changes in $*...'
+	@$(MAKE) -s nop $(shell $(SRC)/tools/dep check $(DISTRO).$(PROJ).rpm $(SRC)/$(PROJ) \
+	       $(foreach D,$($(PROJ)_DEPS),$(DISTRO).$(D).rpm))
+
+%.srpm :  %.dist $(MOCK_INIT_TEST) $(MOCK_RESULTS_DIR)
+	test -d @DOWNLOAD_LIB_CACHE@ || mkdir -p @DOWNLOAD_LIB_CACHE@
+	test -d $(MOCK_SRPM_DIR) || mkdir -p $(MOCK_SRPM_DIR)
+	if [ -n "$($(PROJ)_SPEC)" ]; then \
+	  $(foreach S,$($(PROJ)_SOURCES),$(call CopySourceFile,$(S),@RPMBUILD_TOPDIR@/SOURCES)) \
+	  rpmbuild -bs $(SRPM_DEFS) $($(PROJ)_SRPM_DEFS) --nodeps $($(PROJ)_SPEC); \
+	elif [ -n "$($(PROJ)_TAR)" ]; then \
+	  rpmbuild -ts $(SRPM_DEFS) $($(PROJ)_SRPM_DEFS) --nodeps $($(PROJ)_TAR); \
+	else \
+	  $(call CopySourceFile,$($(PROJ)_SRPM),@RPMBUILD_TOPDIR@/SRPMS/$($(PROJ)_SRPM)) \
+	fi
+	cp @RPMBUILD_TOPDIR@/SRPMS/$($(PROJ)_SRPM) $(MOCK_SRPM_DIR)
+
+$(@PACKAGE_NAME@:=.srpm) : %.srpm : %.dist $(MOCK_INIT_TEST) $(MOCK_RESULTS_DIR)
+	rpmbuild -ts $(SRPM_DEFS) $($(PROJ)_SRPM_DEFS) --nodeps $($(PROJ)_TAR)
+	test -d $(MOCK_SRPM_DIR) || mkdir -p $(MOCK_SRPM_DIR)
+	cp @RPMBUILD_TOPDIR@/SRPMS/$($(PROJ)_SRPM) $(MOCK_SRPM_DIR)
+
+%.rpm : %.srpm repo-webserver
+	mock $(MOCK_OPTS) \
+	  --no-clean \
+	  --no-cleanup-after \
+	  --rebuild \
+	  $($(PROJ)_RPM_DEFS) \
+	  $(MOCK_SRPM_DIR)/$($(PROJ)_SRPM) || \
+	  (tail -100 $(MOCK_RESULTS_DIR)/build.log ; false)
+	find $(MOCK_RESULTS_DIR) -name '*.src.rpm' -exec rm {} \;
+# generate repo AFTER build otherwise it's unusable as a repo to feed to next build or other systems.
+	cd $(MOCK_RESULTS_DIR); createrepo $(CREATEREPO_OPTS) .
+	$(SRC)/tools/dep save $(DISTRO).$(PROJ).rpm $(SRC)/$(PROJ) \
+	  $(foreach D,$($(PROJ)_DEPS),$(DISTRO).$(D).rpm)
+
+$(MOCK_INIT_TEST) :
+	$(MAKE) repo-init
+
+$(MOCK_RESULTS_DIR) :
+	$(MAKE) repo-create
+
+help-more.repo-init = Clear mock chroot for $(DISTRO). Requied before first build and useful when you suspect caching is the result of a build error.
+repo-init : repo-create repo-webserver
+	mock $(MOCK_OPTS) --scrub=all
+	test -d $(MOCK_RESULTS_DIR) || mkdir -p $(MOCK_RESULTS_DIR)
+	cd $(MOCK_RESULTS_DIR); createrepo $(CREATEREPO_OPTS) .
+	mock $(MOCK_OPTS) --init
+
+help-more.repo-clean = Delete all RPMs in $(MOCK_RESULTS_DIR) to ensure fresh build. Build knows how to delete previous build results but only if new RPM results exists. 
+repo-clean :
+	test ! -d $(MOCK_RESULTS_DIR) || \
+	  find $(MOCK_RESULTS_DIR) -maxdepth 1 -name '*.rpm' -exec rm {} \;
+	$(SRC)/tools/dep clean $(DISTRO)
+
+
+# points a webserver at $(MOCK_RESULTS_DIR) with no caching headers to feed the results of build back into the 
+# chroot'ed system. future: explore mounting $(MOCK_RESULTS_DIR) from the chroot system. Possibly there is
+# a yum plugin .  
+# Touching everyfile because squid download proxy will deliver cached files from localhost even when cache live time is zero
+# if it has a file time that is newer then the file system. When building rpms from 2 different locations on the sames system
+# this is problematic
+repo-webserver :
+	x="$(firstword $(shell ps xo "%p %a" \
+	    | grep -v grep \
+	    | egrep 'thttpd -d repo -p @REPO_PORT@'))"; \
+	  test -z "$${x}" || kill -15 "$${x}"
+	find $(MOCK_RESULTS_DIR) -type f \
+	  -not -path '*/.dep.*' \
+	  -a -not -name available_pkgs -exec touch {} \;
+	/usr/sbin/thttpd -d $(RPM_DIST_DIR) -p @REPO_PORT@ -M 0
+
+help-more.repo-src = Assemble source rpms into $(RPM_DIST_DIR)/$(DISTRO_RESULTS_DIR)/source
+repo-src :
+	for f in $(shell $(SRC)/mak/list-obsolete-rpms $(MOCK_SRPM_DIR)); do rm $$f; done
+	cd $(MOCK_SRPM_DIR); createrepo $(CREATEREPO_OPTS) .
+
+help-more.repo-check = Installs @PACKAGE_NAME@ in chroot. Tip, run repo-chroot-init first for more thourugh test of all dependencies.
+repo-check : repo-webserver repo-update
+	mock $(MOCK_OPTS) --scrub=cache
+	mock $(MOCK_OPTS) --install $(MOCK_CHECK_PRODUCT)
+
+help-more.repo-dedup=If you have built RPMs multiple times between git updates, and therefore have older versions of a package, this will remove all older copies.
+repo-dedup:
+	for f in $(shell $(SRC)/mak/list-obsolete-rpms $(MOCK_RESULTS_DIR)); do rm $$f; done
+
+help-more.repo-create = run createrepo in $(MOCK_RESULTS_DIR)
+repo-create:
+	test -d $(MOCK_RESULTS_DIR) || mkdir -p $(MOCK_RESULTS_DIR)
+	cd $(MOCK_RESULTS_DIR); createrepo $(CREATEREPO_OPTS) .
+
+help.repo-update = Remove only the packages from chroot that are built. Takes 14 seconds when a full rebuild can take 2 minutues
+repo-quick-update repo-update :
+	rpm -qp --queryformat '%{name}\n' $(MOCK_RESULTS_DIR)/*.rpm | sort | uniq | \
+	  xargs --no-run-if-empty mock $(MOCK_OPTS) --remove
+	mock $(MOCK_OPTS) --scrub=yum-cache
+
+help.repo = Prepares repository for $(DISTRO) for publishing or re-distributing in ISO by removing extra rpms and moving source rpms to separate directory.
+repo: repo-src repo-dedup repo-create;

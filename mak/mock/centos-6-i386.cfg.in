@@ -1,0 +1,53 @@
+config_opts['root'] = 'centos-6-i386'
+config_opts['target_arch'] = 'i686'
+config_opts['legal_host_arches'] = ('i386', 'i586', 'i686', 'x86_64')
+config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build'
+config_opts['dist'] = 'el6'  # only useful for --resultdir variable subst
+
+config_opts['yum.conf'] = """
+[main]
+cachedir=/var/cache/yum
+debuglevel=1
+reposdir=/dev/null
+logfile=/var/log/yum.log
+retries=20
+obsoletes=1
+gpgcheck=0
+assumeyes=1
+syslog_ident=mock
+syslog_device=
+
+# repos
+[base]
+name=BaseOS
+enabled=1
+@CENTOS_BASE_URL_ON@baseurl=@CENTOS_BASE_URL@/6/os/i386
+@CENTOS_BASE_URL_OFF@mirrorlist=http://mirrorlist.centos.org/?release=6&arch=i386&repo=os
+failovermethod=priority
+
+[updates]
+name=updates
+enabled=1
+@CENTOS_BASE_URL_ON@baseurl=@CENTOS_BASE_URL@/6/updates/i386
+@CENTOS_BASE_URL_OFF@mirrorlist=http://mirrorlist.centos.org/?release=6&arch=i386&repo=updates
+failovermethod=priority
+
+# Normally from EPEL, just a list of rpms to create a basic build system
+[buildsys-build]
+name=buildsys-build
+baseurl=http://download.sipfoundry.org/pub/sipXecs/buildsys-build
+enabled=1
+
+[upstream]
+name=upstream
+baseurl=@UPSTREAM_URL@/CentOS_6/i386/
+enabled=@UPSTREAM@
+
+[build]
+name=build
+baseurl=http://localhost:@REPO_PORT@/CentOS_6/i386/
+failovermethod=priority
+"""
+
+
+

@@ -1,0 +1,51 @@
+config_opts['root'] = 'fedora-16-x86_64'
+config_opts['target_arch'] = 'x86_64'
+config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build'
+config_opts['dist'] = 'fc16'  # only useful for --resultdir variable subst
+
+config_opts['yum.conf'] = """
+[main]
+cachedir=/var/cache/yum
+debuglevel=1
+reposdir=/dev/null
+logfile=/var/log/yum.log
+retries=20
+obsoletes=1
+gpgcheck=0
+assumeyes=1
+syslog_ident=mock
+syslog_device=
+# grub/syslinux on x86_64 need glibc-devel.i386 which pulls in glibc.i386, need to exclude all
+# .i?86 packages except these.
+#exclude=[0-9A-Za-fh-z]*.i?86 g[0-9A-Za-km-z]*.i?86 gl[0-9A-Za-hj-z]*.i?86 gli[0-9A-Zac-z]*.i?86 glib[0-9A-Za-bd-z]*.i?86
+# The above is not needed anymore with yum multilib policy of "best" which is the default in Fedora.
+@DOWNLOAD_PROXY_CONFIG_LINE@
+
+[fedora]
+name=fedora
+@FEDORA_BASE_URL_ON@baseurl=@FEDORA_BASE_URL@/releases/16/Everything/x86_64/os/
+@FEDORA_BASE_URL_OFF@mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=fedora-16&arch=x86_64
+
+[updates]
+name=updates
+@FEDORA_BASE_URL_ON@baseurl=@FEDORA_BASE_URL@/updates/16/x86_64/
+@FEDORA_BASE_URL_OFF@mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f16&arch=x86_64
+
+[local]
+name=local
+baseurl=http://kojipkgs.fedoraproject.org/repos/dist-f16-build/latest/x86_64/
+cost=2000
+enabled=0
+
+[upstream]
+name=upstream
+baseurl=@UPSTREAM_URL@/Fedora_16/x86_64/
+enabled=@UPSTREAM@
+
+[build]
+name=build
+baseurl=http://localhost:@REPO_PORT@/Fedora_16/x86_64/
+"""
+
+
+
