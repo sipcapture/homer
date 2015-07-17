@@ -15,9 +15,9 @@ Requires: %{php}-json
 %define php php
 %endif
 
-Name:		homer
-Version:	5.0.1
-Release:	0
+Name:		@PACKAGE_NAME@
+Version:	@PACKAGE_VERSION@
+Release:	@PACKAGE_REVISION@
 Summary:	SIP capture server
 
 Group:		Applications/Communications
@@ -101,9 +101,13 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 %{_sysconfdir}/rsyslog.d/sipcapture.conf
 %{_sysconfdir}/logrotate.d/sipcapture
 
-%files apache
+%files apache-aliases
 %defattr(0644,root,root)
 %config(noreplace)%{_sysconfdir}/httpd/conf.d/%name.conf
+
+%files apache-vhost
+%defattr(0644,root,root)
+%config(noreplace)%{_sysconfdir}/httpd/conf.d/%name-vhost.conf
 
 %files mysql
 %defattr(0644,root,root)
@@ -116,7 +120,7 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 
 %files nginx
 %defattr(0644,root,root)
-%config(noreplace)%{_sysconfdir}/nginx/conf.d/%name.conf
+%config(noreplace)%{_sysconfdir}/nginx/conf.d/%name-vhost.conf
 
 %files api
 %defattr(0660,%{webuser},%{webgroup})
@@ -127,23 +131,22 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 
 %files ui
 %defattr(0660,%{webuser},%{webgroup})
-%dir %{webroot}/ui
-%{webroot}/ui/index.html
-%{webroot}/ui/css
-%{webroot}/ui/dist
-%{webroot}/ui/fonts
-%{webroot}/ui/img
-%{webroot}/ui/js
-%{webroot}/ui/lib
-%{webroot}/ui/share
-%dir %attr(2770,%{webuser},%{webgroup}) %{webroot}/ui/store
-%dir %attr(2770,%{webuser},%{webgroup}) %{webroot}/ui/store/dashboard
-%dir %attr(2770,%{webuser},%{webgroup}) %{webroot}/ui/store/profile
-%{webroot}/ui/store/index.html
-%{webroot}/ui/store/dashboard/index.html
-%{webroot}/ui/store/dashboard/*.json
-%{webroot}/ui/store/profile/index.html
-%{webroot}/ui/templates
+%{webroot}/index.html
+%{webroot}/css
+%{webroot}/dist
+%{webroot}/fonts
+%{webroot}/img
+%{webroot}/js
+%{webroot}/lib
+%{webroot}/share
+%dir %attr(2770,%{webuser},%{webgroup}) %{webroot}/store
+%dir %attr(2770,%{webuser},%{webgroup}) %{webroot}/store/dashboard
+%dir %attr(2770,%{webuser},%{webgroup}) %{webroot}/store/profile
+%{webroot}/store/index.html
+%{webroot}/store/dashboard/index.html
+%{webroot}/store/dashboard/*.json
+%{webroot}/store/profile/index.html
+%{webroot}/templates
 
 %prep
 %setup -b0 -q
@@ -165,8 +168,9 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 # http-server config directories and files
 %{__mkdir} -p %{buildroot}%{_sysconfdir}/httpd/conf.d
 %{__mkdir} -p %{buildroot}%{_sysconfdir}/nginx/conf.d
-%{__install} -D -m 644 api/examples/web/%name.conf.httpd %{buildroot}%{_sysconfdir}/httpd/conf.d/%name.conf
-%{__install} -D -m 644 api/examples/web/%{name}5.nginx %{buildroot}%{_sysconfdir}/nginx/conf.d/%name.conf
+%{__install} -D -m 644 api/examples/web/%{name}5-aliases.conf.apache %{buildroot}%{_sysconfdir}/httpd/conf.d/%name.conf
+%{__install} -D -m 644 api/examples/web/%{name}5-vhost.conf.apache %{buildroot}%{_sysconfdir}/httpd/conf.d/%name-vhost.conf
+%{__install} -D -m 644 api/examples/web/%{name}5-vhost.conf.nginx %{buildroot}%{_sysconfdir}/nginx/conf.d/%name-vhost.conf
 # Kamailio in sipcapture role config directories and files
 %{__mkdir} -p %{buildroot}%{_localstatedir}/run/sipcapture
 %{__install} -D -m644 api/examples/sipcapture/el%{rhel}/sipcapture.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/sipcapture
@@ -177,8 +181,8 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 %{__install} -D -m644 api/examples/sipcapture/sipcapture.rsyslogd %{buildroot}%{_sysconfdir}/rsyslog.d/sipcapture.conf
 %{__install} -D -m644 api/examples/sipcapture/sipcapture.logrotated %{buildroot}%{_sysconfdir}/logrotate.d/sipcapture
 # UI and API directories and files
+%{__mkdir} -p %{buildroot}%{webroot}
 %{__mkdir} -p %{buildroot}%{webroot}/api
-%{__mkdir} -p %{buildroot}%{webroot}/ui
 %{__cp} -r api/api/Authentication %{buildroot}%{webroot}/api
 %{__cp} -r api/api/Database %{buildroot}%{webroot}/api
 %{__cp} -r api/api/RestApi %{buildroot}%{webroot}/api
@@ -186,16 +190,16 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 %{__cp} -r api/api/Statistic %{buildroot}%{webroot}/api
 %{__cp} -r api/api/*.php %{buildroot}%{webroot}/api
 %{__cp} -r api/api/.htaccess %{buildroot}%{webroot}/api
-%{__cp} -r ui/index.html %{buildroot}%{webroot}/ui/index.html
-%{__cp} -r ui/css %{buildroot}%{webroot}/ui
-%{__cp} -r ui/dist %{buildroot}%{webroot}/ui
-%{__cp} -r ui/fonts %{buildroot}%{webroot}/ui
-%{__cp} -r ui/img %{buildroot}%{webroot}/ui
-%{__cp} -r ui/js %{buildroot}%{webroot}/ui
-%{__cp} -r ui/lib %{buildroot}%{webroot}/ui
-%{__cp} -r ui/share %{buildroot}%{webroot}/ui
-%{__cp} -r ui/store %{buildroot}%{webroot}/ui
-%{__cp} -r ui/templates %{buildroot}%{webroot}/ui
+%{__cp} -r ui/index.html %{buildroot}%{webroot}/index.html
+%{__cp} -r ui/css %{buildroot}%{webroot}
+%{__cp} -r ui/dist %{buildroot}%{webroot}
+%{__cp} -r ui/fonts %{buildroot}%{webroot}
+%{__cp} -r ui/img %{buildroot}%{webroot}
+%{__cp} -r ui/js %{buildroot}%{webroot}
+%{__cp} -r ui/lib %{buildroot}%{webroot}
+%{__cp} -r ui/share %{buildroot}%{webroot}
+%{__cp} -r ui/store %{buildroot}%{webroot}
+%{__cp} -r ui/templates %{buildroot}%{webroot}
 
 %post
 

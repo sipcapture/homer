@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Calculates the number of revisions since the tag of a given version. Useful as an incremention build sequence
+# when git metadata is missing, for example in tarballs, this script uses a fixed file "./tarball-revision" to retrieve
+# the revision.  Source build therefore should save revision into the tarball
+
+if [ "$#" == "0" ]; then
+    echo "Usage: $0 version. Example: $0 1.2.3" 1>&2
+    exit 1
+fi
+
+if test -f ./tarball-revision; then
+    cat ./tarball-revision
+    exit
+fi
+
+# projects that are submodules should add to their parent's revision otherwise 
+# if there is a rebuild because a dependency triggered a reinstall then package
+# wouldn't be a new revision number and not trigger reinstall on update
+if test -d ../.git; then
+  abs_path=`readlink -f $0`
+  parent=`cd ..; $abs_path $@`
+  parent_rev=${parent%.*}
+fi
+
+VERSION=$1
+VER_REV=`git describe --abbrev=5 --match="v${VERSION}" HEAD`
+if [ "$?" != "0" ]; then
+    echo "Could not find tag v$VERSION" 1>&2
+    exit 1
+fi
+REV=`echo "${VER_REV}" | sed -e 's/^v[0-9.]\+-//g' -e 's/-g\?/./g'`
+if [ -n "$parent_rev" ]; then
+  echo $[ ${parent_rev} + ${REV%.*} ].${REV#*.}
+else
+  echo $REV
+fi

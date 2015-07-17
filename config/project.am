@@ -1,0 +1,34 @@
+# Require utility.am be included. Do not include it here because having all top-level makefile
+# include nec. files helps readablity.  We have to avoid a network of includes that include other
+# includes
+utility_am_required ?= $(error Please include utility.am)
+$(utility_am_required)
+
+EXTRA_DIST = \
+    config/revision-gen \
+    $(@PACKAGE@_EXTRA_DIST)
+
+dist-hook: @PACKAGE@-dist-revision @PACKAGE@-dist-specfile
+
+%-dist-revision :
+	echo $(PACKAGE_REVISION) > $(distdir)/.tarball-revision
+
+%-dist-specfile :
+	@$(call SearchAndReplace,$(srcdir)/@PACKAGE@.spec.in,$(distdir)/@PACKAGE@.spec, $(dist_EXTRA_REPLACE))
+
+# CONFIG_DISTCLEANFILES are files to be added to DISTCLEANFILES in any
+# makefile that includes config as an external subdirectory.
+DISTCLEANFILES = \
+        $(@PACKAGE@-DISTCLEANFILES) \
+	config/config.sub \
+	config/depcomp \
+	config/install-sh \
+	config/ltmain.sh \
+	config/missing \
+	Makefile.in \
+	aclocal.m4 \
+	autom4te.cache/output.0 \
+	autom4te.cache/output.1 \
+	autom4te.cache/requests \
+	autom4te.cache/traces.0 \
+	autom4te.cache/traces.1
