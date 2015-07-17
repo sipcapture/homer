@@ -1,0 +1,12 @@
+Name:		captagent
+Version:	6.0.0
+Release:	0
+Summary:	SIP capture server
+
+Group:		Applications/Communications
+License:	GPLv3
+URL:		http://www.sipcapture.org/
+Source0:	%name-%version.tar.gz
+
+%description
+HOMER is a robust, carrier-grade, scalable SIP Capture system and Monitoring Application with HEP/HEP2, IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling
