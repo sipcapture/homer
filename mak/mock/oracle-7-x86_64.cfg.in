@@ -50,7 +50,7 @@ failovermethod=priority
 # Normally from EPEL, just a list of rpms to create a basic build system
 #[buildsys-build]
 #name=buildsys-build
-#baseurl=http://download.sipcapture.org/pub/homer/buildsys-build/
+#baseurl=@PACKAGE_URL@/pub/@PACKAGE@/buildsys-build/
 #enabled=1
 
 [buildsys-build]
