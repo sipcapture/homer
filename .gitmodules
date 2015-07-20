@@ -12,3 +12,11 @@
 	path = kamailio
 	url = https://github.com/kamailio/kamailio.git
 	branch = 4.3
+[submodule "homer-api"]
+	path = homer-api
+	url = https://github.com/sipcapture/homer-api.git
+	branch = master
+[submodule "homer-ui"]
+	path = homer-ui
+	url = https://github.com/sipcapture/homer-ui.git
+	branch = master
