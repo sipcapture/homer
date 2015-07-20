@@ -7,6 +7,7 @@
 [submodule "captagent"]
 	path = captagent
 	url = https://github.com/sipcapture/captagent.git
+	branch = captagent6
 [submodule "kamailio"]
 	path = kamailio
 	url = https://github.com/kamailio/kamailio.git

@@ -11,10 +11,8 @@
 # should be listed after it's dependencies.  No circular dependecies
 # allowed.
 @PACKAGE_NAME@_core = \
-    api \
-    ui \
-    captagent \
-    kamailio
+    @PACKAGE_NAME@-api \
+    @PACKAGE_NAME@-ui
 
 # @PACKAGE_NAME@ projects that are NOT essential for a running communication system
 @PACKAGE_NAME@_extra =
