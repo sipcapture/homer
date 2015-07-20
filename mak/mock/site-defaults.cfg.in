@@ -1,0 +1,104 @@
+# mock defaults
+# vim:tw=0:ts=4:sw=4:et:
+#
+# This config file is for site-specific default values that apply across all
+# configurations. Options specified in this config file can be overridden in
+# the individual mock config files.
+#
+# The site-defaults.cfg delivered by default has NO options set. Only set options
+# here if you want to override the defaults.
+#
+# Entries in this file follow the same format as other mock config files.
+# config_opts['foo'] = bar
+
+#############################################################################
+#
+# Things that we recommend you set in site-defaults.cfg:
+#
+config_opts['basedir'] = '@abs_top_builddir@/mock/'
+config_opts['cache_topdir'] = '@abs_top_builddir@/mock-cache'
+#  Note: the path pointed to by basedir and cache_topdir must be owned 
+#        by group 'mock' and must have mode: g+rws
+# config_opts['rpmbuild_timeout'] = 0
+# config_opts['use_host_resolv'] = True
+
+# You can configure log format to pull from logging.ini formats of these names:
+# config_opts['build_log_fmt_name'] = "unadorned"
+# config_opts['root_log_fmt_name']  = "detailed"
+# config_opts['state_log_fmt_name'] = "state"
+#
+# mock will normally set up a minimal chroot /dev.
+# If you want to use a pre-configured /dev, disable this and use the bind-mount
+# plugin to mount your special /dev
+# config_opts['internal_dev_setup'] = True
+#
+# internal_setarch defaults to 'True' if the python 'ctypes' package is
+#  available. It is in the python std lib on >= python 2.5. On older versions,
+#  it is available as an addon. On systems w/o ctypes, it will default to
+#  'False'
+# config_opts['internal_setarch'] = False
+#
+# the cleanup_on_* options allow you to automatically clean and remove the
+# mock build directory, but only take effect if --resultdir is used.
+# config_opts provides fine-grained control. cmdline only has big hammer
+#
+# config_opts['cleanup_on_success'] = 1
+# config_opts['cleanup_on_failure'] = 1
+
+# if you want mock to automatically run createrepo on the rpms in your 
+# resultdir.
+# config_opts['createrepo_on_rpms'] = False
+# config_opts['createrepo_command'] = '/usr/bin/createrepo -d -q -x *.src.rpm'
+
+#############################################################################
+#
+# plugin related. Below are the defaults. Change to suit your site
+# policy. site-defaults.cfg is a good place to do this.
+#
+# NOTE: Some of the caching options can theoretically affect build
+#  reproducability. Change with care.
+#
+# config_opts['plugin_conf']['ccache_enable'] = True
+# config_opts['plugin_conf']['ccache_opts']['max_cache_size'] = '4G'
+# config_opts['plugin_conf']['ccache_opts']['dir'] = "%(cache_topdir)s/%(root)s/ccache/"
+# config_opts['plugin_conf']['yum_cache_enable'] = True
+# config_opts['plugin_conf']['yum_cache_opts']['max_age_days'] = 30
+# config_opts['plugin_conf']['yum_cache_opts']['dir'] = "%(cache_topdir)s/%(root)s/yum_cache/"
+# config_opts['plugin_conf']['root_cache_enable'] = True
+# config_opts['plugin_conf']['root_cache_opts']['max_age_days'] = 15
+# config_opts['plugin_conf']['root_cache_opts']['dir'] = "%(cache_topdir)s/%(root)s/root_cache/"
+# config_opts['plugin_conf']['root_cache_opts']['compress_program'] = "pigz"
+# config_opts['plugin_conf']['root_cache_opts']['extension'] = ".gz"
+#
+# bind mount plugin is enabled by default but has no configured directories to mount
+# config_opts['plugin_conf']['bind_mount_enable'] = True
+# config_opts['plugin_conf']['bind_mount_opts']['dirs'].append(('/host/path', '/bind/mount/path/in/chroot/' ))
+#
+# config_opts['plugin_conf']['tmpfs_enable'] = False
+# config_opts['plugin_conf']['tmpfs_opts']['required_ram_mb'] = 1024
+# config_opts['plugin_conf']['tmpfs_opts']['max_fs_size'] = '512m'
+
+#############################################################################
+#
+# Things that you can change, but we dont recommend it:
+# config_opts['chroothome'] = '/builddir'
+# config_opts['clean'] = True
+
+#############################################################################
+#
+# Things that are best suited for individual chroot config files:
+#
+# MUST SET (in individual chroot cfg file):
+# config_opts['root'] = 'name-of-yum-build-dir'
+# config_opts['target_arch'] = 'i386'
+# config_opts['yum.conf'] = ''
+#
+# CAN SET, defaults usually work ok:
+# config_opts['chroot_setup_cmd'] = 'install buildsys-build'
+# config_opts['log_config_file'] = 'logging.ini'
+# config_opts['more_buildreqs']['srpm_name-version-release'] = 'dependencies'
+# config_opts['macros']['Add_your_macro_name_here'] = "add macro value here"
+# config_opts['files']['path/name/no/leading/slash'] = "put file contents here."
+# config_opts['chrootuid'] = os.getuid()
+# config_opts['chrootgid'] = grp.getgrnam("mock")[2]
+# config_opts['useradd'] = '/usr/sbin/useradd -m -u %(uid)s -g %(gid)s -d %(home)s -n %(user)s' # Fedora/RedHat

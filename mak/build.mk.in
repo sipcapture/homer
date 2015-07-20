@@ -23,7 +23,7 @@ endif
 .PRECIOUS: $(SRC)/%/.git
 $(foreach M,$(git_submodules) $(git_custommodules),$(eval $(M)_GIT_SUBMODULE = $(SRC)/$(M)/.git))
 
-include $(SRC)/mak/40-modules.mk
+include mak/40-modules.mk
 
 # pull in dependency make fragments
 include $(SRC)/mak/*.deps.mk

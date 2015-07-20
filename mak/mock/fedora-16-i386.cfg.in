@@ -1,0 +1,48 @@
+config_opts['root'] = 'fedora-16-i386'
+config_opts['target_arch'] = 'i686'
+config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build'
+config_opts['dist'] = 'fc16'  # only useful for --resultdir variable subst
+
+config_opts['yum.conf'] = """
+[main]
+cachedir=/var/cache/yum
+debuglevel=1
+reposdir=/dev/null
+logfile=/var/log/yum.log
+retries=20
+obsoletes=1
+gpgcheck=0
+assumeyes=1
+syslog_ident=mock
+syslog_device=
+proxy=@DOWNLOAD_PROXY@
+
+[fedora]
+name=fedora
+@FEDORA_BASE_URL_ON@baseurl=@FEDORA_BASE_URL@/releases/16/Everything/i386/os/
+@FEDORA_BASE_URL_OFF@mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=fedora-16&arch=i386
+
+[updates]
+name=updates
+@FEDORA_BASE_URL_ON@baseurl=@FEDORA_BASE_URL@/updates/16/i386/
+@FEDORA_BASE_URL_OFF@mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f16&arch=i386
+
+[local]
+name=local
+baseurl=http://kojipkgs.fedoraproject.org/repos/dist-f16-build/latest/i386/
+cost=2000
+enabled=0
+
+[upstream]
+name=upstream
+baseurl=@UPSTREAM_URL@/Fedora_16/i386/
+enabled=@UPSTREAM@
+
+[build]
+name=build
+baseurl=http://localhost:@REPO_PORT@/Fedora_16/i386/
+
+"""
+
+
+

@@ -31,7 +31,7 @@ m4_sinclude([custom/custom.m4])
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([mak/05-build.mk:mak/build.mk.in])
 AC_CONFIG_FILES([mak/40-modules.mk:mak/modules.mk.in])
-#AC_CONFIG_FILES([mak/20-list-dependencies.mk:mak/list-dependencies.mk.in])
-#AC_CONFIG_FILES([mak/30-setup.mk:mak/setup.mk.in])
+AC_CONFIG_FILES([mak/20-list-dependencies.mk:mak/list-dependencies.mk.in])
+AC_CONFIG_FILES([mak/30-setup.mk:mak/setup.mk.in])
 
 AC_OUTPUT

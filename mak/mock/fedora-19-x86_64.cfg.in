@@ -1,0 +1,61 @@
+config_opts['root'] = 'fedora-19-x86_64'
+config_opts['target_arch'] = 'x86_64'
+config_opts['legal_host_arches'] = ('x86_64',)
+config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build'
+config_opts['dist'] = 'fc19'  # only useful for --resultdir variable subst
+
+config_opts['yum.conf'] = """
+[main]
+cachedir=/var/cache/yum
+debuglevel=1
+reposdir=/dev/null
+logfile=/var/log/yum.log
+retries=20
+obsoletes=1
+gpgcheck=0
+assumeyes=1
+syslog_ident=mock
+syslog_device=
+@DOWNLOAD_PROXY_CONFIG_LINE@
+
+# repos
+
+[fedora]
+name=fedora
+@FEDORA_BASE_URL_ON@baseurl=@FEDORA_BASE_URL@/releases/19/Everything/x86_64/os/
+@FEDORA_BASE_URL_OFF@mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=fedora-19&arch=x86_64
+failovermethod=priority
+
+[updates-released]
+name=updates
+@FEDORA_BASE_URL_ON@baseurl=@FEDORA_BASE_URL@/updates/19/x86_64/
+@FEDORA_BASE_URL_OFF@mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f19&arch=x86_64
+failovermethod=priority
+
+[local]
+name=local
+baseurl=http://kojipkgs.fedoraproject.org/repos/f19-build/latest/x86_64/
+cost=2000
+enabled=0
+
+[fedora-debug]
+name=fedora-debug
+mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=fedora-debug-19&arch=x86_64
+failovermethod=priority
+enabled=0
+
+[updates-debug]
+name=updates-debug
+mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-debug-f19&arch=x86_64
+failovermethod=priority
+enabled=0
+
+[upstream]
+name=upstream
+baseurl=@UPSTREAM_URL@/Fedora_19/x86_64/
+enabled=@UPSTREAM@
+
+[build]
+name=build
+baseurl=http://localhost:@REPO_PORT@/Fedora_19/x86_64/
+"""

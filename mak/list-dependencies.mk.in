@@ -1,0 +1,110 @@
+# Initial Version Copyright (C) 2010 eZuce, Inc., All Rights Reserved.
+# Licensed to the User under the LGPL license.
+#
+#
+# Copyright (C) Homer Project 2012-2015 (http://www.sipcapture.org).
+# Licensed to the User under the GPL license.
+#
+
+# grep pulls deps for all distros, here we remove irrellevant ones for each distro
+# some are deps for parts we do not build
+REWRITE_DEPS = \
+	-e "/$${proj}/d" \
+	-e '/%{\?name}\?/d' \
+	-e '/java-ibm.*/d'\
+	-e '/libsng_isdn/d'\
+	-e '/libsng_ss7/d'\
+	-e '/sng-tc-linux/d'\
+	-e '/wanpipe/d'
+
+REWRITE_DEPS_redhat = \
+	$(REWRITE_DEPS) \
+	-e '/java-1_6_0-sun-devel/d' \
+	-e 's/java-devel/java-1.6.0-openjdk-devel/g' \
+	-e '/docbook-xsl-stylesheets/d' \
+	-e '/pwdutils/d' \
+	-e '/apache2-.*/d' \
+	-e '/libapr1-devel/d' \
+	-e '/lzo-devel/d' \
+	-e '/rubygem-postgres/d' \
+	-e '/cron/d'
+
+REWRITE_DEPS_centos_5 = \
+	$(REWRITE_DEPS_redhat) \
+	-e '/perl-ExtUtils-Embed/d'
+
+REWRITE_DEPS_fedora = \
+	$(REWRITE_DEPS_redhat) \
+	-e '/termcap/d' \
+	-e '/jpeg-devel/d' \
+	-e 's/libopenjpeg-devel/openjpeg-devel/g' \
+	-e 's/curl-devel/libcurl-devel/g' \
+	-e 's/jakarta-commons-beanutils/apache-commons-beanutils/g'
+
+REWRITE_DEPS_suse = \
+	$(REWRITE_DEPS) \
+	-e '/docbook-style-xsl/d' \
+	-e '/httpd-.*/d' \
+	-e '/apr-devel/d' \
+	-e '/ruby-postgres/d' \
+	-e '/openldap-devel/d' \
+	-e '/vixiecron/d'
+
+CURRENT_DISTRO := $(shell rpm --eval \
+	'%{?fedora:Fedora}%{!?fedora:%{?suse_version:Suse}%{!?suse_version:CentOS}}')
+
+ifeq ($(CURRENT_DISTRO),CentOS)
+RPMSPEC := $(SRC)/mak/rpmspec-rh6-x86_64
+else
+RPMSPEC := $(wildcard /usr/bin/rpmspec)
+ifeq ($(RPMSPEC),)
+RPMSPEC = $(error Missing rpmspec command. Run 'yum install rpm-build')
+endif
+endif
+
+# Automatically pull build and runtime deps from a spec file. Caller may need to post
+# process file list to translate/remove/add packages
+SpecDeps = $(shell $(RPMSPEC) -P $1 | \
+	  egrep '^(Build|)Requires:' | \
+	    sed \
+	        -e 's/BuildRequires://' \
+	        -e 's/Requires://' \
+	        -e 's/,/\n/g' | \
+	    awk '{print $$1}' | \
+	    sort -u)
+
+# All fedoras have same dependencies as eachother. Assume future versions do too until proven otherwise.
+$(foreach T,10 11 12 13 14 15 16 17 18 19 20,$(eval REWRITE_DEPS_fedora_$(T) = $(REWRITE_DEPS_fedora)))
+
+help.*.deps = List all dependencies to build and run a project.
+help.@PACKAGE_NAME@.deps = List all dependencies for all of @PACKAGE_NAME@
+help.*.deps-missing = List all dependencies to build and run a project that are not currently installed on this system.
+help.@PACKAGE_NAME@.deps-missing = List all dependencies for all of @PACKAGE_NAME@ that are not currently installed on this system.
+# when listing all together, remove interdependencies from the group, make sence when you think about it
+@PACKAGE_NAME@.deps @PACKAGE_NAME@.deps-missing : @PACKAGE_NAME@.% :
+	@($(MAKE) --no-print-directory $(@PACKAGE_NAME@:=.$*) && false) | sort -u
+
+$(@PACKAGE_NAME@:=.deps-missing):
+	@rpm -q rpm `$(MAKE) --no-print-directory $(PROJ).deps` | \
+	  grep 'is not installed' | \
+	  awk '{print $$2}'
+
+.SECONDEXPANSION:
+$(@PACKAGE_NAME@:=.deps): %.deps :
+	@$(MAKE) $($*_GIT_SUBMODULE) $(SRC)/$* &>/dev/null
+	@sed \
+	  -e 's|@PACKAGE\@|SELF|g' \
+	  -e 's|@VERSION\@|0|g' \
+	  -e 's|@PACKAGE_REVISION\@|0|g' \
+	  $(SRC)/$(PROJ)/$(proj).spec* > delme
+	@$(RPMSPEC) -P delme 2>/dev/null | \
+	  egrep '^(Build|)Requires:' | \
+	    sed \
+	        -e 's/BuildRequires://' \
+	        -e 's/Requires://' \
+	        -e 's/,/\n/g' \
+	        -e '/SELF/d' \
+	        $(foreach P,$(@PACKAGE_NAME@),-e '/$(P)/Id') \
+	        $(REWRITE_DEPS_$(DISTRO_OS)_$(DISTRO_VER)) | \
+	    awk '{print $$1}' | \
+	    sort -u
