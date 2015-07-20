@@ -46,6 +46,16 @@ if test -z "$CENTOS_BASE_URL"; then
   fi
 fi
 
+AC_ARG_VAR(ORACLE_BASE_URL, [Where to find Orace Enterprise Linux distribution. Example: http://oracle.aol.com])
+if test -z "$ORACLE_BASE_URL"; then
+  if test -n "$MIRROR_SITE"; then 
+    ORACLE_BASE_URL=$MIRROR_SITE/centos
+  else
+    AC_MSG_ERROR([You must provide a value for ORACLE_BASE_URL or MIRROR_SITE if you are using a download proxy.\
+ See https://github.com/sipcapture/homer/blob/homer5/INSTALL.md for more details.])
+  fi
+fi
+
 AC_ARG_VAR(FEDORA_BASE_URL, [Where to find Fedora distribution. Example: http://mirrors.kernel.org/fedora/linux])
 if test -z "$FEDORA_BASE_URL"; then
   if test -n "$MIRROR_SITE"; then 
@@ -101,7 +111,7 @@ AC_CHECK_FILE(/bin/rpm,
 AC_ARG_VAR(DISTRO, [What operating system you are compiling for. Default is ${DistroDefault}])
 test -n "${DISTRO}" || DISTRO="centos-6-x86_64"
 
-AllDistrosDefault="fedora-16-i386 fedora-16-x86_64 fedora-17-i386 fedora-17-x86_64 fedora-18-i386 fedora-18-x86_64 fedora-19-i386 fedora-19-x86_64 centos-6-i386 centos-6-x86_64"
+AllDistrosDefault="fedora-16-i386 fedora-16-x86_64 fedora-17-i386 fedora-17-x86_64 fedora-18-i386 fedora-18-x86_64 fedora-19-i386 fedora-19-x86_64 centos-6-i386 centos-6-x86_64 oracle-7-x86_64"
 AC_ARG_VAR(ALL_DISTROS, [All distros which using cross distroy compiling (xc.* targets) Default is ${AllDistrosDefault}])
 test -n "${ALL_DISTROS}" || ALL_DISTROS="${AllDistrosDefault}"
 
@@ -132,6 +142,14 @@ AC_ARG_ENABLE(rpm, [--enable-rpm Using mock package to build rpms],
     AC_SUBST(CENTOS_BASE_URL_OFF,[])
   fi
 
+  if test -n "$ORACLE_BASE_URL"; then
+    AC_SUBST(ORACLE_BASE_URL_ON,[])
+    AC_SUBST(ORACLE_BASE_URL_OFF,[#])
+  else
+    AC_SUBST(ORACLE_BASE_URL_ON,[#])
+    AC_SUBST(ORACLE_BASE_URL_OFF,[])
+  fi
+
   if test -n "$FEDORA_BASE_URL"; then
     AC_SUBST(FEDORA_BASE_URL_ON,[])
     AC_SUBST(FEDORA_BASE_URL_OFF,[#])
@@ -160,5 +178,6 @@ AC_ARG_ENABLE(rpm, [--enable-rpm Using mock package to build rpms],
   AC_CONFIG_FILES([mak/mock/fedora-18-x86_64.cfg])
   AC_CONFIG_FILES([mak/mock/fedora-19-i386.cfg])
   AC_CONFIG_FILES([mak/mock/fedora-19-x86_64.cfg])
+  AC_CONFIG_FILES([mak/mock/oracle-7-x86_64.cfg])
   AC_CONFIG_FILES([mak/10-rpm.mk:mak/rpm.mk.in])
 ])
