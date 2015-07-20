@@ -1,6 +1,7 @@
 [submodule "api"]
 	path = api
 	url = https://github.com/sipcapture/homer-api.git
+	branch = master
 [submodule "ui"]
 	path = ui
 	url = https://github.com/sipcapture/homer-ui.git
