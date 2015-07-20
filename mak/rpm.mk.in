@@ -165,7 +165,7 @@ repo-webserver :
 	find $(MOCK_RESULTS_DIR) -type f \
 	  -not -path '*/.dep.*' \
 	  -a -not -name available_pkgs -exec touch {} \;
-	/usr/sbin/thttpd -d $(RPM_DIST_DIR) -p @REPO_PORT@ -M 0
+#	/usr/sbin/thttpd -d $(RPM_DIST_DIR) -p @REPO_PORT@ -M 0
 
 help-more.repo-src = Assemble source rpms into $(RPM_DIST_DIR)/$(DISTRO_RESULTS_DIR)/source
 repo-src :
