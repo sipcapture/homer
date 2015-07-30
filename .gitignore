@@ -1,1 +1,4 @@
 mak/*-*.mk
+configure
+autom4te.cache
+build

@@ -12,7 +12,8 @@
 # allowed.
 @PACKAGE_NAME@_core = \
     @PACKAGE_NAME@-api \
-    @PACKAGE_NAME@-ui
+    @PACKAGE_NAME@-ui \
+    captagent
 
 # @PACKAGE_NAME@ projects that are NOT essential for a running communication system
 @PACKAGE_NAME@_extra =
