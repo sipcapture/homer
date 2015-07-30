@@ -13,7 +13,7 @@
 #
 #  sudo bash -x ./setup.sh
 #
-BUILD_DEPS = gcc-c++ wget libtool rubygems ruby-devel erlang-erts 'java-devel >= 1.6'
+BUILD_DEPS = gcc-c++ wget libtool
 
 # Some build deps are included for rpm builds sometimes because project's
 # autoconf dep checking cannot be disabled even though all we run is dist
