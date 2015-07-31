@@ -2,7 +2,7 @@ config_opts['root'] = 'oracle-7-x86_64'
 config_opts['target_arch'] = 'x86_64'
 config_opts['legal_host_arches'] = ('x86_64',)
 config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build'
-config_opts['dist'] = 'el6'  # only useful for --resultdir variable subst
+config_opts['dist'] = 'el7'  # only useful for --resultdir variable subst
 
 config_opts['yum.conf'] = """
 [main]
