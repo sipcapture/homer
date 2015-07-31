@@ -13,7 +13,7 @@
 #
 #  sudo bash -x ./setup.sh
 #
-BUILD_DEPS = gcc-c++ wget libtool
+BUILD_DEPS = @Development wget
 
 # Some build deps are included for rpm builds sometimes because project's
 # autoconf dep checking cannot be disabled even though all we run is dist
