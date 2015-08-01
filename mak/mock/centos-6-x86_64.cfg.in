@@ -1,7 +1,7 @@
 config_opts['root'] = 'centos-6-x86_64'
 config_opts['target_arch'] = 'x86_64'
 config_opts['legal_host_arches'] = ('x86_64',)
-config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build'
+config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build Development'
 config_opts['dist'] = 'el6'  # only useful for --resultdir variable subst
 
 config_opts['yum.conf'] = """
@@ -36,13 +36,15 @@ failovermethod=priority
 # Normally from EPEL, just a list of rpms to create a basic build system
 [buildsys-build]
 name=buildsys-build
-baseurl=@PACKAGE_URL@/pub/@PACKAGE@/buildsys-build/
+@CENTOS_BASE_URL_ON@baseurl=@CENTOS_BASE_URL@/pub/epel/6/x86_64
+@CENTOS_BASE_URL_OFF@mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=epel-6&arch=x86_64
 enabled=1
 
-[upstream]
-name=upstream
-baseurl=@UPSTREAM_URL@/CentOS_6/x86_64/
-enabled=@UPSTREAM@
+# We do not use upstream repo yet
+#[upstream]
+#name=upstream
+#baseurl=@UPSTREAM_URL@/CentOS_6/x86_64/
+#enabled=@UPSTREAM@
 
 [build]
 name=build
