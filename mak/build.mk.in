@@ -45,7 +45,7 @@ $(eval @PACKAGE_NAME@_exclude = \
 lib := $(filter-out $(@PACKAGE_NAME@_exclude) $(@PACKAGE_NAME@),$(lib) $(@PACKAGE_NAME@_include))
 
 # Only the main rpm
-$(foreach P,$(@PACKAGE_NAME@),$(eval $(P)_TAR ?= $(P)/$$(call lowercase,$(P))-$(PACKAGE_VERSION)-$(PACKAGE_REVISION).tar.gz))
+$(foreach P,$(@PACKAGE_NAME@),$(eval $(P)_TAR ?= $(P)/$$(call lowercase,$(P))-$(PACKAGE_VERSION).tar.gz))
 
 # useful when you have a make command that might not have any targets, this
 # cause no operation. Without it, you trigger make with empty arguments and
