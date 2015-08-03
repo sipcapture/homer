@@ -1,21 +1,20 @@
 %define name		kamailio
-%define ver		4.3.0
-%define rel		0.0%{dist}
+%define ver		%{VERSION_NUMBER}
+%define rel		%{BUILD_NUMBER}
 %define _prefix		/opt
 %define LIBDIR		%{_prefix}/lib64
 %define DATADIR		%{_prefix}/share
 %define DOCDIR		%{DATADIR}/doc
 
 
-Summary:	Kamailio (former OpenSER) - the Open Source SIP Server
+Summary:	Kamailio (former OpenSER) - the Open Source SIP Server for sipcapture
 Name:		%name
 Version:	%ver
 Release:	%rel
 Packager:	Peter Dunkley <peter@dunkley.me.uk>
 License:	GPL
 Group:		System Environment/Daemons
-Source:		http://kamailio.org/pub/kamailio/%{ver}/src/%{name}-%{ver}.tar.gz
-Patch0:		%{name}-%{ver}-00-init-configs.patch
+Source:		http://kamailio.org/pub/kamailio/%{ver}/src/%{name}-%{ver}_src.tar.gz
 URL:		http://kamailio.org/
 Vendor:		kamailio.org
 Conflicts:	kamailio-auth-ephemeral < %ver, kamailio-bdb < %ver
@@ -416,8 +415,6 @@ MySQL database connectivity for Kamailio.
 
 %prep
 %setup -n %{name}-%{ver}
-
-%patch0 -p1
 
 %build
 #make cfg prefix=/usr cfg_prefix=$RPM_BUILD_ROOT basedir=$RPM_BUILD_ROOT \
