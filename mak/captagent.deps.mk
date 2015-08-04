@@ -1,14 +1,13 @@
-PROJ_NAME = captagent
-$(PROJ_NAME)_VER = 6.0.0
-$(PROJ_NAME)_TAG = 6.0.0
-$(PROJ_NAME)_PACKAGE_REVISION = $(shell cd $(SRC)/$(PROJ_NAME); ../config/revision-gen $($(PROJ_NAME)_TAG))
-$(PROJ_NAME)_SRPM = $(PROJ_NAME)-$($(PROJ_NAME)_VER)-$($(PROJ_NAME)_PACKAGE_REVISION).src.rpm
-$(PROJ_NAME)_TAR = $(PROJ_NAME)/$(PROJ_NAME)-$($(PROJ_NAME)_VER).tar.gz
+captagent_VER = 6.0.0
+captagent_TAG = 6.0.0
+captagent_PACKAGE_REVISION = $(shell cd $(SRC)/captagent; ../config/revision-gen $(captagent_TAG))
+captagent_SRPM = captagent-$(captagent_VER)-$(captagent_PACKAGE_REVISION).src.rpm
+captagent_TAR = captagent/captagent-$(captagent_VER).tar.gz
 
-$(PROJ_NAME)_SRPM_DEFS = \
-	--define "BUILD_NUMBER $($(PROJ_NAME)_PACKAGE_REVISION)" \
-	--define "VERSION_NUMBER $($(PROJ_NAME)_VER)"
+captagent_SRPM_DEFS = \
+	--define "BUILD_NUMBER $(captagent_PACKAGE_REVISION)" \
+	--define "VERSION_NUMBER $(captagent_VER)"
 
-$(PROJ_NAME)_RPM_DEFS = \
-	--define="BUILD_NUMBER $($(PROJ_NAME)_PACKAGE_REVISION)" \
-	--define "VERSION_NUMBER $($(PROJ_NAME)_VER)"
+captagent_RPM_DEFS = \
+	--define="BUILD_NUMBER $(captagent_PACKAGE_REVISION)" \
+	--define "VERSION_NUMBER $(captagent_VER)"

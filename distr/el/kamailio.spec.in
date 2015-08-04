@@ -474,11 +474,10 @@ make install
 #install -m644 pkg/%name/centos/%{?centos}/%name.sysconfig \
 #		$RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/%name
 # Install init files
-%{__install} -D -m644 pkg/%name/oracle/%{rhel}/%name.logrotated $RPM_BUILD_ROOT%{_sysconfdir}/logrotate.d/%name
-%{__install} -D -m644 pkg/%name/oracle/%{rhel}/%name.rsyslogd $RPM_BUILD_ROOT%{_sysconfdir}/rsyslog.d/%name.conf
-%{__install} -D -m644 pkg/%name/oracle/%{rhel}/%name.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%name
-%{__install} -D -m644 pkg/%name/oracle/%{rhel}/%name.service $RPM_BUILD_ROOT%{_unitdir}/%name.service
-%{__ln_s} -f %{_unitdir}/%name.service $RPM_BUILD_ROOT%{_sysconfdir}/systemd/system/multi-user.target.wants/%name.service
+%{__install} -D -m644 %name.logrotate $RPM_BUILD_ROOT%{_sysconfdir}/logrotate.d/%name
+%{__install} -D -m644 %name.rsyslog $RPM_BUILD_ROOT%{_sysconfdir}/rsyslog.d/%name.conf
+%{__install} -D -m644 %name.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%name
+%{__install} -D -m644 %name.service $RPM_BUILD_ROOT%{_unitdir}/%name.service
 
 %clean
 %{__rm} -rf "$RPM_BUILD_ROOT"
