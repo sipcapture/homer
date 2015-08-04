@@ -33,7 +33,7 @@ if [ "$?" != "0" ]; then
 	exit 1
     fi
 fi
-REV=`echo "${VER_REV}" | sed -e 's/^v[0-9.]\+-//g' -e 's/-g\?/./g'`
+REV=`echo "${VER_REV}" | sed -e 's/^v[0-9\.]\+-//g' -e 's/-g\?/./g'`
 if [ -n "$parent_rev" ]; then
   echo $[ ${parent_rev} + ${REV%.*} ].${REV#*.}
 else
