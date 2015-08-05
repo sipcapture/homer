@@ -469,15 +469,22 @@ make install
 %{__mkdir} -p $RPM_BUILD_ROOT%{_sysconfdir}/logrtate.d
 %{__mkdir} -p $RPM_BUILD_ROOT%{_sysconfdir}/rsyslog.d
 %{__mkdir} -p $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig
-%{__mkdir} -p $RPM_BUILD_ROOT%{_sysconfdir}/systemd/system/multi-user.target.wants
 %{__mkdir} -p $RPM_BUILD_ROOT%{_localstatedir}/run/%name
 #install -m644 pkg/%name/centos/%{?centos}/%name.sysconfig \
 #		$RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/%name
 # Install init files
 %{__install} -D -m644 %name.logrotate $RPM_BUILD_ROOT%{_sysconfdir}/logrotate.d/%name
 %{__install} -D -m644 %name.rsyslog $RPM_BUILD_ROOT%{_sysconfdir}/rsyslog.d/%name.conf
-%{__install} -D -m644 %name.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%name
-%{__install} -D -m644 %name.service $RPM_BUILD_ROOT%{_unitdir}/%name.service
+
+%if 0%{?el7}
+%{__install} -D -m644 %name.sysconfig.el6 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%name
+%{__install} -D -m644 %name.init.el6 $RPM_BUILD_ROOT%{_sysconfdir}/init.d/%name
+%else
+%{__mkdir} -p $RPM_BUILD_ROOT%{_sysconfdir}/systemd/system/multi-user.target.wants
+%{__install} -D -m644 %name.sysconfig.el7 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%name
+%{__install} -D -m644 %name.service.el7 $RPM_BUILD_ROOT%{_unitdir}/%name.service
+%endif
+
 
 %clean
 %{__rm} -rf "$RPM_BUILD_ROOT"

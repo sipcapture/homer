@@ -23,5 +23,7 @@ kamailio.configure:
 	cp $(kamailio_SPEC) kamailio
 	cp distr/el/kamailio.logrotate kamailio
 	cp distr/el/kamailio.rsyslog kamailio
-	cp distr/el/kamailio.sysconfig kamailio
-	cp distr/el/kamailio.service kamailio
+	cp distr/el/el7/kamailio.sysconfig kamailio/kamailio.sysconfig.el7
+	cp distr/el/el7/kamailio.service kamailio/kamailio.service.el7
+	cp distr/el/el6/kamailio.sysconfig kamailio/kamailio.sysconfig.el6
+	cp distr/el/el6/kamailio.init kamailio/kamailio.init.el6
