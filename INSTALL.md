@@ -67,6 +67,7 @@ Homer 5 is composed of separate elements:
 	* Move example file _$GIT/homer-api/api/preferences_example.php_ to _$WEB/api/preferences.php_
 	* Move example file _$GIT/homer-api/api/configuration_example.php_ to _$WEB/api/configuration.php_
 	* Edit _$WEB/configuration.php_ with the required Database access details
+	* don't forget install php5-mysql (pdo driver)
 
 * Configure & Install rotation script:
 	* Copy and ```chmod +x``` the scripts/ directory on your system _(ie: /opt/sipcapture/)_
