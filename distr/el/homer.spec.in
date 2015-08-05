@@ -176,6 +176,8 @@ Kamailio config for HOMER is a robust, carrier-grade, scalable SIP Capture syste
 %{__install} -D -m644 api/examples/sipcapture/el%{rhel}/sipcapture.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/sipcapture
 %if 0%{?el7}
 %{__install} -D -m644 api/examples/sipcapture/el%{rhel}/sipcapture.service %{buildroot}%{_unitdir}/sipcapture.service
+%else
+%{__install} -D -m644 api/examples/sipcapture/el%{rhel}/sipcapture.init %{buildroot}%{_unitdir}/sipcapture
 %endif
 %{__install} -D -m644 api/examples/sipcapture/kamailio.cfg %{buildroot}%{_sysconfdir}/kamailio/kamailio-sipcapture.cfg
 %{__install} -D -m644 api/examples/sipcapture/sipcapture.rsyslogd %{buildroot}%{_sysconfdir}/rsyslog.d/sipcapture.conf
