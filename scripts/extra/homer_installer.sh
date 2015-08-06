@@ -69,6 +69,9 @@ echo "                                                             "
 echo "*************************************************************"
 echo;
 
+echo "This script is being decommissioned and might no longer work. Remove this line manually override this block."
+exit 1
+
 # Check if we're good on permissions
 if  [ "$(id -u)" != "0" ]; then
   echo "ERROR: You must be a root user. Exiting..." 2>&1
