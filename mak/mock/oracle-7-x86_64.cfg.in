@@ -3,6 +3,9 @@ config_opts['target_arch'] = 'x86_64'
 config_opts['legal_host_arches'] = ('x86_64',)
 config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build Development'
 config_opts['dist'] = 'el7'  # only useful for --resultdir variable subst
+config_opts['macros']['%dist'] = '.el7'
+config_opts['macros']['%el7'] = '1'
+config_opts['macros']['%rhel'] = '7'
 
 config_opts['yum.conf'] = """
 [main]
@@ -48,22 +51,19 @@ enabled=1
 failovermethod=priority
 
 # Normally from EPEL, just a list of rpms to create a basic build system
-#[buildsys-build]
-#name=buildsys-build
-#baseurl=@PACKAGE_URL@/pub/@PACKAGE@/buildsys-build/
-#enabled=1
-
 [buildsys-build]
 name=buildsys-build
-@ORACLE_BASE_URL_ON@baseurl=@ORACLE_BASE_URL@/OracleLinux/OL7/epel/x86_64
-@ORACLE_BASE_URL_OFF@baseurl=http://download.sipcapture.org/pub/homer/buildsys-build/
+@EPEL_BASE_URL_ON@baseurl=@EPEL_BASE_URL@/OracleLinux/OL7/epel/x86_64
+@EPEL_BASE_URL_OFF@mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=epel-6&arch=x86_64
 enabled=1
 
+# We do not use this repo yet
 #[upstream]
 #name=upstream
 #baseurl=@UPSTREAM_URL@/OracleLinux/OL7/x86_64
 #enabled=@UPSTREAM@
 
+# We do not use this repo yet
 #[build]
 #name=build
 #baseurl=http://localhost:@REPO_PORT@/OracleLinux/OL7/x86_64

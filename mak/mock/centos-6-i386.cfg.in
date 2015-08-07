@@ -3,6 +3,9 @@ config_opts['target_arch'] = 'i686'
 config_opts['legal_host_arches'] = ('i386', 'i586', 'i686', 'x86_64')
 config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build'
 config_opts['dist'] = 'el6'  # only useful for --resultdir variable subst
+config_opts['macros']['%dist'] = '.el6'
+config_opts['macros']['%el6'] = '1'
+config_opts['macros']['%rhel'] = '6'
 
 config_opts['yum.conf'] = """
 [main]
