@@ -476,7 +476,6 @@ make install
 %{__install} -D -m644 %name.rsyslog $RPM_BUILD_ROOT%{_sysconfdir}/rsyslog.d/%name.conf
 
 %if 0%{?el7}
-%{__mkdir} -p $RPM_BUILD_ROOT%{_sysconfdir}/systemd/system/multi-user.target.wants
 %{__install} -D -m644 %name.sysconfig.el7 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%name
 %{__install} -D -m644 %name.service.el7 $RPM_BUILD_ROOT%{_unitdir}/%name.service
 %else
@@ -648,7 +647,6 @@ systemctl restart rsyslog
 %{_sysconfdir}/rsyslog.d/%name.conf
 %if 0%{?el7}
 %{_unitdir}/%name.service
-%{_sysconfdir}/systemd/system/multi-user.target.wants
 %else
 %config %{_sysconfdir}/init.d/%name
 %endif

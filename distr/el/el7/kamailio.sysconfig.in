@@ -29,8 +29,8 @@ DUMP_CORE=no
 # Add extra command line parameters in the EXTRA_OPTIONS variable
 # EXTRA_OPTIONS="-a no"
 
-CFG_FILE=@sysconfdir@/kamailio/kamailio.cfg
+CFG_FILE=/etc/kamailio/kamailio-sipcapture.cfg
 
-PID_FILE=@runstatedir@/kamailio/kamailio.pid
+PID_FILE=/var/run/kamailio/kamailio.pid
 
-LOCK_FILE=@localstatedir@/lock/subsys/kamailio
+LOCK_FILE=/var/lock/subsys/kamailio
