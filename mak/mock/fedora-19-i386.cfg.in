@@ -3,6 +3,9 @@ config_opts['target_arch'] = 'i686'
 config_opts['legal_host_arches'] = ('i386', 'i586', 'i686', 'x86_64')
 config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build'
 config_opts['dist'] = 'fc19'  # only useful for --resultdir variable subst
+config_opts['macros']['%dist'] = '.fc19'
+config_opts['macros']['%fc19'] = '1'
+config_opts['macros']['%fedora'] = '19'
 
 config_opts['yum.conf'] = """
 [main]

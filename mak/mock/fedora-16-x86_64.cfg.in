@@ -2,6 +2,9 @@ config_opts['root'] = 'fedora-16-x86_64'
 config_opts['target_arch'] = 'x86_64'
 config_opts['chroot_setup_cmd'] = 'groupinstall buildsys-build'
 config_opts['dist'] = 'fc16'  # only useful for --resultdir variable subst
+config_opts['macros']['%dist'] = '.fc16'
+config_opts['macros']['%fc16'] = '1'
+config_opts['macros']['%fedora'] = '16'
 
 config_opts['yum.conf'] = """
 [main]

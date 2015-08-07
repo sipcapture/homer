@@ -1,7 +1,6 @@
 %define name		kamailio
 %define ver		%{VERSION_NUMBER}
 %define rel		%{BUILD_NUMBER}
-%define _prefix		/opt
 %define LIBDIR		%{_prefix}/lib64
 %define DATADIR		%{_prefix}/share
 %define DOCDIR		%{DATADIR}/doc
@@ -477,12 +476,12 @@ make install
 %{__install} -D -m644 %name.rsyslog $RPM_BUILD_ROOT%{_sysconfdir}/rsyslog.d/%name.conf
 
 %if 0%{?el7}
-%{__install} -D -m644 %name.sysconfig.el6 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%name
-%{__install} -D -m644 %name.init.el6 $RPM_BUILD_ROOT%{_sysconfdir}/init.d/%name
-%else
 %{__mkdir} -p $RPM_BUILD_ROOT%{_sysconfdir}/systemd/system/multi-user.target.wants
 %{__install} -D -m644 %name.sysconfig.el7 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%name
 %{__install} -D -m644 %name.service.el7 $RPM_BUILD_ROOT%{_unitdir}/%name.service
+%else
+%{__install} -D -m644 %name.sysconfig.el6 $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%name
+%{__install} -D -m644 %name.init.el6 $RPM_BUILD_ROOT%{_sysconfdir}/init.d/%name
 %endif
 
 
@@ -643,13 +642,16 @@ systemctl restart rsyslog
 
 
 %dir %{_sysconfdir}/%name
-#%config %{_sysconfdir}/rc.d/init.d/*
 %config(noreplace) %{_sysconfdir}/%name/*
-%{_sysconfdir}/systemd/system/multi-user.target.wants
 %{_sysconfdir}/sysconfig/%name
 %{_sysconfdir}/logrotate.d/%name
 %{_sysconfdir}/rsyslog.d/%name.conf
+%if 0%{?el7}
 %{_unitdir}/%name.service
+%{_sysconfdir}/systemd/system/multi-user.target.wants
+%else
+%config %{_sysconfdir}/init.d/%name
+%endif
 %dir %attr(2770,%name,%name)%{_localstatedir}/run/%name
 
 %dir %{LIBDIR}/%name
