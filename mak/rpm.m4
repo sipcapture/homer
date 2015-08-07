@@ -35,14 +35,11 @@ AC_ARG_WITH(yum-proxy, [--with-yum-proxy send downloads thru caching proxy like 
   AC_SUBST(DOWNLOAD_PROXY_CONFIG_LINE,"proxy=$withval")
   AC_SUBST(WGET_PROXY_OPTS,"http_proxy=$withval")
 
-# Require BASE URL otherwise download proxy will be useless
+# Set BASE URL otherwise default URLs will be used
 AC_ARG_VAR(CENTOS_BASE_URL, [Where to find CentOS distribution. Example: http://centos.aol.com])
 if test -z "$CENTOS_BASE_URL"; then
   if test -n "$MIRROR_SITE"; then 
     CENTOS_BASE_URL=$MIRROR_SITE/centos
-  else
-    AC_MSG_ERROR([You must provide a value for CENTOS_BASE_URL or MIRROR_SITE if you are using a download proxy.\
- See https://github.com/sipcapture/homer/blob/homer5/INSTALL.md for more details.])
   fi
 fi
 
@@ -50,9 +47,6 @@ AC_ARG_VAR(ORACLE_BASE_URL, [Where to find Orace Enterprise Linux distribution. 
 if test -z "$ORACLE_BASE_URL"; then
   if test -n "$MIRROR_SITE"; then 
     ORACLE_BASE_URL=$MIRROR_SITE/centos
-  else
-    AC_MSG_ERROR([You must provide a value for ORACLE_BASE_URL or MIRROR_SITE if you are using a download proxy.\
- See https://github.com/sipcapture/homer/blob/homer5/INSTALL.md for more details.])
   fi
 fi
 
@@ -60,9 +54,6 @@ AC_ARG_VAR(FEDORA_BASE_URL, [Where to find Fedora distribution. Example: http://
 if test -z "$FEDORA_BASE_URL"; then
   if test -n "$MIRROR_SITE"; then 
     FEDORA_BASE_URL=$MIRROR_SITE/fedora/linux
-  else
-    AC_MSG_ERROR([You must provide a value for FEDORA_BASE_URL or MIRROR_SITE if you are using a download proxy.\
- See https://github.com/sipcapture/homer/blob/homer5/INSTALL.md for more details.])
   fi
 fi
 
@@ -70,9 +61,6 @@ AC_ARG_VAR(FEDORA_ARCHIVE_BASE_URL, [Where to find Fedora archives. Example: htt
 if test -z "$FEDORA_ARCHIVE_BASE_URL"; then
   if test -n "$MIRROR_SITE"; then 
     FEDORA_ARCHIVE_BASE_URL=$MIRROR_SITE/archive/fedora/linux
-  else
-    AC_MSG_ERROR([You must provide a value for FEDORA_ARCHIVE_BASE_URL or MIRROR_SITE if you are using a download proxy.\
- See https://github.com/sipcapture/homer/blob/homer5/INSTALL.md for more details.])
   fi
 fi
 
@@ -80,9 +68,6 @@ AC_ARG_VAR(EPEL_BASE_URL, [Where to find EPEL distribution. Example: http://mirr
 if test -z "$EPEL_BASE_URL"; then
   if test -n "$MIRROR_SITE"; then 
     EPEL_BASE_URL=$MIRROR_SITE/epel
-  else
-    AC_MSG_ERROR([You must provide a value for EPEL_BASE_URL or MIRROR_SITE if you are using a download proxy.\
- See https://github.com/sipcapture/homer/blob/homer5/INSTALL.md for more details.])
   fi
 fi
 
