@@ -6,8 +6,8 @@
 # description: Kamailio (OpenSER) - the Open Source SIP Server
 #
 # processname: kamailio
-# pidfile: @runstatedir@/kamailio.pid
-# config:  @sysconfdir@/kamailio/kamailio-sipcapture.cfg
+# pidfile: /var/run/kamailio.pid
+# config:  /etc/kamailio/kamailio-sipcapture.cfg
 #
 ### BEGIN INIT INFO
 # Provides: kamailio
@@ -18,15 +18,15 @@
 ### END INIT INFO
 
 # Source function library.
-. @sysconfdir@/rc.d/init.d/functions
+. /etc/rc.d/init.d/functions
 
-KAM=@sbindir@/kamailio
-KAMCFG=@sysconfdir@/kamailio/kamailio-sipcapture.cfg
+KAM=/usr/sbin/kamailio
+KAMCFG=/etc/kamailio/kamailio-sipcapture.cfg
 PROG=kamailio
-PID_FILE=@runstatedir@/kamailio.pid
-LOCK_FILE=@localstatedir@/lock/subsys/kamailio
+PID_FILE=/var/run/kamailio.pid
+LOCK_FILE=/var/lock/subsys/kamailio
 RETVAL=0
-DEFAULTS=@sysconfdir@/sysconfig/kamailio
+DEFAULTS=/etc/sysconfig/kamailio
 RUN_KAMAILIO=no
 
 
@@ -35,7 +35,7 @@ RUN_KAMAILIO=no
 check_fork ()
 {
     if grep -q "^[[:space:]]*fork[[:space:]]*=[[:space:]]*no.*" $KAMCFG; then
-        echo "Not starting $DESC: fork=no specified in config file; run @sysconfdir@/init.d/kamailio debug instead"
+        echo "Not starting $DESC: fork=no specified in config file; run /etc/init.d/kamailio debug instead"
         exit 1
     fi
 }
@@ -80,7 +80,7 @@ if [ -f $DEFAULTS ]; then
 fi
 
 if [ "$RUN_KAMAILIO" != "yes" ]; then
-    echo "Kamailio not yet configured. Edit @sysconfdir@/default/kamailio first."
+    echo "Kamailio not yet configured. Edit /etc/default/kamailio first."
     exit 0
 fi
 
