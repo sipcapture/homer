@@ -148,6 +148,14 @@ $unique = getVar('unique', 0, $_REQUEST, 'int');
 $location = getVar('location', array(0), $_REQUEST, 'array');
 $text = getVar('text', 0, $_REQUEST, 'int');
 
+
+if ( count($location) <= 1 ) {
+        if ( key($location) == 0 && $location[0] == 0 ) {
+            unset($location);
+            $location[0] = key($mynodes);
+        }
+}
+
 $cid_array = getVar('cid', NULL, $_REQUEST,'array');
 if(is_array($cid_array)) $cid = $cid_array[0];
 else $cid = $cid_array;
@@ -160,6 +168,8 @@ if(!$db->dbconnect_homer(isset($mynodes[$location[0]]) ? $mynodes[$location[0]] 
     //No connect;
     exit;
 }
+
+$mylocation = $location[0];
 
 if(BLEGDETECT == 1) $b2b = 1;
 
