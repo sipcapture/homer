@@ -135,10 +135,11 @@ if (!isset($table)) { $table="sip_capture"; }
 //$cid="1234567890";
 
 // Get Variables
+$timerange = getVar('timerange', 1, $_REQUEST, 'string');
 $b2b = getVar('b2b', NULL, $_REQUEST, 'string');
 $from_user = getVar('from_user', NULL, $_REQUEST, 'string');
 $to_user = getVar('to_user', NULL, $_REQUEST, 'string');
-$limit = getVar('limit', 5000, $_REQUEST, 'string');
+$limit = getVar('limit', 1000, $_REQUEST, 'string');
 // Get time & date if available
 $flow_from_date = getVar('from_date', NULL, $_REQUEST, 'string');
 $flow_to_date = getVar('to_date', NULL, $_REQUEST, 'string');
@@ -164,6 +165,18 @@ else {
 	$cid_array[] = $cid;
 }
 
+if($timerange != 1) {
+        $all = 1;
+        $location = array("1");
+        $cid = "";
+        $cid_array = array("");
+        // auto-set safe limit for PHP mem allocation (MUST be in Megabytes - ie 128M, 1024M)
+        $limit = intval( 32 * intval(ini_get('memory_limit')) );
+        // $limit = 10000;
+        $fileid="RANGE_".$flow_from_date."_SPAN_".$flow_from_time."_".$flow_to_time;
+}
+
+
 if(!$text) $buf=$pcap_packet;
 
 /* HOMER DB */
@@ -185,7 +198,7 @@ if (isset($flow_to_date, $flow_from_time, $flow_to_time))
 }
 
 /* Prevent break SQL */
-if(isset($where)) $where.=" AND ";
+if(isset($where) && !isset($all)) $where.=" AND ";
 
 // Build Search Query
 if(isset($cid_array)) {
@@ -214,16 +227,16 @@ if(isset($cid_array)) {
 	    	}
             }
 	}	         
-} else if(isset($from_user)) {
+} else if(isset($from_user) && !isset($all)) {
 	 $fileid="FROM_".$from_user."_".mt_rand();
          $where .= "( from_user = '".$from_user."'";
          if(isset($to_user)) { $where .= " OR to_user='".$to_user."') AND "; } else {  $where .= ") AND ";}
-} else if(isset($to_user)) {
+} else if(isset($to_user) && !isset($all)) {
          $fileid="TO_".$to_user."_".mt_rand();
 	 $where .= "( to_user = '".$to_user."') AND ";
 }
 
-if(!isset($limit)) { $limit = 100; }
+if(!isset($limit)) { $limit = 500; }
 
 $localdata=array();
 $results = array();
@@ -239,9 +252,25 @@ foreach($location as $value) {
 	            
 	            $local_where = $where." ( callid like '".$cid."' )";                               
 	            
+	             if(isset($all)) {
+		                $local_where = $where;
+                		$query = "SELECT *, ".$tnode
+                             	  ."\n FROM ".$tablename
+                             	  ." WHERE ".$local_where
+                             	  ." limit ".$limit;
+                     } else {
+                    		$local_where = $where." ( callid = '".$cid."' )";
+                    		$query = "SELECT *, ".$tnode
+                              		."\n FROM ".$tablename
+                              		."\n WHERE ".$local_where
+                                     	." order by micro_ts ASC limit ".$limit;
+                     }
+
+		    /*
 	            $query = "SELECT *, ".$tnode
 	                     ."\n FROM ".$tablename
 	                     ."\n WHERE ".$local_where." order by micro_ts ASC limit ".$limit;
+		    */
 	
 	            $result = $db->loadObjectArray($query);
 	
