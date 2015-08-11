@@ -114,7 +114,7 @@ Homer 5 is composed of separate elements:
 * Import the _SIP Search Dashboard_ and perform a test search
 	* _homer-api/examples/dashboards/_1431943495.json_
 
-* Configure Admin > Nodes to point to your MySQL instances w/ authentication
+* Configure Admin > Nodes to point to your MySQL instance(s) w/ actual authentication details
 
 ### Enjoy Homer5!
 
