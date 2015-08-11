@@ -259,7 +259,7 @@ foreach($location as $value) {
                              	  ." WHERE ".$local_where
                              	  ." limit ".$limit;
                      } else {
-                    		$local_where = $where." ( callid = '".$cid."' )";
+                    		$local_where = $where." ( callid like '".$cid."' )";
                     		$query = "SELECT *, ".$tnode
                               		."\n FROM ".$tablename
                               		."\n WHERE ".$local_where
