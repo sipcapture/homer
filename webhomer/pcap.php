@@ -229,11 +229,11 @@ if(isset($cid_array)) {
 	}	         
 } else if(isset($from_user) && !isset($all)) {
 	 $fileid="FROM_".$from_user."_".mt_rand();
-         $where .= "( from_user = '".$from_user."'";
-         if(isset($to_user)) { $where .= " OR to_user='".$to_user."') AND "; } else {  $where .= ") AND ";}
+         $where .= "( from_user like '".$from_user."'";
+         if(isset($to_user)) { $where .= " OR to_user like '".$to_user."') AND "; } else {  $where .= ") AND ";}
 } else if(isset($to_user) && !isset($all)) {
          $fileid="TO_".$to_user."_".mt_rand();
-	 $where .= "( to_user = '".$to_user."') AND ";
+	 $where .= "( to_user like '".$to_user."') AND ";
 }
 
 if(!isset($limit)) { $limit = 500; }
