@@ -409,20 +409,14 @@ if (CSHARK == 1 && !$text) {
 
     // Remove Temp
     unlink($pfile);
-
     exit;
 
 } else {
-
-    $fsize=strlen($buf);;
     header("Content-type: application/octet-stream");
     header("Content-Disposition: filename=\"".$pcapfile."\"");
-    header("Content-length: $fsize");
+    header("Content-length: ".strlen($buf));
     header("Cache-control: private"); 
     echo $buf;
     exit;
-
 } 
-
-
 ?>
