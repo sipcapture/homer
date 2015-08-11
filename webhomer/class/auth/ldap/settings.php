@@ -13,16 +13,16 @@ define('LDAP_ADMINLEVEL',1);
 define('LDAP_ADMIN_USER',"user1,user2,user3,user4");
 
 // If not defined, Password my be commited unencrypted to ldap server
-#define('LDAP_ENCRYPTION', "tls");
+//define('LDAP_ENCRYPTION', "tls");
 // LdapVersion. Default is 2
-# define('LDAP_VERSION', "3");
+//define('LDAP_VERSION', "3");
 // Require membership of group to login
-#define('LDAP_GROUPDN',"cn=groupname,dc=example,dc=com");
-#define('LDAP_GROUP_ATTRIBUTE',"member")
+//define('LDAP_GROUPDN',"cn=groupname,dc=example,dc=com");
+//define('LDAP_GROUP_ATTRIBUTE',"member")
 
 // If you need to authenticate conections with the ldap uncoment these
-#define('LDAP_BIND_USER', "uid=ldapuserauth,ou=users,dc=example,dc=com");
-#define('LDAP_BIND_PASSWORD', "SOMEPASSWORD");
+//define('LDAP_BIND_USER', "uid=ldapuserauth,ou=users,dc=example,dc=com");
+//define('LDAP_BIND_PASSWORD', "SOMEPASSWORD");
 
 ?>
 
