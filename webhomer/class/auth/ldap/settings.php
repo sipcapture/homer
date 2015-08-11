@@ -19,10 +19,7 @@ define('LDAP_ADMIN_USER',"user1,user2,user3,user4");
 // Require membership of group to login
 //define('LDAP_GROUPDN',"cn=groupname,dc=example,dc=com");
 //define('LDAP_GROUP_ATTRIBUTE',"member")
-
 // If you need to authenticate conections with the ldap uncoment these
 //define('LDAP_BIND_USER', "uid=ldapuserauth,ou=users,dc=example,dc=com");
 //define('LDAP_BIND_PASSWORD', "SOMEPASSWORD");
-
 ?>
-
