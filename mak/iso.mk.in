@@ -1,0 +1,35 @@
+# Initial Version Copyright (C) Homer Project 2012-2015 (http://www.sipcapture.org).
+# Licensed to the User under the GPL license.
+#
+
+include $(SRC)/mak/*.iso.mk
+
+$(foreach D,$(ALL_DISTROS),$(eval help-more.$(D).iso = Build single ISO image for $(D).))
+
+iso : $(DISTRO).homer.rpm iso.dirs iso.common $(DISTRO).iso.packages iso.application iso.repo iso/$(DISTRO).iso
+
+iso.dirs :
+	test -d iso/$(DISTRO)/Packages || mkdir -p iso/$(DISTRO)/Packages
+	test -d iso/$(DISTRO)/Application || mkdir -p iso/$(DISTRO)/Application
+
+iso.common :
+	cp -rf $(SRC)/mak/iso/$(DISTRO)/* iso/$(DISTRO)/
+
+iso.application :
+	cp -r $(MOCK_RESULTS_DIR)/*.rpm iso/$(DISTRO)/Application/
+
+iso.repo :
+	createrepo -o iso/$(DISTRO) iso/$(DISTRO)
+
+iso/$(DISTRO).iso :
+	mkisofs \
+	-r -T -J \
+	-V "@PACKAGE_NAME@-$(DISTRO_OS)-$(DISTRO_VER).$(DISTRO_ARCH)" \
+	-b isolinux/isolinux.bin \
+	-c isolinux/boot.cat \
+	-no-emul-boot -boot-load-size 4 -boot-info-table \
+	-o $@ \
+	iso/$(DISTRO)
+
+iso-clean :
+	rm -rf iso/$(DISTRO)

@@ -1,3 +1,7 @@
+# Copyright (C) Homer Project 2012-2015 (http://www.sipcapture.org).
+# Licensed to the User under the GPL license.
+#
+
 captagent_VER = 6.0.0
 captagent_TAG = 6.0.0
 captagent_PACKAGE_REVISION = $(shell cd $(SRC)/captagent; ../config/revision-gen $(captagent_TAG))
