@@ -26,6 +26,7 @@ AC_SUBST(OPTIONS)
 m4_include([config/projectlib2.m4])
 m4_include([mak/rpm.m4])
 m4_sinclude([custom/custom.m4])
+m4_include([mak/iso.m4])
 m4_include([mak/deps.m4])
 
 AC_CONFIG_FILES([Makefile])
