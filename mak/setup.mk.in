@@ -48,7 +48,7 @@ src-setup-header : @PACKAGE_NAME@.repo
 
 .PHONY: @PACKAGE_NAME@.repo
 @PACKAGE_NAME@.repo :
-	echo "$$download_sipcapture_repo_contents" > @PACKAGE_NAME@.repo
+	echo "$$download_project_repo_contents" > @PACKAGE_NAME@.repo
 
 define src_setup_header
 #!/bin/bash
@@ -111,14 +111,14 @@ ln -snf $(abspath build.repo) /etc/yum.repos.d/build.repo
 endef
 export rpm_setup_header
 
-define download_sipcapture_repo_contents
+define download_project_repo_contents
 [@PACKAGE_NAME@]
 name= @PACKAGE_NAME@
 baseurl=http://download.sipcapture.org/pub/$(PACKAGE_VERSION)-unstable/$(CURRENT_DISTRO)_$$releasever/$$basearch
 enabled=1
 gpgcheck=0
 endef
-export download_sipcapture_repo_contents
+export download_project_repo_contents
 
 define build_repo_contents
 [build]
