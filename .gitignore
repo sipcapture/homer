@@ -2,3 +2,5 @@ mak/*-*.mk
 configure
 autom4te.cache
 build
+confg/install-sh
+config/missing
