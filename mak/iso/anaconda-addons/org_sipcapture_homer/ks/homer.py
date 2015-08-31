@@ -14,11 +14,11 @@ class HomerData(AddonData):
 	def __init__(self, name):
 
 		AddonData.__init__(self, name)
-		self.homer_user = "homer_user"
-		self.homer_password = "homer_password"
-		self.homer_database_name = "homer"
-		self.homer_database_host = "localhost"
-		self.homer_webserver_type = "httpd"
+		self.homer_user = ""
+		self.homer_password = ""
+		self.homer_database_name = ""
+		self.homer_database_host = ""
+		self.homer_webserver_type = ""
 
 	def handle_header(self, lineno, args):
 
