@@ -51,9 +51,9 @@ Homer 5 is composed of separate elements:
 * Configure Apache2 (or nginx) for HOMER vhost _(see $GIT/homer-api/examples/web/)_
 * Enable mod rewrite (please check if you set AllowOverride All for api dir. https://github.com/sipcapture/homer/wiki/webHomer-settings#apache-mod_rewrite)
 * Install Homer 5 web components
-	* Copy HOMER-UI Contents to vhost directory
+	* Copy HOMER-UI Contents to vhost directory  _($WEB)_
 		* Make sure store/dashboard writable by Apache
-	* Copy HOMER-API/api directory to vhost directory
+	* Copy HOMER-API/api directory to vhost directory  _($WEB/api)_
 
 
 #### MYSQL:
