@@ -50,7 +50,15 @@ $(@PACKAGE_NAME@:=.distdir) : %.distdir : %.autoreconf %.configure
 
 %.deb : %.distdir
 	@echo 'Building DEB for $*...'
-	$(MAKE) -C $(PROJ) deb
+	if [ -n "$($(PROJ)_DEB)" ]; then \
+	  $(MAKE) -C $(PROJ) deb; \
+	else \
+	  if [ -d debian ]; then \
+	    (cd $(PROJ) && dpkg-buildpackage -rfakeroot -tc && rm debian); \
+	  else \
+	    (cd $(PROJ) && ln -s pkg/debian debian && dpkg-buildpackage -rfakeroot -tc && rm debian); \
+	  fi; \
+	fi;
 
 repo-quick-update repo-update :
 	@echo "Dummy target repo-update"
