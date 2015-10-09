@@ -45,7 +45,8 @@ $(@PACKAGE_NAME@:=.deb.if-changed) $(lib:=.deb.if-changed) : %.deb.if-changed : 
 	@$(MAKE) -s nop $(shell $(SRC)/tools/dep check $(DISTRO).$(PROJ).deb $(SRC)/$(PROJ) \
 	       $(foreach D,$($(PROJ)_DEPS),$(DISTRO).$(D).deb))
 
-$(@PACKAGE_NAME@:=.distdir) : %.distdir : %.autoreconf %.configure
+%.distdir : %.autoreconf %.configure
+	@echo "make distdir for $*..."
 	$(MAKE) -C $(PROJ) distdir=. am__remove_distdir= distdir
 
 %.deb : %.distdir
