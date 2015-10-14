@@ -2,11 +2,12 @@
 # Licensed to the User under the GPL license.
 #
 
-captagent_VER = 6.0.0
-captagent_TAG = 6.0.0
+captagent_VER = 6.0.1
+captagent_TAG = 6.0.1
 captagent_PACKAGE_REVISION = $(shell cd $(SRC)/captagent; ../config/revision-gen $(captagent_TAG))
 captagent_SRPM = captagent-$(captagent_VER)-$(captagent_PACKAGE_REVISION).src.rpm
 captagent_TAR = captagent/captagent-$(captagent_VER).tar.gz
+captagent_DEB = deb
 
 captagent_SRPM_DEFS = \
 	--define "BUILD_NUMBER $(captagent_PACKAGE_REVISION)" \

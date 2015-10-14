@@ -74,7 +74,7 @@ fi
 ],)
 
 dnl NOTE: To support non-rpm based distos, write equivalent of this that defines DISTRO_* vars
-AC_CHECK_FILE(/bin/rpm, 
+AC_CHECK_FILE(/bin/rpm,
 [
   RPMBUILD_TOPDIR="\$(shell rpm --eval '%{_topdir}')"
   AC_SUBST(RPMBUILD_TOPDIR)
@@ -93,17 +93,17 @@ AC_CHECK_FILE(/bin/rpm,
   DistroDefault="${DistroOsDefault}-${DistroVerDefault}-${DistroArchDefault}"
 ])
 
-AC_ARG_VAR(DISTRO, [What operating system you are compiling for. Default is ${DistroDefault}])
-test -n "${DISTRO}" || DISTRO="centos-6-x86_64"
-
-AllDistrosDefault="fedora-16-i386 fedora-16-x86_64 fedora-17-i386 fedora-17-x86_64 fedora-18-i386 fedora-18-x86_64 fedora-19-i386 fedora-19-x86_64 centos-6-i386 centos-6-x86_64 oracle-7-x86_64"
-AC_ARG_VAR(ALL_DISTROS, [All distros which using cross distroy compiling (xc.* targets) Default is ${AllDistrosDefault}])
-test -n "${ALL_DISTROS}" || ALL_DISTROS="${AllDistrosDefault}"
-
 SETUP_TARGET=src
 AC_SUBST(SETUP_TARGET)
 AC_ARG_ENABLE(rpm, [--enable-rpm Using mock package to build rpms],
 [
+  AC_ARG_VAR(DISTRO, [What operating system you are compiling for. Default is ${DistroDefault}])
+  test -n "${DISTRO}" || DISTRO="centos-6-x86_64"
+
+  AllDistrosDefault="fedora-16-i386 fedora-16-x86_64 fedora-17-i386 fedora-17-x86_64 fedora-18-i386 fedora-18-x86_64 fedora-19-i386 fedora-19-x86_64 centos-6-i386 centos-6-x86_64 oracle-7-x86_64"
+  AC_ARG_VAR(ALL_DISTROS, [All distros which using cross distroy compiling (xc.* targets) Default is ${AllDistrosDefault}])
+  test -n "${ALL_DISTROS}" || ALL_DISTROS="${AllDistrosDefault}"
+
   SETUP_TARGET=rpm
 
   # What is installed on host has little to do with what needs to be installed in chroot

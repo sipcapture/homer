@@ -1,0 +1,5 @@
+captagent (5.0.1-1) unstable; urgency=low
+
+  * Initial DEB packaging
+
+ -- Konstantin S. Vishnivetsky <kvishnivetsky@sipcapture.org>  Wed, 18 Sep 2015 23:07:10 +0600
