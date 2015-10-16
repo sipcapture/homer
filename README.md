@@ -1,7 +1,10 @@
 [![Logo](http://sipcapture.org/data/images/sipcapture_header.png)](http://sipcapture.org)
 
-## HOMER 5
+# HOMER 5
 #### 100% Open-Source Modular SIP & VoIP Capture Server & Agent
+![H5](http://i.imgur.com/G5LF1Wl.png)
+
+## What is HOMER?
 
 HOMER is a robust, carrier-grade, scalable SIP Capture system and Monitoring Application with HEP, IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling protocol.
 
@@ -12,7 +15,7 @@ HOMER 5 User-Interface is developed using standard Angular JS, easily extensible
 HOMER is already used by large voice networks, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. Contact the team for your basic and advanced needs or leverage the experience of our great community by joining our [mailing-list](http://groups.google.com/group/homer-discuss). 
 
 ## Components
-The HOMER Application is composed by:
+The HOMER Application is composed of:
 
 * [Homer-API](https://github.com/sipcapture/homer-api)
   * Sipcapture Backend connector and API Component
