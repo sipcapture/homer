@@ -2,7 +2,8 @@
 
 # HOMER 5
 #### 100% Open-Source Modular SIP & VoIP Capture Server & Agent
-![H5](http://i.imgur.com/G5LF1Wl.png)
+
+![TEST](http://sipcapture.org/io/img/H5screen.gif)
 
 ## What is HOMER?
 
@@ -26,6 +27,7 @@ The HOMER Application is composed of:
 * Kamailio-Dev
   * Sipcapture HEP Capture Server _(sipcapture module)_
 
+![H5](http://i.imgur.com/G5LF1Wl.png)
 
 ## Installation
 
