@@ -5,7 +5,8 @@
 
 <br/>
 
-![TEST](http://sipcapture.org/io/img/H5screen.gif)
+![HOMER5](http://i.imgur.com/Ygox016.gif)
+
 
 ## What is HOMER?
 
@@ -46,7 +47,7 @@ The following platforms are _HEP-ready_:
 
 Please follow our [Setup Guide](https://github.com/sipcapture/homer/blob/homer5/INSTALL.md) to get started.
 
-## ![H5](http://i.imgur.com/hmDNkDk.gif)
+![TEST](http://sipcapture.org/io/img/H5screen.gif)
 
 
 ### Need Support?
