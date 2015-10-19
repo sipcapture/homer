@@ -37,7 +37,7 @@ The following platforms are _HEP-ready_:
 * [OpenSIPS](http://opensips.org)
 * [Asterisk](http://asterisk.org)
 * [FreeSWITCH](http://freeswitch.org)
-* ANY (using [CaptAgent](http://github.com/sipcapture/captagent))
+* _ANY_ with [CaptAgent](http://github.com/sipcapture/captagent)
 
 ![H5](http://i.imgur.com/hmDNkDk.gif)
 
