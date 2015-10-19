@@ -39,11 +39,14 @@ The following platforms are _HEP-ready_:
 * [FreeSWITCH](http://freeswitch.org)
 * _ANY_ with [CaptAgent](http://github.com/sipcapture/captagent)
 
-![H5](http://i.imgur.com/hmDNkDk.gif)
+
+
 
 ## Installation
 
 Please follow our [Setup Guide](https://github.com/sipcapture/homer/blob/homer5/INSTALL.md) to get started.
+
+## ![H5](http://i.imgur.com/hmDNkDk.gif)
 
 
 ### Need Support?
