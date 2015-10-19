@@ -7,11 +7,10 @@ This documents outlines the installation process for SIPCAPTURE HOMER version 5.
 
 ## Installation
 
-Homer 5 is composed of separate elements:
- * [HOMER-API](https://github.com/sipcapture/homer-api): API Server and Backend Component
- * [HOMER-UI](https://github.com/sipcapture/homer-ui):  User-Interface and Frontend Component
+**Packages are coming! If you don't know what you are doing, check back next week - the Manual setup procedure requires ability to carefully read, understanding of our elements and some basic system skills**
 
-## Setup Guide
+
+## Manual Setup Guide
 
 * Sytem Requirements:
 	- Apache2 or nginx 
