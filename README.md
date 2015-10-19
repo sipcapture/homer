@@ -3,19 +3,21 @@
 # HOMER 5
 #### _100% Open-Source VoIP Capture, Troubleshooting & Monitoring_
 
+<br/>
+
 ![TEST](http://sipcapture.org/io/img/H5screen.gif)
 
 ## What is HOMER?
 
-HOMER is a robust, carrier-grade, scalable SIP Capture system and Monitoring Application with HEP, IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling, logs and statistics with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling protocol.
+**HOMER** is a robust, carrier-grade, scalable SIP Capture system and Monitoring Application with HEP, IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling, logs and statistics with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling protocol.
 
 Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modules/sipcapture.html) Module for industry-standard [Kamailio](http://kamailio.org) or [OpenSIPS](http://opensips.org), HOMER provides virtually unlimited scope for granular capture [configuration](https://github.com/sipcapture/homer-api/blob/master/examples/sipcapture/kamailio.cfg) either stand-alone or using our companion [Capture Agent](https://github.com/sipcapture/captagent) Project.
 
-HOMER 5 User-Interface is developed using standard Angular JS, easily extensible and with all functionality moved to specialized and customizable widgets feeding and displaying correlated data from internal and external data sources such as InfluxDB and Elasticsearch. 
+**HOMER 5** User-Interface is developed using standard Angular JS, easily extensible and with all functionality moved to specialized and customizable widgets feeding and displaying correlated data from internal and external data sources such as InfluxDB and Elasticsearch. 
 
-HOMER allows integrators and users to define granular custom logic and generate statistic from its capture dialplan interacting with other Kamailio modules to extend its functionality including fully programmable threshold triggering and alarming, providing plenty of space for tailored configurations and logic customizations.
+**HOMER** allows integrators and users to define granular custom logic and generate statistic from its capture dialplan interacting with other Kamailio modules to extend its functionality including fully programmable threshold triggering and alarming, providing plenty of space for tailored configurations and logic customizations.
 
-HOMER is already used by large voice networks, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. Contact the team for your basic and advanced needs or leverage the experience of our great community by joining our [mailing-list](http://groups.google.com/group/homer-discuss). 
+**HOMER** is already used by large voice networks, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. Contact the team for your basic and advanced needs or leverage the experience of our great community by joining our [mailing-list](http://groups.google.com/group/homer-discuss). 
 
 ## Capture Server
 The HOMER Core Application is composed of two elements:
