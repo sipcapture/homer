@@ -7,11 +7,29 @@ This documents outlines the installation process for SIPCAPTURE HOMER version 5.
 
 ## Installation
 
-Homer 5 is composed of separate elements:
- * [HOMER-API](https://github.com/sipcapture/homer-api): API Server and Backend Component
- * [HOMER-UI](https://github.com/sipcapture/homer-ui):  User-Interface and Frontend Component
+**Packages are coming! If you don't know what you are doing, check back next week - the Manual setup procedure requires ability to carefully read, understanding of our elements and some basic system skills**
 
-## Setup Guide
+-------------
+
+### Automated Setup
+All projects required to build HOMER can be downloaded as submodules from our master repository
+```
+$ cd /usr/src
+$ git clone https://github.com/sipcapture/homer.git
+$ cd homer
+$ git submodule update --init --recursive
+```
+
+To force syncronizing all projects to the latest submodules use the following command:
+```
+git submodule foreach git reset --hard origin/master
+```
+
+_... to be continued! work in progress..._
+
+-------------
+
+### Manual Setup
 
 * Sytem Requirements:
 	- Apache2 or nginx 
@@ -143,7 +161,7 @@ Contributors and Contributions to our project are always welcome! If you intend 
 
 *Captagent is released under GNU GPLv3 license*
 
-*(C) 2008-2015 SIPCAPTURE & QXIP BV*
+*(C) 2008-2015 [SIPCAPTURE](http://sipcapture.org) & [QXIP BV](http://qxip.net)*
 
 ----------
 

@@ -492,16 +492,26 @@ make install
 /usr/sbin/useradd -r -g %name -s /bin/false -c "Kamailio daemon" -d \
 		%{LIBDIR}/%name %name 2> /dev/null || :
 
+%if 0%{?el7}
 systemctl daemon-reload
+%endif
 
 %post
 #/sbin/chkconfig --add %name
 
+%if 0%{?el7}
 systemctl restart rsyslog
+%else
+service rsyslog restart
+%endif
 
 
 %preun
+%if 0%{?el7}
 systemctl stop %name
+%else
+service %name stop
+%endif
 
 #if [ $1 = 0 ]; then
 #	/sbin/service %name stop > /dev/null 2>&1
@@ -509,8 +519,12 @@ systemctl stop %name
 #fi
 
 %postun
+%if 0%{?el7}
 systemctl daemon-reload
 systemctl restart rsyslog
+%else
+service rsyslog restart
+%endif
 
 %files
 %defattr(-,root,root)
