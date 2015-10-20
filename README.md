@@ -20,17 +20,14 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 
 **HOMER** is already used by large voice networks, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. Contact the team for your basic and advanced needs or leverage the experience of our great community by joining our [mailing-list](http://groups.google.com/group/homer-discuss). 
 
-## Capture Server
 The HOMER Core Application is composed of two elements:
 
-* [Homer-API](https://github.com/sipcapture/homer-api)
-  * SIPCapture Backend connector and API Components
-* [Homer-UI](https://github.com/sipcapture/homer-ui)
-  * SIPCapture Frontend & JS User-Interface Component
+## Capture Server
+Responsible for Collecting, Indexing and Storing received HEP, IPIP and Raw packets from HEP Agents, the HOMER Capture Server is based on our SIPCapture module for [Kamailio](http://kamailio.org) or [OpenSIPS](http://opensips.org) featuring optimized database schemas with advanced options and complex and extensible capture plans with multiple table support and triggers able to interact with any module on the platform and unlimited scope.
 
 
 ## Capture Agents
-Capture Agents are responsible for feeding HOMER SIP signaling, Logs, RTCP Reports and more using the HEP (Homer Encapsulation Protocol) protocol. Our WIKI provides several useful examples to get started.
+Capture Agents are responsible for feeding HOMER SIP signaling, Logs, RTCP Reports and much more using the HEP _(Homer Encapsulation Protocol)_ protocol. Our [WIKI](https://github.com/sipcapture/homer/wiki) provides several useful examples to get started.
 
 The following platforms are _HEP-ready_:
 
@@ -38,14 +35,14 @@ The following platforms are _HEP-ready_:
 * [OpenSIPS](http://opensips.org)
 * [Asterisk](http://asterisk.org)
 * [FreeSWITCH](http://freeswitch.org)
-* _ANY_ with [CaptAgent](http://github.com/sipcapture/captagent)
++ [CaptAgent](http://github.com/sipcapture/captagent) _for any other platform_
 
 
 
 
 ## Installation
 
-Please follow our [Setup Guide](https://github.com/sipcapture/homer/blob/homer5/INSTALL.md) to get started.
+Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) to get started.
 
 ![TEST](http://sipcapture.org/io/img/H5screen.gif)
 
