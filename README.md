@@ -23,10 +23,13 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 ## Capture Server
 The HOMER Core Application is composed of two elements:
 
-* [Homer-API](https://github.com/sipcapture/homer-api)
-  * SIPCapture Backend connector and API Components
-* [Homer-UI](https://github.com/sipcapture/homer-ui)
-  * SIPCapture Frontend & JS User-Interface Component
+* **Capture Server**
+  * SIPCapture module for [Kamailio](http://kamailio.org) or [OpenSIPS](http://opensips.org)
+  * Collecting, Indexing and Storing received HEP, IPIP and Raw packets
+  
+* **Capture Agent(s)**
+  * Remote HEP probes and Packet Capture Agents _(see below)_
+  * Mirror and Send encapsulated _SIP, XMPP, RTCP, Stats, Logs and more!_
 
 
 ## Capture Agents
