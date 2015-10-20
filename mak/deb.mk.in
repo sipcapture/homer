@@ -55,9 +55,9 @@ $(@PACKAGE_NAME@:=.deb.if-changed) $(lib:=.deb.if-changed) : %.deb.if-changed : 
 	  $(MAKE) -C $(PROJ) deb; \
 	else \
 	  if [ -d debian ]; then \
-	    (cd $(PROJ) && dpkg-buildpackage -rfakeroot -tc && rm debian); \
+	    (cd $(PROJ) && dpkg-buildpackage $($(PROJ)_DEB_OPTIONS) -rfakeroot -tc && rm debian); \
 	  else \
-	    (cd $(PROJ) && ln -s pkg/debian debian && dpkg-buildpackage -rfakeroot -tc && rm debian); \
+	    (cd $(PROJ) && ln -s pkg/debian debian && dpkg-buildpackage $($(PROJ)_DEB_OPTIONS) -rfakeroot -tc && rm debian); \
 	  fi; \
 	fi;
 

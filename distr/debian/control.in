@@ -1,12 +1,13 @@
 Source: @PACKAGE_NAME@
 Section: comm
 Priority: optional
-Maintainer: Konstantin S. Vishnivetsky <developer@unknown>
+Maintainer: Konstantin S. Vishnivetsky <voip-projects@vishnivetsky.ru>
 Build-Depends:	debhelper (>= 8.0.0),
-		autotools-dev,
+		debconf,
+		autotools-dev
 Standards-Version: @PACKAGE_VERSION@
-Homepage: http://sipcapture.org
-Vcs-Git: git://github.com/sipcapture/captagent/tree/captagent6
+Homepage: @PACKAGE_URL@
+Vcs-Git: git://github.com/sipcapture/@PACKAGE_NAME@
 
 Package: @PACKAGE_NAME@
 Architecture: linux-any
