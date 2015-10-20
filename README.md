@@ -1,11 +1,10 @@
 [![Logo](http://sipcapture.org/data/images/sipcapture_header.png)](http://sipcapture.org)
 
 # HOMER 5
-#### _100% Open-Source VoIP Capture, Troubleshooting & Monitoring_
+##### 100% Open-Source VoIP Capture, Troubleshooting & Monitoring
 
 <br/>
-
-![HOMER5](http://i.imgur.com/Ygox016.gif)
+<img src="http://i.imgur.com/Ygox016.gif" width="500">
 
 
 ## What is HOMER?
