@@ -41,14 +41,14 @@ The following platforms are _HEP-ready_:
 * [OpenSIPS](http://opensips.org)
 * [Asterisk](http://asterisk.org)
 * [FreeSWITCH](http://freeswitch.org)
-* _ANY_ with [CaptAgent](http://github.com/sipcapture/captagent)
++ [CaptAgent](http://github.com/sipcapture/captagent) _for any other platform_
 
 
 
 
 ## Installation
 
-Please follow our [Setup Guide](https://github.com/sipcapture/homer/blob/homer5/INSTALL.md) to get started.
+Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) to get started.
 
 ![TEST](http://sipcapture.org/io/img/H5screen.gif)
 
