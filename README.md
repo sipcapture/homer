@@ -1,30 +1,49 @@
 [![Logo](http://sipcapture.org/data/images/sipcapture_header.png)](http://sipcapture.org)
 
-## HOMER 5
-#### 100% Open-Source Modular SIP & VoIP Capture Server & Agent
+# HOMER 5
+##### 100% Open-Source VoIP Capture, Troubleshooting & Monitoring
 
-HOMER is a robust, carrier-grade, scalable SIP Capture system and Monitoring Application with HEP, IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling protocol.
+<br/>
+<img src="http://i.imgur.com/Ygox016.gif" width="500">
 
-Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modules/sipcapture.html) Module for industry-standard [Kamailio](http://kamailio.org), HOMER provides virtually unlimited scope for granular capture [configuration](https://github.com/sipcapture/homer-api/blob/master/examples/sipcapture/kamailio.cfg) either stand-alone or using our companion [Capture Agent](https://github.com/sipcapture/captagent) Project.
 
-HOMER 5 User-Interface is developed using standard Angular JS, easily extensible and with all functionality moved to specialized and customizable widgets feeding and displaying correlated data from internal and external data sources such as InfluxDB and Elasticsearch. HOMER allows users to define and generate statistic from its capture dialplan interacting with other Kamailio modules to extend its functionality including fully programmable threshold triggering and alarming, providing plenty of space for tailored configurations and logic customizations.
+## What is HOMER?
 
-HOMER is already used by large voice networks, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. Contact the team for your basic and advanced needs or leverage the experience of our great community by joining our [mailing-list](http://groups.google.com/group/homer-discuss). 
+**HOMER** is a robust, carrier-grade, scalable SIP Capture system and Monitoring Application with HEP, IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling, logs and statistics with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling protocol.
 
-## Components
-The HOMER Application is composed by:
+Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modules/sipcapture.html) Module for industry-standard [Kamailio](http://kamailio.org) or [OpenSIPS](http://opensips.org), HOMER provides virtually unlimited scope for granular capture [configuration](https://github.com/sipcapture/homer-api/blob/master/examples/sipcapture/kamailio.cfg) either stand-alone or using our companion [Capture Agent](https://github.com/sipcapture/captagent) Project.
 
-* [Homer-API](https://github.com/sipcapture/homer-api)
-  * Sipcapture Backend connector and API Component
-* [Homer-UI](https://github.com/sipcapture/homer-ui)
-  * Sipcapture Frontend & JS User-Interface Component
-* Kamailio-Dev
-  * Sipcapture HEP Capture Server _(sipcapture module)_
+**HOMER 5** User-Interface is developed using standard Angular JS, easily extensible and with all functionality moved to specialized and customizable widgets feeding and displaying correlated data from internal and external data sources such as InfluxDB and Elasticsearch. 
+
+**HOMER** allows integrators and users to define granular custom logic and generate statistic from its capture dialplan interacting with other Kamailio modules to extend its functionality including fully programmable threshold triggering and alarming, providing plenty of space for tailored configurations and logic customizations.
+
+**HOMER** is already used by large voice networks, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. Contact the team for your basic and advanced needs or leverage the experience of our great community by joining our [mailing-list](http://groups.google.com/group/homer-discuss). 
+
+#### The HOMER Application is composed of two main elements:
+
+## Capture Server
+Responsible for Collecting, Indexing and Storing received HEP, IPIP and Raw packets from HEP Agents, the HOMER Capture Server is based on our SIPCapture module for [Kamailio](http://kamailio.org) or [OpenSIPS](http://opensips.org) featuring optimized database schemas with advanced options and complex and extensible capture plans with multiple table support and triggers able to interact with any module on the platform and unlimited scope. Includes a powerful and modern multi-user Web User-Interface and secure REST API 
+
+
+## Capture Agents
+Capture Agents are responsible for feeding HOMER SIP signaling, Logs, RTCP Reports and much more using the HEP _(Homer Encapsulation Protocol)_ protocol. Our [WIKI](https://github.com/sipcapture/homer/wiki) provides several useful examples to get started.
+
+The following platforms are _HEP-ready_:
+
+* [Kamailio](http://kamailio.org)
+* [OpenSIPS](http://opensips.org)
+* [Asterisk](http://asterisk.org)
+* [FreeSWITCH](http://freeswitch.org)
++ [CaptAgent](http://github.com/sipcapture/captagent) _for any other platform_
+
+
 
 
 ## Installation
 
-Please follow our [Setup Guide](https://github.com/sipcapture/homer/blob/homer5/INSTALL.md) to get started.
+Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) to get started.
+
+![TEST](http://sipcapture.org/io/img/H5screen.gif)
 
 
 ### Need Support?
@@ -48,7 +67,7 @@ Contributors and Contributions to our project are always welcome! If you intend 
 
 *Captagent is released under GNU GPLv3 license*
 
-*(C) 2008-2015 SIPCAPTURE & QXIP BV*
+*(C) 2008-2015 [SIPCAPTURE](http://sipcapture.org) & [QXIP BV](http://qxip.net)*
 
 ----------
 

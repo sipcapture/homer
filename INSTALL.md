@@ -7,11 +7,29 @@ This documents outlines the installation process for SIPCAPTURE HOMER version 5.
 
 ## Installation
 
-Homer 5 is composed of separate elements:
- * [HOMER-API](https://github.com/sipcapture/homer-api): API Server and Backend Component
- * [HOMER-UI](https://github.com/sipcapture/homer-ui):  User-Interface and Frontend Component
+**Packages are coming! If you don't know what you are doing, check back next week - the Manual setup procedure requires ability to carefully read, understanding of our elements and some basic system skills**
 
-## Setup Guide
+-------------
+
+### Automated Setup
+All projects required to build HOMER can be downloaded as submodules from our master repository
+```
+$ cd /usr/src
+$ git clone https://github.com/sipcapture/homer.git
+$ cd homer
+$ git submodule update --init --recursive
+```
+
+To force syncronizing all projects to the latest submodules use the following command:
+```
+git submodule foreach git reset --hard origin/master
+```
+
+_... to be continued! work in progress..._
+
+-------------
+
+### Manual Setup
 
 * Sytem Requirements:
 	- Apache2 or nginx 
@@ -51,16 +69,16 @@ Homer 5 is composed of separate elements:
 * Configure Apache2 (or nginx) for HOMER vhost _(see $GIT/homer-api/examples/web/)_
 * Enable mod rewrite (please check if you set AllowOverride All for api dir. https://github.com/sipcapture/homer/wiki/webHomer-settings#apache-mod_rewrite)
 * Install Homer 5 web components
-	* Copy HOMER-UI Contents to vhost directory
+	* Copy HOMER-UI Contents to vhost directory  _($WEB)_
 		* Make sure store/dashboard writable by Apache
-	* Copy HOMER-API/api directory to vhost directory
+	* Copy HOMER-API/api directory to vhost directory  _($WEB/api)_
 
 
 #### MYSQL:
 * Create MySQL databases:
 	* create database homer_data _( < $GIT/homer-api/sql/schema_capture.sql)_
 	* create database homer_configuration _( < $GIT/homer-api/sql/schema_configuration.sql)_
-	* create database homer_statistic _( < $GIT/homer-api/sql/schema_statistics.sql)_
+	* create database homer_statistic _( < $GIT/homer-api/sql/schema_statistic.sql)_
 	* create sipcapture user with access rights on new databases
 
 * Configure HOMER-API:
@@ -143,7 +161,7 @@ Contributors and Contributions to our project are always welcome! If you intend 
 
 *Captagent is released under GNU GPLv3 license*
 
-*(C) 2008-2015 SIPCAPTURE & QXIP BV*
+*(C) 2008-2015 [SIPCAPTURE](http://sipcapture.org) & [QXIP BV](http://qxip.net)*
 
 ----------
 

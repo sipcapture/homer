@@ -32,7 +32,7 @@ RPMBUILD_DIRS = $(addprefix $(HOME)/rpmbuild/,\
 setup.sh: @SETUP_TARGET@-setup-header @SETUP_TARGET@-setup
 	chmod a+x $@
 
-%.rpm-setup %.src-setup:;
+%.deb-setup %.rpm-setup %.src-setup:;
 
 # SOURCE SETUP SCRIPT
 src-setup : $(@PACKAGE_NAME@:=.src-setup);
@@ -48,7 +48,7 @@ src-setup-header : @PACKAGE_NAME@.repo
 
 .PHONY: @PACKAGE_NAME@.repo
 @PACKAGE_NAME@.repo :
-	echo "$$download_sipcapture_repo_contents" > @PACKAGE_NAME@.repo
+	echo "$$download_project_repo_contents" > @PACKAGE_NAME@.repo
 
 define src_setup_header
 #!/bin/bash
@@ -63,6 +63,9 @@ export src_setup_header
 # RPM SETUP SCRIPT
 rpm-setup : build.repo $(HOME)/.rpmmacros $(RPMBUILD_DIRS) $(lib:=.rpm-setup) $(@PACKAGE_NAME@:=.rpm-setup)
 
+# DEB SETUP SCRIPT
+deb-setup : $(DEBBUILD_DIRS) $(lib:=.deb-setup) $(@PACKAGE_NAME@:=.deb-setup)
+
 # Determine this machine's distro, may not be the default distro
 build.repo : CURRENT_DISTRO = $(shell rpm --eval \
 	'%{?fedora:Fedora}%{!?fedora:%{?suse_version:Suse}%{!?suse_version:CentOS}}')
@@ -70,7 +73,7 @@ build.repo : CURRENT_DISTRO = $(shell rpm --eval \
 build.repo : Makefile
 	echo "$$build_repo_contents" > $@
 
-$(RPMBUILD_DIRS) :
+$(DEBBUILD_DIRS) $(RPMBUILD_DIRS) :
 	mkdir -p $@
 
 $(HOME)/.rpmmacros :
@@ -78,6 +81,9 @@ $(HOME)/.rpmmacros :
 
 rpm-setup-header :
 	echo "$$rpm_setup_header" > setup.sh
+
+deb-setup-header :
+	echo "$$deb_setup_header" > setup.sh
 
 # "Efing Package Manager" - This is used for projects that are difficult to 
 # bundle as an rpm. See dart-sdk/.@PACKAGE_NAME@.mk for how to use fpm.  If your
@@ -111,14 +117,14 @@ ln -snf $(abspath build.repo) /etc/yum.repos.d/build.repo
 endef
 export rpm_setup_header
 
-define download_sipcapture_repo_contents
+define download_project_repo_contents
 [@PACKAGE_NAME@]
 name= @PACKAGE_NAME@
 baseurl=http://download.sipcapture.org/pub/$(PACKAGE_VERSION)-unstable/$(CURRENT_DISTRO)_$$releasever/$$basearch
 enabled=1
 gpgcheck=0
 endef
-export download_sipcapture_repo_contents
+export download_project_repo_contents
 
 define build_repo_contents
 [build]
@@ -128,3 +134,12 @@ enabled=0
 gpgcheck=0
 endef
 export build_repo_contents
+
+define deb_setup_header
+#!/bin/bash
+
+# packages needed on host to build debs and to use build system
+apt-get install -y $(DEB_BUILD_DEPS) $(foreach P,$(lib),$($(P)_APT_SETUP))
+
+endef
+export rpm_setup_header

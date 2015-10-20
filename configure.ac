@@ -10,7 +10,7 @@ AC_PREREQ(2.61)
 
 AC_INIT(homer,5.0.1,support@sipcapture.org,,http://www.sipcapture.org)
 
-# Pass standard and sipxecs common params to ./configure switches on all sub-projects.
+# Pass standard and project common params to ./configure switches on all sub-projects.
 # Doesn't have to handle ./configure vars because those can be passed handled
 OPTIONS=
 for a in $@; do
@@ -25,6 +25,7 @@ AC_SUBST(OPTIONS)
 
 m4_include([config/projectlib2.m4])
 m4_include([mak/rpm.m4])
+m4_include([mak/deb.m4])
 m4_sinclude([custom/custom.m4])
 m4_include([mak/iso.m4])
 m4_include([mak/deps.m4])

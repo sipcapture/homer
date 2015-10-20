@@ -6,7 +6,9 @@ include $(SRC)/mak/*.iso.mk
 
 $(foreach D,$(ALL_DISTROS),$(eval help-more.$(D).iso = Build single ISO image for $(D).))
 
-iso : $(DISTRO).homer.rpm iso.dirs iso.common $(DISTRO).iso.packages iso.application iso.repo iso/$(DISTRO).iso
+iso : $(DISTRO).homer.rpm iso.image
+
+iso.image : iso.dirs iso.common $(DISTRO).iso.packages iso.application iso.addons iso.repo iso/$(DISTRO).iso
 
 iso.dirs :
 	test -d iso/$(DISTRO)/Packages || mkdir -p iso/$(DISTRO)/Packages
@@ -16,10 +18,16 @@ iso.common :
 	cp -rf $(SRC)/mak/iso/$(DISTRO)/* iso/$(DISTRO)/
 
 iso.application :
-	cp -r $(MOCK_RESULTS_DIR)/*.rpm iso/$(DISTRO)/Application/
+	cp -rf $(MOCK_RESULTS_DIR)/*.rpm iso/$(DISTRO)/Application/
+
+iso.addons :
+	mkdir -p iso/$(DISTRO)/addons/usr/share/anaconda/addons
+	cp -rf $(SRC)/mak/iso/anaconda-addons/* iso/$(DISTRO)/addons/usr/share/anaconda/addons/
+	(cd iso/$(DISTRO)/addons && find . -path usr/* | cpio -c -o | gzip -9 > updates.img)
+	rm -rf iso/$(DISTRO)/addons/usr
 
 iso.repo :
-	createrepo -o iso/$(DISTRO) iso/$(DISTRO)
+	createrepo -g $(SRC)/mak/comps.xml -o iso/$(DISTRO) iso/$(DISTRO)
 
 iso/$(DISTRO).iso :
 	mkisofs \

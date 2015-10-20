@@ -62,6 +62,6 @@ WIDTH=`tput cols`
 HELP_WIDTH=`echo $$[$${WIDTH} - $${MARGIN}]`
 export TEXT=`echo "$${Text}" | fold -s -w $${HELP_WIDTH} | sed -e "2,10s|^|                  |g"`
 export LABEL="$${Label}"
-echo | awk '{printf("%-15s - %s\n", ENVIRON["LABEL"], ENVIRON["TEXT"]);}'
+printf "%-26s - %s\n" "$${LABEL}" "$${TEXT}"
 endef
 export format_help
