@@ -1,5 +1,5 @@
-kamailio_VER = 4.3.2
-kamailio_TAG = 4.3.2
+kamailio_VER = 4.3.3
+kamailio_TAG = 4.3.3
 kamailio_PACKAGE_REVISION = $(shell cd $(SRC)/kamailio; ../config/revision-gen $(kamailio_TAG))
 kamailio_SRPM = kamailio-$(kamailio_VER)-$(kamailio_PACKAGE_REVISION).src.rpm
 kamailio_TAR = kamailio/kamailio-$(kamailio_VER)_src.tar.gz
