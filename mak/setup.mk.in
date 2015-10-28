@@ -18,7 +18,7 @@ BUILD_DEPS = @Development wget
 # Some build deps are included for rpm builds sometimes because project's
 # autoconf dep checking cannot be disabled even though all we run is dist
 # target on host
-RPM_BUILD_DEPS = createrepo rpm-build thttpd mock $(BUILD_DEPS)
+RPM_BUILD_DEPS = createrepo rpm-build thttpd mock expat-devel bison flex-devel libpcap-devel json-devel json-c-devel $(BUILD_DEPS)
 
 RPMBUILD_DIRS = $(addprefix $(HOME)/rpmbuild/,\
 	BUILD \
