@@ -82,6 +82,14 @@ $(DOWNLOAD_LIB_CACHE)/% :
 # a relying project gets compiled.
 @PACKAGE_NAME@.rpm : repo-update $(@PACKAGE_NAME@:=.rpm.if-changed);
 
+@PACKAGE_NAME@-httpd.rpm :
+	rpmbuild -bb mak/@PACKAGE_NAME@-httpd.spec
+	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-httpd-@PACKAGE_VERSION@-@PACKAGE_REVISION@.$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
+
+@PACKAGE_NAME@-nginx.rpm :
+	rpmbuild -bb mak/@PACKAGE_NAME@-nginx.spec
+	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-nginx-@PACKAGE_VERSION@-@PACKAGE_REVISION@.$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
+
 lib.rpm : repo-update $(lib:=.rpm.if-changed);
 
 @PACKAGE_NAME@.rpm.changes lib.rpm.changes : %.rpm.changes :
@@ -184,6 +192,8 @@ repo-dedup:
 help-more.repo-create = run createrepo in $(MOCK_RESULTS_DIR)
 repo-create:
 	test -d $(MOCK_RESULTS_DIR) || mkdir -p $(MOCK_RESULTS_DIR)
+	make @PACKAGE_NAME@-httpd.rpm
+	make @PACKAGE_NAME@-nginx.rpm
 	cd $(MOCK_RESULTS_DIR); createrepo $(CREATEREPO_OPTS) .
 
 help.repo-update = Remove only the packages from chroot that are built. Takes 14 seconds when a full rebuild can take 2 minutues

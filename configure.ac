@@ -35,5 +35,7 @@ AC_CONFIG_FILES([mak/05-build.mk:mak/build.mk.in])
 AC_CONFIG_FILES([mak/40-modules.mk:mak/modules.mk.in])
 AC_CONFIG_FILES([mak/20-list-dependencies.mk:mak/list-dependencies.mk.in])
 AC_CONFIG_FILES([mak/30-setup.mk:mak/setup.mk.in])
+AC_CONFIG_FILES([mak/homer-httpd.spec:mak/homer-httpd.spec.in])
+AC_CONFIG_FILES([mak/homer-nginx.spec:mak/homer-nginx.spec.in])
 
 AC_OUTPUT
