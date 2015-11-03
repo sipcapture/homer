@@ -47,9 +47,9 @@ Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) to get starte
 
 
 ### Need Support?
-For support, installations, customizations or commercial requests please contact: support@sipcapture.org
+For professional support, installations, customizations or commercial requests please contact: support@sipcapture.org
 
-For community updates, user discussion and experience exchange please join our users   [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss)
+For community support, updates, user discussion and experience exchange please join our users   [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss)
 
 [![HomerFlow](http://i.imgur.com/U7UBI.png)](http://sipcapture.org)
 
