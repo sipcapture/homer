@@ -13,12 +13,14 @@
 #
 #  sudo bash -x ./setup.sh
 #
-BUILD_DEPS = @Development wget
+BUILD_DEPS = wget
 
 # Some build deps are included for rpm builds sometimes because project's
 # autoconf dep checking cannot be disabled even though all we run is dist
 # target on host
-RPM_BUILD_DEPS = createrepo rpm-build thttpd mock expat-devel bison flex-devel libpcap-devel json-devel json-c-devel $(BUILD_DEPS)
+RPM_BUILD_DEPS = @Development createrepo rpm-build thttpd mock expat-devel bison flex-devel libpcap-devel json-devel json-c-devel $(BUILD_DEPS)
+
+DEB_BUILD_DEPS = debhelper libtool $(BUILD_DEPS)
 
 RPMBUILD_DIRS = $(addprefix $(HOME)/rpmbuild/,\
 	BUILD \
@@ -105,7 +107,7 @@ define rpm_setup_header
 #!/bin/bash
 
 # packages needed on host to build srpms and to use mock build system
-yum install -y $(RPM_BUILD_DEPS) $(foreach P,$(lib),$($(P)_YUM_SETUP))
+yum install -y $(RPM_BUILD_DEPS) $(foreach P,$(all),$($(P)_YUM_SETUP))
 
 # required to run mock commands
 usermod -a -G mock @PROJECTUSER@
@@ -139,7 +141,8 @@ define deb_setup_header
 #!/bin/bash
 
 # packages needed on host to build debs and to use build system
-apt-get install -y $(DEB_BUILD_DEPS) $(foreach P,$(lib),$($(P)_APT_SETUP))
+apt-get install -y $(DEB_BUILD_DEPS) $(foreach P,$(all),$($(P)_APT_SETUP))
 
 endef
-export rpm_setup_header
+export deb_setup_header
+

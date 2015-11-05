@@ -9,6 +9,7 @@ captagent_PACKAGE_REVISION = $(shell cd $(SRC)/captagent; git checkout $(captage
 captagent_SRPM = captagent-$(captagent_VER)-$(captagent_PACKAGE_REVISION).src.rpm
 captagent_TAR = captagent/captagent-$(captagent_VER).tar.gz
 captagent_DEB = deb
+captagent_APT_SETUP = libmysqlclient-dev libexpat1-dev bison flex libpcap-dev libjson-c-dev
 
 captagent_SRPM_DEFS = \
 	--define "BUILD_NUMBER $(captagent_PACKAGE_REVISION)" \
