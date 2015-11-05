@@ -166,4 +166,6 @@ AC_ARG_ENABLE(rpm, [--enable-rpm Using mock package to build rpms],
   AC_CONFIG_FILES([mak/mock/fedora-19-x86_64.cfg])
   AC_CONFIG_FILES([mak/mock/oracle-7-x86_64.cfg])
   AC_CONFIG_FILES([mak/10-rpm.mk:mak/rpm.mk.in])
+  AC_CONFIG_FILES([mak/homer-httpd.spec:mak/homer-httpd.spec.in])
+  AC_CONFIG_FILES([mak/homer-nginx.spec:mak/homer-nginx.spec.in])
 ])
