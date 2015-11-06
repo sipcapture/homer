@@ -5,7 +5,7 @@
 captagent_VER = 6.0.1
 captagent_TAG = 6.0.1
 captagent_BRANCH = captagent6
-captagent_PACKAGE_REVISION = $(shell cd $(SRC)/captagent; git checkout $(captagent_BRANCH); ../config/revision-gen $(captagent_TAG))
+captagent_PACKAGE_REVISION = $(shell cd $(SRC)/captagent; git checkout $(captagent_BRANCH) >/dev/null 2>&1; ../config/revision-gen $(captagent_TAG))
 captagent_SRPM = captagent-$(captagent_VER)-$(captagent_PACKAGE_REVISION).src.rpm
 captagent_TAR = captagent/captagent-$(captagent_VER).tar.gz
 captagent_DEB = deb
