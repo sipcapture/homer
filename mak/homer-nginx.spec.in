@@ -7,7 +7,7 @@ Group:          Applications/Communications
 License:        GPLv3
 URL:            @PACKAGE_URL@
 
-Requires:       homer-api = %version, homer-api-nginx = %version, homer-ui = %version, kamailio
+Requires:       homer-api = %version, homer-api-nginx = %version, homer-ui = %version, kamailio, nginx
 Conflicts:	homer-httpd
 
 %description
@@ -16,7 +16,5 @@ WEB UI for HOMER is a robust, carrier-grade, scalable SIP Capture system and Mon
 %files
 
 %post
-/usr/bin/sipcapture_configure install
 
 %postun
-/usr/bin/sipcapture_configure uninstall

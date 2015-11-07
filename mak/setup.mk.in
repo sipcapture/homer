@@ -122,7 +122,7 @@ export rpm_setup_header
 define download_project_repo_contents
 [@PACKAGE_NAME@]
 name= @PACKAGE_NAME@
-baseurl=http://download.sipcapture.org/pub/$(PACKAGE_VERSION)-unstable/$(CURRENT_DISTRO)_$$releasever/$$basearch
+baseurl=http://download.sipcapture.org/pub/$(PACKAGE_VERSION)-unstable/$(DISTRO_OS)/$$releasever/$$basearch
 enabled=1
 gpgcheck=0
 endef
@@ -131,7 +131,7 @@ export download_project_repo_contents
 define build_repo_contents
 [build]
 name=Local build for @PACKAGE_NAME@
-baseurl=file://$(abspath repo)/$(CURRENT_DISTRO)_$$releasever/$$basearch
+baseurl=file://$(abspath repo)/$(DISTRO_OS)/$$releasever/$$basearch
 enabled=0
 gpgcheck=0
 endef
