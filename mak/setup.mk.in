@@ -132,7 +132,7 @@ define build_repo_contents
 [build]
 name=Local build for @PACKAGE_NAME@
 baseurl=file://$(abspath repo)/$(DISTRO_OS)/$$releasever/$$basearch
-enabled=0
+enabled=1
 gpgcheck=0
 endef
 export build_repo_contents
