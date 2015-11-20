@@ -662,7 +662,7 @@ service rsyslog restart
 %if 0%{?el7}
 %{_unitdir}/%name.service
 %else
-%config %{_sysconfdir}/init.d/%name
+%config %attr(0775,root,root)%{_sysconfdir}/init.d/%name
 %endif
 %dir %attr(2770,%name,%name)%{_localstatedir}/run/%name
 
