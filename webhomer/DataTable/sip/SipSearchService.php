@@ -98,6 +98,8 @@ class SipSearchService implements ISipService
      $sort = $this->propertyToColumnMapping[$sort];
 
      $location = $homer->location;
+     
+     if ($sort == "date") $sort = 'micro_ts';
 
      $skip_keys = array('location','max_records','from_date', 'to_date','from_time', 'to_time', 'unique','b2b','limit','node','logic_or');
      $ft = date("Y-m-d H:i:s", strtotime($homer->from_date." ".$homer->from_time));
@@ -429,6 +431,8 @@ class SipSearchService implements ISipService
     } else {
 
       $sort = $this->propertyToColumnMapping[$sort];
+      
+      if ($sort == "date") $sort = 'micro_ts';
 
       $results = array();
       $datasort = array();
