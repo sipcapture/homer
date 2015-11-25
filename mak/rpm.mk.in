@@ -9,7 +9,8 @@
 MOCK_CONFIG_DIR = mak/mock
 MOCK_TARGET_PLATFORM = $(DISTRO)
 # avoids https://bugzilla.redhat.com/show_bug.cgi?id=490613 hit by *some* fedora 14 machines
-SRPM_DEFS = --define "_source_filedigest_algorithm md5"
+SRPM_DEFS = --define "_source_filedigest_algorithm md5" --define "BUILD_NUMBER $(DIST_REV)"
+RPM_DEFS = --define "BUILD_NUMBER $(DIST_REV)"
 DOWNLOAD_LIB_CACHE = @DOWNLOAD_LIB_CACHE@
 ALL_DISTROS = @ALL_DISTROS@
 CENTOS_RSYNC_URL = @CENTOS_RSYNC_URL@
@@ -34,7 +35,7 @@ MOCK_INIT_TEST = \
 
 # Define @PACKAGE_NAME@ SRPMS and tarball files. Cannot define RPM files however as one specfile may generate many rpms
 $(foreach P,$(@PACKAGE_NAME@),$(eval $(P)_SRPM ?= $$(call lowercase,$(P))-$(PACKAGE_VERSION)-$$(DIST_REV).src.rpm))
-DIST_REV = $(shell tar -O -xzf $(PROJ)/$(proj)-$(PACKAGE_VERSION).tar.gz $(proj)-$(PACKAGE_VERSION)/.tarball-revision).el$(DISTRO_VER)
+DIST_REV = $(shell tar -O -xzf $(PROJ)/$(proj)-$(PACKAGE_VERSION).tar.gz $(proj)-$(PACKAGE_VERSION)/.tarball-revision)$(RPM_DIST)
 
 # Allows to target other distros other than the default
 help.*.rpm = Build single rpm for $(DISTRO).
@@ -84,11 +85,11 @@ $(DOWNLOAD_LIB_CACHE)/% :
 
 @PACKAGE_NAME@-httpd.rpm :
 	rpmbuild -bb mak/@PACKAGE_NAME@-httpd.spec
-	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-httpd-@PACKAGE_VERSION@-@PACKAGE_REVISION@.el$(DISTRO_VER).$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
+	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-httpd-@PACKAGE_VERSION@-@PACKAGE_REVISION@$(RPM_DIST).$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
 
 @PACKAGE_NAME@-nginx.rpm :
 	rpmbuild -bb mak/@PACKAGE_NAME@-nginx.spec
-	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-nginx-@PACKAGE_VERSION@-@PACKAGE_REVISION@.el$(DISTRO_VER).$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
+	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-nginx-@PACKAGE_VERSION@-@PACKAGE_REVISION@$(RPM_DIST).$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
 
 lib.rpm : repo-update $(lib:=.rpm.if-changed);
 
@@ -130,6 +131,7 @@ $(@PACKAGE_NAME@:=.srpm) : %.srpm : %.dist $(MOCK_INIT_TEST) $(MOCK_RESULTS_DIR)
 	  --no-clean \
 	  --no-cleanup-after \
 	  --rebuild \
+	  $(RPM_DEFS) \
 	  $($(PROJ)_RPM_DEFS) \
 	  $(MOCK_SRPM_DIR)/$($(PROJ)_SRPM) || \
 	  (tail -100 $(MOCK_RESULTS_DIR)/build.log ; false)

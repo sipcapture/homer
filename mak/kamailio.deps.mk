@@ -1,7 +1,7 @@
 kamailio_VER = 4.3.3
 kamailio_TAG = 4.3.3
 kamailio_BRANCH = 4.3
-kamailio_PACKAGE_REVISION = $(shell cd $(SRC)/kamailio; git checkout $(kamailio_BRANCH) >/dev/null 2>&1; ../config/revision-gen $(kamailio_TAG)).el$(DISTRO_VER)
+kamailio_PACKAGE_REVISION = $(shell cd $(SRC)/kamailio; git checkout $(kamailio_BRANCH) >/dev/null 2>&1; ../config/revision-gen $(kamailio_TAG))$(RPM_DIST)
 kamailio_SRPM = kamailio-$(kamailio_VER)-$(kamailio_PACKAGE_REVISION).src.rpm
 kamailio_TAR = kamailio/kamailio-$(kamailio_VER)_src.tar.gz
 kamailio_SPEC = distr/el/kamailio.spec
