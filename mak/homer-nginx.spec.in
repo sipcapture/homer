@@ -1,6 +1,6 @@
 Name:           @PACKAGE_NAME@-nginx
 Version:        @PACKAGE_VERSION@
-Release:        @PACKAGE_REVISION@
+Release:        @PACKAGE_REVISION@%{dist}
 Summary:        HOMER with nginx
 
 Group:          Applications/Communications

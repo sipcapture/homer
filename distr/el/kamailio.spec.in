@@ -1,6 +1,6 @@
 %define name		kamailio
 %define ver		%{VERSION_NUMBER}
-%define rel		%{BUILD_NUMBER}
+%define rel		%{BUILD_NUMBER}%{dist}
 %define LIBDIR		%{_prefix}/lib64
 %define DATADIR		%{_prefix}/share
 %define DOCDIR		%{DATADIR}/doc
