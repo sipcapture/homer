@@ -34,7 +34,7 @@ MOCK_INIT_TEST = \
 
 # Define @PACKAGE_NAME@ SRPMS and tarball files. Cannot define RPM files however as one specfile may generate many rpms
 $(foreach P,$(@PACKAGE_NAME@),$(eval $(P)_SRPM ?= $$(call lowercase,$(P))-$(PACKAGE_VERSION)-$$(DIST_REV).src.rpm))
-DIST_REV = $(shell tar -O -xzf $(PROJ)/$(proj)-$(PACKAGE_VERSION).tar.gz $(proj)-$(PACKAGE_VERSION)/.tarball-revision)
+DIST_REV = $(shell tar -O -xzf $(PROJ)/$(proj)-$(PACKAGE_VERSION).tar.gz $(proj)-$(PACKAGE_VERSION)/.tarball-revision).el$(DISTRO_VER)
 
 # Allows to target other distros other than the default
 help.*.rpm = Build single rpm for $(DISTRO).
@@ -84,11 +84,11 @@ $(DOWNLOAD_LIB_CACHE)/% :
 
 @PACKAGE_NAME@-httpd.rpm :
 	rpmbuild -bb mak/@PACKAGE_NAME@-httpd.spec
-	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-httpd-@PACKAGE_VERSION@-@PACKAGE_REVISION@.$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
+	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-httpd-@PACKAGE_VERSION@-@PACKAGE_REVISION@.el$(DISTRO_VER).$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
 
 @PACKAGE_NAME@-nginx.rpm :
 	rpmbuild -bb mak/@PACKAGE_NAME@-nginx.spec
-	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-nginx-@PACKAGE_VERSION@-@PACKAGE_REVISION@.$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
+	cp @RPMBUILD_TOPDIR@/RPMS/$(DISTRO_ARCH)/@PACKAGE_NAME@-nginx-@PACKAGE_VERSION@-@PACKAGE_REVISION@.el$(DISTRO_VER).$(DISTRO_ARCH).rpm $(MOCK_RESULTS_DIR)
 
 lib.rpm : repo-update $(lib:=.rpm.if-changed);
 
