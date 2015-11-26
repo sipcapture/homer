@@ -1,4 +1,4 @@
-[![Logo](http://sipcapture.org/data/images/sipcapture_header.png)](http://sipcapture.org)
+[![Logo](http://i.imgur.com/ViXcGAD.png)](http://sipcapture.org)
 
 # HOMER 5
 #### 100% Open-Source VoIP Capture, Troubleshooting & Monitoring
@@ -9,7 +9,7 @@
 
 ## What is HOMER?
 
-**HOMER** is a robust, carrier-grade, scalable SIP Capture system and Monitoring Application with HEP, IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling, logs and statistics with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling protocol.
+**HOMER** is a robust, carrier-grade, scalable SIP Capture system and VoiP Monitoring Application offering [HEP/EEP](http://github.com/sipcapture/hep), IP Proto4 (IPIP) encapsulation & port mirroring/monitoring support right out of the box, ready to process & store insane amounts of signaling, logs and statistics with instant search, end-to-end analysis and drill-down capabilities for ITSPs, VoIP Providers and Trunk Suppliers using SIP signaling protocol.
 
 Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modules/sipcapture.html) Module for industry-standard [Kamailio](http://kamailio.org) or [OpenSIPS](http://opensips.org), HOMER provides virtually unlimited scope for granular capture [configuration](https://github.com/sipcapture/homer-api/blob/master/examples/sipcapture/kamailio.cfg) either stand-alone or using our companion [Capture Agent](https://github.com/sipcapture/captagent) Project.
 
@@ -26,6 +26,7 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 ## Capture Server
 Responsible for Collecting, Indexing and Storing received HEP, IPIP and Raw packets from HEP Agents, the HOMER Capture Server is based on our SIPCapture module for [Kamailio](http://kamailio.org) or [OpenSIPS](http://opensips.org) featuring optimized database schemas with advanced options and complex and extensible capture plans with multiple table support and triggers able to interact with any module on the platform and unlimited scope. Includes a powerful and modern multi-user Web User-Interface and secure REST API 
 
+<img src="http://i.imgur.com/AS7fM2Nh.png">
 
 ## Capture Agents
 Capture Agents are responsible for feeding HOMER SIP signaling, Logs, RTCP Reports and much more using the HEP _(Homer Encapsulation Protocol)_ protocol. Our [WIKI](https://github.com/sipcapture/homer/wiki) provides several useful examples to get started.
@@ -43,7 +44,7 @@ The following platforms are _HEP-ready_:
 
 ## Installation
 
-Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) to get started.
+Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) to get started with HOMER
 
 ![TEST](http://sipcapture.org/io/img/H5screen.gif)
 
