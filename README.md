@@ -1,10 +1,7 @@
-[![Logo](http://i.imgur.com/ViXcGAD.png)](http://sipcapture.org)
+[![Logo](http://i.imgur.com/Zd6tCxNh.png)](http://sipcapture.org)
 
-# HOMER 5
 #### 100% Open-Source VoIP Capture, Troubleshooting & Monitoring
 
-<br/>
-<img src="http://i.imgur.com/Ygox016.gif" width="500">
 
 
 ## What is HOMER?
@@ -18,6 +15,10 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 **HOMER** allows integrators and users to define granular custom logic and generate statistic from its capture dialplan interacting with other Kamailio modules to extend its functionality including fully programmable threshold triggering and alarming, providing plenty of space for tailored configurations and logic customizations.
 
 **HOMER** is already used by large voice networks, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. Contact the team for your basic and advanced needs or leverage the experience of our great community by joining our [mailing-list](http://groups.google.com/group/homer-discuss). 
+
+<br/>
+<img src="http://i.imgur.com/Ygox016.gif" width="500">
+
 
 [![HomerFlow](http://i.imgur.com/U7UBI.png)](http://sipcapture.org)
 
