@@ -5,7 +5,7 @@
 [submodule "kamailio"]
 	path = kamailio
 	url = https://github.com/kamailio/kamailio.git
-	branch = 4.4
+	branch = master
 [submodule "homer-api"]
 	path = homer-api
 	url = https://github.com/sipcapture/homer-api.git
