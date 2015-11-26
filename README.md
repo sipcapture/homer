@@ -18,9 +18,8 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 
 <br/>
 <img src="http://i.imgur.com/Ygox016.gif" width="500">
+<img src="http://i.imgur.com/U7UBI.png" width="500">
 
-
-[![HomerFlow](http://i.imgur.com/U7UBI.png)](http://sipcapture.org)
 
 #### The HOMER Application is composed of two main elements:
 
