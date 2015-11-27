@@ -60,6 +60,8 @@ $(@PACKAGE_NAME@:=.deb.if-changed) $(lib:=.deb.if-changed) : %.deb.if-changed : 
 	    (cd $(PROJ) && ln -s pkg/debian debian && dpkg-buildpackage $($(PROJ)_DEB_OPTIONS) -rfakeroot -tc && rm debian); \
 	  fi; \
 	fi;
+	mkdir -p dists/jessie/main/binary-amd64
+	dpkg-scanpackages . /dev/null | gzip -9c > dists/jessie/main/binary-amd64/Packages.gz
 
 repo-quick-update repo-update :
 	@echo "Dummy target repo-update"

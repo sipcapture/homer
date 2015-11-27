@@ -20,7 +20,7 @@ BUILD_DEPS = wget
 # target on host
 RPM_BUILD_DEPS = @Development createrepo rpm-build thttpd mock expat-devel bison flex-devel libpcap-devel json-devel json-c-devel $(BUILD_DEPS)
 
-DEB_BUILD_DEPS = debhelper libtool $(BUILD_DEPS)
+DEB_BUILD_DEPS = debhelper libtool dpkg-dev $(BUILD_DEPS)
 
 RPMBUILD_DIRS = $(addprefix $(HOME)/rpmbuild/,\
 	BUILD \
@@ -50,7 +50,7 @@ src-setup-header : @PACKAGE_NAME@.repo
 
 .PHONY: @PACKAGE_NAME@.repo
 @PACKAGE_NAME@.repo :
-	echo "$$download_project_repo_contents" > @PACKAGE_NAME@.repo
+	echo "$$rpm_download_project_repo_contents" > @PACKAGE_NAME@.repo
 
 define src_setup_header
 #!/bin/bash
@@ -66,26 +66,29 @@ export src_setup_header
 rpm-setup : build.repo $(HOME)/.rpmmacros $(RPMBUILD_DIRS) $(lib:=.rpm-setup) $(@PACKAGE_NAME@:=.rpm-setup)
 
 # DEB SETUP SCRIPT
-deb-setup : $(DEBBUILD_DIRS) $(lib:=.deb-setup) $(@PACKAGE_NAME@:=.deb-setup)
+deb-setup : build.list $(DEBBUILD_DIRS) $(lib:=.deb-setup) $(@PACKAGE_NAME@:=.deb-setup)
 
 # Determine this machine's distro, may not be the default distro
 build.repo : CURRENT_DISTRO = $(shell rpm --eval \
 	'%{?fedora:Fedora}%{!?fedora:%{?suse_version:Suse}%{!?suse_version:CentOS}}')
 
 build.repo : Makefile
-	echo "$$build_repo_contents" > $@
+	echo "$$rpm_build_repo_contents" > $@
+
+build.list : Makefile
+	echo "$$deb_build_repo_contents" > $@
 
 $(DEBBUILD_DIRS) $(RPMBUILD_DIRS) :
 	mkdir -p $@
 
 $(HOME)/.rpmmacros :
-	echo "%_topdir      $$HOME/rpmbuild" >> ~/.rpmmacros
+	@echo "%_topdir      $$HOME/rpmbuild" >> ~/.rpmmacros
 
 rpm-setup-header :
-	echo "$$rpm_setup_header" > setup.sh
+	@echo "$$rpm_setup_header" > setup.sh
 
 deb-setup-header :
-	echo "$$deb_setup_header" > setup.sh
+	@echo "$$deb_setup_header" > setup.sh
 
 # "Efing Package Manager" - This is used for projects that are difficult to 
 # bundle as an rpm. See dart-sdk/.@PACKAGE_NAME@.mk for how to use fpm.  If your
@@ -119,30 +122,36 @@ ln -snf $(abspath build.repo) /etc/yum.repos.d/build.repo
 endef
 export rpm_setup_header
 
-define download_project_repo_contents
+define rpm_download_project_repo_contents
 [@PACKAGE_NAME@]
 name= @PACKAGE_NAME@
 baseurl=http://download.sipcapture.org/pub/$(PACKAGE_VERSION)-unstable/$(DISTRO_OS)/$$releasever/$$basearch
 enabled=1
 gpgcheck=0
 endef
-export download_project_repo_contents
+export rpm_download_project_repo_contents
 
-define build_repo_contents
+define rpm_build_repo_contents
 [build]
 name=Local build for @PACKAGE_NAME@
 baseurl=file://$(abspath repo)/$(DISTRO_OS)/$$releasever/$$basearch
 enabled=1
 gpgcheck=0
 endef
-export build_repo_contents
+export rpm_build_repo_contents
 
 define deb_setup_header
 #!/bin/bash
 
 # packages needed on host to build debs and to use build system
-apt-get install -y $(DEB_BUILD_DEPS) $(foreach P,$(all),$($(P)_APT_SETUP))
+apt-get install -y $(DEB_BUILD_DEPS)$(foreach P,$(all),$($(P)_APT_SETUP))
+
+ln -snf $(abspath build.list) /etc/apt/sources.list.d/build.list
 
 endef
 export deb_setup_header
 
+define deb_build_repo_contents
+deb file://$(abspath .) jessie main
+endef
+export deb_build_repo_contents
