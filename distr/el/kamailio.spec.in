@@ -13,7 +13,7 @@ Release:	%rel
 Packager:	Peter Dunkley <peter@dunkley.me.uk>
 License:	GPL
 Group:		System Environment/Daemons
-Source:		http://kamailio.org/pub/kamailio/%{ver}/src/%{name}-%{ver}_src.tar.gz
+Source:		http://kamailio.org/pub/kamailio/%{ver}/src/%{SRC_TAR}
 URL:		http://kamailio.org/
 Vendor:		kamailio.org
 Conflicts:	kamailio-auth-ephemeral < %ver, kamailio-bdb < %ver

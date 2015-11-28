@@ -1,5 +1,5 @@
-kamailio_VER = 4.3.3
-kamailio_TAG = 4.3.3
+kamailio_VER = 4.3.4
+kamailio_TAG = 4.3.4
 kamailio_BRANCH = 4.3
 kamailio_PACKAGE_REVISION = $(shell cd $(SRC)/kamailio; git checkout $(kamailio_BRANCH) >/dev/null 2>&1; ../config/revision-gen $(kamailio_TAG))$(RPM_DIST)
 kamailio_SRPM = kamailio-$(kamailio_VER)-$(kamailio_PACKAGE_REVISION).src.rpm
@@ -10,11 +10,13 @@ kamailio_APT_SETUP = docbook-xml erlang-dev gcj-jdk libconfuse-dev libcurl4-open
 
 kamailio_SRPM_DEFS = \
 	--define "BUILD_NUMBER $(kamailio_PACKAGE_REVISION)" \
-	--define "VERSION_NUMBER $(kamailio_VER)"
+	--define "VERSION_NUMBER $(kamailio_VER)" \
+	--define "SRC_TAR kamailio-$(kamailio_VER)_src.tar.gz"
 
 kamailio_RPM_DEFS = \
 	--define="BUILD_NUMBER $(kamailio_PACKAGE_REVISION)" \
-	--define "VERSION_NUMBER $(kamailio_VER)"
+	--define "VERSION_NUMBER $(kamailio_VER)" \
+	--define "SRC_TAR kamailio-$(kamailio_VER)_src.tar.gz"
 
 kamailio.autoreconf:
 	@echo -n
