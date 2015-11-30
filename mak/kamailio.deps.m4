@@ -1,7 +1,0 @@
-AC_CONFIG_FILES([distr/el/kamailio.logrotate])
-AC_CONFIG_FILES([distr/el/kamailio.spec])
-AC_CONFIG_FILES([distr/el/kamailio.rsyslog])
-AC_CONFIG_FILES([distr/el/el6/kamailio.sysconfig])
-AC_CONFIG_FILES([distr/el/el6/kamailio.init])
-AC_CONFIG_FILES([distr/el/el7/kamailio.sysconfig])
-AC_CONFIG_FILES([distr/el/el7/kamailio.service])
