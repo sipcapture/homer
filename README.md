@@ -2,6 +2,8 @@
 
 #### 100% Open-Source VoIP Capture, Troubleshooting & Monitoring
 
+[![Join the chat at https://gitter.im/sipcapture/homer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/sipcapture/homer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 ![H5](https://img.shields.io/badge/HOMER-5-red.svg)
 ![HEP](https://img.shields.io/badge/proto-hep_eep-blue.svg)
 ![HEP](https://img.shields.io/badge/proto-sip-brightgreen.svg)
