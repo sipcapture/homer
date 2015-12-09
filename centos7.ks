@@ -6,7 +6,7 @@ cdrom
 keyboard us
 lang en_US.UTF8
 
-timezone --utc Asia/Novosibirsk
+timezone --utc Europe/Amsterdam
 
 auth --enableshadow --passalgo=sha512 --enablefingerprint
 rootpw --iscrypted $6$y4oi7guFydjyif96$9bm7hVh/D5DxqAF1vEAPCZKSUdF3GiLFP2lcui9uGZ6tCKYr30c20gIBtU8jO08IYmG9Frrz1d.XmMktmYoPp.
