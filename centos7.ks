@@ -1,7 +1,7 @@
 install
 text
 sshpw --username=root setup --plaintext
-cdrom
+url --url=http://mirror.centos.org/centos/7/os/x86_64/
 
 keyboard us
 lang en_US.UTF8
