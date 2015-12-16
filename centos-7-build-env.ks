@@ -68,6 +68,7 @@ mkdir -p build; \
 cd build; \
 ../configure --enable-rpm; \
 make setup.sh"
+cd /usr/local/src/homer/build
 export PATH=/usr/local/bin:/usr/local/sbin:/bin:/sbin:/usr/bin:/usr/sbin:/root/bin
 ./setup.sh
 su homer
