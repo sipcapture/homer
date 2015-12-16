@@ -2,6 +2,9 @@ install
 text
 sshpw --username=root setup --plaintext
 url --url=http://mirror.centos.org/centos/7/os/x86_64/
+repo --name=updates --baseurl=http://mirror.centos.org/centos/7/updates/x86_64/
+repo --name=extras --baseurl=http://mirror.centos.org/centos/7/extras/x86_64/
+repo --name=plus --baseurl=http://mirror.centos.org/centos/7/centosplus/x86_64/
 
 keyboard us
 lang en_US.UTF8
