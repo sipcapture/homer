@@ -50,16 +50,16 @@ mkdir -p /root/.ssh
 
 systemctl enable sshd.service
 
-/bin/sh -c "cd /usr/src/ ; \
+/bin/sh -c "cd /mnt/sysimage/usr/src ; \
 git clone -b homer5 https://github.com/sipcapture/homer.git; \
-chown homer:homer -R homer; \
-cd homer; \
+chown homer:homer -R /mnt/sysimage/usr/src/homer; \
+cd /mnt/sysimage/usr/src/homer; \
 git submodule init; \
 git submodule update"
-sudo -u homer -g homer /bin/sh -c "cd /usr/src/homer; \
+sudo -u homer -g homer /bin/sh -c "cd /mnt/sysimage/usr/src/homer; \
 autoreconf -if; \
-mkdir -p build; \
-cd build; \
+mkdir -p /mnt/sysimage/usr/src/homer/build; \
+cd /mnt/sysimage/usr/src/homer/build; \
 ../configure --enable-rpm; \
 make setup.sh"
 export PATH=/usr/local/bin:/usr/local/sbin:/bin:/sbin:/usr/bin:/usr/sbin:/root/bin;
