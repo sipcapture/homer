@@ -44,9 +44,9 @@ git
 
 %end
 
-%post —log=/var/log/ks-post.log
+%post —log=/mnt/sysimage/var/log/ks-post.log
 
-mkdir -p /root/.ssh
+mkdir -p /mnt/sysimage/root/.ssh
 
 systemctl enable sshd.service
 
