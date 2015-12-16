@@ -41,6 +41,7 @@ bootloader --location=mbr
 @Development
 epel-release
 git
+mock
 
 %end
 
@@ -50,20 +51,28 @@ mkdir -p /mnt/sysimage/root/.ssh
 
 systemctl enable sshd.service
 
-/bin/sh -c "cd /mnt/sysimage/usr/src ; \
-git clone -b homer5 https://github.com/sipcapture/homer.git; \
-chown homer:homer -R /mnt/sysimage/usr/src/homer; \
-cd /mnt/sysimage/usr/src/homer; \
+yum update -y
+
+cat <<EOF > /root/make-build-env
+#!/bin/bash
+
+cd /usr/local/src/
+git clone -b homer5 https://github.com/sipcapture/homer.git
+chown homer:homer -R homer
+sudo -u homer -g homer sh -c "cd homer; \
 git submodule init; \
-git submodule update"
-sudo -u homer -g homer /bin/sh -c "cd /mnt/sysimage/usr/src/homer; \
+git submodule update; \
 autoreconf -if; \
-mkdir -p /mnt/sysimage/usr/src/homer/build; \
-cd /mnt/sysimage/usr/src/homer/build; \
+mkdir -p build; \
+cd build; \
 ../configure --enable-rpm; \
 make setup.sh"
-export PATH=/usr/local/bin:/usr/local/sbin:/bin:/sbin:/usr/bin:/usr/sbin:/root/bin;
-sudo ./setup.sh
+export PATH=/usr/local/bin:/usr/local/sbin:/bin:/sbin:/usr/bin:/usr/sbin:/root/bin
+./setup.sh
+su homer
+
+EOF
+chmod +x /root/make-build-env
 
 %end
 
