@@ -1,0 +1,54 @@
+# Initial Version Copyright (C) 2010 eZuce, Inc., All Rights Reserved.
+# Licensed to the User under the LGPL license.
+#
+#
+# Copyright (C) Homer Project 2012-2015 (http://www.sipcapture.org).
+# Licensed to the User under the GPL license.
+#
+
+# @PACKAGE_NAME@ projects that are essential for a running communication system.
+# Order is important, projects that are dependant on other project
+# should be listed after it's dependencies.  No circular dependecies
+# allowed.
+@PACKAGE_NAME@_core = \
+    @PACKAGE_NAME@-api \
+    @PACKAGE_NAME@-ui \
+    captagent
+
+# @PACKAGE_NAME@ projects that are NOT essential for a running communication system
+@PACKAGE_NAME@_extra =
+
+# @PACKAGE_NAME@ projects that are NOT essential for a running communication system
+# and are related to configuration system. Many are phone plugins
+@PACKAGE_NAME@_config =
+
+# Language packs not required for a function communications system
+@PACKAGE_NAME@_lang =
+
+@PACKAGE_NAME@_all = \
+    $(@PACKAGE_NAME@_core) \
+    $(@PACKAGE_NAME@_extra) \
+    $(@PACKAGE_NAME@_config) \
+    $(@PACKAGE_NAME@_lang)
+
+
+lib_all =
+
+lib_exclude_fedora_16 =
+lib_exclude_fedora_17 = $(lib_exclude_fedora_16)
+lib_exclude_fedora_18 = $(lib_exclude_fedora_17)
+lib_exclude_fedora_19 = $(lib_exclude_fedora_18)
+lib_exclude_fedora_20 = $(lib_exclude_fedora_19)
+lib_exclude_fedora_21 = $(lib_exclude_fedora_20)
+lib_exclude_fedora_22 = $(lib_exclude_fedora_21)
+lib_exclude_fedora_23 = $(lib_exclude_fedora_22)
+
+lib = $(filter-out $(lib_exclude_$(DISTRO_OS)_$(DISTRO_VER)),$(lib_all))
+
+# @PACKAGE_NAME@ project compile-time dependencies. Only list project that if
+# it's dependecies were recompiled then you'd want to recompile.
+
+
+all = \
+    $(lib) \
+    $(@PACKAGE_NAME@)

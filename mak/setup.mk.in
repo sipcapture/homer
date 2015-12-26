@@ -1,0 +1,158 @@
+# Initial Version Copyright (C) 2013 eZuce, Inc., All Rights Reserved.
+# Licensed to the User under the LGPL license.
+#
+#
+# Copyright (C) Homer Project 2012-2015 (http://www.sipcapture.org).
+# Licensed to the User under the GPL license.
+#
+
+# Create a setup.sh script that build user can run on their system to
+# prepare it for building. setup.sh script may be be customized to what type
+# of host their are using and what build options they've enabled. Once the
+# setup.sh script it created, user would execute
+#
+#  sudo bash -x ./setup.sh
+#
+BUILD_DEPS = wget
+
+# Some build deps are included for rpm builds sometimes because project's
+# autoconf dep checking cannot be disabled even though all we run is dist
+# target on host
+RPM_BUILD_DEPS = @Development createrepo rpm-build thttpd mock expat-devel bison flex-devel libpcap-devel json-devel json-c-devel $(BUILD_DEPS)
+
+DEB_BUILD_DEPS = debhelper libtool dpkg-dev $(BUILD_DEPS)
+
+RPMBUILD_DIRS = $(addprefix $(HOME)/rpmbuild/,\
+	BUILD \
+	SOURCES \
+	RPMS \
+	SRPMS \
+	SPECS)
+
+# generate each time to ensure freshness
+.PHONY: setup.sh
+setup.sh: @SETUP_TARGET@-setup-header @SETUP_TARGET@-setup
+	chmod a+x $@
+
+%.deb-setup %.rpm-setup %.src-setup:;
+
+# SOURCE SETUP SCRIPT
+src-setup : $(@PACKAGE_NAME@:=.src-setup);
+
+# If this machine build @PACKAGE_NAME@ rpms, this file will exists and we should
+# enable installing from it by default
+BUILD_REPOS =
+src-setup-header : BUILD_REPOS += $(if $(wildcard /etc/yum.repos.d/build.repo),--enablerepo=build)
+# Use the dependency checking targets to assembled yum command line
+src-setup-header : @PACKAGE_NAME@.repo
+	echo "$$src_setup_header" > setup.sh
+	echo "yum install -y "`$(MAKE) --no-print-directory @PACKAGE_NAME@.deps` >> setup.sh
+
+.PHONY: @PACKAGE_NAME@.repo
+@PACKAGE_NAME@.repo :
+	echo "$$rpm_download_project_repo_contents" > @PACKAGE_NAME@.repo
+
+define src_setup_header
+#!/bin/bash
+
+yum install $(BUILD_REPOS) -y $(BUILD_DEPS)
+! test -d @prefix@ && mkdir -p @prefix@
+chown @PROJECTUSER@:@PROJECTGROUP@ @prefix@
+
+endef
+export src_setup_header
+
+# RPM SETUP SCRIPT
+rpm-setup : build.repo $(HOME)/.rpmmacros $(RPMBUILD_DIRS) $(lib:=.rpm-setup) $(@PACKAGE_NAME@:=.rpm-setup)
+
+# DEB SETUP SCRIPT
+deb-setup : build.list $(DEBBUILD_DIRS) $(lib:=.deb-setup) $(@PACKAGE_NAME@:=.deb-setup)
+
+# Determine this machine's distro, may not be the default distro
+build.repo : CURRENT_DISTRO = $(shell rpm --eval \
+	'%{?fedora:Fedora}%{!?fedora:%{?suse_version:Suse}%{!?suse_version:CentOS}}')
+
+build.repo : Makefile
+	echo "$$rpm_build_repo_contents" > $@
+
+build.list : Makefile
+	echo "$$deb_build_repo_contents" > $@
+
+$(DEBBUILD_DIRS) $(RPMBUILD_DIRS) :
+	mkdir -p $@
+
+$(HOME)/.rpmmacros :
+	@echo "%_topdir      $$HOME/rpmbuild" >> ~/.rpmmacros
+
+rpm-setup-header :
+	@echo "$$rpm_setup_header" > setup.sh
+
+deb-setup-header :
+	@echo "$$deb_setup_header" > setup.sh
+
+# "Efing Package Manager" - This is used for projects that are difficult to 
+# bundle as an rpm. See dart-sdk/.@PACKAGE_NAME@.mk for how to use fpm.  If your
+# project uses fpm, just add this to your myproject/.@PACKAGE_NAME@.mk to get 
+# fpm install in the setup.sh script.
+#
+#   myproject.rpm-setup : fpm-setup
+#
+fpm-setup :
+	echo "gem install --no-rdoc fpm" >> setup.sh
+
+#
+# NOTE: shell fragments below are NOT run by this makefile. These
+# fragments get copied into a script that the user would run to
+# setup their system
+#
+
+define rpm_setup_header
+#!/bin/bash
+
+# packages needed on host to build srpms and to use mock build system
+yum install -y $(RPM_BUILD_DEPS) $(foreach P,$(all),$($(P)_YUM_SETUP))
+
+# required to run mock commands
+usermod -a -G mock @PROJECTUSER@
+
+# only useful if this machine plans to install from this machine
+# for example source based installs.
+ln -snf $(abspath build.repo) /etc/yum.repos.d/build.repo
+
+endef
+export rpm_setup_header
+
+define rpm_download_project_repo_contents
+[@PACKAGE_NAME@]
+name= @PACKAGE_NAME@
+baseurl=http://download.sipcapture.org/pub/$(PACKAGE_VERSION)-unstable/$(DISTRO_OS)/$$releasever/$$basearch
+enabled=1
+gpgcheck=0
+endef
+export rpm_download_project_repo_contents
+
+define rpm_build_repo_contents
+[build]
+name=Local build for @PACKAGE_NAME@
+baseurl=file://$(abspath repo)/$(DISTRO_OS)/$$releasever/$$basearch
+enabled=1
+gpgcheck=0
+skip_if_unavailable=1
+endef
+export rpm_build_repo_contents
+
+define deb_setup_header
+#!/bin/bash
+
+# packages needed on host to build debs and to use build system
+apt-get install -y $(DEB_BUILD_DEPS)$(foreach P,$(all),$($(P)_APT_SETUP))
+
+ln -snf $(abspath build.list) /etc/apt/sources.list.d/build.list
+
+endef
+export deb_setup_header
+
+define deb_build_repo_contents
+deb file://$(abspath .) jessie main
+endef
+export deb_build_repo_contents

@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# Check a directory full of source for changes.  Uses MD5 of every file 
+# to check for changes but caches the result so command becomes faster
+# after initial call.
+
+BaseDir=`dirname $0`
+Command=$1
+Target=$2
+# take out path delims
+TargetId=${Target//\//_}
+Dependency=$3
+shift 3
+
+# optional - list other projects this project depends on
+ProjectDependencies=$@
+
+DependencyFile=.$TargetId.dep-check
+ChecksumFile=.$TargetId.dep-md5
+# NOTE: I attempted and failed to declare find filters as common variables
+# the quotes would not be preserved correctly so there are 2 nearly identical
+# copies of the find filter.
+function make-checksum-force {
+    find $Dependency/ \
+	    -type f \
+	    -a -not -path '*/.git/*' \
+	    -a -not -name '*~' \
+	    -a -not -path '*/autom4te.cache/*' \
+	    -a -not -path '*/bin.eclipse/*' \
+	    -print0 \
+	| sort -z | xargs -0 md5sum > $ChecksumFile.tmp || exit 1
+    if [ -n "$ProjectDependencies" ]; then
+      for p in $ProjectDependencies; do
+	  if ! test -f .${p}.dep-check; then
+	      # generating a checksum for a project when its
+	      # dependencies have not been build is not typical
+	      # but we can essentially generate a random number
+	      # so this project will always show up as changed
+	      printf "%020d  .${p}.dep-check\n" `date +%s` >> $ChecksumFile.tmp
+          else
+	      md5sum .${p}.dep-check >> $ChecksumFile.tmp
+	  fi
+      done
+    fi
+    mv $ChecksumFile.tmp $ChecksumFile
+}
+
+function make-checksum {
+    if test -f $ChecksumFile; then
+	if find $Dependency/ \
+	    -newer $ChecksumFile \
+	    -a -type f \
+	    -a -not -path '*/.git/*' \
+	    -a -not -name '*~' \
+	    -a -not -path '*/autom4te.cache/*' \
+	    -a -not -path '*/bin.eclipse/*' \
+	   &> /dev/null; then
+	    make-checksum-force
+	fi
+	# check if any projects this project depends on where changed
+	# and if so regenerate checksum
+	if [ -n "$ProjectDependencies" ] ; then
+	    for p in $ProjectDependencies; do
+		if [ .${p}.dep-check -nt "$ChecksumFile" ] ; then
+		    make-checksum-force
+		    break;
+		fi
+	    done
+        fi
+    else
+	make-checksum-force
+    fi
+}
+
+function dep-changes {
+    if ! test -f $DependencyFile; then
+	echo "$Target: ***ALL***"
+	exit
+    fi
+    make-checksum
+    diff -U 0 $DependencyFile $ChecksumFile | tail -n +4 | cut --complement -c 2-35
+}
+
+function dep-save {
+    make-checksum
+    cp $ChecksumFile $DependencyFile    
+}
+
+function dep-clean {
+    test -f $ChecksumFile && rm $ChecksumFile
+    for f in `ls -1 .${TargetId}*.dep-{md5,check} 2>/dev/null` ; do
+	rm $f
+    done
+}
+
+function dep-check {
+    if ! test -f $DependencyFile; then
+	echo $Target
+	exit
+    fi
+    make-checksum
+    if ! diff $DependencyFile $ChecksumFile &>/dev/null; then
+	echo $Target
+	exit
+    fi
+}
+
+dep-$Command

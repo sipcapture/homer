@@ -1,0 +1,131 @@
+# Initial Version Copyright (C) 2010 eZuce, Inc., All Rights Reserved.
+# Licensed to the User under the LGPL license.
+#
+#
+# Copyright (C) Homer Project 2012-2015 (http://www.sipcapture.org).
+# Licensed to the User under the GPL license.
+#
+
+OPTIONS = @OPTIONS@
+DOWNLOAD_LIB_CACHE = @DOWNLOAD_LIB_CACHE@
+
+git_submodules = $(shell sed -e '/^\[submodule/! d' -e 's/^\[submodule "\(.*\)"]$$/\1/g' $(wildcard $(SRC)/.gitmodules))
+custommodules =
+git_custommodules_file = $(wildcard $(SRC)/custom/.gitmodules)
+ifneq ($(git_custommodules_file),)
+git_custommodules = $(shell sed -e '/^\[submodule/! d' -e 's/^\[submodule "\(.*\)"]$$/\1/g' $(git_custommodules_file))
+endif
+
+# Initialize submodules as we need them and only the specific submodule. This allows
+# many submodules to be defined, but only requested submodules to be loaded. There
+# is no need to specify which projects are git submodules, all of this is handled
+# by these this section.
+.PRECIOUS: $(SRC)/%/.git
+$(foreach M,$(git_submodules) $(git_custommodules),$(eval $(M)_GIT_SUBMODULE = $(SRC)/$(M)/.git))
+
+include mak/40-modules.mk
+
+# pull in dependency make fragments
+include $(SRC)/mak/*.deps.mk
+include $(SRC)/*/.deps.mk
+
+# Example .modules-include files
+# - Includes project core pieces
+#    $(@PACKAGE_NAME@_core)
+# - Includes all project pieces
+#    $(@PACKAGE_NAME@_all)
+$(eval @PACKAGE_NAME@_include = \
+	$(if $(wildcard .modules-include),$(shell cat .modules-include),$(@PACKAGE_NAME@_core)))
+
+# Exclude specific packages from building.
+$(eval @PACKAGE_NAME@_exclude = \
+	$(if $(wildcard .modules-exclude),$(shell cat .modules-exclude)))
+
+@PACKAGE_NAME@ := $(filter-out $(@PACKAGE_NAME@_exclude) $(lib),$(@PACKAGE_NAME@_include))
+lib := $(filter-out $(@PACKAGE_NAME@_exclude) $(@PACKAGE_NAME@),$(lib) $(@PACKAGE_NAME@_include))
+
+# Only the main rpm
+$(foreach P,$(@PACKAGE_NAME@),$(eval $(P)_TAR ?= $(P)/$$(call lowercase,$(P))-$(PACKAGE_VERSION).tar.gz))
+
+# useful when you have a make command that might not have any targets, this
+# cause no operation. Without it, you trigger make with empty arguments and
+# that triggers help output
+nop :
+	@echo
+
+help.@PACKAGE_NAME@ = Build all @PACKAGE_NAME@ components starting from autoreconf and finishing with install for each target
+build @PACKAGE_NAME@ : $(project:=.if-changed);
+
+help-more.@PACKAGE_NAME@.changes = Show which projects have changes since last build.
+@PACKAGE_NAME@.changes:
+	@echo $(foreach P,$(@PACKAGE_NAME@),\
+	   $(shell $(SRC)/tools/dep check $(P) $(SRC)/$(P) $($(P)_DEPS)))
+
+$(foreach P,$(git_custommodules),$(SRC)/$(P)/.git) : $(SRC)/%/.git :
+	cd $(SRC)/custom; \
+	  git submodule init $*; \
+	  git submodule update $*
+	ln -snf $(SRC)/custom/$* $(SRC)
+
+$(foreach P,$(custommodules),$(SRC)/$(P)) : $(SRC)/% :
+	ln -snf $(SRC)/custom/$* $(SRC)
+
+$(foreach P,$(git_submodules),$(SRC)/$(P)/.git) : $(SRC)/%/.git :
+	cd $(SRC); \
+	  git submodule init $*; \
+	  git submodule update $*
+
+.PHONY:$(@PACKAGE_NAME@)
+help.* = Compile and install from source this a specific project. Assumes all dependencies are already compiled and installed.
+$(@PACKAGE_NAME@) : % : %.autoreconf %.configure %.all %.install
+
+help-more.*.changes = Show actual files that have changed for a project that would trigger rebuilding this project.
+$(@PACKAGE_NAME@:=.changes):
+	$(SRC)/tools/dep changes $(PROJ) $(SRC)/$(PROJ) $($(PROJ)_DEPS)
+
+help-more.*.if-changed = Compile project only if files have changed for a project.
+.SECONDEXPANSION:
+$(@PACKAGE_NAME@:=.if-changed): %.if-changed :
+	@echo -n 'checking for changes in $*...'
+	@$(MAKE) -s nop $(shell $(SRC)/tools/dep check $(PROJ) $(SRC)/$(PROJ) \
+	       $(foreach D,$($(PROJ)_DEPS),$(D)))
+
+# Targets for project and lib. Uses pattern %.xyz so libs can implement their own
+# implementation that will override the patterned one. i.e. freeswitch.autoreconf
+# This also means all targets in all other make files cannot create a target that
+# ends in autoreconf, configure or dist.
+help-more.*.autoreconf = Run only autoreconf on a single project
+%.autoreconf : $$($$*_GIT_SUBMODULE) $(SRC)/$$*
+	cd $(SRC)/$(PROJ); \
+	  autoreconf -if
+
+help-more.*.configure = Run only configure target on a single project
+%.configure :
+	test -d $(PROJ) || mkdir -p $(PROJ)
+	cd $(PROJ); \
+	  $(SRC)/$(PROJ)/configure $(OPTIONS) $(PROJECT_OPTIONS) $($(PROJ)_OPTIONS)
+
+.SECONDEXPANSION:
+help-more.*.dist = Run autoreconf thru to archive (tarball) for a single project
+$(@PACKAGE_NAME@:=.dist) : %.dist : %.autoreconf %.configure
+	$(MAKE) -C $(PROJ) dist
+
+# Targets for main project only. 
+MAKE_COMMANDS = check install clean dist
+$(foreach C,$(MAKE_COMMANDS) all,$(eval help-more.*.$(C)=Run only the $(C) target for a single project))
+$(@PACKAGE_NAME@:=.install) :
+	$(MAKE) -C $(PROJ) install
+	$(SRC)/tools/dep save $(PROJ) $(SRC)/$(PROJ) $($(PROJ)_DEPS)
+
+$(@PACKAGE_NAME@:=.clean) :
+	$(MAKE) -C $(PROJ) clean
+	$(SRC)/tools/dep clean $(PROJ)
+
+help.*.check = Run unit tests on for a single project
+$(@PACKAGE_NAME@:=.check) :
+	$(MAKE) -C $(PROJ) check
+
+# projects do not all have an "all" target, they probably should, until then, use
+# no-target default
+$(@PACKAGE_NAME@:=.all) :
+	$(MAKE) -C $(PROJ)

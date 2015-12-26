@@ -1,0 +1,15 @@
+{
+  "name": "homer_ui_unit",
+  "description": "Homer UI Unit Tests",
+  "author": "Lorenzo Mangani <lorenzo.mangani@gmail.com>",
+  "dependencies": {
+    "casperjs": "*",
+    "spooky":"*"
+  },
+  "config": {
+    "unsafe-perm":true
+  },
+  "scripts": {
+    "start": "node test.js"
+  }
+}

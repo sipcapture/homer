@@ -1,8 +1,6 @@
-Makefile.in
-aclocal.m4
-autom4te.cache/*
-config/*
+mak/*-*.mk
 configure
-webhomer/preferences.php
-webhomer/configuration.php
-webhomer/tmp
+autom4te.cache
+build
+config/install-sh
+config/missing
