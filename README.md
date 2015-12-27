@@ -15,6 +15,7 @@
 ![HEP](https://img.shields.io/badge/text-CDRs-green.svg)
 
 
+![splitter](http://i.imgur.com/lytn4zn.png)
 
 ## What is HOMER?
 
@@ -30,6 +31,7 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 
 <br/>
 
+![splitter](http://i.imgur.com/lytn4zn.png)
 #### HOMER Components
 ---------------
 <img src="http://i.imgur.com/0qiWlzi.png" >
