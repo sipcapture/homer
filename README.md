@@ -55,6 +55,7 @@ The following platforms are _HEP-ready_:
 
 
 
+![splitter](http://i.imgur.com/lytn4zn.png)
 
 ## Installation
 
