@@ -58,7 +58,7 @@ The following platforms are _HEP-ready_:
 
 Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) to get started with HOMER
 
-![TEST](http://sipcapture.org/io/img/H5screen.gif)
+![TEST](http://i.imgur.com/hXW5J51.gif)
 
 
 ### Need Support?
