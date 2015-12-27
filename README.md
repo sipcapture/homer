@@ -32,17 +32,19 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 <br/>
 
 ![splitter](http://i.imgur.com/lytn4zn.png)
-#### HOMER Components
----------------
+# HOMER Components
+
 <img src="http://i.imgur.com/0qiWlzi.png" >
 
 
-## Capture Server
+## Capture Server <a href="http://github.com/sipcapture/HEP"><img src="http://i.imgur.com/RSUlFRa.gif"></a>
+
 Responsible for Collecting, Indexing and Storing received HEP, IPIP and Raw packets from HEP Agents, the HOMER Capture Server is based on our SIPCapture module for [Kamailio](http://kamailio.org) or [OpenSIPS](http://opensips.org) featuring optimized database schemas with advanced options and complex and extensible capture plans with multiple table support and triggers able to interact with any module on the platform and unlimited scope. Includes a powerful and modern [Web User-Interface](https://github.com/sipcapture/homer-ui) and secure [REST API](https://github.com/sipcapture/homer-api)
 
 <img src="http://i.imgur.com/p9wV9kh.png">
 
-## Capture Agents
+## Capture Agents <a href="http://github.com/sipcapture/HEP"><img src="http://i.imgur.com/RSUlFRa.gif"></a>
+
 Capture Agents are responsible for feeding HOMER SIP signaling, Logs, RTCP Reports and much more using the HEP _(Homer Encapsulation Protocol)_ protocol. Our [WIKI](https://github.com/sipcapture/homer/wiki) provides several useful examples to get started.
 
 The following platforms are _HEP-ready_:
@@ -92,5 +94,4 @@ Contributors and Contributions to our project are always welcome! If you intend 
 ##### If you use HOMER in production, please consider supporting the project with a [Donation](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
 
 [![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
-
 
