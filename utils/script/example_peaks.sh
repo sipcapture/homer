@@ -76,7 +76,7 @@ REGSTAT=$(curl -s --cookie "HOMERSESSID=tcuass65ejl2lifoopuuurpmq7; path=/" -X P
 TOTAL=$(echo "$REGSTAT"|jq '.count')
 
 # get totals
-TOTALS=$(echo "$REGSTAT" | jq '.data[] .total' | tr -d '"' | sort -n )
+TOTALS=$(echo "$REGSTAT" | jq -r '.data[] .total' | sort -n )
 if [ -z "$TOTALS" ]; then
 	echo "No results"
 	exit
@@ -91,11 +91,9 @@ PERC95=$(echo "$TOTALS" | awk 'BEGIN{c=0} length($0){a[c]=$0;c++}END{p5=(c/100*5
 # Check entries
 	COUNTER=0
          while [  $COUNTER -ne "$TOTAL" ]; do
-	     THISTOT=$(echo "$REGSTAT" | jq '.data['$COUNTER'] .total' | tr -d '"')
+	     THISTOT=$(echo "$REGSTAT" | jq -r '.data['$COUNTER'] .total')
 	     if [ "$THISTOT" -gt "$PERC95" ]; then
-		     echo "$REGSTAT" | jq '.data['$COUNTER'] .source_ip'
-		     echo "$REGSTAT" | jq '.data['$COUNTER'] .total'
-		     echo "$REGSTAT" | jq '.data['$COUNTER'] .method'
+		     echo "$REGSTAT" | jq -r '.data['$COUNTER'] | "\(.source_ip) \(.total) \(.method)"'
 	     fi
              let COUNTER=COUNTER+1 
          done
