@@ -82,7 +82,7 @@ REGSTAT=$(curl -s --cookie "HOMERSESSID=tcuass65ejl2lifoopuuurpmq7; path=/" -X P
 
 # get entries and totals
 TOTAL=$(echo "$REGSTAT"|jq '.count')
-TOTALS=$(echo "$REGSTAT" | jq '.data[] .total' | tr -d '"' )
+TOTALS=$(echo "$REGSTAT" | jq -r '.data[] .total' )
 if [ -z "$TOTALS" ]; then
 	echo "No results"
 	exit
@@ -110,16 +110,14 @@ STD=$(echo "$STDDEV 1.3" | awk '{print $1*$2}')
 # Check series for anomalies
 COUNTER=0
          while [  $COUNTER -ne "$TOTAL" ]; do
-	     THISTOT=$(echo "$REGSTAT" | jq '.data['$COUNTER'] .total' | tr -d '"')
+	     THISTOT=$(echo "$REGSTAT" | jq -r '.data['$COUNTER'] .total' )
 
 		# IF abs(x-mu) > 3*std  THEN  x is outlier
 		ABS=$(echo "$THISTOT $MEAN"| awk '{print $1-$2}' | tr -d - )
 
 	     if [ $(echo " $ABS > $STD" | bc) -eq 1 ]; then
 		     echo "Outlier:"
-		     echo "$REGSTAT" | jq '.data['$COUNTER'] .source_ip'
-		     echo "$REGSTAT" | jq '.data['$COUNTER'] .total'
-		     echo "$REGSTAT" | jq '.data['$COUNTER'] .method'
+		     echo "$REGSTAT" | jq -r '.data['$COUNTER'] | "\(.source_ip) \(.total) \(.method)"'
 	     fi
              let COUNTER=COUNTER+1 
          done
