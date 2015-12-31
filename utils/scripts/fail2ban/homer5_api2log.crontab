@@ -1,0 +1,4 @@
+##################################################################
+# Running every 30 minutes collecting alarms from HOMER5 API
+
+30 * * * * root /opt/homer5_api2log.sh > /var/log/homer5_alarms.log 2>&1
