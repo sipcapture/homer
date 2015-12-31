@@ -1,7 +1,11 @@
 #!/bin/bash
 # Get Alarms in timerange from HOMER 5 API (http://sipcapture.org)
-# Useful in combination with fail2ban, etc.
 # (C) 2015 QXIP BV
+#
+# fail2ban filter:
+#
+# 	[Definition]
+# 	failregex = ^.* scanner: (?P<counter>\d*) <HOST>.*
 
 # OPTIONS:
 # TIMERANGE
