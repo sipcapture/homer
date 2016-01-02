@@ -16,6 +16,8 @@
 # IPTABLES
   IPTABLES="/sbin/iptables"
   IPRULE="DROP"
+# WHITELIST
+  WHITELIST=('127.0.0.1' '192.168.1.1')
   
 # USER INPUT
 while [ "$1" != "" ]; do
@@ -110,8 +112,10 @@ offenders=()
 	for ip in "${offenders[@]}"
 	do
 	   :
-	   echo "Banning $ip"
-	   echo "$IPTABLES -A H5BLACKLIST-INPUT -s \"$ip\" -j $IPRULE" | sh
+	   if [[ ! " ${WHITELIST[@]} " =~ " ${ip} " ]]; then
+	   	echo "Banning $ip"
+	   	echo "$IPTABLES -A H5BLACKLIST-INPUT -s \"$ip\" -j $IPRULE" | sh
+	   fi
 	done
 
 echo "Done!"
