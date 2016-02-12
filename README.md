@@ -61,7 +61,7 @@ The following platforms are _HEP-ready_:
 
 ## Installation
 
-Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) to get started with HOMER
+Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) and learn how to [setup HOMER](https://github.com/sipcapture/homer/wiki/Quick-Install), configure [capture agents](https://github.com/sipcapture/homer/wiki/Examples%3A-Captagent4) with secure [encryption](https://github.com/sipcapture/homer/wiki/hepstunnel), ship [custom logs](https://github.com/sipcapture/homer/wiki/Examples%3A-hepipe.js), custom [statistics](https://github.com/sipcapture/homer/wiki/Example%3A-CustomStats) and more using our examples and guides.
 
 ![TEST](http://i.imgur.com/hXW5J51.gif)
 
