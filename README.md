@@ -31,6 +31,12 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 
 <br/>
 
+## Installation
+
+Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) and learn how to [setup HOMER](https://github.com/sipcapture/homer/wiki/Quick-Install), configure [capture agents](https://github.com/sipcapture/homer/wiki/Examples%3A-Captagent4) with secure [encryption](https://github.com/sipcapture/homer/wiki/hepstunnel), ship [custom logs](https://github.com/sipcapture/homer/wiki/Examples%3A-hepipe.js), custom [statistics](https://github.com/sipcapture/homer/wiki/Example%3A-CustomStats) and more using our examples and guides.
+
+![TEST](http://i.imgur.com/hXW5J51.gif)
+
 ![splitter](http://i.imgur.com/lytn4zn.png)
 # HOMER Components
 
@@ -59,11 +65,7 @@ The following platforms are _HEP-ready_:
 
 ![splitter](http://i.imgur.com/lytn4zn.png)
 
-## Installation
 
-Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) and learn how to [setup HOMER](https://github.com/sipcapture/homer/wiki/Quick-Install), configure [capture agents](https://github.com/sipcapture/homer/wiki/Examples%3A-Captagent4) with secure [encryption](https://github.com/sipcapture/homer/wiki/hepstunnel), ship [custom logs](https://github.com/sipcapture/homer/wiki/Examples%3A-hepipe.js), custom [statistics](https://github.com/sipcapture/homer/wiki/Example%3A-CustomStats) and more using our examples and guides.
-
-![TEST](http://i.imgur.com/hXW5J51.gif)
 
 
 ### Need Support?
