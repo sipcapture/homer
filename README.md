@@ -2,7 +2,6 @@
 
 #### 100% Open-Source VoIP Capture, Troubleshooting & Monitoring
 
-[![Join the chat at https://gitter.im/sipcapture/homer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/sipcapture/homer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ![H5](https://img.shields.io/badge/HOMER-5-red.svg)
 ![HEP](https://img.shields.io/badge/proto-hep_eep-blue.svg)
@@ -73,6 +72,9 @@ The following platforms are _HEP-ready_:
 For professional support, installations, customizations or commercial requests please contact: support@sipcapture.org
 
 For community support, updates, user discussion and experience exchange please join our users   [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss)
+
+
+[![Join the chat at https://gitter.im/sipcapture/homer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/sipcapture/homer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 
 
