@@ -30,12 +30,21 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 
 <br/>
 
-## Installation
+## Installation & Configuration
 
 Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) and learn how to [setup](https://github.com/sipcapture/homer/wiki/Quick-Install) and [use](https://github.com/sipcapture/homer/wiki/Using-Homer-5) HOMER, configure [capture agents](https://github.com/sipcapture/homer/wiki/Examples%3A-Captagent4) ([Kamailio](https://github.com/sipcapture/homer/wiki/Examples%3A-Kamailio), [OpenSIPS](https://github.com/sipcapture/homer/wiki/Examples%3A-OpenSIPS), [Asterisk](https://github.com/sipcapture/homer/wiki/Examples%3A-Asterisk), [FreeSwitch](https://github.com/sipcapture/homer/wiki/Examples%3A-FreeSwitch), [sipgrep](https://github.com/sipcapture/homer/wiki/Examples%3A-sipgrep), [sngrep](https://github.com/sipcapture/homer/wiki/Examples%3A-sngrep) and more!) with secure [encryption](https://github.com/sipcapture/homer/wiki/hepstunnel), ship [custom logs](https://github.com/sipcapture/homer/wiki/Examples%3A-hepipe.js), custom [statistics](https://github.com/sipcapture/homer/wiki/Example%3A-CustomStats) and more.
 
 
 ![TEST](http://i.imgur.com/hXW5J51.gif)
+
+### Need Support?
+For professional support, remote installations, customizations or commercial requests please contact: support@sipcapture.org
+
+For community support, updates, user discussion and experience exchange please join our users   [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss)
+
+
+[![Join the chat at https://gitter.im/sipcapture/homer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/sipcapture/homer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 
 ![splitter](http://i.imgur.com/lytn4zn.png)
 # HOMER Components
@@ -68,13 +77,6 @@ The following platforms are _HEP-ready_:
 
 
 
-### Need Support?
-For professional support, installations, customizations or commercial requests please contact: support@sipcapture.org
-
-For community support, updates, user discussion and experience exchange please join our users   [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss)
-
-
-[![Join the chat at https://gitter.im/sipcapture/homer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/sipcapture/homer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 
 
