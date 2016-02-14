@@ -33,7 +33,7 @@ Powered at the core by [SIPCAPTURE](http://kamailio.org/docs/modules/stable/modu
 
 ## Installation
 
-Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) and learn how to [setup HOMER](https://github.com/sipcapture/homer/wiki/Quick-Install), configure [capture agents](https://github.com/sipcapture/homer/wiki/Examples%3A-Captagent4) with secure [encryption](https://github.com/sipcapture/homer/wiki/hepstunnel), ship [custom logs](https://github.com/sipcapture/homer/wiki/Examples%3A-hepipe.js), custom [statistics](https://github.com/sipcapture/homer/wiki/Example%3A-CustomStats) and more using our examples and guides.
+Please follow our [Wiki](https://github.com/sipcapture/homer/wiki) and learn how to [setup](https://github.com/sipcapture/homer/wiki/Quick-Install) and [use](https://github.com/sipcapture/homer/wiki/Using-Homer-5) HOMER, configure [capture agents](https://github.com/sipcapture/homer/wiki/Examples%3A-Captagent4) ([Kamailio](https://github.com/sipcapture/homer/wiki/Examples%3A-Kamailio), [OpenSIPS](https://github.com/sipcapture/homer/wiki/Examples%3A-OpenSIPS), [Asterisk](https://github.com/sipcapture/homer/wiki/Examples%3A-Asterisk), [FreeSwitch](https://github.com/sipcapture/homer/wiki/Examples%3A-FreeSwitch), [sipgrep](https://github.com/sipcapture/homer/wiki/Examples%3A-sipgrep), [sngrep](https://github.com/sipcapture/homer/wiki/Examples%3A-sngrep) and more!) with secure [encryption](https://github.com/sipcapture/homer/wiki/hepstunnel), ship [custom logs](https://github.com/sipcapture/homer/wiki/Examples%3A-hepipe.js), custom [statistics](https://github.com/sipcapture/homer/wiki/Example%3A-CustomStats) and more using our examples and guides.
 
 ![TEST](http://i.imgur.com/hXW5J51.gif)
 
