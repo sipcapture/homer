@@ -60,14 +60,17 @@ Responsible for Collecting, Indexing and Storing received HEP, IPIP and Raw pack
 
 ## Capture Agents <a href="http://github.com/sipcapture/HEP"><img src="http://i.imgur.com/RSUlFRa.gif"></a>
 
-Capture Agents are responsible for feeding HOMER SIP signaling, Logs, RTCP Reports and much more using the HEP _(Homer Encapsulation Protocol)_ protocol. Our [WIKI](https://github.com/sipcapture/homer/wiki) provides several useful examples to get started.
+Capture Agents are responsible for feeding HOMER SIP signaling, Logs, RTP/RTCP Reports, Custom Statistics and much more using the HEP _(Homer Encapsulation Protocol)_ protocol. Our [WIKI](https://github.com/sipcapture/homer/wiki) provides several useful examples to get started.
 
-The following platforms are _HEP-ready_:
+The following projects are _HEP-ready_:
 
-* [Kamailio](http://kamailio.org)
-* [OpenSIPS](http://opensips.org)
-* [Asterisk](http://asterisk.org)
-* [FreeSWITCH](http://freeswitch.org)
+* [Kamailio](https://github.com/sipcapture/homer/wiki/Examples%3A-Kamailio)
+* [OpenSIPS](https://github.com/sipcapture/homer/wiki/Examples%3A-OpenSIPS)
+* [Asterisk](https://github.com/sipcapture/homer/wiki/Examples%3A-Asterisk)
+* [FreeSWITCH](https://github.com/sipcapture/homer/wiki/Examples%3A-FreeSwitch)
+* [RTPEngine](https://github.com/sipcapture/homer/wiki/Examples%3A-RTPEngine) 
+* [sngrep](https://github.com/sipcapture/homer/wiki/Examples%3A-sngrep)
+* [sipgrep](https://github.com/sipcapture/homer/wiki/Examples%3A-sipgrep)
 + [CaptAgent](http://github.com/sipcapture/captagent) _for any other platform_
 
 
