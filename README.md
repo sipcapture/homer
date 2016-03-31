@@ -60,7 +60,7 @@ Responsible for Collecting, Indexing and Storing received HEP, IPIP and Raw pack
 
 ## Capture Agents <a href="http://github.com/sipcapture/HEP"><img src="http://i.imgur.com/RSUlFRa.gif"></a>
 
-Capture Agents are responsible for feeding HOMER SIP signaling, Logs, RTP/RTCP Reports, Custom Statistics and much more using the HEP _(Homer Encapsulation Protocol)_ protocol. Our [WIKI](https://github.com/sipcapture/homer/wiki) provides several useful examples to get started.
+Capture Agents are responsible for feeding HOMER [SIP signaling](https://github.com/sipcapture/homer/wiki), [Logs](https://github.com/sipcapture/homer/wiki/Examples%3A-hepipe.js), [RTP/RTCP Reports](https://github.com/sipcapture/homer/wiki/Using-Homer-5-QoS-Reports), [Custom Statistics](https://github.com/sipcapture/homer/wiki/Example%3A-CustomStats) and much more using the HEP _(Homer Encapsulation Protocol)_ protocol. Our [WIKI](https://github.com/sipcapture/homer/wiki) provides several useful examples to get started.
 
 The following projects are _HEP-ready_:
 
