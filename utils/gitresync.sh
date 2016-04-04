@@ -34,7 +34,7 @@ do
      esac
 done
 
-if [[ $(git remote -v) =~ "//github.com/sipcapture/homer.git" ]]; then
+if [[ $(git remote -v) =~ "//github.com/sipcapture/homer" ]]; then
 	echo "Syncronizing submodules..."
 	git submodule update --init --recursive
 	git submodule foreach git pull origin master
