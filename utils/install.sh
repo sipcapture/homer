@@ -361,7 +361,7 @@ case $DIST in
 		wget http://download.opensuse.org/repositories/home:/kamailio:/v4.4.x-rpms/CentOS_7/home:kamailio:v4.4.x-rpms.repo -O /etc/yum.repos.d/kamailio.repo
 	   fi
 	   yum -y update
-	   yum -y install $COMMON_PKGS mysql-server kamailio rsyslog kamailio-outbound kamailio-sctp kamailio-tls kamailio-websocket kamailio-jansson kamailio-mysql
+	   yum -y install $COMMON_PKGS mysql-community-server kamailio rsyslog kamailio-outbound kamailio-sctp kamailio-tls kamailio-websocket kamailio-jansson kamailio-mysql
            chkconfig mysqld on
            chkconfig httpd on
 	   chkconfig kamailio on
@@ -432,6 +432,8 @@ case $DIST in
 
 		  MYSQL_RUN
 
+		  mysql -u "$sqluser" -p"$sqlpassword" -e "ALTER USER 'root'@'localhost' PASSWORD EXPIRE NEVER;"
+		  
 		  echo "Creating Databases..."
 		  mysql -u "$sqluser" -p"$sqlpassword" < $SQL_LOCATION/homer_databases.sql
 		  mysql -u "$sqluser" -p"$sqlpassword" < $SQL_LOCATION/homer_user.sql
