@@ -97,15 +97,21 @@ echo "OS: Dectecting System...."
 if [ -f /etc/debian_version ] ; then
     DIST="DEBIAN"
     echo "OS: DEBIAN detected"
-# elif [ -f /etc/redhat-release ] ; then
-#    DIST="CENTOS"
-#    echo "OS: CENTOS detected"
+elif [ -f /etc/redhat-release ] ; then
+    DIST="CENTOS"
+    echo "OS: CENTOS detected"
+    read -p "Support for CentOS is experimental and likely broken. Continue (y/N)? " choice
+	case "$choice" in 
+	  y|Y ) echo "Proceeding...";;
+	  n|N ) echo "Exiting" && exit 1;;
+	  * ) echo "invalid" && exit 1 ;;
+	esac
 # elif [ -f /etc/SuSE-release ] ; then
 #   DIST="SUSE"
 #   echo "OS: SUSE detected"
 else
     echo "ERROR:"
-    echo "Sorry, this Installer supports Debian flavoures systems only!"
+    echo "Sorry, this Installer does not support your OS yet!"
     echo "Please follow instructions in the HOW-TO for manual installation & setup"
     echo "available at http://sipcapture.org"
     echo
@@ -331,6 +337,175 @@ case $DIST in
 	   WEBROOT="/var/www/html/"
 	   WEBSERV="httpd"
 	   MYSQL="mysqld"
+	   yum -f install wget
+           COMMON_PKGS=" autoconf automake bzip2 cpio curl curl-devel curl-devel expat-devel fileutils make gcc gcc-c++ gettext-devel gnutls-devel openssl openssl-devel openssl-devel mod_ssl perl patch unzip wget zip zlib zlib-devel bison flex mysql pcre-devel libxml2-devel sox httpd php php-gd php-mysql php-json git php-mysql php-devel"
+	   VERS=$(cat /etc/redhat-release |cut -d' ' -f4 |cut -d'.' -f1)
+	   if [ "$VERS" = "6" ]; then
+		wget http://dev.mysql.com/get/mysql57-community-release-el6-7.noarch.rpm
+		yum -y localinstall mysql57-community-release-el6-7.noarch.rpm
+		       if [ ! "$?" == "0" ]; then
+		   	echo 
+		   	echo "HALT! Something went wrong. Please resolve the errors above and try again."
+		   	exit 1
+		       fi
+		wget http://download.opensuse.org/repositories/home:/kamailio:/v4.4.x-rpms/CentOS_6/home:kamailio:v4.4.x-rpms.repo -O /etc/yum.repos.d/kamailio.repo
+
+           elif [ "$VERS" = "7" ]; then
+		wget http://dev.mysql.com/get/mysql57-community-release-el7-7.noarch.rpm
+		yum -y localinstall mysql57-community-release-el7-7.noarch.rpm
+		       if [ ! "$?" == "0" ]; then
+		   	echo 
+		   	echo "HALT! Something went wrong. Please resolve the errors above and try again."
+		   	exit 1
+		       fi
+		wget http://download.opensuse.org/repositories/home:/kamailio:/v4.4.x-rpms/CentOS_7/home:kamailio:v4.4.x-rpms.repo -O /etc/yum.repos.d/kamailio.repo
+	   fi
+	   yum -y update
+	   yum -y install $COMMON_PKGS kamailio rsyslog kamailio-outbound kamailio-sctp kamailio-tls kamailio-websocket kamailio-jansson kamailio-mysql
+           chkconfig mysqld on
+           chkconfig httpd on
+	   chkconfig kamailio on
+
+	   # HOMER GIT
+		cd /usr/src/
+		if [ ! -d "/usr/src/homer-api" ]; then
+		   echo "GIT: Cloning Homer components..."
+		   	git clone --depth 1 https://github.com/sipcapture/homer-api.git homer-api
+			git clone --depth 1 https://github.com/sipcapture/homer-ui.git homer-ui
+			git clone --depth 1 https://github.com/QXIP/homer-docker.git homer-docker
+			chmod +x /usr/src/homer-api/scripts/*
+			cp /usr/src/homer-api/scripts/* /opt/
+		else
+			echo "GIT: Updating Homer components..."
+		   	cd homer-api; git pull; cd ..
+		   	cd homer-ui; git pull; cd ..
+		   	cd homer-docker; git pull; cd ..
+		fi
+		
+			cp -R /usr/src/homer-ui/* $WEBROOT/
+			cp -R /usr/src/homer-api/api $WEBROOT/
+			chown -R www-data:www-data $WEBROOT/store/
+			chmod -R 0775 $WEBROOT/store/dashboard
+		
+			SQL_LOCATION=/usr/src/homer-api/sql
+
+			cp /usr/src/homer-docker/data/configuration.php $WEBROOT/api/configuration.php
+			cp /usr/src/homer-docker/data/preferences.php $WEBROOT/api/preferences.php
+			cp /usr/src/homer-docker/data/vhost.conf /etc/httpd/conf.d/sipcapture.conf
+		
+			cp /usr/src/homer-docker/data/kamailio.cfg /etc/kamailio/kamailio.cfg
+			chmod 775 /etc/kamailio/kamailio.cfg
+		
+			(crontab -l ; echo "30 3 * * * /opt/homer_rotate >> /var/log/cron.log 2>&1") | sort - | uniq - | crontab -
+	
+		# Handy-dandy MySQL run function
+		function MYSQL_RUN () {
+
+		  echo 'Starting mysqld'
+		  /etc/init.d/mysql start
+		  #echo 'Waiting for mysqld to come online'
+		  while [ ! -x /var/run/mysqld/mysqld.sock ]; do
+		      sleep 1
+		  done
+
+		}
+
+		# MySQL data loading function
+		function MYSQL_INITIAL_DATA_LOAD () {
+
+		  echo
+	   	  echo "Please provide your MySQL $sqluser password to proceed (empty for no password)"
+	   	  stty -echo
+	   	  read sqlpassword
+
+   			echo "Using default username..."
+   			sqlhomeruser="homer"
+		  	DB_USER="$sqlhomeruser"
+   			echo "Using random password... "
+   			sqlhomerpassword=$(cat /dev/urandom|tr -dc "a-zA-Z0-9"|fold -w 9|head -n 1)
+		  	DB_PASS="$sqlhomerpassword"
+
+		  DATADIR=/var/lib/mysql
+
+		  echo "Beginning initial data load...."
+
+		  #chown -R mysql:mysql "$DATADIR"
+		  #mysql_install_db --user=mysql --datadir="$DATADIR"
+
+		  MYSQL_RUN
+
+		  echo "Creating Databases..."
+		  mysql -u "$sqluser" -p"$sqlpassword" < $SQL_LOCATION/homer_databases.sql
+		  mysql -u "$sqluser" -p"$sqlpassword" < $SQL_LOCATION/homer_user.sql
+		  
+		  echo "Creating Tables..."
+		  mysql -u "$sqluser" -p"$sqlpassword" homer_data < $SQL_LOCATION/schema_data.sql
+		  mysql -u "$sqluser" -p"$sqlpassword" homer_configuration < $SQL_LOCATION/schema_configuration.sql
+		  mysql -u "$sqluser" -p"$sqlpassword" homer_statistic < $SQL_LOCATION/schema_statistic.sql
+		  
+		  # echo "Creating local DB Node..."
+		  mysql -u "$sqluser" -p"$sqlpassword" homer_configuration -e "INSERT INTO node VALUES(1,'mysql','homer_data','3306','"$DB_USER"','"$DB_PASS"','sip_capture','node1', 1);"
+		  
+		  mysql -u "$sqluser" -p"$sqlpassword" -e "GRANT ALL ON *.* TO '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS'; FLUSH PRIVILEGES;";
+
+		  echo "Homer initial data load complete" > $DATADIR/.homer_initialized
+
+		}
+
+		# Initialize Database
+		MYSQL_INITIAL_DATA_LOAD
+
+		# HOMER API CONFIG
+		echo "Patching Homer configuration..."
+		PATH_HOMER_CONFIG=$WEBROOT/api/configuration.php
+		chmod 775 $PATH_HOMER_CONFIG
+
+		# Replace values in template
+		perl -p -i -e "s/\{\{ DB_PASS \}\}/$DB_PASS/" $PATH_HOMER_CONFIG
+		perl -p -i -e "s/\{\{ DB_HOST \}\}/$DB_HOST/" $PATH_HOMER_CONFIG
+		perl -p -i -e "s/\{\{ DB_USER \}\}/$DB_USER/" $PATH_HOMER_CONFIG
+		# Set Permissions for webapp
+		mkdir $WEBROOT/api/tmp
+		chmod -R 0777 $WEBROOT/api/tmp/
+		chmod -R 0775 $WEBROOT/store/dashboard*
+
+		# Reconfigure SQL rotation
+    		export PATH_ROTATION_SCRIPT=/opt/homer_rotate
+    		chmod 775 $PATH_ROTATION_SCRIPT
+    		chmod +x $PATH_ROTATION_SCRIPT
+    		perl -p -i -e "s/homer_user/$sqlhomeruser/" $PATH_ROTATION_SCRIPT
+    		perl -p -i -e "s/homer_password/$sqlhomerpassword/" $PATH_ROTATION_SCRIPT
+    		# Init rotation
+    		/opt/homer_rotate > /dev/null 2>&1
+
+		# KAMAILIO
+		export PATH_KAMAILIO_CFG=/etc/kamailio/kamailio.cfg
+		cp /usr/src/homer-docker/data/kamailio.cfg $PATH_KAMAILIO_CFG
+
+		awk '/max_while_loops=100/{print $0 RS "mpath=\"//usr/lib/x86_64-linux-gnu/kamailio/modules/\"";next}1' $PATH_KAMAILIO_CFG >> $PATH_KAMAILIO_CFG.tmp | 2&>1 >/dev/null
+		mv $PATH_KAMAILIO_CFG.tmp $PATH_KAMAILIO_CFG
+
+		# Replace values in template
+		perl -p -i -e "s/\{\{ LISTEN_PORT \}\}/$LISTEN_PORT/" $PATH_KAMAILIO_CFG
+		perl -p -i -e "s/\{\{ DB_PASS \}\}/$DB_PASS/" $PATH_KAMAILIO_CFG
+		perl -p -i -e "s/\{\{ DB_HOST \}\}/$DB_HOST/" $PATH_KAMAILIO_CFG
+		perl -p -i -e "s/\{\{ DB_USER \}\}/$DB_USER/" $PATH_KAMAILIO_CFG
+
+		sed -i -e "s/#RUN_KAMAILIO/RUN_KAMAILIO/g" /etc/default/kamailio
+		sed -i -e "s/#CFGFILE/CFGFILE/g" /etc/default/kamailio
+		sed -i -e "s/#USER/USER/g" /etc/default/kamailio
+		sed -i -e "s/#GROUP/GROUP/g" /etc/default/kamailio
+
+		# Test the syntax.
+		# kamailio -c $PATH_KAMAILIO_CFG
+
+		# Start Apache
+		# apachectl -DFOREGROUND
+		service apache2 restart
+
+		# It's Homer time!
+		service kamailio restart
+
 	   ;;
 esac
 
