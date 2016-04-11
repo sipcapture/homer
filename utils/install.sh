@@ -430,7 +430,7 @@ case $DIST in
                         DB_USER="$sqlhomeruser"
                         # echo "Using random password... "
                         sqlhomerpassword=$(cat /dev/urandom|tr -dc "a-zA-Z0-9"|fold -w 9|head -n 1)
-                        DB_PASS="$sqlhomerpassword"
+                        DB_PASS="$sqlhomerpassword!"
 
                   DATADIR=/var/lib/mysql
 
@@ -442,7 +442,7 @@ case $DIST in
 
 		  MYSQL_RUN
 
-		  mysql -u "$sqluser" -p"$sqlpassword" -e "ALTER USER 'root'@'localhost' PASSWORD EXPIRE NEVER;"
+		  mysql -u "$sqluser" -p"$sqlpassword" -e "SET GLOBAL validate_password_policy=LOW;"
 		  
 		  echo "Creating Databases..."
 		  mysql -u "$sqluser" -p"$sqlpassword" < $SQL_LOCATION/homer_databases.sql
