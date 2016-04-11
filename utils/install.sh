@@ -399,41 +399,41 @@ case $DIST in
 			(crontab -l ; echo "30 3 * * * /opt/homer_rotate >> /var/log/cron.log 2>&1") | sort - | uniq - | crontab -
 	
 		# Handy-dandy MySQL run function
-		function MYSQL_RUN () {
+                function MYSQL_RUN () {
 
-		  echo 'Starting mysqld'
-		  service mysqld start
-		  #echo 'Waiting for mysqld to come online'
-		  while [ ! -x /var/lib/mysql/mysql.sock ]; do
-		      sleep 1
-		  done
+                  echo 'Starting mysqld'
+                  service mysqld start
+                  echo 'Waiting for mysqld to start...'
+                  while [ ! -x /var/lib/mysql/mysql.sock ]; do
+                      sleep 1
+                  done
+               	}
 
-		}
-		
-		function MYSQL_AUTH () {
-                        read -s -p "Please provide MYSQL root password: " sqlpassword
+                # MySQL data loading function
+                function MYSQL_INITIAL_DATA_LOAD () {
+
+                  MYSQL_RUN
+
+                  sqlpassword=$(grep 'temporary password' /var/log/mysqld.log | awk '{ print $(NF) }')
+                  echo "Starting mysql secure installation [ $sqlpassword ] "
+                  echo "Please follow the prompts: "
+                  sudo mysql_secure_installation -p"$sqlpassword"
+		  echo "------------"
+		  echo
+                        read -p "Please provide MYSQL root password: " sqlpassword
                         while ! mysql -u root -p$sqlpassword  -e ";" ; do
                                read -p "Can't connect, please try again: " sqlpassword
                        	done
-                }
 
-		# MySQL data loading function
-		function MYSQL_INITIAL_DATA_LOAD () {
+                       	echo "Generating homer mysql user..."
+                        sqlhomeruser="homer"
+                        DB_USER="$sqlhomeruser"
+                        # echo "Using random password... "
+                        sqlhomerpassword=$(cat /dev/urandom|tr -dc "a-zA-Z0-9"|fold -w 9|head -n 1)
+                        DB_PASS="$sqlhomerpassword"
 
-		  echo "Starting mysql secure installation... "
-		  sqlpassword=$(grep 'temporary password' /var/log/mysqld.log | awk '{ print $(NF) }')
-		  mysql_secure_installation -p"$sqlpassword"
+                  DATADIR=/var/lib/mysql
 
-                  MYSQL_AUTH
-
-   			echo "Generating homer mysql user..."
-   			sqlhomeruser="homer"
-		  	DB_USER="$sqlhomeruser"
-   			# echo "Using random password... "
-   			sqlhomerpassword=$(cat /dev/urandom|tr -dc "a-zA-Z0-9"|fold -w 9|head -n 1)
-		  	DB_PASS="$sqlhomerpassword"
-
-		  DATADIR=/var/lib/mysql
 
 		  echo "Beginning initial data load...."
 
