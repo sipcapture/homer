@@ -338,7 +338,7 @@ case $DIST in
 	   WEBSERV="httpd"
 	   MYSQL="mysqld"
 	   yum -y install wget
-           COMMON_PKGS=" autoconf automake bzip2 cpio curl curl-devel curl-devel expat-devel fileutils make gcc gcc-c++ gettext-devel gnutls-devel openssl openssl-devel openssl-devel mod_ssl perl patch unzip wget zip zlib zlib-devel bison flex mysql pcre-devel libxml2-devel sox httpd php php-gd php-mysql php-json git php-mysql php-devel"
+           COMMON_PKGS=" autoconf automake bzip2 cpio curl curl-devel curl-devel expat-devel fileutils make gcc gcc-c++ gettext-devel gnutls-devel openssl openssl-devel openssl-devel mod_ssl perl patch unzip wget zip zlib zlib-devel bison flex pcre-devel libxml2-devel sox httpd php php-gd php-mysql php-json git php-mysql php-devel"
 	   VERS=$(cat /etc/redhat-release |cut -d' ' -f4 |cut -d'.' -f1)
 	   if [ "$VERS" = "6" ]; then
 		wget http://dev.mysql.com/get/mysql57-community-release-el6-7.noarch.rpm
@@ -409,17 +409,27 @@ case $DIST in
 		  done
 
 		}
+		
+		function MYSQL_AUTH () {
+                        read -s -p "Please provide MYSQL root password: " sqlpassword
+                        while ! mysql -u root -p$sqlpassword  -e ";" ; do
+                               read -p "Can't connect, please try again: " sqlpassword
+                       	done
+                }
 
 		# MySQL data loading function
 		function MYSQL_INITIAL_DATA_LOAD () {
 
-		echo "Using temporary password for mysql"
+		  echo "Starting mysql secure installation... "
 		  sqlpassword=$(grep 'temporary password' /var/log/mysqld.log | awk '{ print $(NF) }')
+		  mysql_secure_installation -p"$sqlpassword"
 
-   			echo "Using default username..."
+                  MYSQL_AUTH
+
+   			echo "Generating homer mysql user..."
    			sqlhomeruser="homer"
 		  	DB_USER="$sqlhomeruser"
-   			echo "Using random password... "
+   			# echo "Using random password... "
    			sqlhomerpassword=$(cat /dev/urandom|tr -dc "a-zA-Z0-9"|fold -w 9|head -n 1)
 		  	DB_PASS="$sqlhomerpassword"
 
