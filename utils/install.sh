@@ -482,6 +482,8 @@ case $DIST in
 
 		awk '/max_while_loops=100/{print $0 RS "mpath=\"//usr/lib/x86_64-linux-gnu/kamailio/modules/\"";next}1' $PATH_KAMAILIO_CFG >> $PATH_KAMAILIO_CFG.tmp | 2&>1 >/dev/null
 		mv $PATH_KAMAILIO_CFG.tmp $PATH_KAMAILIO_CFG
+		# Create SymLink for modules
+		ln -s /usr/lib64 /usr/lib/x86_64-linux-gnu
 
 		# Replace values in template
 		perl -p -i -e "s/\{\{ LISTEN_PORT \}\}/$LISTEN_PORT/" $PATH_KAMAILIO_CFG
@@ -499,7 +501,7 @@ case $DIST in
 
 		# Start Apache
 		# apachectl -DFOREGROUND
-		service apache2 restart
+		service httpd restart
 
 		# It's Homer time!
 		service kamailio restart
