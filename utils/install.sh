@@ -99,13 +99,16 @@ if [ -f /etc/debian_version ] ; then
     echo "OS: DEBIAN detected"
 elif [ -f /etc/redhat-release ] ; then
     DIST="CENTOS"
-    echo "OS: CENTOS detected"
-    read -p "Support for CentOS is experimental and likely broken. Continue (y/N)? " choice
-	case "$choice" in 
-	  y|Y ) echo "Proceeding...";;
-	  n|N ) echo "Exiting" && exit 1;;
-	  * ) echo "invalid" && exit 1 ;;
-	esac
+    VERS=$(cat /etc/redhat-release |cut -d' ' -f4 |cut -d'.' -f1)
+    if [ "$VERS" = "7" ]; then
+	    echo "OS: CENTOS 7 detected"
+	    read -p "Support for CentOS is experimental and likely broken. Continue (y/N)? " choice
+		case "$choice" in 
+		  y|Y ) echo;;
+		  n|N ) echo "Exiting" && exit 1;;
+		  * ) echo "invalid" && exit 1 ;;
+		esac
+    fi
 # elif [ -f /etc/SuSE-release ] ; then
 #   DIST="SUSE"
 #   echo "OS: SUSE detected"
@@ -253,10 +256,12 @@ case $DIST in
 
 		  echo "Creating Databases..."
 		  mysql -u "$sqluser" < $SQL_LOCATION/homer_databases.sql
-		  mysql -u "$sqluser" < $SQL_LOCATION/homer_user.sql
+		  # mysql -u "$sqluser" < $SQL_LOCATION/homer_user.sql
 		  
 		  echo "Creating Tables..."
 		  mysql -u "$sqluser" homer_data < $SQL_LOCATION/schema_data.sql
+		  # patch password for centos
+		  # perl -p -i -e "s/test123/test1234/" $SQL_LOCATION/schema_configuration.sql
 		  mysql -u "$sqluser" homer_configuration < $SQL_LOCATION/schema_configuration.sql
 		  mysql -u "$sqluser" homer_statistic < $SQL_LOCATION/schema_statistic.sql
 		  
@@ -443,20 +448,25 @@ case $DIST in
 		  MYSQL_RUN
 
 		  mysql -u "$sqluser" -p"$sqlpassword" -e "SET GLOBAL validate_password_policy=LOW;"
-		  
+		  mysql -u "$sqluser" -p"$sqlpassword" -e "GRANT ALL ON *.* TO '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS'; FLUSH PRIVILEGES;";
+
 		  echo "Creating Databases..."
 		  mysql -u "$sqluser" -p"$sqlpassword" < $SQL_LOCATION/homer_databases.sql
-		  mysql -u "$sqluser" -p"$sqlpassword" < $SQL_LOCATION/homer_user.sql
+		  # mysql -u "$sqluser" -p"$sqlpassword" < $SQL_LOCATION/homer_user.sql
 		  
 		  echo "Creating Tables..."
 		  mysql -u "$sqluser" -p"$sqlpassword" homer_data < $SQL_LOCATION/schema_data.sql
+		  
+		  # patch password for centos min policy
+		  perl -p -i -e "s/test123/test1234/" $SQL_LOCATION/schema_configuration.sql
+		  perl -p -i -e "s/123test/1234test/" $SQL_LOCATION/schema_configuration.sql
+
 		  mysql -u "$sqluser" -p"$sqlpassword" homer_configuration < $SQL_LOCATION/schema_configuration.sql
 		  mysql -u "$sqluser" -p"$sqlpassword" homer_statistic < $SQL_LOCATION/schema_statistic.sql
 		  
 		  # echo "Creating local DB Node..."
 		  mysql -u "$sqluser" -p"$sqlpassword" homer_configuration -e "INSERT INTO node VALUES(1,'mysql','homer_data','3306','"$DB_USER"','"$DB_PASS"','sip_capture','node1', 1);"
 		  
-		  mysql -u "$sqluser" -p"$sqlpassword" -e "GRANT ALL ON *.* TO '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS'; FLUSH PRIVILEGES;";
 
 		  echo "Homer initial data load complete" > $DATADIR/.homer_initialized
 
@@ -509,11 +519,10 @@ case $DIST in
 		sed -i -e "s/#GROUP/GROUP/g" /etc/default/kamailio
 		
 		# Allow HTTPD + Kamailio ports
-		iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-		iptables -A INPUT -p tcp --dport 9060 -j ACCEPT
-		iptables -A INPUT -p udp --dport 9060 -j ACCEPT
-		/etc/init.d/iptables save
-		service iptables restart
+		firewall-cmd --add-service=http --add-service=https
+		firewall-cmd --add-port=9060/udp
+		firewall-cmd --add-port=9060/tcp
+		firewall-cmd --runtime-to-permanent
 
 		# Test the syntax.
 		# kamailio -c $PATH_KAMAILIO_CFG
@@ -559,7 +568,7 @@ echo "         '$REAL_PATH/sbin/kamctl start|stop'"
 echo
 echo "     * Access HOMER UI:"
 echo "         http://$LOCAL_IP or http://$LOCAL_IP"
-echo "         [default login: admin/test1234]"
+echo "         [default: admin/test123 or test1234]"
 echo
 echo "     * Send HEP/EEP Encapsulated Packets:"
 echo "         hep://$LOCAL_IP:$LISTEN_PORT"
