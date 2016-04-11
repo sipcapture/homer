@@ -337,7 +337,7 @@ case $DIST in
 	   WEBROOT="/var/www/html/"
 	   WEBSERV="httpd"
 	   MYSQL="mysqld"
-	   yum -f install wget
+	   yum -y install wget
            COMMON_PKGS=" autoconf automake bzip2 cpio curl curl-devel curl-devel expat-devel fileutils make gcc gcc-c++ gettext-devel gnutls-devel openssl openssl-devel openssl-devel mod_ssl perl patch unzip wget zip zlib zlib-devel bison flex mysql pcre-devel libxml2-devel sox httpd php php-gd php-mysql php-json git php-mysql php-devel"
 	   VERS=$(cat /etc/redhat-release |cut -d' ' -f4 |cut -d'.' -f1)
 	   if [ "$VERS" = "6" ]; then
