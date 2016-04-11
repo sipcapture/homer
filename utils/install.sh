@@ -417,7 +417,7 @@ case $DIST in
                   sqlpassword=$(grep 'temporary password' /var/log/mysqld.log | awk '{ print $(NF) }')
                   echo "Starting mysql secure installation [ $sqlpassword ] "
                   echo "Please follow the prompts: "
-                  sudo mysql_secure_installation -p"$sqlpassword"
+                  sudo mysql_secure_installation -p"$sqlpassword"  --use-default
 		  echo "------------"
 		  echo
                         read -p "Please provide MYSQL root password: " sqlpassword
@@ -430,7 +430,7 @@ case $DIST in
                         DB_USER="$sqlhomeruser"
                         # echo "Using random password... "
                         sqlhomerpassword=$(cat /dev/urandom|tr -dc "a-zA-Z0-9"|fold -w 9|head -n 1)
-                        DB_PASS="$sqlhomerpassword!"
+                        DB_PASS="$sqlhomerpassword"
 
                   DATADIR=/var/lib/mysql
 
@@ -507,6 +507,13 @@ case $DIST in
 		sed -i -e "s/#CFGFILE/CFGFILE/g" /etc/default/kamailio
 		sed -i -e "s/#USER/USER/g" /etc/default/kamailio
 		sed -i -e "s/#GROUP/GROUP/g" /etc/default/kamailio
+		
+		# Allow HTTPD + Kamailio ports
+		iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+		iptables -A INPUT -p tcp --dport 9060 -j ACCEPT
+		iptables -A INPUT -p udp --dport 9060 -j ACCEPT
+		/etc/init.d/iptables save
+		service iptables restart
 
 		# Test the syntax.
 		# kamailio -c $PATH_KAMAILIO_CFG
