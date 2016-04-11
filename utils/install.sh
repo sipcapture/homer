@@ -484,6 +484,9 @@ case $DIST in
 		perl -p -i -e "s/\{\{ DB_PASS \}\}/$DB_PASS/" $PATH_HOMER_CONFIG
 		perl -p -i -e "s/\{\{ DB_HOST \}\}/$DB_HOST/" $PATH_HOMER_CONFIG
 		perl -p -i -e "s/\{\{ DB_USER \}\}/$DB_USER/" $PATH_HOMER_CONFIG
+		# API talks to localhost on CentOS
+		perl -p -i -e "s/127.0.0.1/localhost/" $PATH_HOMER_CONFIG
+		
 		# Set Permissions for webapp
 		mkdir $WEBROOT/api/tmp
 		chmod -R 0777 $WEBROOT/api/tmp/
