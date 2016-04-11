@@ -361,7 +361,7 @@ case $DIST in
 		wget http://download.opensuse.org/repositories/home:/kamailio:/v4.4.x-rpms/CentOS_7/home:kamailio:v4.4.x-rpms.repo -O /etc/yum.repos.d/kamailio.repo
 	   fi
 	   yum -y update
-	   yum -y install $COMMON_PKGS kamailio rsyslog kamailio-outbound kamailio-sctp kamailio-tls kamailio-websocket kamailio-jansson kamailio-mysql
+	   yum -y install $COMMON_PKGS mysql-server kamailio rsyslog kamailio-outbound kamailio-sctp kamailio-tls kamailio-websocket kamailio-jansson kamailio-mysql
            chkconfig mysqld on
            chkconfig httpd on
 	   chkconfig kamailio on
@@ -402,9 +402,9 @@ case $DIST in
 		function MYSQL_RUN () {
 
 		  echo 'Starting mysqld'
-		  /etc/init.d/mysql start
+		  service mysqld start
 		  #echo 'Waiting for mysqld to come online'
-		  while [ ! -x /var/run/mysqld/mysqld.sock ]; do
+		  while [ ! -x /var/lib/mysql/mysql.sock ]; do
 		      sleep 1
 		  done
 
@@ -413,10 +413,8 @@ case $DIST in
 		# MySQL data loading function
 		function MYSQL_INITIAL_DATA_LOAD () {
 
-		  echo
-	   	  echo "Please provide your MySQL $sqluser password to proceed (empty for no password)"
-	   	  stty -echo
-	   	  read sqlpassword
+		echo "Using temporary password for mysql"
+		  sqlpassword=$(grep 'temporary password' /var/log/mysqld.log | awk '{ print $(NF) }')
 
    			echo "Using default username..."
    			sqlhomeruser="homer"
