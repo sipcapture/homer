@@ -14,7 +14,8 @@
 ![HEP](https://img.shields.io/badge/text-CDRs-green.svg)
 
 
-![splitter](http://i.imgur.com/lytn4zn.png)
+<img src="http://i.imgur.com/9AN08au.gif" width=100% height=50 >
+
 
 ## What is HOMER?
 
@@ -47,7 +48,8 @@ For community support, updates, user discussion and experience exchange please j
 [![Join the chat at https://gitter.im/sipcapture/homer](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/sipcapture/homer?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 
-![splitter](http://i.imgur.com/lytn4zn.png)
+<img src="http://i.imgur.com/9AN08au.gif" width=100% height=50 >
+
 # HOMER Components
 
 <img src="http://i.imgur.com/0qiWlzi.png" >
@@ -76,7 +78,7 @@ The following projects are _HEP-ready_:
 
 
 
-![splitter](http://i.imgur.com/lytn4zn.png)
+<img src="http://i.imgur.com/9AN08au.gif" width=100% height=50 >
 
 
 
