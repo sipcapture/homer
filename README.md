@@ -96,9 +96,9 @@ Contributors and Contributions to our project are always welcome! If you intend 
 
 ### License & Copyright
 
-*Homer components are released under GNU AGPLv3 license*
+![H5](https://img.shields.io/badge/license-GNU_AGPL_v3-blue.svg)
 
-*Captagent is released under GNU GPLv3 license*
+Homer components are released under the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
 *(C) 2008-2016 [SIPCAPTURE](http://sipcapture.org) & [QXIP BV](http://qxip.net)*
 
