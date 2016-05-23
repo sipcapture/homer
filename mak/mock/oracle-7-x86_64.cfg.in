@@ -28,6 +28,7 @@ enabled=1
 @ORACLE_BASE_URL_ON@baseurl=@ORACLE_BASE_URL@/OracleLinux/OL7/1/base/x86_64
 @ORACLE_BASE_URL_OFF@mirrorlist=http://mirrorlist.oracle.com/?release=7&arch=x86_64&repo=os
 failovermethod=priority
+skip_if_unavailable=1
 
 [latest]
 name=Latest
@@ -56,6 +57,7 @@ name=buildsys-build
 @EPEL_BASE_URL_ON@baseurl=@EPEL_BASE_URL@/OracleLinux/OL7/epel/x86_64
 @EPEL_BASE_URL_OFF@mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=epel-6&arch=x86_64
 enabled=1
+skip_if_unavailable=1
 
 # We do not use this repo yet
 #[upstream]
