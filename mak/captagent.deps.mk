@@ -2,8 +2,8 @@
 # Licensed to the User under the GPL license.
 #
 
-captagent_VER = 6.0.1
-captagent_TAG = 6.0.1
+captagent_VER = 6.0.2
+captagent_TAG = 6.0.2
 captagent_BRANCH = captagent6
 captagent_PACKAGE_REVISION = $(shell cd $(SRC)/captagent; git checkout $(captagent_BRANCH) >/dev/null 2>&1; ../config/revision-gen $(captagent_TAG))$(RPM_DIST)
 captagent_SRPM = captagent-$(captagent_VER)-$(captagent_PACKAGE_REVISION).src.rpm
@@ -16,5 +16,5 @@ captagent_SRPM_DEFS = \
 	--define "VERSION_NUMBER $(captagent_VER)"
 
 captagent_RPM_DEFS = \
-	--define="BUILD_NUMBER $(captagent_PACKAGE_REVISION)" \
+	--define "BUILD_NUMBER $(captagent_PACKAGE_REVISION)" \
 	--define "VERSION_NUMBER $(captagent_VER)"

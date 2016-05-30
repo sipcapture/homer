@@ -8,7 +8,7 @@
 #
 AC_PREREQ(2.61)
 
-AC_INIT(homer,5.0.1,support@sipcapture.org,,http://www.sipcapture.org)
+AC_INIT(homer,5.0.5,support@sipcapture.org,,http://www.sipcapture.org)
 
 # Pass standard and project common params to ./configure switches on all sub-projects.
 # Doesn't have to handle ./configure vars because those can be passed handled
