@@ -1,7 +1,3 @@
-[submodule "captagent"]
-	path = captagent
-	url = https://github.com/sipcapture/captagent.git
-	branch = captagent6
 [submodule "homer-api"]
 	path = homer-api
 	url = https://github.com/sipcapture/homer-api.git
