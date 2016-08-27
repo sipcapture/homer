@@ -6,3 +6,6 @@
 	path = homer-ui
 	url = https://github.com/sipcapture/homer-ui.git
 	branch = master
+[submodule "captagent"]
+	path = captagent
+	url = https://github.com/sipcapture/captagent.git
