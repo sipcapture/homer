@@ -54,8 +54,8 @@ failovermethod=priority
 # Normally from EPEL, just a list of rpms to create a basic build system
 [buildsys-build]
 name=buildsys-build
-@EPEL_BASE_URL_ON@baseurl=@EPEL_BASE_URL@/OracleLinux/OL7/epel/x86_64
-@EPEL_BASE_URL_OFF@mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=epel-6&arch=x86_64
+@EPEL_BASE_URL_ON@baseurl=@EPEL_BASE_URL@/epel/7/x86_64
+@EPEL_BASE_URL_OFF@mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=epel-7&arch=x86_64
 enabled=1
 skip_if_unavailable=1
 
