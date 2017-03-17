@@ -35,7 +35,7 @@ MOCK_INIT_TEST = \
 
 # Define @PACKAGE_NAME@ SRPMS and tarball files. Cannot define RPM files however as one specfile may generate many rpms
 $(foreach P,$(@PACKAGE_NAME@),$(eval $(P)_SRPM ?= $$(call lowercase,$(P))-$(PACKAGE_VERSION)-$$(DIST_REV).src.rpm))
-DIST_REV = $(shell tar -O -xzf $(PROJ)/$(proj)-$(PACKAGE_VERSION).tar.gz $(proj)-$(PACKAGE_VERSION)/.tarball-revision)$(RPM_DIST)
+DIST_REV = $(shell if [ -n "$($(PROJ)_TAR)" ]; then tar -O -xzf $(PROJ)/$(proj)-$(PACKAGE_VERSION).tar.gz $(proj)-$(PACKAGE_VERSION)/.tarball-revision; else tar -O -xzf $($(PROJ)_TAR).tar.gz $(proj)-$($(PROJ)_VER)/.tarball-revision; fi;)$(RPM_DIST)
 
 # Allows to target other distros other than the default
 help.*.rpm = Build single rpm for $(DISTRO).
