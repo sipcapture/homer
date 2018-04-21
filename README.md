@@ -1,6 +1,6 @@
 <p>
   <center>
-    <img src="https://user-images.githubusercontent.com/1423657/39084356-c723a81e-4574-11e8-963c-d11717789fa3.png" width=300/>
+    <img src="https://user-images.githubusercontent.com/1423657/39084356-c723a81e-4574-11e8-963c-d11717789fa3.png" width=200/>
   </center>
 </p>
 
@@ -18,13 +18,55 @@
 ![HEP](https://img.shields.io/badge/text-CDRs-green.svg)
 
 
-## What is HOMER?
 
 **HOMER** is a robust, carrier-grade, scalable Packet and Event capture system and VoiP/RTC Monitoring Application based on the [HEP/EEP](http://github.com/sipcapture/hep) protocol and ready to process & store insane amounts of signaling, rtc events, logs and statistics with instant search, end-to-end analysis and drill-down capabilities.
 
 **HOMER** is already used by large enterprises, voice network operators, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. 
 
 <br/>
+
+--------
+### HEP STACK
+#### HEP Servers
+
+| Name          | Role   | Features | Link |
+|---------------|--------|----------|------|
+| HEPop         | server | core     | http://github.com/sipcapture/hepop |
+| HEPlify-server| server | core     | http://github.com/sipcapture/heplify-server |
+
+#### HEP Agents
+| Name          | Role   | Features | Link |
+|---------------|--------|----------|------|
+| HEPlify       | agent  | external | http://github.com/sipcapture/heplify |
+| CaptAgent     | agent  | external | http://github.com/sipcapture/captagent |
+
+#### Native HEP Agents
+HOMER and its HEP protocol are natively supported at the core of all leading VoiP/RTC projects:
+
+| Name          | Role   | Features | Link |
+|---------------|--------|----------|------|
+| OpenSIPS      | agent  | SIP/TLS, LOGS, MI, REST, HEP-Relay | http://github.com/opensips |
+| Kamailio      | agent  | SIP/TLS, LOGS | http://github.com/kamailio |
+| FreeSwitch    | agent  | SIP/TLS, ESL(rtcp,logs) | http://github.com/freeswitch |
+| Asterisk      | agent  | SIP/TLS, RTCP | https://github.com/digium |
+| sipgrep       | agent  | SIP  | https://github.com/sipcapture/sipgrep |
+| sngrep        | agent  | SIP, HEP-Relay | https://github.com/irontec/sngrep |
+
+#### Middleware HEP Agents
+HEP messages can be generated from just about any logfile, event, streaming protocol.
+
+| Name          | Role   | Features | Link |
+|---------------|--------|----------|------|
+| paStash       | agent  | Logs, AMI/ESL, Janus, Mediasoup, Queues, Any | http://github.com/sipcapture/pastash |
+| hepipe.js     | agent  | ESL, Janus, Logs | http://github.com/sipcapture/hepipe.js |
+
+#### HEP Generators
+HEP messages can be forged synthetically for CI and load-testing purposes:
+
+| Name          | Role   | Features | Link |
+|---------------|--------|----------|------|
+| hepgen.js     | agent  | Generate HEP from scenarios | http://github.com/sipcapture/hepgen.js |
+| hammerHEP     | agent  | Generate HEP bulk load-tests | http://github.com/negbie/hammerHEP |
 
 
 ### Support
