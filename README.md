@@ -25,48 +25,6 @@
 
 <br/>
 
---------
-### HEP STACK
-#### HEP Servers
-
-| Name          | Role   | Features | Link |
-|---------------|--------|----------|------|
-| HEPop         | server | core     | http://github.com/sipcapture/hepop |
-| HEPlify-server| server | core     | http://github.com/sipcapture/heplify-server |
-
-#### HEP Agents
-| Name          | Role   | Features | Link |
-|---------------|--------|----------|------|
-| HEPlify       | agent  | external | http://github.com/sipcapture/heplify |
-| CaptAgent     | agent  | external | http://github.com/sipcapture/captagent |
-
-#### Native HEP Agents
-HOMER and its HEP protocol are natively supported at the core of all leading VoiP/RTC projects:
-
-| Name          | Role   | Features | Link |
-|---------------|--------|----------|------|
-| OpenSIPS      | agent  | SIP/TLS, LOGS, MI, REST, HEP-Relay | http://github.com/opensips |
-| Kamailio      | agent  | SIP/TLS, LOGS | http://github.com/kamailio |
-| FreeSwitch    | agent  | SIP/TLS, ESL(rtcp,logs) | http://github.com/freeswitch |
-| Asterisk      | agent  | SIP/TLS, RTCP | https://github.com/digium |
-| sipgrep       | agent  | SIP  | https://github.com/sipcapture/sipgrep |
-| sngrep        | agent  | SIP, HEP-Relay | https://github.com/irontec/sngrep |
-
-#### Middleware HEP Agents
-HEP messages can be generated from just about any logfile, event, streaming protocol.
-
-| Name          | Role   | Features | Link |
-|---------------|--------|----------|------|
-| paStash       | agent  | Logs, AMI/ESL, Janus, Mediasoup, Queues, Any | http://github.com/sipcapture/pastash |
-| hepipe.js     | agent  | ESL, Janus, Logs | http://github.com/sipcapture/hepipe.js |
-
-#### HEP Generators
-HEP messages can be forged synthetically for CI and load-testing purposes:
-
-| Name          | Role   | Features | Link |
-|---------------|--------|----------|------|
-| hepgen.js     | agent  | Generate HEP from scenarios | http://github.com/sipcapture/hepgen.js |
-| hammerHEP     | agent  | Generate HEP bulk load-tests | http://github.com/negbie/hammerHEP |
 
 
 ### Support
