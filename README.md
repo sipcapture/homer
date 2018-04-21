@@ -7,7 +7,7 @@
 #### HOMER: 100% Open-Source VoIP Capture, Troubleshooting & Monitoring
 
 
-![H5](https://img.shields.io/badge/HOMER-5-red.svg)
+![H5](https://img.shields.io/badge/HOMER-7-red.svg)
 ![HEP](https://img.shields.io/badge/proto-hep_eep-blue.svg)
 ![HEP](https://img.shields.io/badge/proto-sip-brightgreen.svg)
 ![HEP](https://img.shields.io/badge/proto-rtcp-brightgreen.svg)
