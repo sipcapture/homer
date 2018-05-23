@@ -25,7 +25,42 @@
 
 <br/>
 
+## :construction: Installation
+Warning! This is a work in progress, the process and instructions might change at any give time.
+#### :warning: Requirements
+* Postgres 9.x
+* NodeJS 8.x+
+* InfluxDB *or* Prometheus
 
+#### :package: Deploy HEP Capture Server (CS)
+Install a HEP Capture Server based on your needs and preferences:
+* **HEPlify-server**
+  :small_red_triangle_down: CS developed in go, ideal for heavy HEP packet loads
+* **HEPop**: 
+  :small_red_triangle_down: CS developed in nodejs, ideal for RTC events and JSON streams
+
+  * Configure HEP sockets
+  * Configure connectivity to DB and Timeseries DB
+
+#### :package: Deploy a HOMER webapp
+Install the Homer App
+* **HOMER-APP**
+  :small_red_triangle_down: API + UI developed in nodejs, self-served
+  
+  * Configure connectivity to DB and Timeseries DB
+  * Configure user access preferences
+
+#### :package: Deploy a Capture Agent (CA)
+Install a HEP Capture Agent based on your needs and preferences:
+* **HEPlify**
+  :small_red_triangle_down: CA developed in go, portable, near zero configuration
+* **CaptAgent**: 
+  :small_red_triangle_down: CA developed in C, ideal for complex configurations
+  
+  * Configure Capture settings
+  * Configure connectivity to HEP server
+  
+----------------
 
 ### Support
 For professional support, remote installations, customizations or commercial requests please contact: support@sipcapture.org
