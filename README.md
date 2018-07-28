@@ -23,10 +23,31 @@
 
 **HOMER** is already used by large enterprises, voice network operators, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. 
 
+**HOMER** 7+ is designed and delivered as a set of modular components and building blocks to be used stand-alone or in combination with other platforms.
 <br/>
 
+#### :construction: This is a work in progress, the process and instructions might change at any give time.
+
+
+## :package: Dev Containers
+Starting Fresh or Testing? A ready to fire set of containers is available for the following flavours:
+
+* HOMER 5 (legacy)
+  * [HEPlify-S + Prometheus ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-prom-graf)
+  * [HEPlify-S + InfluxDB ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-influx)
+  * [HEPlify-S + Elasticsearch ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-elastic)
+* HOMER 7 (dev)
+  * [HEPlify-S + Prometheus ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-prom-graf)
+  * [HEPlify-S + InfluxDB ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-influx)
+  * [HEPlify-S + Elasticsearch ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-elastic)
+* HEADLESS (dev)
+  * [HEPlify-S + Elasticsearch](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-elastic)
+  * [HEPop + MongoDB]()
+  * [HEPop + RethinkDB]()
+  * [HEPop + Elasticsearch]()
+
 ## :construction: Installation
-Warning! This is a work in progress, the process and instructions might change at any give time.
+
 #### :warning: Requirements
 * Postgres 9.x
 * NodeJS 8.x+
