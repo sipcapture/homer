@@ -56,9 +56,9 @@ Starting Fresh or Testing? A ready to fire set of [containers](https://github.co
 #### :package: Deploy HEP Capture Server (CS)
 Install a HEP Capture Server based on your needs and preferences:
 * **HEPlify-server**
-  :small_red_triangle_down: CS developed in go, ideal for heavy HEP packet loads
+  :o: CS developed in go, ideal for heavy HEP packet loads
 * **HEPop**: 
-  :small_red_triangle_down: CS developed in nodejs, ideal for RTC events and JSON streams
+  :o: CS developed in nodejs, ideal for RTC events and JSON streams
 
   * Configure HEP sockets
   * Configure connectivity to DB and Timeseries DB
@@ -66,7 +66,7 @@ Install a HEP Capture Server based on your needs and preferences:
 #### :package: Deploy a HOMER webapp
 Install the Homer App
 * **HOMER-APP**
-  :small_red_triangle_down: API + UI developed in nodejs, self-served
+  :o: API + UI developed in nodejs, self-served
   
   * Configure connectivity to DB and Timeseries DB
   * Configure user access preferences
@@ -74,13 +74,15 @@ Install the Homer App
 #### :package: Deploy a Capture Agent (CA)
 Install a HEP Capture Agent based on your needs and preferences:
 * **HEPlify**
-  :small_red_triangle_down: CA developed in go, portable, near zero configuration
+  :o: CA developed in go, portable, near zero configuration
 * **CaptAgent**: 
-  :small_red_triangle_down: CA developed in C, ideal for complex configurations
+  :o: CA developed in C, ideal for complex configurations
   
   * Configure Capture settings
   * Configure connectivity to HEP server
   
+* **Native**
+  :o: Native HEP Agents in OpenSIPS, Kamailio, Asterisk, Freeswitch, RTP:Engine and more
 ----------------
 
 ### Support
