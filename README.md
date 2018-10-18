@@ -38,7 +38,7 @@ Starting Fresh or Testing? A ready to fire set of [containers](https://github.co
   * [HEPlify-S + Elasticsearch ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-elastic)
 * HOMER 7 (dev)
   * [HEPlify-S + Prometheus ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-prom-graf)
-  * [HEPlify-S + InfluxDB ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-influx)
+  * [HEPlify-S + InfluxDB ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-influx) [+LoudML](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-influx)
   * [HEPlify-S + Elasticsearch ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-elastic)
 * HEADLESS (dev)
   * [HEPlify-S + Elasticsearch](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-elastic)
