@@ -33,20 +33,29 @@
 ## :package: Dev Containers
 Starting Fresh or Testing? A ready to fire set of [containers](https://github.com/sipcapture/homer-docker/tree/master/heplify-server) is available for the following flavours:
 
-* HOMER 5 (legacy)
-  * [HEPlify-S + Prometheus ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-prom-graf)
-  * [HEPlify-S + InfluxDB ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-influx)
-  * [HEPlify-S + Elasticsearch ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-elastic)
-* HOMER 7 (dev)
-  * [HEPlify-S + Prometheus ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-prom-graf)
-  * [HEPlify-S + InfluxDB ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-influx) [+LoudML](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-influx)
-  * [HEPlify-S + Elasticsearch ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-elastic)
-* HEADLESS (dev)
-  * [HEPlify-S + Elasticsearch](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-elastic)
-  * [HEPop + MongoDB]()
-  * [HEPop + RethinkDB]()
-  * [HEPop + Elasticsearch]()
+* [HOMER 7](https://github.com/sipcapture/homer/tree/homer7) _development_
+  * [HEPlify-Server](https://github.com/sipcapture/homer-docker/tree/master/heplify-server)
+    * [HEPlify + Prometheus ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-prom-graf)
+    * [HEPlify + InfluxDB ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-influx) 
+    * [HEPlify + InfluxDB + LoudML](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-influx)
+    * [HEPlify + Elastic ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-hep-elastic) 
+    * [HEPlify + Elastic Headless](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom7-elastic)
+    
+  * [HEPop Server](https://github.com/sipcapture/homer-docker/tree/master/hepop)
+    * [HEPop + InfluxDB](https://github.com/sipcapture/homer-docker/tree/master/hepop/hom7-hep-influx)
+    * [HEPop + InfluxDB + LoudML](https://github.com/sipcapture/homer-docker/tree/master/hepop/hom7-loudml-influx)
 
+
+* [HOMER 5](https://github.com/sipcapture/homer/tree/homer5) _legacy_
+  * [HEPlify-Server](https://github.com/sipcapture/homer-docker/tree/master/heplify-server)
+    * [HEPlify-S + Prometheus ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-prom-graf)
+    * [HEPlify-S + InfluxDB ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-influx)
+    * [HEPlify-S + Elasticsearch ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-elastic)
+    
+  * [OpenSIPS + sipcapture](https://github.com/sipcapture/homer-docker/tree/master/opensips-everything)
+  * [Kamailio + sipcapture](https://github.com/sipcapture/homer-docker/tree/master/kamailio)
+  
+  
 ## :construction: Installation
 
 #### :warning: Requirements
