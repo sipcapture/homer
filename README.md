@@ -4,7 +4,8 @@
   </center>
 </p>
 
-#### HOMER: 100% Open-Source VoIP Capture, Troubleshooting & Monitoring
+### HOMER Seven
+#### 100% Open-Source VoIP & RTC Capture, Troubleshooting & Monitoring
 
 
 ![H5](https://img.shields.io/badge/HOMER-7-red.svg)
