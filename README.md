@@ -31,8 +31,8 @@
 #### :construction: This is a work in progress, the process and instructions might change at any give time.
 
 
-## :package: Dev Containers
-Starting Fresh or Testing? A ready to fire set of [containers](https://github.com/sipcapture/homer-docker/tree/master/heplify-server) is available for the following flavours:
+## :package: Docker Containers
+Starting Fresh or Testing? A ready to fire set of [containers](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server) is available in many flavours:
 
 * [HOMER 7](https://github.com/sipcapture/homer/tree/homer7) _development_
   * [HEPlify-Server](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server)
@@ -61,11 +61,19 @@ Starting Fresh or Testing? A ready to fire set of [containers](https://github.co
   
   
 ## :construction: Installation
+Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible. Before installing the user should determine preferences and settings for each component. 
 
 #### :warning: Requirements
-* Postgres 9.x
-* NodeJS 8.x+
-* InfluxDB *or* Prometheus
+* API + UI
+  * NodeJS 8.x+
+* DATA STORAGE (choose one)
+  * Postgres 9.x
+  * Elasticsearch
+  * Loki
+* TIMESERIES (choose one)
+  * InfluxDB
+  * Prometheus
+  * Elasticsearch
 
 #### :package: Deploy HEP Capture Server (CS)
 Install a HEP Capture Server based on your needs and preferences:
