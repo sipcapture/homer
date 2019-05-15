@@ -26,8 +26,10 @@
 
 #### :construction: This is a work in progress, the process and instructions might change at any give time.
 
+## Installation
+Ready to Install? Choose your preferred method from the following:
 
-## :package: Docker Containers
+### :package: Docker Containers
 Starting Fresh or Testing? A ready to fire set of [containers](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server) is available in many flavours:
 
 * [HOMER 7](https://github.com/sipcapture/homer/tree/homer7) _development_
@@ -54,9 +56,11 @@ Starting Fresh or Testing? A ready to fire set of [containers](https://github.co
     
   * [OpenSIPS + sipcapture](https://github.com/sipcapture/homer-docker/tree/master/opensips-everything)
   * [Kamailio + sipcapture](https://github.com/sipcapture/homer-docker/tree/master/kamailio)
-  
-  
-## :construction: Installation
+
+### :package: BASH Script
+Installing on a fresh, dedicated *all-in-one* server? Try our [installer script](https://github.com/sipcapture/homerinstaller) supporting the latest Debian and CentOS releases.
+
+### :package: Manual Mode (dev)
 Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible. Before installing the user should determine preferences and settings for each component. 
 
 #### :warning: Requirements
@@ -124,7 +128,7 @@ Contributors and Contributions to our project are always welcome! If you intend 
 
 Homer components are released under the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
-*(C) 2008-2018 [QXIP BV](http://qxip.net)*
+*(C) 2008-2019 [QXIP BV](http://qxip.net)*
 
 ----------
 
