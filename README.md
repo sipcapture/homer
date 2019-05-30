@@ -26,6 +26,9 @@
 
 #### :construction: This is a work in progress, the process and instructions might change at any give time.
 
+## Introduction
+Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible - even at the same time! This opens up a number of new use-case options some users might find overwhelming at first - don't worry, *its just about freedom of choice!* If you're usure or just want a stand-alone capture system, please consider using our [Installation Script](https://github.com/sipcapture/homer-installer) on a vanilla system, launching our *ready-to-go* [Docker containers](https://github.com/sipcapture/homer7-docker), or joining our [users mailing list](https://groups.google.com/forum/#!forum/homer-discuss) where our community will welcome and help you move the first steps.
+
 ## Installation
 Ready to Install? Choose your preferred method from the following:
 
@@ -58,10 +61,10 @@ Starting Fresh or Testing? A ready to fire set of [containers](https://github.co
   * [Kamailio + sipcapture](https://github.com/sipcapture/homer-docker/tree/master/kamailio)
 
 ### :package: BASH Script
-Installing on a fresh, dedicated *all-in-one* server? Try our [installer script](https://github.com/sipcapture/homerinstaller) supporting the latest Debian and CentOS releases.
+Installing on a fresh, dedicated *all-in-one* server? Try our [installer script](https://github.com/sipcapture/homer-installer) supporting the latest Debian and CentOS releases.
 
-### :package: Manual Mode (dev)
-Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible. Before installing the user should determine preferences and settings for each component. 
+### :package: Manual Mode (dev only)
+Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible. Before installing the user should determine preferences and settings for each component. Not for first time users!
 
 #### :warning: Requirements
 * API + UI
