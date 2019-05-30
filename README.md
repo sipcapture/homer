@@ -1,6 +1,6 @@
 <img src="https://user-images.githubusercontent.com/1423657/55069501-8348c400-5084-11e9-9931-fefe0f9874a7.png" width=200/>
 
-# HOMER Seven
+# HOMER 7.x *(Seven)*
 #### 100% Open-Source VoIP & RTC Capture, Troubleshooting & Monitoring
 
 
@@ -24,10 +24,27 @@
 **HOMER** 7+ is designed and delivered as a set of modular components and building blocks to be used stand-alone or in combination with other platforms.
 <br/>
 
+##### Core Features
+* Based on HEP Encapsulation, available everywhere
+* Stand-Alone Capture Servers & Agents for any OS
+* Supports advanced SIP, RTP/RTCP Reports, RTC Events and Custom protocols
+* Multiple Database backend support for Packets, Logs, Timeseries in parallel
+* Dynamic Mapping and Correlation for internal and external data sources
+* Made by Humans, and Supported by the best community ever
+
 #### :construction: This is a work in progress, the process and instructions might change at any give time.
 
 ## Introduction
 Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible - even at the same time! This opens up a number of new use-case options some users might find overwhelming at first - don't worry, *its just about freedom of choice!* If you're usure or just want a stand-alone capture system, please consider using our [Installation Script](https://github.com/sipcapture/homer-installer) on a vanilla system, launching our *ready-to-go* [Docker containers](https://github.com/sipcapture/homer7-docker), or joining our [users mailing list](https://groups.google.com/forum/#!forum/homer-discuss) where our community will welcome and help you move the first steps.
+
+## Presentations
+If you'd like to get an idea about what HOMER is and what HOMER does, consider watching one of our presentations or workshops:
+
+* [HOMER 7: RTC Features](https://www.youtube.com/watch?v=xQ0rvpQURR0) @OpenSIPS Summit 2019
+* [HOMER 7: Docker Workshop](https://www.youtube.com/watch?v=6teucQPAaWI) @KamailioWorld 2019
+* [HOMER 7: The Power of Timeseries](https://vimeo.com/302849555) @Voip2Day 2018 [spanish version](https://vimeo.com/302408369)
+
+
 
 ## Installation
 Ready to Install? Choose your preferred method from the following:
