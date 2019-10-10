@@ -32,10 +32,10 @@
 * Dynamic Mapping and Correlation for internal and external data sources
 * Made by Humans, and Supported by the best community ever
 
-#### :construction: This is a work in progress, the process and instructions might change at any give time.
+#### :construction: This is a work in progress, the process and instructions might change at any given time.
 
 ## Introduction
-Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible - even at the same time! This opens up a number of new use-case options some users might find overwhelming at first - don't worry, *its just about freedom of choice!* If you're usure or just want a stand-alone capture system, please consider using our [Installation Script](https://github.com/sipcapture/homer-installer) on a vanilla system, launching our *ready-to-go* [Docker containers](https://github.com/sipcapture/homer7-docker), or joining our [users mailing list](https://groups.google.com/forum/#!forum/homer-discuss) where our community will welcome and help you move the first steps.
+Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible - even at the same time! This opens up a number of new use-case options some users might find overwhelming at first - don't worry, *its just about freedom of choice!* If you're unsure or just want a stand-alone capture system, please consider using our [Installation Script](https://github.com/sipcapture/homer-installer) on a vanilla system, launching our *ready-to-go* [Docker containers](https://github.com/sipcapture/homer7-docker), or joining our [users mailing list](https://groups.google.com/forum/#!forum/homer-discuss) where our community will welcome and help you move the first steps.
 
 ### Presentations
 If you'd like to get an idea about what HOMER is and what HOMER does, consider watching one of our presentations or workshops:
