@@ -37,6 +37,15 @@
 ## Introduction
 Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible - even at the same time! This opens up a number of new use-case options some users might find overwhelming at first - don't worry, *its just about freedom of choice!* If you're unsure or just want a stand-alone capture system, please consider using our [Installation Script](https://github.com/sipcapture/homer-installer) on a vanilla system, launching our *ready-to-go* [Docker containers](https://github.com/sipcapture/homer7-docker), or joining our [users mailing list](https://groups.google.com/forum/#!forum/homer-discuss) where our community will welcome and help you move the first steps.
 
+### Composition
+
+On how many parts Homer7 consists depends on your needs but normally you have:
+
+1. Capture Agent (CA) see https://github.com/sipcapture/heplify
+2. Capture Server (CS) see https://github.com/sipcapture/heplify-server
+3. (optional) Postgres or Prometheus
+4. HOMER webapp see https://github.com/sipcapture/homer-app
+
 ### Presentations
 If you'd like to get an idea about what HOMER is and what HOMER does, consider watching one of our presentations or workshops:
 
