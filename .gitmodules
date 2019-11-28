@@ -1,12 +1,12 @@
-[submodule "homer-installer"]
-	path = installer
-	url = https://github.com/sipcapture/homer-installer
+[submodule "homer-docker"]
+	path = homer-docker
+	url = https://github.com/sipcapture/homer7-docker
 	branch = 7.7
 [submodule "homer-app"]
 	path = homer-app
 	url = https://github.com/sipcapture/homer-app
 	branch = server-only
-[submodule "homer-docker"]
-	path = homer-app
-	url = https://github.com/sipcapture/homer7-docker
+[submodule "homer-installer"]
+	path = homer-installer
+	url = https://github.com/sipcapture/homer-installer
 	branch = 7.7
