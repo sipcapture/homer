@@ -91,7 +91,7 @@ Install the Homer App
 
 
 #### :package: Deploy a Capture Agent (CA)
-Install a HEP Capture Agent based on your needs and preferences:
+Ready to ship data to Homer? Install a HEP Capture Agent based on your needs and preferences:
 * **HEPlify**
   :o: CA developed in go, portable, near zero configuration
 * **CaptAgent**: 
@@ -101,7 +101,7 @@ Install a HEP Capture Agent based on your needs and preferences:
   * Configure connectivity to HEP server
   
 * **Native**
-  :o: Native HEP Agents in OpenSIPS, Kamailio, Asterisk, Freeswitch, RTP:Engine and more
+  :o: Native HEP Agents in OpenSIPS, Kamailio, Asterisk, Freeswitch, RTP:Engine and many more!
 ----------------
 
 ### Support
