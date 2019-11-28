@@ -1,6 +1,6 @@
 <img src="https://user-images.githubusercontent.com/1423657/55069501-8348c400-5084-11e9-9931-fefe0f9874a7.png" width=200/>
 
-# HOMER 7.x *(Seven)*
+# HOMER 7.7 *(Seven)*
 #### 100% Open-Source VoIP & RTC Capture, Troubleshooting & Monitoring
 
 
@@ -13,9 +13,6 @@
 ![HEP](https://img.shields.io/badge/text-QoS-green.svg)
 ![HEP](https://img.shields.io/badge/text-syslog-green.svg)
 ![HEP](https://img.shields.io/badge/text-CDRs-green.svg)
-
-
-![ezgif com-optimize 10](https://user-images.githubusercontent.com/1423657/46264200-211a6680-c51a-11e8-8477-3b7a53f9aa0b.gif)
 
 **HOMER** is a robust, carrier-grade, scalable Packet and Event capture system and VoiP/RTC Monitoring Application based on the [HEP/EEP](http://github.com/sipcapture/hep) protocol and ready to process & store insane amounts of signaling, rtc events, logs and statistics with instant search, end-to-end analysis and drill-down capabilities.
 
@@ -35,7 +32,7 @@
 #### :construction: This is a work in progress, the process and instructions might change at any given time.
 
 ## Introduction
-Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible - even at the same time! This opens up a number of new use-case options some users might find overwhelming at first - don't worry, *its just about freedom of choice!* If you're unsure or just want a stand-alone capture system, please consider using our [Installation Script](https://github.com/sipcapture/homer-installer) on a vanilla system, launching our *ready-to-go* [Docker containers](https://github.com/sipcapture/homer7-docker), or joining our [users mailing list](https://groups.google.com/forum/#!forum/homer-discuss) where our community will welcome and help you move the first steps.
+Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible - even at the same time! This opens up a number of new use-case options some users might find overwhelming at first - don't worry, *its just about freedom of choice!* If you're unsure or just want a stand-alone capture system, please consider using the below options or joining our friendly [users mailing list](https://groups.google.com/forum/#!forum/homer-discuss) where our community will welcome and help you move the first steps.
 
 ### Presentations
 If you'd like to get an idea about what HOMER is and what HOMER does, consider watching one of our presentations or workshops:
@@ -49,38 +46,15 @@ If you'd like to get an idea about what HOMER is and what HOMER does, consider w
 Ready to Install? Choose your preferred method from the following:
 
 ### :package: Docker Containers
-Starting Fresh or Testing? A ready to fire set of [containers](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server) is available in many flavours:
-
-* [HOMER 7](https://github.com/sipcapture/homer/tree/homer7) _development_
-  * [HEPlify-Server](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server)
-    * [HEPlify + Prometheus ](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server/hom7-hep-prom-graf)
-    * [HEPlify + Prometheus + Loki ](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server/hom7-prom-all)
-    * [HEPlify + InfluxDB ](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server/hom7-hep-influx) 
-    * [HEPlify + InfluxDB + LoudML](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server/hom7-hep-influx)
-    * [HEPlify + Elastic ](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server/hom7-hep-elastic) 
-    * [HEPlify + Elastic Headless](https://github.com/sipcapture/homer7-docker/tree/master/heplify-server/hom7-elastic)
-    
-  * [HEPop Server](https://github.com/sipcapture/homer7-docker/tree/master/hepop)
-    * [HEPop + InfluxDB](https://github.com/sipcapture/homer7-docker/tree/master/hepop/hom7-hep-influx)
-    * [HEPop + InfluxDB + LoudML](https://github.com/sipcapture/homer7-docker/tree/master/hepop/hom7-loudml-influx)
-    * [HEPop + Loki ](https://github.com/sipcapture/homer7-docker/tree/master/hepop/hom7-json-loki)
-    * [HEPop + PGSql + InfluxDB ](https://github.com/sipcapture/homer7-docker/tree/master/hepop/hom7-json-influx)
-    * [HEPop + Elastic ](https://github.com/sipcapture/homer7-docker/tree/master/hepop/hom7-elastic-only)
-
-* [HOMER 5](https://github.com/sipcapture/homer/tree/homer5) _legacy_
-  * [HEPlify-Server](https://github.com/sipcapture/homer-docker/tree/master/heplify-server)
-    * [HEPlify-S + Prometheus ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-prom-graf)
-    * [HEPlify-S + InfluxDB ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-influx)
-    * [HEPlify-S + Elasticsearch ](https://github.com/sipcapture/homer-docker/tree/master/heplify-server/hom5-hep-elastic)
-    
-  * [OpenSIPS + sipcapture](https://github.com/sipcapture/homer-docker/tree/master/opensips-everything)
-  * [Kamailio + sipcapture](https://github.com/sipcapture/homer-docker/tree/master/kamailio)
+Starting Fresh or Testing? A ready to fire set of [Docker containers](https://github.com/sipcapture/homer7-docker/tree/7.7/heplify-server) is available in many flavours, ready to capture in minutes!
 
 ### :package: BASH Script
-Installing on a fresh, dedicated *all-in-one* server? Try our [installer script](https://github.com/sipcapture/homer-installer) supporting the latest Debian and CentOS releases.
+Installing on a fresh, dedicated *all-in-one* server? Try our [installer script](https://github.com/sipcapture/homer-installer/tree/7.7) supporting the latest Debian and CentOS releases.
+
+<!--
 
 ### :package: Manual Mode (dev only)
-Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible. Before installing the user should determine preferences and settings for each component. Not for first time users!
+Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible. Before installing the user should determine preferences and settings for each component. Not suggested for first time users!
 
 #### :warning: Requirements
 * API + UI
@@ -93,6 +67,7 @@ Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are ma
   * InfluxDB
   * Prometheus
   * Elasticsearch
+
 
 #### :package: Deploy HEP Capture Server (CS)
 Install a HEP Capture Server based on your needs and preferences:
@@ -111,6 +86,9 @@ Install the Homer App
   
   * Configure connectivity to DB and Timeseries DB
   * Configure user access preferences
+  
+-->
+
 
 #### :package: Deploy a Capture Agent (CA)
 Install a HEP Capture Agent based on your needs and preferences:
