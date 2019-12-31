@@ -125,7 +125,7 @@ Contributors and Contributions to our project are always welcome! If you intend 
 
 Homer components are released under the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
-*(C) 2008-2019 [QXIP BV](http://qxip.net)*
+*(C) 2008-2020 [QXIP BV](http://qxip.net)*
 
 ----------
 
