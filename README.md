@@ -71,12 +71,17 @@ Once ready, proceed to install your HEP Stack:
   * Use a native HEP client in [Kamailio](https://github.com/sipcapture/homer/wiki/Examples%3A-Kamailio), [OpenSIPS](https://github.com/sipcapture/homer/wiki/Examples%3A-OpenSIPS), [Asterisk](https://github.com/sipcapture/homer/wiki/Examples%3A-Asterisk), [Freeswitch](https://github.com/sipcapture/homer/wiki/Examples%3A-FreeSwitch) and [others](https://github.com/sipcapture/homer/wiki)
 * TiSIP/RTCP me to start your services and login as `admin` with password `sipcapture` (change it!)
 
+----
 
 ### :whale: Docker Containers
 Starting Fresh or Testing? A ready to fire set of [Docker containers](https://github.com/sipcapture/homer7-docker/tree/7.7/heplify-server) is available in many flavours, ready to capture in minutes!
 
+----
+
 ### :package: BASH Script
 Installing on a fresh, dedicated *all-in-one* server? Try our [installer script](https://github.com/sipcapture/homer-installer/tree/7.7) supporting the latest Debian and CentOS releases.
+
+----
 
 <!--
 
