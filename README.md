@@ -34,6 +34,8 @@
 ## Introduction
 Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible - even at the same time! This opens up a number of new use-case options some users might find overwhelming at first - don't worry, *its just about freedom of choice!* If you're unsure or just want a stand-alone capture system, please consider using the below options or joining our friendly [users mailing list](https://groups.google.com/forum/#!forum/homer-discuss) where our community will welcome and help you move the first steps.
 
+![image](https://user-images.githubusercontent.com/1423657/72265062-1e168d00-361c-11ea-9662-1663f3d9f38b.png)
+
 ### Presentations
 If you'd like to get an idea about what HOMER is and what HOMER does, consider watching one of our presentations or workshops:
 
@@ -45,7 +47,32 @@ If you'd like to get an idea about what HOMER is and what HOMER does, consider w
 ## Installation
 Ready to Install? Choose your preferred method from the following:
 
-### :package: Docker Containers
+### :hand: Manual Setup
+Installing HOMER 7.x is simple and does not require skills other than patience.
+
+##### Requirements
+Before proceeding, install the database requirements for HOMER 7.7:
+* Postgres 11+ w/ root account for `DATA` and `API`
+* Prometheus or InfluxDB for `TIMESERIES`
+* _(optional)_ Loki for `LOGS`
+
+Once ready, proceed to install your HEP Stack:
+* Install [heplify-server](https://github.com/sipcapture/heplify-server)
+  * Configure with your Postgres instance for storing `DATA`
+  * Configure with your Loki instance for storing `LOGS`
+  * Configure Prometheus scrapers to `HOMER:9096/metrics`
+* Install [homer-app](https://github.com/sipcapture/homer-app)
+  * Configure with your Postgres instance for `API` 
+  * Configure with your Prometheus or InfluxDB instances for reading `TIMESERIES`
+  * Configure with your Loki instance for reading `LOGS`
+* Install and Configure a HEP Capture Agent
+  * Install [heplify](https://github.com/sipcapture/heplify) on a host with SIP/RTCP traffic
+    * Configure with your SIP/RTCP portrange and send `HEP` traffic to `heplify-server` on port `9060`
+  * Use a native HEP client in [Kamailio](https://github.com/sipcapture/homer/wiki/Examples%3A-Kamailio), [OpenSIPS](https://github.com/sipcapture/homer/wiki/Examples%3A-OpenSIPS), [Asterisk](https://github.com/sipcapture/homer/wiki/Examples%3A-Asterisk), [Freeswitch](https://github.com/sipcapture/homer/wiki/Examples%3A-FreeSwitch) and [others](https://github.com/sipcapture/homer/wiki)
+* TiSIP/RTCP me to start your services and login as `admin` with password `sipcapture` (change it!)
+
+
+### :whale: Docker Containers
 Starting Fresh or Testing? A ready to fire set of [Docker containers](https://github.com/sipcapture/homer7-docker/tree/7.7/heplify-server) is available in many flavours, ready to capture in minutes!
 
 ### :package: BASH Script
