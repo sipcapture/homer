@@ -57,6 +57,7 @@ Before proceeding, install the database requirements for HOMER 7.7:
 * _(optional)_ Loki for `LOGS`
 
 Once ready, proceed to install your HEP Stack:
+* Install the [sipcapture](https://github.com/sipcapture/homer/wiki/Quick-Install) package repositories
 * Install [heplify-server](https://github.com/sipcapture/heplify-server)
   * Configure with your Postgres instance for storing `DATA`
   * Configure with your Loki instance for storing `LOGS`
