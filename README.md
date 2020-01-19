@@ -69,8 +69,9 @@ Once ready, proceed to install your HEP Stack:
 * Install and Configure a HEP Capture Agent
   * Install [heplify](https://github.com/sipcapture/heplify) on a host with SIP/RTCP traffic
     * Configure with your SIP/RTCP portrange and send `HEP` traffic to `heplify-server` on port `9060`
+      * example: ` ./heplify -i eth0 -pr 5060-5080 -hs 10.20.30.40:9060`
   * Use a native HEP client in [Kamailio](https://github.com/sipcapture/homer/wiki/Examples%3A-Kamailio), [OpenSIPS](https://github.com/sipcapture/homer/wiki/Examples%3A-OpenSIPS), [Asterisk](https://github.com/sipcapture/homer/wiki/Examples%3A-Asterisk), [Freeswitch](https://github.com/sipcapture/homer/wiki/Examples%3A-FreeSwitch) and [others](https://github.com/sipcapture/homer/wiki)
-* TiSIP/RTCP me to start your services and login as `admin` with password `sipcapture` (change it!)
+* Start your services and login on port `9080` as `admin` with password `sipcapture` _(change it!)_
 
 ----
 
@@ -125,16 +126,16 @@ Install the Homer App
 
 #### :package: Deploy a Capture Agent (CA)
 Ready to ship data to Homer? Install a HEP Capture Agent based on your needs and preferences:
-* **HEPlify**
-  :o: CA developed in go, portable, near zero configuration
+* **HEPlify**:
+  CA developed in go, portable, near zero configuration
 * **CaptAgent**: 
-  :o: CA developed in C, ideal for complex configurations
+  CA developed in C, ideal for complex configurations
   
   * Configure Capture settings
   * Configure connectivity to HEP server
   
-* **Native**
-  :o: Native HEP Agents in OpenSIPS, Kamailio, Asterisk, Freeswitch, RTP:Engine and many more!
+* **Native**:
+  [Native HEP Agents](https://github.com/sipcapture/homer/wiki) are available in OpenSIPS, Kamailio, Asterisk, Freeswitch, RTP:Engine and many more!
 ----------------
 
 ### Support
