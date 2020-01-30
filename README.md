@@ -45,8 +45,9 @@ If you'd like to get an idea about what HOMER is and what HOMER does, consider w
 
 
 ## Installation
-Ready to Install? Choose your preferred method from the following:
+Ready to Install? Choose your preferred method from our [Wiki](https://github.com/sipcapture/homer/wiki/Quick-Install)
 
+<!--
 ### :hand: Manual Setup
 Installing HOMER 7.x is simple and does not require skills other than patience.
 
@@ -83,59 +84,10 @@ Starting Fresh or Testing? A ready to fire set of [Docker containers](https://gi
 ### :package: BASH Script
 Installing on a fresh, dedicated *all-in-one* server? Try our [installer script](https://github.com/sipcapture/homer-installer/tree/7.7) supporting the latest Debian and CentOS releases.
 
-----
-
-<!--
-
-### :package: Manual Mode (dev only)
-Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible. Before installing the user should determine preferences and settings for each component. Not suggested for first time users!
-
-#### :warning: Requirements
-* API + UI
-  * NodeJS 8.x+
-* DATA STORAGE (choose one)
-  * Postgres 9.x
-  * Elasticsearch
-  * Loki
-* TIMESERIES (choose one)
-  * InfluxDB
-  * Prometheus
-  * Elasticsearch
 
 
-#### :package: Deploy HEP Capture Server (CS)
-Install a HEP Capture Server based on your needs and preferences:
-* **HEPlify-server**
-  :o: CS developed in go, ideal for heavy HEP packet loads
-* **HEPop**: 
-  :o: CS developed in nodejs, ideal for RTC events and JSON streams
-
-  * Configure HEP sockets
-  * Configure connectivity to DB and Timeseries DB
-
-#### :package: Deploy a HOMER webapp
-Install the Homer App
-* **HOMER-APP**
-  :o: API + UI developed in nodejs, self-served
-  
-  * Configure connectivity to DB and Timeseries DB
-  * Configure user access preferences
   
 -->
-
-
-#### :package: Deploy a Capture Agent (CA)
-Ready to ship data to Homer? Install a HEP Capture Agent based on your needs and preferences:
-* **HEPlify**:
-  CA developed in go, portable, near zero configuration
-* **CaptAgent**: 
-  CA developed in C, ideal for complex configurations
-  
-  * Configure Capture settings
-  * Configure connectivity to HEP server
-  
-* **Native**:
-  [Native HEP Agents](https://github.com/sipcapture/homer/wiki) are available in OpenSIPS, Kamailio, Asterisk, Freeswitch, RTP:Engine and many more!
 ----------------
 
 ### Support
