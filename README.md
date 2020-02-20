@@ -44,7 +44,7 @@ If you'd like to get an idea about what HOMER is and what HOMER does, consider w
 * [HOMER 7: Docker Workshop](https://www.youtube.com/watch?v=6teucQPAaWI) @KamailioWorld 2019
 
 
-## Installation
+## [Installation](https://github.com/sipcapture/homer/wiki/Quick-Install)
 Ready to Install? Choose your preferred method from our [Wiki](https://github.com/sipcapture/homer/wiki/Quick-Install)
 
 <!--
