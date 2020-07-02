@@ -1,5 +1,4 @@
 # These are supported funding model platforms
 
-#github: lmangani,qxip
-custom: https://www.paypal.me/sipcapture
-custom: https://bunq.me/qxip
+github: qxip
+custom: [https://bunq.me/qxip, https://www.paypal.me/sipcapture]
