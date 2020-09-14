@@ -3,6 +3,7 @@
 # HOMER 7.7 _(Seven)_
 #### 100% Open-Source VoIP & RTC Capture, Troubleshooting & Monitoring
 
+<img src="https://user-images.githubusercontent.com/1423657/73536888-5513dd80-4427-11ea-82aa-b2ce53192a63.png"/>
 
 ![H5](https://img.shields.io/badge/HOMER-7-red.svg)
 ![HEP](https://img.shields.io/badge/proto-hep_eep-blue.svg)
