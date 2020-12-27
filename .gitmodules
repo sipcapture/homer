@@ -2,14 +2,6 @@
 	path = homer-app
 	url = https://github.com/sipcapture/homer-app
 	branch = master
-[submodule "homer-ui"]
-	path = homer-ui
-	url = https://github.com/sipcapture/homer-ui
-	branch = master
-[submodule "heplify-server"]
-	path = heplify-server
-	url = https://github.com/sipcapture/heplify-server
-	branch = master
 [submodule "homer-docker"]
 	path = homer-docker
 	url = https://github.com/sipcapture/homer7-docker
