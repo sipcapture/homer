@@ -10,3 +10,12 @@
 	path = homer-installer
 	url = https://github.com/sipcapture/homer-installer
 	branch = master
+[submodule "homer-ui"]
+	path = homer-ui
+	url = https://github.com/sipcapture/homer-ui
+[submodule "heplify-server"]
+	path = heplify-server
+	url = https://github.com/sipcapture/heplify-server
+[submodule "heplify"]
+	path = heplify
+	url = https://github.com/sipcapture/heplify
