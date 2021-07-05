@@ -41,6 +41,9 @@ Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are ma
 ### Presentations
 If you'd like to get an idea about what HOMER is and what HOMER does, consider watching one of our presentations or workshops:
 
+* [HOMER 7: Workshop](https://www.youtube.com/watch?v=1Bq3aKGPuXo) at @Cluecon 2021
+* [HOMER 7: Workshop](https://youtu.be/fv9KwrguR-4?t=224) @OpenSIPS Summit 2020
+* [HOMER 7: Mapping Insights](https://youtu.be/4dBKoLSy6Ro?t=856) with @adubovikov
 * [HOMER 7: The Power of Timeseries & Machine Learning](https://vimeo.com/302849555) @Voip2Day 2018 [spanish](https://vimeo.com/302408369)
 * [HOMER 7: RTC Features](https://www.youtube.com/watch?v=xQ0rvpQURR0) @OpenSIPS Summit 2019
 * [HOMER 7: Docker Workshop](https://www.youtube.com/watch?v=6teucQPAaWI) @KamailioWorld 2019
