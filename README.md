@@ -1,7 +1,7 @@
 <img src="https://user-images.githubusercontent.com/1423657/55069501-8348c400-5084-11e9-9931-fefe0f9874a7.png" width=200/>
 
-# HOMER 7.7 _(Seven)_
-#### 100% Open-Source VoIP & RTC Capture, Troubleshooting & Monitoring
+# HOMER
+### 100% Open-Source VoIP & RTC Capture, Troubleshooting & Monitoring
 
 
 <img src="https://user-images.githubusercontent.com/1423657/73536888-5513dd80-4427-11ea-82aa-b2ce53192a63.png"/>
@@ -117,7 +117,7 @@ Contributors and Contributions to our project are always welcome! If you intend 
 
 Homer components are released under the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
-*(C) 2008-2020 [QXIP BV](http://qxip.net)*
+*(C) 2008-2021 [QXIP BV](http://qxip.net)*
 
 ----------
 
