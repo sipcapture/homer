@@ -98,7 +98,7 @@ Installing on a fresh, dedicated *all-in-one* server? Try our [installer script]
 ### Support
 For professional support, remote installations, customizations or commercial requests please contact: support@sipcapture.org
 
-For community support, updates, user discussion and experience exchange please join our quiet [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss) or our active [matrix channel](https://matrix.to/#/#sipcapture_homer:gitter.im)
+For community support, updates, user discussion and experience exchange please join our [Matrix channel](https://matrix.to/#/#sipcapture_homer:gitter.im) and [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss)
 
 For commercial licensing and support, please contact the QXIP Team at [http://qxip.net]
 
