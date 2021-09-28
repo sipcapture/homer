@@ -1,0 +1,26 @@
+# Resync Submodules
+
+name: Resync Submodules
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Checkout submodules
+        run: git pull --recurse-submodules
+      - name: Update submodules
+        run: git submodule update --remote --recursive --init --force
+      - name: Commit update
+        run: |
+          git config --global user.name 'qxip-push'
+          git config --global user.email 'bot@noreply.github.com'
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git commit -am "Auto updated submodule references" && git push || echo "No changes to commit"
