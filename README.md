@@ -31,12 +31,24 @@
 * Dynamic Mapping and Correlation for internal and external data sources
 * Made by Humans, and Supported by the best community ever
 
-#### :construction: This is a work in progress, the process and instructions might change at any given time.
 
 ## Introduction
 Unlike its predecessors, HOMER Seven is completely dynamic, meaning there are many database, timeseries and logging backend combinations possible - even at the same time! This opens up a number of new use-case options some users might find overwhelming at first - don't worry, *its just about freedom of choice!* If you're unsure or just want a stand-alone capture system, please consider using the below options or joining our friendly [users mailing list](https://groups.google.com/forum/#!forum/homer-discuss) where our community will welcome and help you move the first steps.
 
 ![image](https://user-images.githubusercontent.com/1423657/72265062-1e168d00-361c-11ea-9662-1663f3d9f38b.png)
+
+## [Installation](https://github.com/sipcapture/homer/wiki/Quick-Install)
+Ready to Install HOMER? Choose your preferred method from our [Wiki](https://github.com/sipcapture/homer/wiki/Quick-Install) :thumbsup: 
+
+### Support
+
+For community support, updates, user discussion and experience exchange please join our [Matrix channel](https://matrix.to/#/#sipcapture_homer:gitter.im) and [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss). If you'd like to help the project or donate resources, drop us an email at support@sipcapture.org
+
+For professional support, remote setups, customizations or commercial licensing please contact the QXIP Team at [http://qxip.net](http://qxip.net)
+
+<img src="http://i.imgur.com/9AN08au.gif" width=100% height=50 >
+
+----
 
 ### Presentations
 If you'd like to get an idea about what HOMER is and what HOMER does, consider watching one of our presentations or workshops:
@@ -49,8 +61,6 @@ If you'd like to get an idea about what HOMER is and what HOMER does, consider w
 * [HOMER 7: Docker Workshop](https://www.youtube.com/watch?v=6teucQPAaWI) @KamailioWorld 2019
 
 
-## [Installation](https://github.com/sipcapture/homer/wiki/Quick-Install)
-Ready to Install? Choose your preferred method from our [Wiki](https://github.com/sipcapture/homer/wiki/Quick-Install)
 
 <!--
 ### :hand: Manual Setup
@@ -95,19 +105,9 @@ Installing on a fresh, dedicated *all-in-one* server? Try our [installer script]
 -->
 ----------------
 
-### Support
-For professional support, remote installations, customizations or commercial requests please contact: support@sipcapture.org
-
-For community support, updates, user discussion and experience exchange please join our [Matrix channel](https://matrix.to/#/#sipcapture_homer:gitter.im) and [Mailing-List](https://groups.google.com/forum/#!forum/homer-discuss)
-
-For commercial licensing and support, please contact the QXIP Team at [http://qxip.net](http://qxip.net)
-
-<img src="http://i.imgur.com/9AN08au.gif" width=100% height=50 >
-
-
 
 ### Developers
-Contributors and Contributions to our project are always welcome! If you intend to participate and help us improve HOMER by sending patches, we kindly ask you to sign a standard [CLA (Contributor License Agreement)](http://cla.qxip.net) which enables us to distribute your code alongside the project without restrictions present or future. It doesn’t require you to assign to us any copyright you have, the ownership of which remains in full with you. Developers can coordinate with the existing team via the [homer-dev](http://groups.google.com/group/homer-dev) mailing list. If you'd like to join our internal team and volunteer to help with the project's many needs, feel free to contact us anytime!
+Contributors and Contributions to our project are always welcome! Developers and Users can coordinate with the existing team via our [Matrix channel](https://matrix.to/#/#sipcapture_homer:gitter.im). If you'd like to join our internal team and volunteer to help with the project's many needs, feel free to contact us anytime!
 
 ### ⭐️ Project Assistance
 If you want to say thank you or/and support active development:
