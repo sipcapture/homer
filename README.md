@@ -129,7 +129,12 @@ Homer components are released under the GNU Affero General Public License as pub
 
 ----------
 
+<a href="https://github.com/sipcapture/homer/graphs/contributors">
+  <img src="https://contributors-img.web.app/image?repo=sipcapture/homer" />
+</a>
+
 #### Made by Humans
+
 This Open-Source project is made possible by actual Humans without corporate sponsors, angels or patreons.<br>
 If you use this software in production, please consider supporting its development with contributions or [donations](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=donation%40sipcapture%2eorg&lc=US&item_name=SIPCAPTURE&no_note=0&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHostedGuest)
 
