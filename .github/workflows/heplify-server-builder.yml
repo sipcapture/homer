@@ -15,27 +15,23 @@ jobs:
     permissions:
       contents: read
       packages: write
-
     steps:
- 
       - name: Clone homer-app
         uses: actions/checkout@v3
         with:
           repository: sipcapture/heplify-server
-          path: ''
-
+          path: 'heplify-server'
       - name: Log in to the Container registry
         uses: docker/login-action@v2.0.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build and push
         uses: docker/build-push-action@v3.0.0
         with:
-          context: ../
-          file: ./docker/Dockerfile
+          context: ./heplify-server
+          file: ./heplify-server/docker/Dockerfile
           push: true
           tags: |
              ghcr.io/sipcapture/heplify-server:latest
