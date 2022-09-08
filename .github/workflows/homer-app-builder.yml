@@ -1,0 +1,40 @@
+name: ghcr push
+
+on:
+  push:
+    branches: ['homer7', 'master']
+    paths-ignore: ['**/*.md']
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+ 
+      - name: Clone homer-app
+        uses: actions/checkout@v3
+        with:
+          repository: sipcapture/homer-app
+          path: ''
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v2.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v3.0.0
+        with:
+          context: .
+          push: true
+          tags: |
+             ghcr.io/sipcapture/homer-app:latest
