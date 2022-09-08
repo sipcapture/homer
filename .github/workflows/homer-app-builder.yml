@@ -1,9 +1,9 @@
-name: ghcr push
+name: homer-app ghcr build + push
 
 on:
   push:
     branches: ['homer7', 'master']
-    paths-ignore: ['**/*.md']
+    paths-ignore: ['**/*.md', '**/*.yml']
 
 env:
   REGISTRY: ghcr.io
