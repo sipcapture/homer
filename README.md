@@ -6,7 +6,10 @@
 
 <img src="https://user-images.githubusercontent.com/1423657/73536888-5513dd80-4427-11ea-82aa-b2ce53192a63.png"/>
 
-![H5](https://img.shields.io/badge/HOMER-7-red.svg)
+<img src="https://github.com/sipcapture/homer/assets/1423657/ce4c8603-be1f-4ca9-a0fa-556d84c5660c" width=100%/>
+
+
+![H5](https://img.shields.io/badge/HOMER-10-red.svg)
 ![HEP](https://img.shields.io/badge/proto-hep_eep-blue.svg)
 ![HEP](https://img.shields.io/badge/proto-sip-brightgreen.svg)
 ![HEP](https://img.shields.io/badge/proto-rtcp-brightgreen.svg)
@@ -20,7 +23,10 @@
 
 **HOMER** is already used by large enterprises, voice network operators, voip service providers and traffic carriers worldwide, has been implemented as a service in 3rd party voice platforms and is suitable for production. 
 
-**HOMER** 7+ is designed and delivered as a set of modular components and building blocks to be used stand-alone or in combination with other platforms.
+**HOMER** 7+ is delivered as a set of modular components and building blocks to be used stand-alone or in combination with other platforms.
+
+**HOMER** 10+ reimagines the platform as a headless observaility solution using standard protocols and visualization tools such as Grafana.
+
 <br/>
 
 ##### Core Features
@@ -51,16 +57,7 @@ For professional support, remote setups, customizations or commercial licensing 
 ----
 
 ### Presentations
-If you'd like to get an idea about what HOMER is and what HOMER does, consider watching one of our presentations or workshops:
-
-* [HOMER 7: Workshop](https://www.youtube.com/watch?v=1Bq3aKGPuXo) at @Cluecon 2021
-* [HOMER 7: Workshop](https://youtu.be/fv9KwrguR-4?t=224) @OpenSIPS Summit 2020
-* [HOMER 7: Mapping Insights](https://youtu.be/4dBKoLSy6Ro?t=856) with @adubovikov
-* [HOMER 7: The Power of Timeseries & Machine Learning](https://vimeo.com/302849555) @Voip2Day 2018 [spanish](https://vimeo.com/302408369)
-* [HOMER 7: RTC Features](https://www.youtube.com/watch?v=xQ0rvpQURR0) @OpenSIPS Summit 2019
-* [HOMER 7: Docker Workshop](https://www.youtube.com/watch?v=6teucQPAaWI) @KamailioWorld 2019
-
-
+If you'd like to get an idea about what HOMER is and what HOMER does, consider watching one of our presentations or workshops from ClueCon, OpenSIPS Summit, Kamailio World, CommCon, Fosdem and many more.
 
 <!--
 ### :hand: Manual Setup
