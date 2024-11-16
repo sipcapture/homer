@@ -1,7 +1,3 @@
-[submodule "homer-app"]
-	path = homer-app
-	url = https://github.com/sipcapture/homer-app
-	branch = master
 [submodule "homer-docker"]
 	path = homer-docker
 	url = https://github.com/sipcapture/homer7-docker
