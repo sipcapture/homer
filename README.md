@@ -1,22 +1,29 @@
 <img src="https://github.com/user-attachments/assets/3fc9d420-938a-44cd-b2ab-47a574e00c55" width=200 />
 
-# homer-core
+# homer eleven
 
-## License
+`homer` is the *all-in-one* HEP capture and API server monolith powering Homer 11.x
 
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+<img width="600"  alt="homer11" src="https://github.com/user-attachments/assets/1ee359d4-f2e1-41d3-9965-22a244d06e1e" />
 
-See the [LICENSE](LICENSE) file for details.
+## Features
 
----
+- All-in-One Application *(Writer, Reader, Coordinator, Compactor, API)*
+- Modern Codebase in golang for X64/ARM64 on Linux/MacOS
+- Powered by DuckDB 1.5/DuckLake 1.0 and Apache Arrow IPC/Parquet
+- End-to-End Columnar OTLP Design w/ on-demand execution
+- Linear Scaling to query over the same shared Object Storage pool
+- Flexible Schema support for growing problems and protocols
+- Backwards compatible with all HEPv3 Agents
+- Easy to maintain, operate and scale *(down to zero!)*
+- Cloud Native Design for K8s and standard deployments
+- Built-In User Interface for Humans
+- MCP support and LLM/Agent friendly design *(steal our boring jobs)*
 
-# homer-core 
-
-`homer-core` is the HEP core capture server of HOMER 11
 
 ## Architecture
 
-Homer Core uses a modular architecture with four main components:
+Homer uses a modular architecture with four main components:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -220,5 +227,6 @@ See the `examples/` directory:
 - [Compaction Setup](docs/COMPACTION_SETUP.md) - File compaction
 
 ## License
+Released under the [AGPL-3.0 License](LICENSE.md)
 
-AGPL-3.0 License - QXIP / SIPCapture Team
+> Copyright (C) 2025 QXIP BV
