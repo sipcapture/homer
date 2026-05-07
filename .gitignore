@@ -1,0 +1,60 @@
+homer
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# env file
+.env
+
+# Test certificates and keys
+certs/
+test_certs/
+*.pem
+*.key
+*.crt
+*.csr
+*.srl
+src/src
+src/dist/*
+!src/dist/.gitkeep
+src/ui/node_modules
+src/ui/.vite
+*.json~
+homer_catalog.duckdb
+
+# Build artifacts and local binaries
+bin/
+nfpm
+homer.json
+
+# Benchmark run data
+bechmarks/runs/
+bechmarks/results.legacy.*.csv
+
+# Agent planning artifacts
+agent_planning/
+
+# Temp DuckDB files
+.tmp/.static-cxx-link/
+.static-cxx-link/
+
+# Locally-built distribution artifacts (never belong in the repo;
+# release pipeline publishes them as Github releases instead).
+homer-core_*.deb
+homer-core_*.rpm
+.cursor/

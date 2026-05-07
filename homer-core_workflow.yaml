@@ -1,0 +1,46 @@
+# nfpm example config file
+name: "homer-core"
+arch: "amd64"
+platform: "linux"
+version: "${VERSION}"
+section: "default"
+priority: "extra"
+# No replaces/provides self-refs: Packagecloud has returned 500 on upload for this package;
+# they are redundant when the package name is already homer-core.
+#depends:
+#- dialog
+#runtime: go115
+
+maintainer: "QXIP <support@qxip.net>"
+description: |
+    Homer Core under AGPL-3.0
+vendor: "QXIP"
+homepage: "http://qxip.net"
+# license omitted on purpose: nfpm writes "License:" into deb control; Packagecloud
+# has rejected uploads with that non-standard field (500). SPDX remains in description.
+contents:
+  # Basic file that applies to all packagers
+  - src: ./homer
+    dst: /usr/local/homer-core/bin/homer
+  - src: ./examples/README
+    dst: /usr/local/homer-core/log/README
+  # Per-file copies (not type: tree): tree tar dirs tripped Packagecloud 500. Match Vite layout: root + assets/.
+  - src: ./src/dist/index.html
+    dst: /usr/local/homer-core/dist/index.html
+  - src: ./src/dist/logo.png
+    dst: /usr/local/homer-core/dist/logo.png
+  - src: ./src/dist/assets/*
+    dst: /usr/local/homer-core/dist/assets/
+  - src: ./examples/homer-core.service
+    dst: /etc/systemd/system/homer-core.service
+  - src: ./examples/homer-core.init
+    dst: /etc/init.d/homer-core
+     # Simple config file
+  - src: ./examples/homer.json
+    dst: /usr/local/homer-core/etc/homer.json.example
+    type: config
+
+#  # These config files will not be replaced by new versions if they were
+#  # changed by the user. Corresponds to %config(noreplace).
+#  config_noreplace_files:
+#    /tmp/pkg/examples/homer_app.json: /usr/local/homer-core/etc/homer-core_config.json

@@ -1,0 +1,166 @@
+{
+  "ingest": {
+    "enable": true,
+    "udp": {
+      "enable": true,
+      "host": "0.0.0.0",
+      "port": 9060,
+      "multicore": true
+    },
+    "tcp": {
+      "enable": false
+    },
+    "tls": {
+      "enable": false
+    },
+    "http": {
+      "enable": true,
+      "host": "0.0.0.0",
+      "port": 9080,
+      "websocket_enable": false
+    },
+    "https": {
+      "enable": false
+    },
+    "hep": {
+      "hepv2_enable": true,
+      "hepv3_enable": true,
+      "protobuf_enable": true,
+      "deduplicate": false
+    },
+    "hep_stream": {
+      "enable": true,
+      "buffer_size": 10000,
+      "max_subscribers": 32,
+      "per_sub_queue_len": 256,
+      "rate_per_sub_pps": 500
+    },
+    "otlp": {
+      "enable": false,
+      "max_recv_msg_bytes": 4194304,
+      "grpc": {
+        "enable": true,
+        "listen": ":4317"
+      },
+      "http": {
+        "enable": true,
+        "listen": ":4318",
+        "read_timeout_sec": 30,
+        "write_timeout_sec": 30
+      },
+      "sinks": {
+        "store_traces": true,
+        "store_metrics": true,
+        "store_logs": true
+      }
+    },
+    "line_protocol": {
+      "enable": false,
+      "listen": ":8086",
+      "max_body_bytes": 8388608,
+      "default_precision": "ns",
+      "default_db": "",
+      "table_prefix": "lp_",
+      "read_timeout_sec": 30,
+      "write_timeout_sec": 30
+    }
+  },
+  "storage": {
+    "enable": true,
+    "ducklake": {
+      "catalog_type": "sqlite",
+      "catalog_path": "/data/homer_catalog.sqlite",
+      "data_path": "/data/homer_parquet",
+      "lake_name": "homer_lake",
+      "batch_size": 10000,
+      "flush_interval_sec": 30
+    }
+  },
+  "node": {
+    "enable": true,
+    "flight_server": {
+      "host": "0.0.0.0",
+      "port": 50051,
+      "max_message_size": 16777216
+    },
+    "flightsql_server": {
+      "enable": false,
+      "host": "0.0.0.0",
+      "port": 50055,
+      "auth_token": "",
+      "catalog_refresh_interval_sec": 30
+    },
+    "ducklake": {
+      "catalog_type": "sqlite",
+      "catalog_path": "/data/homer_catalog.sqlite",
+      "data_path": "/data/homer_parquet",
+      "lake_name": "homer_lake"
+    }
+  },
+  "coordinator": {
+    "enable": true,
+    "http_server": {
+      "enable": true,
+      "host": "0.0.0.0",
+      "port": 8080,
+      "read_timeout": 30,
+      "write_timeout": 30
+    },
+    "nodes": [
+      {
+        "name": "local",
+        "host": "127.0.0.1",
+        "port": 50051,
+        "flightsql_port": 0
+      }
+    ],
+    "flightsql_server": {
+      "enable": false,
+      "host": "0.0.0.0",
+      "port": 32010,
+      "auth_token": "",
+      "catalog_refresh_interval_sec": 30
+    },
+    "jwt": {
+      "secret": "change-me-in-production",
+      "expire_hours": 24
+    },
+    "auth": {
+      "admin_user": "admin",
+      "admin_password_hash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
+    },
+    "hep_stream": {
+      "enable": true,
+      "allow_payload": false,
+      "fan_out_timeout_ms": 2000,
+      "history_limit": 200
+    }
+  },
+  "log": {
+    "level": "info",
+    "json": false,
+    "output": ["stdout"],
+    "file": {
+      "path": "/var/log/homer",
+      "name": "homer.log",
+      "max_age_days": 7,
+      "rotation_hours": 24,
+      "max_size_mb": 100
+    },
+    "stdout": {
+      "colored": true
+    },
+    "syslog": {
+      "uri": "",
+      "facility": "local0",
+      "level": "LOG_INFO",
+      "tag": "homer"
+    }
+  },
+  "prometheus": {
+    "enable": false,
+    "host": "0.0.0.0",
+    "port": 9090,
+    "path": "/metrics"
+  }
+}

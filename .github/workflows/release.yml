@@ -1,0 +1,238 @@
+# ARM64 packages temporarily disabled — add arm64 back to matrix.goarch to re-enable.
+name: Build-n-Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref_name:
+        description: Release Version
+        required: true
+      releaseVersion:
+          description: "the release version of the build"
+          type: string
+          default: ''
+          required: false
+      release:
+        required: true
+        type: boolean
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux]
+        goarch: [amd64]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Get current date
+      if: inputs.releaseVersion == ''
+      id: date
+      uses: Kaven-Universe/github-action-current-date-time@v1
+      with:
+        format: "YYYYMMDDHHmmss"
+
+    - name: Set release date
+      run: |
+        echo "RELEASE_DATE=${{ inputs.releaseVersion || steps.date.outputs.time }}" >> $GITHUB_ENV
+
+    - name: Install build requirements
+      run: |
+        sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: '1.26.0'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Build frontend
+      run: |
+        cd src/ui && npm ci && npm run build
+
+    - name: Set up cross-compilation for ${{ matrix.goarch }}
+      run: |
+        echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
+        echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
+        if [ "${{ matrix.goarch }}" == "arm64" ]; then
+          sudo dpkg --add-architecture arm64
+          CODENAME=$(lsb_release -cs)
+          # Add arm64 repos (ports.ubuntu.com)
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sudo sed -i '/^Types:/i Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+            sudo tee /etc/apt/sources.list.d/arm64-ports.sources <<EOF
+        Types: deb
+        URIs: http://ports.ubuntu.com/ubuntu-ports/
+        Suites: ${CODENAME} ${CODENAME}-updates
+        Components: main restricted universe multiverse
+        Architectures: arm64
+        Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+        EOF
+          else
+            sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64-ports.list
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list
+          fi
+          sudo apt update
+          sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libluajit-5.1-dev:arm64
+          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+        fi
+
+    - name: Set version
+      run: |
+        echo "VERSION=${{ (github.ref_name == 'master' && github.event_name == 'workflow_dispatch') && github.event.inputs.ref_name || github.ref_name }}" >> $GITHUB_ENV
+
+    - name: Compile homer-core ${{ matrix.goarch }}
+      env:
+        CGO_ENABLED: 1
+        GOARCH: ${{ matrix.goarch }}
+        GOOS: ${{ matrix.goos }}
+      run: |
+        echo "NOW=$(date +'%Y%m%dT%H%M%S')" >> $GITHUB_ENV
+        GIT_COMMIT=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date +%Y-%m-%d)
+        BUILD_TIME=$(date +%H:%M:%S)
+        # Set up static libstdc++ wrapper dir (RHEL 8 / GLIBC 2.28 compatibility).
+        # Contains ONLY libstdc++.a so -lstdc++ from DuckDB's #cgo LDFLAGS resolves
+        # to the static archive before the shared lib in /usr/lib/gcc/.../13/.
+        if [ "${{ matrix.goarch }}" == "amd64" ]; then
+          STATIC_CXX_DIR="$(pwd)/.static-cxx-link"
+          mkdir -p "${STATIC_CXX_DIR}"
+          LIBSTDCXX_A=$(gcc --print-file-name=libstdc++.a 2>/dev/null)
+          if [ -n "${LIBSTDCXX_A}" ] && [ -f "${LIBSTDCXX_A}" ]; then
+            ln -sf "${LIBSTDCXX_A}" "${STATIC_CXX_DIR}/libstdc++.a"
+            export CGO_LDFLAGS="-L${STATIC_CXX_DIR}"
+          fi
+          EXTLD="-extldflags '-static-libgcc -ldl'"
+        else
+          EXTLD=""
+        fi
+        LDFLAGS="-s -w -X main.VERSION_APPLICATION=${{ env.VERSION }} -X main.BuildDate=${BUILD_DATE} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} ${EXTLD}"
+        cd src && go build -ldflags "${LDFLAGS}" -o ../homer && cd ..
+        cp homer homer-core_${{ matrix.goarch }}
+
+    - name: Apply glibc polyfill (RHEL 8 / GLIBC 2.28 compatibility)
+      if: matrix.goarch == 'amd64'
+      run: |
+        if command -v polyfill-glibc >/dev/null 2>&1; then
+          polyfill-glibc --target-glibc=2.28 homer-core_${{ matrix.goarch }} || \
+            echo "Warning: polyfill-glibc failed, continuing without glibc patching..."
+        else
+          pip install polyfill-glibc --quiet || true
+          if command -v polyfill-glibc >/dev/null 2>&1; then
+            polyfill-glibc --target-glibc=2.28 homer-core_${{ matrix.goarch }} || \
+              echo "Warning: polyfill-glibc failed, continuing without glibc patching..."
+          else
+            echo "polyfill-glibc not available, skipping glibc compatibility patch"
+          fi
+        fi
+
+    - name: get NFPM
+      if:  github.event_name == 'release' || ${{ inputs.release }}
+      run: |
+          wget -qO- https://github.com/goreleaser/nfpm/releases/download/v2.41.1/nfpm_2.41.1_Linux_x86_64.tar.gz | tar --directory ./ -xz nfpm
+          chmod +x nfpm
+
+    - name: Create Packages ${{ matrix.goarch }}
+      if:  github.event_name == 'release' || ${{ inputs.release }}
+      env:
+          VERSION: ${{ env.VERSION }}
+          PACKAGE: "homer-core"
+          RELEASE: ${{ env.VERSION }}
+          ARCH: ${{ matrix.goarch }}
+          OS: ${{ matrix.goos }}
+      run: |
+          export VERSION="${VERSION#v}"
+          sed -i 's/^arch: ".*"/arch: "${{ matrix.goarch }}"/' homer-core_workflow.yaml
+          ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.deb"
+          ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.rpm"
+
+    - name: Upload release
+      if:  github.event_name == 'release' || ${{ inputs.release }}
+      uses: boxpositron/upload-multiple-releases@1.0.7
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        release_config: |
+            homer-core_${{ matrix.goarch }}
+            homer-core*.deb
+            homer-core*.rpm
+        tag_name: ${{ env.VERSION }}
+        release_name: ${{ env.VERSION }}
+        draft: false
+        prerelease: false
+        overwrite: true
+
+    - name: Upload package artifacts (Packagecloud job)
+      if: github.event_name == 'release' || ${{ inputs.release }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: homer-core-pkg-${{ matrix.goarch }}
+        path: |
+          homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.deb
+          homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.rpm
+        if-no-files-found: error
+
+  # Single runner pushes all debs/rpms in order — avoids parallel Packagecloud API races.
+  packagecloud:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.release) || (github.event_name == 'release' && !github.event.release.prerelease) }}
+    env:
+      PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: pkgs
+          pattern: homer-core-pkg-*
+          merge-multiple: true
+
+      - name: Push to Packagecloud (sequential, retries)
+        run: |
+          set -e
+          ls -laR pkgs
+          deb_n=$(find pkgs -name '*.deb' | wc -l)
+          rpm_n=$(find pkgs -name '*.rpm' | wc -l)
+          echo "Artifacts: $deb_n deb, $rpm_n rpm"
+          [ "$deb_n" -ge 1 ] && [ "$rpm_n" -ge 1 ] || { echo "::error::missing packages under pkgs/"; exit 1; }
+          sudo apt install -y ruby ca-certificates
+          sudo update-ca-certificates
+          sudo gem install package_cloud
+          push_pkg() {
+            f="$1"
+            repo="$2"
+            n=0
+            ok=0
+            while [ "$n" -lt 2 ]; do
+              n=$((n+1))
+              if package_cloud push "$repo" "$f"; then
+                ok=1
+                break
+              fi
+              echo "package_cloud failed $f (attempt $n/2), sleeping $((n*25))s..."
+              sleep $((n*25))
+            done
+            [ "$ok" = "1" ]
+          }
+          for deb in $(find pkgs -name '*.deb' | sort); do
+            echo "---- $deb ----"
+            dpkg-deb -I "$deb" | head -30
+            if dpkg-deb -f "$deb" 2>/dev/null | grep -qi '^License:'; then
+              echo "::error::deb control still has License: — fix nfpm yaml"
+              exit 1
+            fi
+            push_pkg "$deb" "qxip/sipcapture/any/any"
+          done
+          for rpm in $(find pkgs -name '*.rpm' | sort); do
+            echo "---- $rpm ----"
+            push_pkg "$rpm" "qxip/sipcapture/rpm_any/rpm_any"
+          done

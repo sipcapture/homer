@@ -1,0 +1,24 @@
+{
+  "coordinator": {
+    "ldap": {
+      "enable": true,
+      "host": "127.0.0.1",
+      "port": 389,
+      "use_ssl": false,
+      "skip_tls": true,
+      "insecure_skip_verify": true,
+      "bind_dn": "cn=admin,dc=example,dc=org",
+      "bind_password": "admin",
+      "base": "dc=example,dc=org",
+      "user_filter": "(uid=%s)",
+      "anonymous": false,
+      "admin_group": "",
+      "user_group": "",
+      "admin_mode": false,
+      "user_mode": false,
+      "group_filter": "(memberUid=%s)",
+      "group_attributes": ["memberOf"],
+      "use_dn_for_group_search": false
+    }
+  }
+}

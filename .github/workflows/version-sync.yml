@@ -1,0 +1,91 @@
+name: Sync version.go on Tag
+
+# Triggers on any versioned tag push (e.g. v11.0.6, v2.0.0-rc1)
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+# Prevent parallel runs of this workflow to avoid push conflicts when
+# multiple tags are created in quick succession.
+concurrency:
+  group: version-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Use a PAT or the default GITHUB_TOKEN; fetch full history so we
+          # can push the commit back to the default branch.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: extract_version
+        run: |
+          # github.ref_name is the full tag name, e.g. "v11.0.6"
+          TAG="${{ github.ref_name }}"
+
+          # Strip leading "v" so the value stored in version.go is "11.0.6"
+          VERSION="${TAG#v}"
+
+          if [ -z "$VERSION" ]; then
+            echo "ERROR: Could not determine version from tag '${TAG}'" >&2
+            exit 1
+          fi
+
+          echo "TAG=${TAG}"
+          echo "VERSION=${VERSION}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Update VERSION_APPLICATION in src/version.go
+        run: |
+          VERSION="${{ steps.extract_version.outputs.VERSION }}"
+          VERSION_FILE="src/version.go"
+
+          if [ ! -f "${VERSION_FILE}" ]; then
+            echo "ERROR: ${VERSION_FILE} not found" >&2
+            exit 1
+          fi
+
+          # Replace the VERSION_APPLICATION value using sed.
+          # The line looks like:  VERSION_APPLICATION = "11.0.5"
+          sed -i "s|VERSION_APPLICATION = \"[^\"]*\"|VERSION_APPLICATION = \"${VERSION}\"|g" "${VERSION_FILE}"
+
+          # Verify the replacement was applied.
+          if ! grep -q "VERSION_APPLICATION = \"${VERSION}\"" "${VERSION_FILE}"; then
+            echo "ERROR: Failed to update VERSION_APPLICATION in ${VERSION_FILE}" >&2
+            exit 1
+          fi
+
+          echo "Updated ${VERSION_FILE} to version ${VERSION}"
+          grep 'VERSION_APPLICATION' "${VERSION_FILE}"
+
+      - name: Commit and push updated version.go
+        run: |
+          VERSION="${{ steps.extract_version.outputs.VERSION }}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add src/version.go
+
+          # Only commit if there is an actual change.
+          if git diff --cached --quiet; then
+            echo "src/version.go already up to date for version ${VERSION}; nothing to commit."
+          else
+            git commit -m "chore: bump VERSION_APPLICATION to ${VERSION} [skip ci]"
+            # Rebase on top of any commits pushed since our checkout to
+            # avoid a non-fast-forward rejection.
+            git pull --rebase origin ${{ github.event.repository.default_branch }}
+            git push origin HEAD:${{ github.event.repository.default_branch }}
+            echo "Pushed version bump commit for ${VERSION}"
+          fi

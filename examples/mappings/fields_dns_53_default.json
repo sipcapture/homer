@@ -1,0 +1,74 @@
+[
+  {
+    "id": "call_id",
+    "name": "Search in payload (no session_id column)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 1,
+    "hide": false
+  },
+  {
+    "id": "src_ip",
+    "name": "Src IP",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 2,
+    "hide": false
+  },
+  {
+    "id": "dst_ip",
+    "name": "Dst IP",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 3,
+    "hide": false
+  },
+  {
+    "id": "src_port",
+    "name": "Src port",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 4,
+    "hide": false
+  },
+  {
+    "id": "dst_port",
+    "name": "Dst port",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 5,
+    "hide": false
+  },
+  {
+    "id": "node",
+    "name": "Node",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 6,
+    "hide": true
+  },
+  {
+    "id": "capture_id",
+    "name": "Capture ID",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 7,
+    "hide": true
+  },
+  {
+    "id": "payload",
+    "name": "Payload contains",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 8,
+    "hide": false
+  }
+]

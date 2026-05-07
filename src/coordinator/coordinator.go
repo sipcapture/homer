@@ -1,0 +1,726 @@
+// Copyright (C) 2025 Homer Server Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Package coordinator provides the API coordinator module for Homer Server.
+// It serves REST API endpoints and queries data from nodes via FlightSQL.
+package coordinator
+
+import (
+	"context"
+	"database/sql"
+	"embed"
+	"fmt"
+	"mime"
+	"net/http"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/coordinator/games/netris"
+	"github.com/sipcapture/homer-core/src/coordinator/handlers"
+	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/homerconfig"
+	"github.com/sipcapture/homer-core/src/scripting/correlation"
+	"github.com/sipcapture/homer-core/src/stream/hepstream"
+	logger "github.com/sipcapture/homer-core/src/utils/logging"
+)
+
+// WebAssets can be set to embedded UI files from main package
+var WebAssets *embed.FS
+
+// Coordinator is the API coordinator module
+type Coordinator struct {
+	config        *config.CoordinatorConfig
+	echo          *echo.Echo
+	server        *http.Server
+	flightService *services.FlightService
+	streamService *services.StreamService
+	settingsDB    *sql.DB
+	correlation   *correlation.CorrelationEngine
+	syncCancel    context.CancelFunc
+	lpMappingSync *services.LPMappingSyncService
+	mu            sync.RWMutex
+	running       bool
+
+	// localBroker is set via SetLocalBroker before setupRoutes runs
+	// when the coordinator shares a process with the ingest module.
+	// nil means "distributed deployment" and StreamService will fan
+	// out to configured nodes via WebSocket.
+	localBroker *hepstream.Broker
+
+	// fsqlProxy is optional Arrow FlightSQL (Grafana) on the coordinator.
+	fsqlProxy *flightSQLProxy
+}
+
+// SetLocalBroker injects an in-process hepstream.Broker so the
+// coordinator can serve the /api/v4/stream/hep endpoint without a
+// WebSocket round-trip to localhost. Must be called before the first
+// setupRoutes() run; calling it after has no effect.
+func (c *Coordinator) SetLocalBroker(b *hepstream.Broker) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.localBroker = b
+}
+
+// New creates a new Coordinator module
+func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
+	// Create FlightSQL service
+	queryTimeout := time.Duration(cfg.QueryTimeoutSec) * time.Second
+	flightService := services.NewFlightService(cfg.Nodes, queryTimeout)
+	flightService.SetLakeName(cfg.LakeName)
+
+	c := &Coordinator{
+		config:        cfg,
+		echo:          echo.New(),
+		flightService: flightService,
+	}
+	if cfg.FlightSQLServer.Enable {
+		c.fsqlProxy = newFlightSQLProxy(cfg.FlightSQLServer, cfg.Nodes)
+	}
+
+	// Open settings DuckDB
+	settingsDB, err := services.OpenSettingsDB(cfg.SettingsDBPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open settings db: %w", err)
+	}
+	if err := services.EnsureSettingsSchema(settingsDB); err != nil {
+		_ = settingsDB.Close()
+		return nil, fmt.Errorf("failed to ensure settings schema: %w", err)
+	}
+	// First-run defaults for Settings → Protocol Mappings (SIP call / default / registration).
+	if err := services.SeedDefaultMappingSchema(context.Background(), settingsDB); err != nil {
+		_ = settingsDB.Close()
+		return nil, fmt.Errorf("failed to seed default protocol mappings: %w", err)
+	}
+	c.settingsDB = settingsDB
+
+	// Seed disabled default correlation templates on first run so the
+	// Settings → Scripts UI is never empty out of the box. The seeds are
+	// inserted with status=FALSE, so they are inert unless an operator
+	// explicitly enables them — it is safe to seed even when the engine
+	// itself is disabled. Failure here must not abort startup.
+	if cfg.Correlation.SeedDefault {
+		if err := seedDefaultCorrelationScript(c.settingsDB); err != nil {
+			logger.Warn("Coordinator: failed to seed default correlation script", "err", err.Error())
+		}
+	}
+
+	// Build the Lua correlation engine if enabled. When disabled NewEngine
+	// returns nil and the handler treats it as "no correlation" — zero cost.
+	if cfg.Correlation.Enable {
+		loader := correlation.NewDBScriptLoader(c.settingsDB)
+		executor := correlation.FlightExecutor{F: c.flightService}
+		c.correlation = correlation.NewEngine(cfg.Correlation, loader, executor, cfg.LakeName)
+	}
+
+	// Configure Echo
+	c.setupEcho()
+
+	return c, nil
+}
+
+// setupEcho configures the Echo framework
+func (c *Coordinator) setupEcho() {
+	c.echo.HideBanner = true
+	c.echo.HidePort = true
+
+	// Middleware
+	c.echo.Use(middleware.Recover())
+	c.echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOriginFunc: func(origin string) (bool, error) {
+			return strings.HasPrefix(origin, "http://127.0.0.1:") ||
+				strings.HasPrefix(origin, "http://localhost:"), nil
+		},
+		AllowMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodOptions,
+		},
+		AllowHeaders: []string{
+			"Origin",
+			"Authorization",
+			"Auth-Token",
+			"Content-Type",
+			"Accept",
+			"X-Request-Id",
+		},
+	}))
+	c.echo.Use(middleware.RequestID())
+
+	// Logger middleware
+	c.echo.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Format: "${time_rfc3339} ${method} ${uri} ${status} ${latency_human}\n",
+	}))
+
+	// Setup routes
+	c.setupRoutes()
+}
+
+// setupRoutes configures API routes
+func (c *Coordinator) setupRoutes() {
+	// Initialize user service for authentication from DuckDB
+	userService := services.NewUserService(c.settingsDB, c.config.Auth.AdminUser, c.config.Auth.AdminPasswordHash)
+	userSettingsService := services.NewUserSettingsService(c.settingsDB)
+	userMappingService := services.NewUserMappingService(c.settingsDB)
+
+	// Initialize handlers
+	shareExportSvc := services.NewShareExportService(c.settingsDB)
+	viewTokenSvc := services.NewTransactionViewTokenService(c.settingsDB)
+	aliasSvc := services.NewAliasService(c.settingsDB, time.Duration(c.config.IPAliasCacheTTLSec)*time.Second)
+	authTokenSvc := services.NewAuthTokenService(c.settingsDB)
+	searchHandler := handlers.NewSearchHandler(c.flightService, aliasSvc, &c.config.MCP, shareExportSvc, viewTokenSvc, c.config.TransactionViewMaxOpens)
+	if c.correlation != nil {
+		searchHandler.SetCorrelator(correlatorAdapter{engine: c.correlation})
+	}
+	dashboardHandler := handlers.NewDashboardHandler(c.flightService)
+	ldapAuth := services.NewLDAPAuthService(&c.config.LDAP)
+	if c.config.LDAP.Enable && strings.TrimSpace(c.config.LDAP.Host) == "" {
+		logger.Warn("coordinator.ldap.enable is true but coordinator.ldap.host is empty; LDAP login is disabled until host is configured")
+	}
+	authHandler := handlers.NewAuthHandlerWithUserService(
+		c.config.JWT.Secret,
+		c.config.JWT.ExpireHours,
+		userService,
+		mapOAuthProvider(c.config.OAuth2Provider),
+		authTokenSvc,
+		c.config.APISettings,
+		ldapAuth,
+	)
+	usersHandler := handlers.NewUsersHandler(userService)
+	userSettingsHandler := handlers.NewUserSettingsHandler(userSettingsService, userMappingService)
+	dashboardsHandler := handlers.NewDashboardsHandler(services.NewDashboardService(c.settingsDB))
+	mappingsHandler := handlers.NewMappingsHandler(services.NewMappingService(c.settingsDB), userMappingService)
+	hepsubsHandler := handlers.NewHepsubsHandler(services.NewHepsubService(c.settingsDB))
+	aliasesHandler := handlers.NewAliasesHandler(aliasSvc)
+	authTokensHandler := handlers.NewAuthTokensHandler(authTokenSvc)
+	agentSubsHandler := handlers.NewAgentSubscriptionsHandler(services.NewAgentSubscriptionService(c.settingsDB))
+	exportsHandler := handlers.NewExportsHandler(handlers.NewExportStore())
+	importsHandler := handlers.NewImportsHandler(c.flightService)
+	nodesHandler := handlers.NewNodesHandlerWithFlight(mapNodeEndpoints(c.config.Nodes), c.flightService, c.config.LakeName)
+	advancedHandler := handlers.NewAdvancedHandler(services.NewGlobalSettingsService(c.settingsDB))
+	scriptsHandler := handlers.NewScriptsHandler(services.NewScriptsService(c.settingsDB))
+	alertsHandler := handlers.NewAlertsHandler(services.NewAlertsService(c.settingsDB))
+	modulesHandler := handlers.NewModulesHandler()
+	statisticsHandler := handlers.NewStatisticsHandler(c.flightService)
+	// LineProtoHandler exposes read-only discovery for the dynamic LP
+	// tables created by the line-protocol receiver. The receiver and
+	// the coordinator can run on different processes, so we cannot
+	// reach into IngestConfig from here — the handler falls back to
+	// the receiver's documented default of "lp_" and clients can
+	// always override via ?prefix= when the receiver is configured
+	// with a non-default TablePrefix.
+	lineProtoHandler := handlers.NewLineProtoHandler(c.flightService, "")
+	logsHandler := handlers.NewLogsHandler()
+	integrationsHandler := handlers.NewIntegrationsHandler()
+	streamHandler := handlers.NewStreamHandler()
+	// Netris (PvP SIPetris) lobby + relay. The hub keeps no
+	// persistent state across coordinator restarts — players just
+	// reconnect and re-pair. Always wired (no separate config knob)
+	// because it costs nothing when nobody is playing.
+	gamesHandler := handlers.NewGamesHandler()
+	gamesHandler.SetNetrisHub(netris.NewHub(netris.Config{}))
+	// Wire the live HEP stream service only when the coordinator-side
+	// switch is on; otherwise the handler stays a 503 stub and the UI
+	// hides its "Use live traffic" toggle. The local broker is
+	// preferred (zero network hop) and falls back to fan-out over
+	// configured nodes.
+	if c.config.HepStream.Enable {
+		streamSvc := services.NewStreamService(
+			c.config.Nodes,
+			c.localBroker,
+			time.Duration(c.config.HepStream.FanOutTimeoutMS)*time.Millisecond,
+			c.config.HepStream.HistoryLimit,
+		)
+		c.streamService = streamSvc
+		streamHandler.SetService(streamSvc, c.config.HepStream.AllowPayload, c.config.HepStream.HistoryLimit)
+		// Make the wiring visible in the logs: operators chasing a
+		// "stream not working" report can grep for this line to see
+		// whether the local-broker shortcut is taking effect or we're
+		// fanning out to remote nodes.
+		mode := "fan-out"
+		if c.localBroker != nil {
+			mode = "local-broker"
+		}
+		logger.Info("HEP stream endpoint wired",
+			"path", "/api/v4/stream/hep",
+			"mode", mode,
+			"nodes", len(c.config.Nodes),
+			"allow_payload", c.config.HepStream.AllowPayload,
+			"history_limit", c.config.HepStream.HistoryLimit)
+	} else {
+		logger.Warn("HEP stream endpoint disabled (coordinator.hep_stream.enable=false); " +
+			"GET /api/v4/stream/hep will return 503. Live traffic toggle in the UI will not deliver events.")
+	}
+
+	// Public routes (v3)
+	public := c.echo.Group("/api/v3")
+	{
+		// Health check
+		public.GET("/health", c.healthHandler)
+
+		// Authentication
+		public.POST("/auth", authHandler.Login)
+		public.POST("/auth/login", authHandler.Login)
+	}
+
+	// Protected routes (JWT required) - v3
+	protected := c.echo.Group("/api/v3")
+	if c.config.JWT.Secret != "" {
+		protected.Use(authHandler.JWTMiddleware())
+	}
+	{
+		// Search endpoints
+		protected.POST("/search/call/data", searchHandler.SearchCalls)
+		protected.POST("/call/transaction", searchHandler.GetCallTransaction)
+
+		// Dashboard endpoints
+		protected.GET("/dashboard/info", dashboardHandler.GetDashboardInfo)
+
+		// User profile
+		protected.GET("/auth/me", authHandler.GetProfile)
+	}
+
+	// API v1 routes (backward compatibility with homer-app UI)
+	publicV1 := c.echo.Group("/api/v1")
+	{
+		publicV1.GET("/health", c.healthHandler)
+		publicV1.POST("/auth", authHandler.Login)
+		publicV1.POST("/auth/login", authHandler.Login)
+	}
+
+	protectedV1 := c.echo.Group("/api/v1")
+	if c.config.JWT.Secret != "" {
+		protectedV1.Use(authHandler.JWTMiddleware())
+	}
+	{
+		protectedV1.POST("/search", searchHandler.SearchCalls)
+		protectedV1.POST("/search/call/data", searchHandler.SearchCalls)
+		protectedV1.POST("/call/transaction", searchHandler.GetCallTransaction)
+		protectedV1.GET("/call/:callid", searchHandler.GetCallByID)
+		protectedV1.GET("/payload/:uuid", searchHandler.GetPayload)
+		protectedV1.GET("/dashboard/info", dashboardHandler.GetDashboardInfo)
+		protectedV1.GET("/auth/me", authHandler.GetProfile)
+		protectedV1.GET("/status", c.statusHandler)
+	}
+
+	// Root health check
+	c.echo.GET("/health", c.healthHandler)
+
+	// API v4 routes
+	publicV4 := c.echo.Group("/api/v4")
+	{
+		publicV4.GET("/health", c.healthHandler)
+		publicV4.POST("/auth/sessions", authHandler.V4CreateSession)
+		publicV4.GET("/auth/providers", authHandler.V4ListProviders)
+		publicV4.GET("/auth/oauth2/:provider/redirect", authHandler.V4OAuth2Redirect)
+		publicV4.GET("/auth/oauth2/:provider/callback", authHandler.V4OAuth2Callback)
+		publicV4.POST("/auth/oauth2/token", authHandler.V4OAuth2TokenExchange)
+		publicV4.GET("/openapi.json", c.openapiHandler)
+		// Unauthenticated export by share id (same body as authenticated export, stored server-side).
+		publicV4.GET("/share/transactions/export/text/:shareId", searchHandler.V4ShareTransactionExportText)
+		publicV4.GET("/share/transactions/export/pcap/:shareId", searchHandler.V4ShareTransactionExportPcap)
+	}
+
+	protectedV4 := c.echo.Group("/api/v4")
+	if c.config.JWT.Secret != "" {
+		protectedV4.Use(authHandler.JWTMiddlewareV4())
+	}
+	{
+		protectedV4.DELETE("/auth/sessions/:sessionId", authHandler.V4DeleteSession)
+		protectedV4.GET("/me", authHandler.V4GetMe)
+		protectedV4.GET("/me/settings", userSettingsHandler.V4UserSettingsList)
+		protectedV4.PUT("/me/settings/:category", userSettingsHandler.V4UserSettingsUpsert)
+		protectedV4.DELETE("/me/settings/:category", userSettingsHandler.V4UserSettingsDelete)
+		protectedV4.GET("/me/mappings", userSettingsHandler.V4UserMappingsList)
+		protectedV4.GET("/me/mappings/:hepid/:profile", userSettingsHandler.V4UserMappingsGet)
+		protectedV4.PUT("/me/mappings/:hepid/:profile", userSettingsHandler.V4UserMappingsUpsert)
+		protectedV4.DELETE("/me/mappings/:hepid/:profile", userSettingsHandler.V4UserMappingsDelete)
+		protectedV4.POST("/me/dashboards/reset", dashboardsHandler.V4DashboardsReset)
+		protectedV4.GET("/dashboards", dashboardsHandler.V4DashboardsList)
+		protectedV4.POST("/dashboards", dashboardsHandler.V4DashboardsCreate)
+		protectedV4.GET("/dashboards/:dashboardId", dashboardsHandler.V4DashboardsGet)
+		protectedV4.PUT("/dashboards/:dashboardId", dashboardsHandler.V4DashboardsUpdate)
+		protectedV4.DELETE("/dashboards/:dashboardId", dashboardsHandler.V4DashboardsDelete)
+		protectedV4.GET("/mappings", mappingsHandler.V4MappingsList)
+		protectedV4.POST("/mappings", mappingsHandler.V4MappingsCreate)
+		protectedV4.GET("/mappings/fields", mappingsHandler.V4MappingsFields)
+		protectedV4.GET("/mappings/widget-fields", mappingsHandler.V4MappingsWidgetFields)
+		protectedV4.GET("/mappings/merged", mappingsHandler.V4MappingsMerged)
+		protectedV4.GET("/mappings/:mappingId", mappingsHandler.V4MappingsGet)
+		protectedV4.PUT("/mappings/:mappingId", mappingsHandler.V4MappingsUpdate)
+		protectedV4.DELETE("/mappings/:mappingId", mappingsHandler.V4MappingsDelete)
+		protectedV4.GET("/hepsubs", hepsubsHandler.V4HepsubsList)
+		protectedV4.POST("/hepsubs", hepsubsHandler.V4HepsubsCreate)
+		protectedV4.GET("/hepsubs/:hepsubId", hepsubsHandler.V4HepsubsGet)
+		protectedV4.PUT("/hepsubs/:hepsubId", hepsubsHandler.V4HepsubsUpdate)
+		protectedV4.DELETE("/hepsubs/:hepsubId", hepsubsHandler.V4HepsubsDelete)
+		protectedV4.GET("/aliases", aliasesHandler.V4AliasesList)
+		protectedV4.GET("/aliases/lookup", aliasesHandler.V4AliasesLookup)
+		protectedV4.POST("/aliases", aliasesHandler.V4AliasesCreate)
+		protectedV4.PUT("/aliases/:aliasId", aliasesHandler.V4AliasesUpdate)
+		protectedV4.DELETE("/aliases/:aliasId", aliasesHandler.V4AliasesDelete)
+		protectedV4.GET("/ipaliases", aliasesHandler.V4AliasesList)
+		protectedV4.GET("/ipaliases/lookup", aliasesHandler.V4AliasesLookup)
+		protectedV4.POST("/ipaliases", aliasesHandler.V4AliasesCreate)
+		protectedV4.PUT("/ipaliases/:aliasId", aliasesHandler.V4AliasesUpdate)
+		protectedV4.DELETE("/ipaliases/:aliasId", aliasesHandler.V4AliasesDelete)
+		protectedV4.GET("/advanced", advancedHandler.V4AdvancedList)
+		protectedV4.GET("/advanced/:guid", advancedHandler.V4AdvancedGet)
+		protectedV4.POST("/advanced", advancedHandler.V4AdvancedCreate)
+		protectedV4.PUT("/advanced/:guid", advancedHandler.V4AdvancedUpdate)
+		protectedV4.DELETE("/advanced/:guid", advancedHandler.V4AdvancedDelete)
+		protectedV4.GET("/scripts", scriptsHandler.V4ScriptsList)
+		protectedV4.GET("/scripts/:scriptId", scriptsHandler.V4ScriptsGet)
+		protectedV4.POST("/scripts", scriptsHandler.V4ScriptsCreate)
+		protectedV4.PUT("/scripts/:scriptId", scriptsHandler.V4ScriptsUpdate)
+		protectedV4.DELETE("/scripts/:scriptId", scriptsHandler.V4ScriptsDelete)
+		protectedV4.GET("/alerts", alertsHandler.V4AlertsList)
+		protectedV4.POST("/alerts", alertsHandler.V4AlertsCreate)
+		protectedV4.DELETE("/alerts", alertsHandler.V4AlertsDeleteAll)
+		protectedV4.GET("/auth-tokens", authTokensHandler.V4AuthTokensList)
+		protectedV4.POST("/auth-tokens", authTokensHandler.V4AuthTokensCreate)
+		protectedV4.GET("/auth-tokens/:tokenId", authTokensHandler.V4AuthTokensGet)
+		protectedV4.PUT("/auth-tokens/:tokenId", authTokensHandler.V4AuthTokensUpdate)
+		protectedV4.DELETE("/auth-tokens/:tokenId", authTokensHandler.V4AuthTokensDelete)
+		protectedV4.GET("/agents/subscriptions", agentSubsHandler.V4AgentSubsList)
+		protectedV4.POST("/agents/subscriptions", agentSubsHandler.V4AgentSubsCreate)
+		protectedV4.GET("/agents/subscriptions/:subscriptionId", agentSubsHandler.V4AgentSubsGet)
+		protectedV4.PUT("/agents/subscriptions/:subscriptionId", agentSubsHandler.V4AgentSubsUpdate)
+		protectedV4.DELETE("/agents/subscriptions/:subscriptionId", agentSubsHandler.V4AgentSubsDelete)
+		protectedV4.GET("/agents/types", agentSubsHandler.V4AgentTypesList)
+		protectedV4.GET("/agents/types/:type", agentSubsHandler.V4AgentTypeSubscriptions)
+		protectedV4.POST("/agents/search", agentSubsHandler.V4AgentSubsSearch)
+		protectedV4.POST("/exports", exportsHandler.V4ExportsCreate)
+		protectedV4.GET("/exports/:exportId", exportsHandler.V4ExportsGet)
+		protectedV4.GET("/exports/:exportId/download", exportsHandler.V4ExportsDownload)
+		protectedV4.POST("/imports/pcap", importsHandler.V4ImportsPcap)
+		protectedV4.GET("/db/nodes", nodesHandler.V4NodesList)
+		protectedV4.GET("/db/ducklake/settings", nodesHandler.V4DuckLakeSettings)
+		protectedV4.GET("/db/sql-autocomplete-schema", nodesHandler.V4DbSqlAutocompleteSchema)
+		protectedV4.GET("/modules", modulesHandler.V4ModulesStatus)
+		protectedV4.POST("/statistics/query", statisticsHandler.V4StatisticsQuery)
+		protectedV4.GET("/statistics/databases", statisticsHandler.V4StatisticsDatabases)
+		protectedV4.GET("/statistics/measurements", statisticsHandler.V4StatisticsMeasurements)
+		protectedV4.GET("/statistics/metrics", statisticsHandler.V4StatisticsMetrics)
+		// Line Protocol receiver discovery — list dynamic lp_* tables
+		// and inspect their (lazily-created) column schemas.
+		protectedV4.GET("/line_protocol/tables", lineProtoHandler.V4LineProtoTables)
+		protectedV4.GET("/line_protocol/tables/:schema/:table", lineProtoHandler.V4LineProtoTable)
+		protectedV4.GET("/statistics/tags", statisticsHandler.V4StatisticsTags)
+		protectedV4.GET("/logs/loki/labels", logsHandler.V4LokiLabels)
+		protectedV4.GET("/logs/loki/values", logsHandler.V4LokiValues)
+		protectedV4.POST("/logs/loki/query", logsHandler.V4LokiQuery)
+		protectedV4.GET("/integrations/grafana/status", integrationsHandler.V4GrafanaStatus)
+		protectedV4.GET("/integrations/grafana/folders", integrationsHandler.V4GrafanaFolders)
+		protectedV4.GET("/integrations/grafana/dashboards/:uid", integrationsHandler.V4GrafanaDashboard)
+		protectedV4.GET("/stream/hep", streamHandler.V4HepStream)
+		protectedV4.GET("/games/netris", gamesHandler.V4Netris)
+		protectedV4.POST("/query", searchHandler.V4RawQuery)
+		protectedV4.POST("/mcp/query", searchHandler.V4MCPQuery)
+		protectedV4.GET("/mcp/llm/status", searchHandler.V4MCPLLMStatus)
+		protectedV4.GET("/transactions", searchHandler.V4TransactionsList)
+		protectedV4.POST("/transactions/search", searchHandler.V4TransactionsSearch)
+		protectedV4.POST("/transactions/messages", searchHandler.V4TransactionMessages)
+		protectedV4.POST("/transactions/export/text", searchHandler.V4TransactionExportText)
+		protectedV4.POST("/transactions/export/pcap", searchHandler.V4TransactionExportPcap)
+		protectedV4.POST("/transactions/export/link", searchHandler.V4TransactionExportLinkCreate)
+		protectedV4.POST("/transactions/view/link", searchHandler.V4TransactionViewLinkCreate)
+		protectedV4.POST("/messages", searchHandler.V4MessageGet)
+		protectedV4.POST("/messages/decoded", searchHandler.V4MessageDecoded)
+		protectedV4.POST("/transactions/qos", searchHandler.V4TransactionQos)
+		protectedV4.POST("/transactions/callinfo", searchHandler.V4TransactionCallInfo)
+		protectedV4.POST("/transactions/events", searchHandler.V4TransactionEvents)
+		protectedV4.POST("/transactions/sub", searchHandler.V4TransactionSub)
+		protectedV4.POST("/transactions/otlp-logs", searchHandler.V4TransactionOtlpLogs)
+		protectedV4.POST("/transactions/otlp-logs-trace", searchHandler.V4TransactionOtlpLogsTrace)
+		protectedV4.POST("/transactions/otlp-metric-names", searchHandler.V4TransactionOtlpMetricNames)
+		protectedV4.GET("/users", usersHandler.V4UsersList)
+		protectedV4.POST("/users", usersHandler.V4UsersCreate)
+		protectedV4.GET("/users/:userId", usersHandler.V4UsersGet)
+		protectedV4.PATCH("/users/:userId", usersHandler.V4UsersUpdate)
+		protectedV4.DELETE("/users/:userId", usersHandler.V4UsersDelete)
+	}
+
+	// Standalone HTML transaction view at /export/view/:uuid (one-time token); must register before UI static catch-all.
+	c.echo.GET("/export/view/:uuid", searchHandler.TransactionViewHTMLPage)
+
+	// Setup static file serving for UI
+	c.setupStaticRoutes()
+}
+
+func mapOAuthProvider(p *config.OAuthProviderConfig) []handlers.OAuthProvider {
+	if p == nil || !p.Enable {
+		return nil
+	}
+	if strings.TrimSpace(p.Name) == "" || strings.TrimSpace(p.URL) == "" {
+		return nil
+	}
+	typ := p.Type
+	if strings.TrimSpace(typ) == "" {
+		typ = "oauth2"
+	}
+	return []handlers.OAuthProvider{{
+		Enable:        true,
+		Name:          p.Name,
+		Position:      p.Position,
+		Type:          typ,
+		ProviderImage: p.ProviderImage,
+		ProviderName:  p.ProviderName,
+		URL:           p.URL,
+		AutoRedirect:  p.AutoRedirect,
+		CallbackURL:   p.CallbackURL,
+	}}
+}
+
+func mapNodeEndpoints(nodes []config.NodeEndpoint) []handlers.NodeInfo {
+	if len(nodes) == 0 {
+		return nil
+	}
+	mapped := make([]handlers.NodeInfo, 0, len(nodes))
+	for _, node := range nodes {
+		mapped = append(mapped, handlers.NodeInfo{
+			Name:     node.Name,
+			Host:     node.Host,
+			Port:     node.Port,
+			Priority: node.Priority,
+		})
+	}
+	return mapped
+}
+
+// setupStaticRoutes configures static file serving for UI
+func (c *Coordinator) setupStaticRoutes() {
+	staticPath := c.config.HTTPServer.StaticPath
+
+	// Serve from filesystem if static_path is configured
+	if staticPath != "" {
+		logger.Info("Coordinator: Serving UI from filesystem", "path", staticPath)
+		c.echo.Static("/", staticPath)
+		c.echo.GET("/", func(ctx echo.Context) error {
+			return ctx.File(filepath.Join(staticPath, "index.html"))
+		})
+		// SPA fallback - serve index.html for unknown routes
+		c.echo.RouteNotFound("/*", func(ctx echo.Context) error {
+			return ctx.File(filepath.Join(staticPath, "index.html"))
+		})
+		return
+	}
+
+	// Serve embedded assets if available
+	if WebAssets != nil {
+		logger.Info("Coordinator: Serving embedded UI")
+		c.echo.GET("/", func(ctx echo.Context) error {
+			data, err := WebAssets.ReadFile("dist/index.html")
+			if err != nil {
+				return ctx.JSON(http.StatusNotFound, map[string]interface{}{
+					"status":  "error",
+					"message": "UI not available",
+				})
+			}
+			return ctx.HTMLBlob(http.StatusOK, data)
+		})
+
+		c.echo.GET("/*", func(ctx echo.Context) error {
+			path := ctx.Request().URL.Path
+			if path == "/" {
+				path = "/index.html"
+			}
+			filename := "dist" + path
+
+			data, err := WebAssets.ReadFile(filename)
+			if err != nil {
+				// SPA fallback - serve index.html for unknown routes
+				data, err = WebAssets.ReadFile("dist/index.html")
+				if err != nil {
+					return ctx.JSON(http.StatusNotFound, map[string]interface{}{
+						"status":  "error",
+						"message": "File not found",
+					})
+				}
+				return ctx.HTMLBlob(http.StatusOK, data)
+			}
+
+			// Detect MIME type
+			contentType := mime.TypeByExtension(filepath.Ext(path))
+			if contentType == "" {
+				contentType = echo.MIMEOctetStream
+			}
+
+			return ctx.Blob(http.StatusOK, contentType, data)
+		})
+		return
+	}
+
+	logger.Info("Coordinator: No UI configured (set static_path or embed dist/)")
+}
+
+// healthHandler returns health status
+func (c *Coordinator) healthHandler(ctx echo.Context) error {
+	v := homerconfig.SystemSettingsGlobal.VersionApp
+	if v == "" {
+		v = "unknown"
+	}
+	return ctx.JSON(http.StatusOK, map[string]interface{}{
+		"status":  "ok",
+		"module":  "coordinator",
+		"nodes":   len(c.config.Nodes),
+		"version": v,
+	})
+}
+
+// statusHandler returns system status (v1 API compatibility)
+func (c *Coordinator) statusHandler(ctx echo.Context) error {
+	nodeStats := c.flightService.GetStats()
+
+	// Build nodes status array
+	nodes := make([]map[string]interface{}, 0)
+	if nodeList, ok := nodeStats["nodes"].([]map[string]interface{}); ok {
+		for _, n := range nodeList {
+			nodes = append(nodes, map[string]interface{}{
+				"name":      n["name"],
+				"host":      n["host"],
+				"port":      n["port"],
+				"status":    boolToStatus(n["connected"].(bool)),
+				"connected": n["connected"],
+			})
+		}
+	}
+
+	return ctx.JSON(http.StatusOK, map[string]interface{}{
+		"status": "ok",
+		"data": map[string]interface{}{
+			"total_nodes":     nodeStats["configured_nodes"],
+			"connected_nodes": nodeStats["connected_nodes"],
+			"nodes":           nodes,
+			"version":         "1.0.0",
+		},
+	})
+}
+
+func boolToStatus(connected bool) string {
+	if connected {
+		return "online"
+	}
+	return "offline"
+}
+
+// Start starts the coordinator module
+func (c *Coordinator) Start() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.running {
+		return fmt.Errorf("coordinator already running")
+	}
+
+	// Connect to nodes
+	if err := c.flightService.ConnectAll(); err != nil {
+		logger.Error(fmt.Sprintf("Coordinator: Failed to connect to some nodes: %v", err))
+		// Continue anyway, some nodes might be offline
+	}
+
+	addr := fmt.Sprintf("%s:%d", c.config.HTTPServer.Host, c.config.HTTPServer.Port)
+
+	c.server = &http.Server{
+		Addr:         addr,
+		ReadTimeout:  time.Duration(c.config.HTTPServer.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(c.config.HTTPServer.WriteTimeout) * time.Second,
+	}
+
+	c.running = true
+
+	// Start the correlation script sync loop. One-shot ReloadFromDB is also
+	// invoked inside SyncLoop so the cache is populated before the first
+	// request is served (best-effort).
+	if c.correlation != nil {
+		syncCtx, cancel := context.WithCancel(context.Background())
+		c.syncCancel = cancel
+		go c.correlation.SyncLoop(syncCtx)
+	}
+
+	// Background sync of mapping_schema rows for dynamic Line Protocol
+	// tables (lp_<measurement>). Without this the Proto Search picker
+	// and Settings → Mappings UI would never show measurements created
+	// after the receiver started ingesting them. Tick interval is
+	// fixed at 60s — cheap (one INFORMATION_SCHEMA query plus N
+	// per-table column reads) and well below the latency users notice
+	// when adding a new widget.
+	c.lpMappingSync = services.NewLPMappingSyncService(c.settingsDB, c.flightService, "lp_", 60*time.Second)
+	c.lpMappingSync.Start(context.Background())
+
+	go func() {
+		logger.Info("Coordinator: API server started", "addr", addr)
+		if err := c.echo.StartServer(c.server); err != nil && err != http.ErrServerClosed {
+			logger.Error(fmt.Sprintf("Coordinator: API server error: %v", err))
+		}
+	}()
+
+	if c.fsqlProxy != nil {
+		if err := c.fsqlProxy.Start(); err != nil {
+			logger.Error(fmt.Sprintf("Coordinator: FlightSQL proxy failed to start: %v", err))
+		}
+	}
+
+	return nil
+}
+
+// Stop stops the coordinator module
+func (c *Coordinator) Stop() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.running {
+		return nil
+	}
+
+	if c.fsqlProxy != nil {
+		c.fsqlProxy.Stop()
+	}
+
+	// Shutdown server
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := c.echo.Shutdown(ctx); err != nil {
+		logger.Error(fmt.Sprintf("Coordinator: Failed to shutdown server: %v", err))
+	}
+
+	// Stop the correlation sync loop before closing the settings DB so it
+	// doesn't race on a closed handle during a pending reload.
+	if c.syncCancel != nil {
+		c.syncCancel()
+		c.syncCancel = nil
+	}
+	if c.correlation != nil {
+		c.correlation.Stop()
+	}
+	// Stop the LP mapping sync loop before closing the settings DB
+	// for the same reason (Stop blocks until the goroutine returns,
+	// so a fresh tick can't race the Close below).
+	if c.lpMappingSync != nil {
+		c.lpMappingSync.Stop()
+		c.lpMappingSync = nil
+	}
+
+	// Close flight connections
+	c.flightService.CloseAll()
+	if c.settingsDB != nil {
+		_ = c.settingsDB.Close()
+		c.settingsDB = nil
+	}
+
+	c.running = false
+	logger.Info("Coordinator: API server stopped")
+	return nil
+}

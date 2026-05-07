@@ -1,0 +1,83 @@
+[
+  {
+    "id": "severity_text",
+    "name": "Severity text",
+    "type": "string",
+    "index": "secondary",
+    "form_type": "input_multi_select",
+    "form_default": [
+      { "name": "TRACE", "value": "TRACE" },
+      { "name": "DEBUG", "value": "DEBUG" },
+      { "name": "INFO", "value": "INFO" },
+      { "name": "WARN", "value": "WARN" },
+      { "name": "ERROR", "value": "ERROR" },
+      { "name": "FATAL", "value": "FATAL" }
+    ],
+    "position": 1,
+    "hide": false
+  },
+  {
+    "id": "severity_number",
+    "name": "Severity number",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 2,
+    "hide": true
+  },
+  {
+    "id": "service_name",
+    "name": "Service name",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 3,
+    "hide": false
+  },
+  {
+    "id": "body",
+    "name": "Body (contains)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 4,
+    "hide": false
+  },
+  {
+    "id": "trace_id",
+    "name": "Trace ID",
+    "type": "string",
+    "index": "secondary",
+    "form_type": "input",
+    "position": 5,
+    "sid_type": true,
+    "hide": false
+  },
+  {
+    "id": "span_id",
+    "name": "Span ID",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 6,
+    "hide": false
+  },
+  {
+    "id": "scope_name",
+    "name": "Instrumentation scope",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 7,
+    "hide": true
+  },
+  {
+    "id": "raw",
+    "name": "Raw OTLP (contains)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 8,
+    "hide": true
+  }
+]

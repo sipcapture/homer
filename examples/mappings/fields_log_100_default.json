@@ -1,0 +1,66 @@
+[
+  {
+    "id": "call_id",
+    "name": "Session / correlation id",
+    "type": "string",
+    "index": "secondary",
+    "form_type": "input",
+    "position": 1,
+    "sid_type": true,
+    "hide": false
+  },
+  {
+    "id": "src_ip",
+    "name": "Src IP",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 2,
+    "hide": false
+  },
+  {
+    "id": "dst_ip",
+    "name": "Dst IP",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 3,
+    "hide": false
+  },
+  {
+    "id": "node",
+    "name": "Node",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 4,
+    "hide": true
+  },
+  {
+    "id": "capture_id",
+    "name": "Capture ID",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 5,
+    "hide": true
+  },
+  {
+    "id": "user_agent",
+    "name": "Extra JSON user_agent",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 6,
+    "hide": true
+  },
+  {
+    "id": "payload",
+    "name": "Payload / message contains",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 7,
+    "hide": false
+  }
+]

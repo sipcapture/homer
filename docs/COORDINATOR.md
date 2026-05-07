@@ -1,0 +1,424 @@
+# Coordinator Module - API Gateway
+
+The Coordinator module provides REST API for frontend applications and orchestrates queries across multiple Node instances via FlightSQL/HTTP.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Homer Coordinator                            │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                      REST API (:8080)                         │   │
+│  │  /api/v4/transactions/search                                  │   │
+│  │  /api/v4/auth/sessions                                        │   │
+│  │  /api/v4/dashboards                                           │   │
+│  │  ...                                                          │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                              │                                       │
+│                              ▼                                       │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                    FlightService                              │   │
+│  │         (Query routing to nodes via HTTP)                     │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                              │                                       │
+│         ┌────────────────────┼────────────────────┐                 │
+│         ▼                    ▼                    ▼                 │
+│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐         │
+│  │   Node 1    │      │   Node 2    │      │   Node 3    │         │
+│  │ :50051/HTTP │      │ :50051/HTTP │      │ :50051/HTTP │         │
+│  └─────────────┘      └─────────────┘      └─────────────┘         │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                   Settings DB (DuckDB)                        │   │
+│  │        Users, Dashboards, User Settings                       │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Key Features
+
+- **REST API** - Full API for Homer UI (v1, v3, v4 endpoints)
+- **Multi-node routing** - Query distribution across multiple nodes
+- **JWT Authentication** - Secure API access with tokens
+- **OAuth2 Support** - External authentication providers
+- **Settings Storage** - DuckDB-based user and dashboard storage
+- **Embedded UI** - Optional built-in web interface
+
+## Configuration
+
+### Basic Configuration
+
+```json
+{
+  "coordinator": {
+    "enable": true,
+    "http_server": {
+      "enable": true,
+      "host": "0.0.0.0",
+      "port": 8080,
+      "read_timeout": 30,
+      "write_timeout": 30,
+      "static_path": ""
+    },
+    "nodes": [
+      {
+        "name": "local",
+        "host": "127.0.0.1",
+        "port": 50051,
+        "use_tls": false,
+        "token": "your-node-token",
+        "priority": 1
+      }
+    ],
+    "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
+    "transaction_view_max_opens": 3,
+    "ip_alias_cache_ttl_sec": 30,
+    "jwt": {
+      "secret": "your-jwt-secret-minimum-32-characters",
+      "expire_hours": 24
+    },
+    "auth": {
+      "admin_user": "admin",
+      "admin_password_hash": "your-sha256-password-hash"
+    }
+  }
+}
+```
+
+`transaction_view_max_opens` (default `3`) caps how many successful `GET /export/view/:uuid` responses each shared view token may serve before it is exhausted (the `expires_at` TTL still applies).
+
+`ip_alias_cache_ttl_sec` (default `30`, min `5`, max `86400`) controls how long the coordinator reuses the in-memory IP-alias lookup table when enriching search/QoS/message rows. Creating, updating, or deleting an alias still clears the cache immediately.
+
+### Multi-Node Configuration
+
+```json
+{
+  "coordinator": {
+    "enable": true,
+    "http_server": {
+      "host": "0.0.0.0",
+      "port": 8080
+    },
+    "nodes": [
+      {
+        "name": "node-eu",
+        "host": "node-eu.example.com",
+        "port": 50051,
+        "use_tls": true,
+        "token": "eu-node-token",
+        "priority": 1
+      },
+      {
+        "name": "node-us",
+        "host": "node-us.example.com",
+        "port": 50051,
+        "use_tls": true,
+        "token": "us-node-token",
+        "priority": 2
+      },
+      {
+        "name": "node-asia",
+        "host": "node-asia.example.com",
+        "port": 50051,
+        "use_tls": true,
+        "token": "asia-node-token",
+        "priority": 3
+      }
+    ],
+    "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
+    "jwt": {
+      "secret": "your-jwt-secret-minimum-32-characters",
+      "expire_hours": 24
+    },
+    "auth": {
+      "admin_user": "admin",
+      "admin_password_hash": "your-sha256-password-hash"
+    }
+  }
+}
+```
+
+### With OAuth2 Providers
+
+```json
+{
+  "coordinator": {
+    "enable": true,
+    "http_server": {
+      "host": "0.0.0.0",
+      "port": 8080
+    },
+    "nodes": [
+      {
+        "name": "local",
+        "host": "127.0.0.1",
+        "port": 50051
+      }
+    ],
+    "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
+    "jwt": {
+      "secret": "your-jwt-secret",
+      "expire_hours": 24
+    },
+    "auth": {
+      "admin_user": "admin",
+      "admin_password_hash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
+    },
+    "oauth2_provider": {
+      "enable": true,
+      "name": "google",
+      "type": "oauth2",
+      "provider_name": "Google",
+      "provider_image": "/assets/google.svg",
+      "position": 1,
+      "url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=YOUR_CLIENT_ID&response_type=code&scope=openid%20email&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fv4%2Fauth%2Foauth2%2Fgoogle%2Fcallback",
+      "callback_url": "http://localhost:8080/",
+      "auto_redirect": false
+    }
+  }
+}
+```
+
+## Configuration Parameters
+
+### http_server
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enable` | bool | true | Enable HTTP server |
+| `host` | string | "0.0.0.0" | Listen address |
+| `port` | int | 8080 | HTTP server port |
+| `read_timeout` | int | 30 | Read timeout in seconds |
+| `write_timeout` | int | 30 | Write timeout in seconds |
+| `static_path` | string | "" | Path to UI static files (optional) |
+
+### nodes
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | string | - | Node identifier |
+| `host` | string | - | Node hostname or IP |
+| `port` | int | 50051 | Node FlightSQL port |
+| `use_tls` | bool | false | Use TLS for connection |
+| `token` | string | "" | Authentication token for node |
+| `priority` | int | 1 | Query routing priority (lower = higher priority) |
+
+### jwt
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `secret` | string | - | JWT signing secret (min 32 characters recommended) |
+| `expire_hours` | int | 24 | Token expiration time in hours |
+
+### auth
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `admin_user` | string | "admin" | Default admin username |
+| `admin_password_hash` | string | - | SHA256 hash of admin password |
+
+**Generating password hash:**
+
+```bash
+# Linux/macOS
+echo -n "your-password" | sha256sum | cut -d' ' -f1
+
+# Example: password "sipcapture" produces:
+# 883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90
+```
+
+### oauth2_provider
+
+Single optional OAuth2 IdP object (`OAuthProviderConfig` in `src/config/config.go`).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `enable` | bool | Enable this provider |
+| `name` | string | Stable id for URLs (`/api/v4/auth/oauth2/{name}/...`) |
+| `type` | string | Usually `oauth2` |
+| `provider_name` | string | Display name |
+| `provider_image` | string | Provider logo path |
+| `position` | int | Display order in discovery |
+| `url` | string | Full IdP authorization URL (includes client id and redirect_uri query params as required by the IdP) |
+| `callback_url` | string | Browser redirect after coordinator callback (SPA reads `token` and exchanges via `POST /auth/oauth2/token`) |
+| `auto_redirect` | bool | If true, UI may redirect immediately to this provider |
+
+The deprecated **`oauth2_providers`** array is still accepted at startup and migrated with a log warning; prefer **`oauth2_provider`**.
+
+## API Endpoints
+
+### Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v4/auth/sessions` | Create session (login) |
+| DELETE | `/api/v4/auth/sessions/:id` | Delete session (logout) |
+| GET | `/api/v4/auth/providers` | List OAuth2 providers |
+| GET | `/api/v4/me` | Get current user info |
+
+### Transactions (Search)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v4/transactions` | List transactions |
+| POST | `/api/v4/transactions/search` | Search transactions |
+| POST | `/api/v4/transactions/messages` | Get transaction messages (with optional Lua call-id correlation, see [`LUA_CORRELATION.md`](./LUA_CORRELATION.md)) |
+| GET | `/api/v4/messages/:id` | Get single message |
+| GET | `/api/v4/messages/:id/decoded` | Get decoded message |
+| POST | `/api/v4/transactions/qos` | Get QoS data |
+| POST | `/api/v4/transactions/events` | Application log lines (proto 100) for session(s) |
+
+### Dashboards
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v4/dashboards` | List dashboards |
+| POST | `/api/v4/dashboards` | Create dashboard |
+| GET | `/api/v4/dashboards/:id` | Get dashboard |
+| PUT | `/api/v4/dashboards/:id` | Update dashboard |
+| DELETE | `/api/v4/dashboards/:id` | Delete dashboard |
+
+### Users (Admin)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v4/users` | List users |
+| POST | `/api/v4/users` | Create user |
+| GET | `/api/v4/users/:id` | Get user |
+| PATCH | `/api/v4/users/:id` | Update user |
+| DELETE | `/api/v4/users/:id` | Delete user |
+
+### Settings & Configuration
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v4/mappings` | List field mappings |
+| GET | `/api/v4/hepsubs` | List HEP subscriptions |
+| GET | `/api/v4/aliases` | List aliases |
+| GET | `/api/v4/db/nodes` | List configured nodes |
+| GET | `/api/v4/modules` | Get modules status |
+
+### Statistics
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v4/statistics/query` | Execute statistics query |
+| GET | `/api/v4/statistics/databases` | List databases |
+| GET | `/api/v4/statistics/measurements` | List measurements |
+| GET | `/api/v4/statistics/metrics` | List metrics |
+
+### Health & Status
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| GET | `/api/v1/status` | System status with nodes info |
+
+## Deployment Patterns
+
+### Standalone (All-in-One)
+
+Single server running Ingest, Storage, Node, and Coordinator:
+
+```
+┌───────────────────────────────────────────────────────────┐
+│                       Homer Server                         │
+│  ┌─────────┐ ┌─────────┐ ┌──────┐ ┌─────────────┐        │
+│  │ Ingest  │ │ Storage │ │ Node │ │ Coordinator │        │
+│  │ :9060   │ │         │ │:50051│ │   :8080     │        │
+│  └────┬────┘ └────┬────┘ └───┬──┘ └──────┬──────┘        │
+│       │           │          │           │                │
+│       └───────────┴──────────┴───────────┘                │
+│                         │                                  │
+│                  ┌──────┴──────┐                          │
+│                  │  DuckLake   │                          │
+│                  └─────────────┘                          │
+└───────────────────────────────────────────────────────────┘
+```
+
+### Distributed (Recommended for Production)
+
+Separate instances for each module:
+
+```
+                       ┌─────────────────┐
+                       │   Coordinator   │
+                       │     :8080       │
+                       └────────┬────────┘
+                                │
+           ┌────────────────────┼────────────────────┐
+           ▼                    ▼                    ▼
+    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+    │  Ingest 1    │    │  Ingest 2    │    │  Ingest 3    │
+    │  Storage 1   │    │  Storage 2   │    │  Storage 3   │
+    │  Node 1      │    │  Node 2      │    │  Node 3      │
+    │  :50051      │    │  :50051      │    │  :50051      │
+    └──────┬───────┘    └──────┬───────┘    └──────┬───────┘
+           │                   │                   │
+           ▼                   ▼                   ▼
+    ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+    │  DuckLake   │     │  DuckLake   │     │  DuckLake   │
+    │  (Region 1) │     │  (Region 2) │     │  (Region 3) │
+    └─────────────┘     └─────────────┘     └─────────────┘
+```
+
+### Read-Heavy Setup
+
+Multiple Coordinators behind load balancer:
+
+```
+                    ┌─────────────────┐
+                    │  Load Balancer  │
+                    └────────┬────────┘
+                             │
+           ┌─────────────────┼─────────────────┐
+           ▼                 ▼                 ▼
+    ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+    │ Coordinator │   │ Coordinator │   │ Coordinator │
+    │    :8080    │   │    :8080    │   │    :8080    │
+    └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+           │                 │                 │
+           └─────────────────┼─────────────────┘
+                             │
+                    ┌────────┴────────┐
+                    │   Node Pool     │
+                    │  (FlightSQL)    │
+                    └─────────────────┘
+```
+
+## Settings Database
+
+The Coordinator uses a DuckDB database for storing:
+
+- **users** — accounts and credentials  
+- **user_preferences** — generic per-user JSON blobs (`/api/v4/me/settings`)  
+- **global_settings** — system-wide key/value rows (`/api/v4/advanced`)  
+- **dashboard_settings** — saved dashboards  
+- **user_mapping_settings** — per-user mapping widget overrides  
+- **correlation_scripts** — Lua correlation + script API rows  
+- **dashboard_alerts**, **export_share_links**, **transaction_view_tokens** — supporting tables  
+
+The database is created automatically at `settings_db_path`.
+
+### Default schema
+
+The canonical DDL is created in `EnsureSettingsSchema` in
+`src/coordinator/services/settings_db.go` (DuckDB: BIGINT ids, JSON `data`, etc.).
+Do not rely on older table names such as `user_settings` or `hep_scripts`.
+
+## Example Configurations
+
+See examples in the `examples/` directory:
+
+- `homer-coordinator.json` - Coordinator only
+- `homer-writer.json` - Ingest + Storage + Node
+- `homer.json` - Ingest + Storage + Node + Coordinator (all-in-one)
+
+## Security Considerations
+
+1. **JWT Secret** - Use a strong, random secret (minimum 32 characters)
+2. **Admin Password** - Store as SHA256 hash, never plain text
+3. **TLS** - Enable `use_tls` for node connections in production
+4. **Network** - Restrict coordinator access via firewall/reverse proxy
+5. **OAuth2** - Use HTTPS callback URLs in production

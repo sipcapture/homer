@@ -1,0 +1,81 @@
+{
+  "ingest": {
+    "enable": false
+  },
+  "storage": {
+    "enable": false
+  },
+  "node": {
+    "enable": false
+  },
+  "coordinator": {
+    "enable": true,
+    "http_server": {
+      "enable": true,
+      "host": "0.0.0.0",
+      "port": 8080,
+      "read_timeout": 30,
+      "write_timeout": 30
+    },
+    "nodes": [
+      {
+        "name": "local",
+        "host": "127.0.0.1",
+        "port": 50051,
+        "flightsql_port": 0,
+        "use_tls": false,
+        "token": "",
+        "priority": 1
+      }
+    ],
+    "flightsql_server": {
+      "enable": false,
+      "host": "0.0.0.0",
+      "port": 32010,
+      "auth_token": "",
+      "catalog_refresh_interval_sec": 30
+    },
+    "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
+    "transaction_view_max_opens": 3,
+    "ip_alias_cache_ttl_sec": 30,
+    "jwt": {
+      "secret": "change-this-to-a-secure-random-string-in-production",
+      "expire_hours": 24
+    },
+    "auth": {
+      "admin_user": "admin",
+      "admin_password_hash": "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
+    },
+    "api_settings": {
+      "enable_token_access": false,
+      "auth_token_header": "Auth-Token"
+    }
+  },
+  "log": {
+    "level": "debug",
+    "json": false,
+    "output": ["stdout"],
+    "file": {
+      "path": "/var/log/homer",
+      "name": "homer.log",
+      "max_age_days": 7,
+      "rotation_hours": 24,
+      "max_size_mb": 100
+    },
+    "stdout": {
+      "colored": true
+    },
+    "syslog": {
+      "uri": "",
+      "facility": "local0",
+      "level": "LOG_INFO",
+      "tag": "homer"
+    }
+  },
+  "prometheus": {
+    "enable": true,
+    "host": "0.0.0.0",
+    "port": 9092,
+    "path": "/metrics"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "ingest": {
+    "enable": false
+  },
+  "storage": {
+    "enable": false
+  },
+  "node": {
+    "enable": true,
+    "flight_server": {
+      "host": "0.0.0.0",
+      "port": 50051,
+      "auth_token": "your-secret-token-here",
+      "max_message_size": 16777216
+    },
+    "flightsql_server": {
+      "enable": false,
+      "host": "0.0.0.0",
+      "port": 50055,
+      "auth_token": "",
+      "catalog_refresh_interval_sec": 30
+    },
+    "ducklake": {
+      "lake_name": "homer_lake",
+      "volumes": [
+        {
+          "name": "default",
+          "type": "local",
+          "catalog_type": "sqlite",
+          "catalog_path": "/data/homer/homer_catalog.sqlite",
+          "path": "/data/homer/parquet"
+        }
+      ]
+    }
+  },
+  "coordinator": {
+    "enable": false
+  },
+  "log": {
+    "level": "info",
+    "json": false,
+    "output": ["stdout"],
+    "file": {
+      "path": "/var/log/homer",
+      "name": "homer.log",
+      "max_age_days": 7,
+      "rotation_hours": 24,
+      "max_size_mb": 100
+    },
+    "stdout": {
+      "colored": true
+    },
+    "syslog": {
+      "uri": "",
+      "facility": "local0",
+      "level": "LOG_INFO",
+      "tag": "homer"
+    }
+  },
+  "prometheus": {
+    "enable": true,
+    "host": "0.0.0.0",
+    "port": 9091,
+    "path": "/metrics"
+  }
+}

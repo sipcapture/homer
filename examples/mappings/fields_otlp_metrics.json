@@ -1,0 +1,90 @@
+[
+  {
+    "id": "name",
+    "name": "Metric name",
+    "type": "string",
+    "index": "secondary",
+    "form_type": "input",
+    "position": 1,
+    "hide": false
+  },
+  {
+    "id": "type",
+    "name": "Metric type",
+    "type": "string",
+    "index": "none",
+    "form_type": "input_multi_select",
+    "form_default": [
+      { "name": "Gauge", "value": "gauge" },
+      { "name": "Sum", "value": "sum" },
+      { "name": "Histogram", "value": "histogram" },
+      { "name": "Exponential histogram", "value": "exponential_histogram" },
+      { "name": "Summary", "value": "summary" }
+    ],
+    "position": 2,
+    "hide": false
+  },
+  {
+    "id": "service_name",
+    "name": "Service name",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 3,
+    "hide": false
+  },
+  {
+    "id": "unit",
+    "name": "Unit",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 4,
+    "hide": true
+  },
+  {
+    "id": "description",
+    "name": "Description",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 5,
+    "hide": true
+  },
+  {
+    "id": "value_double",
+    "name": "Value (double)",
+    "type": "number",
+    "index": "none",
+    "form_type": "input",
+    "position": 6,
+    "hide": false
+  },
+  {
+    "id": "value_int",
+    "name": "Value (int)",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 7,
+    "hide": false
+  },
+  {
+    "id": "scope_name",
+    "name": "Instrumentation scope",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 8,
+    "hide": true
+  },
+  {
+    "id": "raw",
+    "name": "Raw OTLP (contains)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 9,
+    "hide": true
+  }
+]

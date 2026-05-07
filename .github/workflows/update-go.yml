@@ -1,0 +1,82 @@
+name: Go Version Sync
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  update-go:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get latest stable Go version
+        id: latest
+        run: |
+          LATEST=$(curl -sSL "https://go.dev/dl/?mode=json" | jq -r '.[0].version' | sed 's/^go//')
+          echo "version=${LATEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Get current Go version from go.mod
+        id: current
+        run: |
+          CURRENT=$(grep -m1 '^go ' src/go.mod | awk '{print $2}')
+          echo "version=${CURRENT}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if update is needed
+        id: check
+        run: |
+          if [ "${{ steps.latest.outputs.version }}" = "${{ steps.current.outputs.version }}" ]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "Go is already at the latest version (${{ steps.current.outputs.version }}), no update needed."
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "Update needed: ${{ steps.current.outputs.version }} → ${{ steps.latest.outputs.version }}"
+          fi
+
+      - name: Update Go version in go.mod
+        if: steps.check.outputs.needed == 'true'
+        env:
+          CURRENT: ${{ steps.current.outputs.version }}
+          LATEST: ${{ steps.latest.outputs.version }}
+        run: |
+          sed -i "s|^go ${CURRENT}$|go ${LATEST}|" src/go.mod
+
+      - name: Set up Go
+        if: steps.check.outputs.needed == 'true'
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ steps.latest.outputs.version }}
+
+      - name: Tidy go modules
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          cd src && go mod tidy
+
+      - name: Open pull request
+        if: steps.check.outputs.needed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update Go from ${{ steps.current.outputs.version }} to ${{ steps.latest.outputs.version }}"
+          branch: "chore/go-update-${{ steps.latest.outputs.version }}"
+          delete-branch: true
+          title: "chore: update Go to ${{ steps.latest.outputs.version }}"
+          body: |
+            ## Go Version Update
+
+            This automated PR updates the project Go version from `${{ steps.current.outputs.version }}` to `${{ steps.latest.outputs.version }}`.
+
+            ### Files changed
+            - `src/go.mod` — `go` directive (workflow files: update manually if needed)
+
+            ### Why
+            Keeping the project up-to-date with Go releases ensures access to the latest bug fixes, security patches, and performance improvements.
+
+            ---
+            _This PR was opened automatically by the [Go Version Sync](${{ github.server_url }}/${{ github.repository }}/actions/workflows/update-go.yml) workflow._
+          labels: dependencies,go

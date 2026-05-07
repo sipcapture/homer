@@ -1,0 +1,102 @@
+[
+  {
+    "id": "trace_id",
+    "name": "Trace ID",
+    "type": "string",
+    "index": "secondary",
+    "form_type": "input",
+    "position": 1,
+    "sid_type": true,
+    "hide": false
+  },
+  {
+    "id": "span_id",
+    "name": "Span ID",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 2,
+    "hide": false
+  },
+  {
+    "id": "parent_span_id",
+    "name": "Parent Span ID",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 3,
+    "hide": true
+  },
+  {
+    "id": "name",
+    "name": "Span name",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 4,
+    "hide": false
+  },
+  {
+    "id": "service_name",
+    "name": "Service name",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 5,
+    "hide": false
+  },
+  {
+    "id": "kind",
+    "name": "Span kind",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 6,
+    "hide": true
+  },
+  {
+    "id": "status_code",
+    "name": "Status code",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 7,
+    "hide": false
+  },
+  {
+    "id": "status_message",
+    "name": "Status message",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 8,
+    "hide": true
+  },
+  {
+    "id": "duration_ns",
+    "name": "Duration (ns)",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 9,
+    "hide": true
+  },
+  {
+    "id": "scope_name",
+    "name": "Instrumentation scope",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 10,
+    "hide": true
+  },
+  {
+    "id": "raw",
+    "name": "Raw OTLP (contains)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 11,
+    "hide": true
+  }
+]

@@ -1,0 +1,133 @@
+[
+  {
+    "id": "call_id",
+    "name": "Call-ID",
+    "type": "string",
+    "index": "secondary",
+    "form_type": "input",
+    "position": 1,
+    "sid_type": true,
+    "hide": false
+  },
+  {
+    "id": "method",
+    "name": "SIP method",
+    "type": "string",
+    "index": "none",
+    "form_type": "select",
+    "selector": [
+      { "value": "", "name": "Any" },
+      { "value": "REGISTER", "name": "REGISTER" }
+    ],
+    "position": 2,
+    "hide": false
+  },
+  {
+    "id": "aor",
+    "name": "AOR",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 3,
+    "hide": false
+  },
+  {
+    "id": "contact",
+    "name": "Contact",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 4,
+    "hide": false
+  },
+  {
+    "id": "expires",
+    "name": "Expires",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 5,
+    "hide": false
+  },
+  {
+    "id": "user_agent",
+    "name": "User-Agent",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 6,
+    "hide": false
+  },
+  {
+    "id": "src_ip",
+    "name": "Src IP",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 7,
+    "hide": false
+  },
+  {
+    "id": "dst_ip",
+    "name": "Dst IP",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 8,
+    "hide": false
+  },
+  {
+    "id": "src_port",
+    "name": "Src port",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 9,
+    "hide": false
+  },
+  {
+    "id": "dst_port",
+    "name": "Dst port",
+    "type": "integer",
+    "index": "none",
+    "form_type": "input",
+    "position": 10,
+    "hide": false
+  },
+  {
+    "id": "response_code",
+    "name": "SIP response",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 11,
+    "hide": false
+  },
+  {
+    "id": "node",
+    "name": "Node",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 12,
+    "hide": true
+  },
+  {
+    "id": "payload",
+    "name": "Payload contains",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 13,
+    "hide": true
+  },
+  {
+    "id": "ruri_user",
+    "name": "Request-URI (substring)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 14,
+    "hide": true
+  }
+]

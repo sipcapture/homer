@@ -1,0 +1,455 @@
+package cli
+
+import (
+	"database/sql"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/chzyer/readline"
+	_ "github.com/duckdb/duckdb-go/v2"
+	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/storage/ducklake"
+)
+
+// CLIFlags holds flags for the "homer cli" subcommand.
+type CLIFlags struct {
+	ConfigPath string
+	Query      string
+}
+
+type cliFlagRefs struct {
+	ConfigPath *string
+	Query      *string
+}
+
+// RegisterCLIFlags creates a FlagSet for "homer cli" subcommand.
+func RegisterCLIFlags() (*flag.FlagSet, *cliFlagRefs) {
+	fs := flag.NewFlagSet("cli", flag.ExitOnError)
+	refs := &cliFlagRefs{}
+
+	refs.ConfigPath = fs.String("config-path", "", "path to config file or directory")
+	refs.Query = fs.String("query", "", "execute single SQL query and exit")
+
+	return fs, refs
+}
+
+// ParseCLIFlags extracts CLIFlags from parsed flag refs.
+func ParseCLIFlags(refs *cliFlagRefs) CLIFlags {
+	return CLIFlags{
+		ConfigPath: *refs.ConfigPath,
+		Query:      *refs.Query,
+	}
+}
+
+// RunCLICmd runs the interactive DuckLake SQL CLI.
+func RunCLICmd(f CLIFlags) error {
+	cfg, err := config.Load(f.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	duckCfg := duckLakeConfigFromModular(cfg)
+	db, err := openDuckLakeReadOnly(duckCfg)
+	if err != nil {
+		return fmt.Errorf("failed to open DuckLake: %w", err)
+	}
+	defer db.Close()
+
+	return runCLI(db, duckCfg.LakeName, f.Query)
+}
+
+// ---- config helper ---------------------------------------------------------
+
+func duckLakeConfigFromModular(cfg *config.Config) ducklake.Config {
+	base := ducklake.DefaultConfig()
+
+	source := cfg.Storage.DuckLake
+	if !cfg.Storage.Enable && cfg.Node.Enable {
+		source = cfg.Node.DuckLake
+	}
+
+	if source.CatalogType != "" {
+		base.CatalogType = ducklake.CatalogType(source.CatalogType)
+	}
+	if source.CatalogPath != "" {
+		base.CatalogPath = source.CatalogPath
+	}
+	if source.DataPath != "" {
+		base.DataPath = source.DataPath
+	}
+	if source.LakeName != "" {
+		base.LakeName = source.LakeName
+	}
+	if source.BatchSize > 0 {
+		base.BatchSize = source.BatchSize
+	}
+	if source.FlushInterval > 0 {
+		base.FlushInterval = time.Duration(source.FlushInterval) * time.Second
+	}
+	if source.FlushQueue != nil {
+		base.FlushQueue = source.FlushQueue
+	}
+	if source.DataInliningRowLimit != -1 {
+		base.DataInliningRowLimit = source.DataInliningRowLimit
+	}
+
+	if source.S3.AccessKeyID != "" {
+		base.S3Region = source.S3.Region
+		base.S3AccessKeyID = source.S3.AccessKeyID
+		base.S3SecretAccessKey = source.S3.SecretAccessKey
+		base.S3Endpoint = source.S3.Endpoint
+		base.S3UseSSL = source.S3.UseSSL
+	}
+
+	return base
+}
+
+// ---- DuckDB read-only access -----------------------------------------------
+
+func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to open DuckDB: %w", err)
+	}
+
+	if cfg.S3AccessKeyID != "" {
+		s3Queries := []string{
+			fmt.Sprintf("SET s3_region='%s'", cfg.S3Region),
+			fmt.Sprintf("SET s3_access_key_id='%s'", cfg.S3AccessKeyID),
+			fmt.Sprintf("SET s3_secret_access_key='%s'", cfg.S3SecretAccessKey),
+		}
+		if cfg.S3Endpoint != "" {
+			s3Queries = append(s3Queries, fmt.Sprintf("SET s3_endpoint='%s'", cfg.S3Endpoint))
+		}
+		for _, q := range s3Queries {
+			if _, err := db.Exec(q); err != nil {
+				db.Close()
+				return nil, fmt.Errorf("failed to configure S3: %w", err)
+			}
+		}
+	}
+
+	dataPath := cfg.DataPath
+	fmt.Printf("Data path: %s\n", dataPath)
+
+	viewsCreated, err := createParquetViews(db, cfg.LakeName, dataPath)
+	if err != nil {
+		fmt.Printf("Note: Could not auto-create views: %v\n", err)
+		fmt.Printf("You can query parquet files directly:\n")
+		fmt.Printf("  SELECT * FROM read_parquet('%s/main/*/**/*.parquet', hive_partitioning=true) LIMIT 10;\n\n", dataPath)
+	} else if viewsCreated > 0 {
+		fmt.Printf("Created %d table views\n", viewsCreated)
+	}
+
+	useSQL := fmt.Sprintf("USE %s", cfg.LakeName)
+	if _, err := db.Exec(useSQL); err != nil {
+		setSQL := fmt.Sprintf("SET search_path TO '%s'", cfg.LakeName)
+		db.Exec(setSQL)
+	}
+
+	return db, nil
+}
+
+func createParquetViews(db *sql.DB, lakeName, dataPath string) (int, error) {
+	schemaSQL := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", lakeName)
+	if _, err := db.Exec(schemaSQL); err != nil {
+		return 0, fmt.Errorf("failed to create schema: %w", err)
+	}
+
+	mainPath := dataPath + "/main"
+	globSQL := fmt.Sprintf("SELECT DISTINCT regexp_extract(file, '.*[/\\\\]main[/\\\\]([^/\\\\]+)[/\\\\].*', 1) as tbl FROM glob('%s/**/*.parquet') WHERE file LIKE '%%/main/%%'", mainPath)
+	rows, err := db.Query(globSQL)
+	if err != nil {
+		return createCommonViews(db, lakeName, dataPath)
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var tbl sql.NullString
+		if err := rows.Scan(&tbl); err != nil {
+			continue
+		}
+		if tbl.Valid && tbl.String != "" && tbl.String != "main" {
+			tables = append(tables, tbl.String)
+		}
+	}
+
+	if len(tables) == 0 {
+		return createCommonViews(db, lakeName, dataPath)
+	}
+
+	created := 0
+	for _, tbl := range tables {
+		pattern := fmt.Sprintf("%s/main/%s/**/*.parquet", dataPath, tbl)
+		viewSQL := fmt.Sprintf(
+			"CREATE OR REPLACE VIEW %s.%s AS SELECT * FROM read_parquet('%s', hive_partitioning=true, union_by_name=true)",
+			lakeName, tbl, pattern)
+		if _, err := db.Exec(viewSQL); err != nil {
+			fmt.Printf("Warning: could not create view for %s: %v\n", tbl, err)
+		} else {
+			created++
+		}
+	}
+
+	return created, nil
+}
+
+func createCommonViews(db *sql.DB, lakeName, dataPath string) (int, error) {
+	commonTables := []string{
+		"hep_proto_1_call",
+		"hep_proto_1_registration",
+		"hep_proto_1_default",
+		"hep_proto_5_default",
+		"hep_proto_34_default",
+		"hep_proto_35_default",
+		"hep_proto_100_default",
+	}
+
+	created := 0
+	for _, tbl := range commonTables {
+		pattern := fmt.Sprintf("%s/main/%s/**/*.parquet", dataPath, tbl)
+		checkSQL := fmt.Sprintf("SELECT COUNT(*) FROM glob('%s')", pattern)
+		var count int
+		if err := db.QueryRow(checkSQL).Scan(&count); err != nil || count == 0 {
+			continue
+		}
+
+		viewSQL := fmt.Sprintf(
+			"CREATE OR REPLACE VIEW %s.%s AS SELECT * FROM read_parquet('%s', hive_partitioning=true, union_by_name=true)",
+			lakeName, tbl, pattern)
+		if _, err := db.Exec(viewSQL); err == nil {
+			created++
+		}
+	}
+
+	if created == 0 {
+		return 0, fmt.Errorf("no parquet files found in %s", dataPath)
+	}
+	return created, nil
+}
+
+// ---- interactive SQL CLI ---------------------------------------------------
+
+func runCLI(db *sql.DB, lakeName string, singleQuery string) error {
+	fmt.Println("Homer DuckLake SQL CLI (read-only)")
+	fmt.Println("===================================")
+	fmt.Printf("Schema: %s\n", lakeName)
+	fmt.Println("Type 'help' for commands, 'exit' or Ctrl+D to quit")
+	fmt.Println()
+
+	tables := discoverSchemaViews(db, lakeName)
+
+	if singleQuery != "" {
+		return executeSQLQuery(db, singleQuery)
+	}
+
+	historyFile := os.ExpandEnv("$HOME/.homer_cli_history")
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:            "sql> ",
+		HistoryFile:       historyFile,
+		HistoryLimit:      1000,
+		InterruptPrompt:   "^C",
+		EOFPrompt:         "exit",
+		HistorySearchFold: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to init readline: %w", err)
+	}
+	defer rl.Close()
+
+	for {
+		line, err := rl.Readline()
+		if err != nil {
+			fmt.Println("\nGoodbye!")
+			return nil
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		lowerLine := strings.ToLower(line)
+		switch lowerLine {
+		case "exit", "quit", "\\q":
+			fmt.Println("Goodbye!")
+			return nil
+		case "help", "\\h", "\\?":
+			printCLIHelp(lakeName, tables)
+			continue
+		case "tables", "\\dt":
+			tables = discoverSchemaViews(db, lakeName)
+			printTables(tables)
+			continue
+		case "clear", "\\c":
+			fmt.Print("\033[H\033[2J")
+			continue
+		case "show tables", "show tables;":
+			line = fmt.Sprintf("SHOW TABLES FROM %s", lakeName)
+		}
+
+		if err := executeSQLQuery(db, line); err != nil {
+			fmt.Printf("Error: %v\n", err)
+		}
+	}
+}
+
+func executeSQLQuery(db *sql.DB, query string) error {
+	rows, err := db.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+
+	if len(cols) == 0 {
+		fmt.Println("Query executed successfully")
+		return nil
+	}
+
+	widths := make([]int, len(cols))
+	for i, col := range cols {
+		widths[i] = len(col)
+		if widths[i] < 4 {
+			widths[i] = 4
+		}
+	}
+
+	var allRows [][]string
+	values := make([]interface{}, len(cols))
+	scanArgs := make([]interface{}, len(cols))
+	for i := range values {
+		scanArgs[i] = &values[i]
+	}
+
+	for rows.Next() {
+		if err := rows.Scan(scanArgs...); err != nil {
+			return err
+		}
+		row := make([]string, len(cols))
+		for i, val := range values {
+			str := formatSQLValue(val)
+			row[i] = str
+			if len(str) > widths[i] && len(str) <= 50 {
+				widths[i] = len(str)
+			} else if len(str) > 50 {
+				widths[i] = 50
+			}
+		}
+		allRows = append(allRows, row)
+	}
+
+	printSQLTableRow(cols, widths)
+	printSQLTableSeparator(widths)
+
+	for _, row := range allRows {
+		printSQLTableRow(row, widths)
+	}
+
+	fmt.Printf("\n(%d rows)\n\n", len(allRows))
+	return rows.Err()
+}
+
+func formatSQLValue(val interface{}) string {
+	if val == nil {
+		return "NULL"
+	}
+	switch v := val.(type) {
+	case []byte:
+		s := string(v)
+		if len(s) > 100 {
+			return s[:97] + "..."
+		}
+		return s
+	case string:
+		if len(v) > 100 {
+			return v[:97] + "..."
+		}
+		return v
+	case time.Time:
+		return v.Format("2006-01-02 15:04:05")
+	case int64:
+		if v > 1000000000000000000 {
+			t := time.Unix(0, v)
+			return t.Format("2006-01-02 15:04:05.000")
+		}
+		return fmt.Sprintf("%d", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func printSQLTableRow(values []string, widths []int) {
+	fmt.Print("| ")
+	for i, val := range values {
+		if len(val) > widths[i] {
+			val = val[:widths[i]-3] + "..."
+		}
+		fmt.Printf("%-*s | ", widths[i], val)
+	}
+	fmt.Println()
+}
+
+func printSQLTableSeparator(widths []int) {
+	fmt.Print("+")
+	for _, w := range widths {
+		fmt.Print(strings.Repeat("-", w+2) + "+")
+	}
+	fmt.Println()
+}
+
+func printCLIHelp(lakeName string, tables []string) {
+	fmt.Println("\nCommands:")
+	fmt.Println("  help, \\h, \\?    Show this help")
+	fmt.Println("  tables, \\dt     List available tables")
+	fmt.Println("  clear, \\c       Clear screen")
+	fmt.Println("  exit, quit, \\q  Exit CLI")
+	fmt.Println()
+	fmt.Println("Example queries:")
+	fmt.Printf("  SELECT * FROM %s.main.hep_proto_1_call LIMIT 10;\n", lakeName)
+	fmt.Printf("  SELECT COUNT(*) FROM %s.main.hep_proto_1_call;\n", lakeName)
+	fmt.Printf("  SELECT caller, callee, method FROM %s.main.hep_proto_1_call WHERE date = current_date LIMIT 10;\n", lakeName)
+	fmt.Println()
+	fmt.Println("Useful DuckLake functions:")
+	fmt.Printf("  SELECT * FROM ducklake_snapshots('%s.main.hep_proto_1_call');\n", lakeName)
+	fmt.Printf("  CALL ducklake_merge_adjacent_files('%s');\n", lakeName)
+	fmt.Println()
+}
+
+func printTables(tables []string) {
+	if len(tables) == 0 {
+		fmt.Println("No tables found")
+		return
+	}
+	fmt.Println("\nAvailable tables:")
+	for _, t := range tables {
+		fmt.Printf("  %s\n", t)
+	}
+	fmt.Println()
+}
+
+func discoverSchemaViews(db *sql.DB, schemaName string) []string {
+	var tables []string
+	query := fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE table_schema = '%s'", schemaName)
+	rows, err := db.Query(query)
+	if err != nil {
+		return tables
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil {
+			tables = append(tables, fmt.Sprintf("%s.%s", schemaName, name))
+		}
+	}
+	return tables
+}

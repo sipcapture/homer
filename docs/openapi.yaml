@@ -1,0 +1,3832 @@
+openapi: 3.0.3
+info:
+  title: Homer Next-Gen API
+  version: "4.0.2-draft"
+  description: >
+    Draft Next-Gen REST API specification for the new homer-core.
+servers:
+  - url: "{apiPrefix}/api/v4"
+    variables:
+      apiPrefix:
+        default: ""
+        description: Optional API prefix (for example, /homer)
+tags:
+  - name: Auth
+  - name: Users
+  - name: Transactions
+  - name: Exports
+  - name: Imports
+  - name: Dashboards
+  - name: Mappings
+  - name: Hepsub
+  - name: Aliases
+  - name: Tokens
+  - name: Agents
+  - name: Settings
+  - name: Statistics
+  - name: Metrics
+  - name: Logs
+  - name: Integrations
+  - name: System
+  - name: Stream
+security:
+  - bearerAuth: []
+paths:
+  /auth/sessions:
+    post:
+      tags: [Auth]
+      summary: Create session (login)
+      operationId: authSessionCreate
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /auth/sessions/{sessionId}:
+    delete:
+      tags: [Auth]
+      summary: Close session (logout)
+      operationId: authSessionDelete
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "204":
+          description: Session closed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /auth/providers:
+    get:
+      tags: [Auth]
+      summary: List authentication providers
+      operationId: authProvidersList
+      security: []
+      responses:
+        "200":
+          description: Providers list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthProvidersResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /auth/oauth2/{provider}/redirect:
+    get:
+      tags: [Auth]
+      summary: OAuth2 redirect
+      operationId: authOauth2Redirect
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Provider"
+      responses:
+        "302":
+          description: Redirect to provider
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /auth/oauth2/{provider}/callback:
+    get:
+      tags: [Auth]
+      summary: OAuth2 callback
+      operationId: authOauth2Callback
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Provider"
+      responses:
+        "302":
+          description: Redirect after callback
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /auth/oauth2/token:
+    post:
+      tags: [Auth]
+      summary: Exchange one-time token for JWT
+      operationId: authOauth2TokenExchange
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuth2TokenExchange"
+      responses:
+        "201":
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      operationId: usersList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/FilterUsername"
+        - $ref: "#/components/parameters/FilterEmail"
+        - $ref: "#/components/parameters/FilterUserGroup"
+        - $ref: "#/components/parameters/FilterEnabled"
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Users]
+      summary: Create user (admin)
+      operationId: usersCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreate"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /users/{userId}:
+    get:
+      tags: [Users]
+      summary: Get user
+      operationId: usersGet
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    patch:
+      tags: [Users]
+      summary: Update user
+      operationId: usersUpdate
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserPatch"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Users]
+      summary: Delete user (admin)
+      operationId: usersDelete
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /me:
+    get:
+      tags: [Users]
+      summary: Current user profile
+      operationId: usersMe
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /me/settings:
+    get:
+      tags: [Settings]
+      summary: All user settings
+      operationId: userSettingsList
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettingListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /me/settings/{category}:
+    put:
+      tags: [Settings]
+      summary: Create/update settings by category
+      operationId: userSettingsUpsert
+      parameters:
+        - $ref: "#/components/parameters/Category"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserSettingUpsert"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Settings]
+      summary: Delete settings by category
+      operationId: userSettingsDelete
+      parameters:
+        - $ref: "#/components/parameters/Category"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /transactions:
+    get:
+      tags: [Transactions]
+      summary: Transaction search (simple filters)
+      operationId: transactionsList
+      parameters:
+        - $ref: "#/components/parameters/From"
+        - $ref: "#/components/parameters/To"
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/FilterTransactionId"
+        - $ref: "#/components/parameters/FilterSrcIp"
+        - $ref: "#/components/parameters/FilterDstIp"
+        - $ref: "#/components/parameters/FilterProtocol"
+        - $ref: "#/components/parameters/FilterMethod"
+      responses:
+        "200":
+          description: Transactions list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallListResponse"
+              example:
+                data:
+                  items:
+                    - id: 123
+                      sid: "abc-123"
+                      src_ip: "127.0.0.1"
+                      dst_ip: "127.0.0.1"
+                      method: "INVITE"
+                      storage_lake: "homer_lake_hot"
+                      storage_volume: "hot"
+                  keys:
+                    - id
+                    - sid
+                    - src_ip
+                    - dst_ip
+                    - method
+                    - storage_lake
+                    - storage_volume
+                meta:
+                  pagination:
+                    limit: 50
+                    total: 1
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /transactions/search:
+    post:
+      tags: [Transactions]
+      summary: Advanced transaction search
+      operationId: transactionsSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallSearchRequest"
+      responses:
+        "200":
+          description: Transactions list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /transactions/messages:
+    post:
+      tags: [Transactions]
+      summary: Transaction messages
+      operationId: transactionMessagesList
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionSessionRequest"
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /messages/{messageId}:
+    get:
+      tags: [Transactions]
+      summary: Message by ID
+      operationId: messagesGet
+      parameters:
+        - $ref: "#/components/parameters/MessageId"
+      responses:
+        "200":
+          description: Message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /messages/{messageId}/decoded:
+    get:
+      tags: [Transactions]
+      summary: Decoded message
+      operationId: messagesGetDecoded
+      parameters:
+        - $ref: "#/components/parameters/MessageId"
+      responses:
+        "200":
+          description: Decoded message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDecodedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /transactions/qos:
+    post:
+      tags: [Transactions]
+      summary: Transaction QoS
+      operationId: transactionQosGet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionSessionRequest"
+      responses:
+        "200":
+          description: QoS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QosResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /exports:
+    post:
+      tags: [Exports]
+      summary: Create export (PCAP/TEXT)
+      operationId: exportsCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportRequest"
+      responses:
+        "201":
+          description: Export created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /exports/{exportId}:
+    get:
+      tags: [Exports]
+      summary: Export status
+      operationId: exportsGet
+      parameters:
+        - $ref: "#/components/parameters/ExportId"
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /exports/{exportId}/download:
+    get:
+      tags: [Exports]
+      summary: Download export file
+      operationId: exportsDownload
+      parameters:
+        - $ref: "#/components/parameters/ExportId"
+      responses:
+        "200":
+          description: Export file (binary)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /imports/pcap:
+    post:
+      tags: [Imports]
+      summary: Import PCAP
+      operationId: importsPcapCreate
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                override_to_current_time:
+                  type: string
+                  description: >
+                    When "true" / "1" / "on", packet timestamps are remapped so the first
+                    SIP frame is "now" and later frames keep the same deltas as in the capture.
+                  enum: ["true", "false", "1", "0", "on", "off"]
+                force_sip_table:
+                  type: string
+                  description: >
+                    Optional. When set, every decoded SIP message is written to this logical
+                    DuckLake table instead of auto-routing by method. Values: call, registration,
+                    default; aliases: reg, register, hep_proto_1_call, 1_call, etc. Same as multipart field force_table.
+                  example: registration
+                force_table:
+                  type: string
+                  description: Alias of force_sip_table (same semantics).
+      responses:
+        "201":
+          description: Import completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /dashboards:
+    get:
+      tags: [Dashboards]
+      summary: List dashboards
+      operationId: dashboardsList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Dashboards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Dashboards]
+      summary: Create dashboard
+      operationId: dashboardsCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DashboardUpsert"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /dashboards/{dashboardId}:
+    get:
+      tags: [Dashboards]
+      summary: Get dashboard
+      operationId: dashboardsGet
+      parameters:
+        - $ref: "#/components/parameters/DashboardId"
+      responses:
+        "200":
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags: [Dashboards]
+      summary: Update dashboard
+      operationId: dashboardsUpdate
+      parameters:
+        - $ref: "#/components/parameters/DashboardId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DashboardUpsert"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Dashboards]
+      summary: Delete dashboard
+      operationId: dashboardsDelete
+      parameters:
+        - $ref: "#/components/parameters/DashboardId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /me/dashboards/reset:
+    post:
+      tags: [Dashboards]
+      summary: Reset user dashboards
+      operationId: dashboardsReset
+      responses:
+        "200":
+          description: Reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /mappings:
+    get:
+      tags: [Mappings]
+      summary: List mappings
+      operationId: mappingsList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/FilterMappingProfile"
+        - $ref: "#/components/parameters/FilterHepId"
+        - $ref: "#/components/parameters/FilterHepAlias"
+      responses:
+        "200":
+          description: Mappings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Mappings]
+      summary: Create mapping (admin)
+      operationId: mappingsCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MappingUpsert"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /mappings/{mappingId}:
+    get:
+      tags: [Mappings]
+      summary: Mapping by ID
+      operationId: mappingsGet
+      parameters:
+        - $ref: "#/components/parameters/MappingId"
+      responses:
+        "200":
+          description: Mapping
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags: [Mappings]
+      summary: Update mapping (admin)
+      operationId: mappingsUpdate
+      parameters:
+        - $ref: "#/components/parameters/MappingId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MappingUpsert"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Mappings]
+      summary: Delete mapping (admin)
+      operationId: mappingsDelete
+      parameters:
+        - $ref: "#/components/parameters/MappingId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /mappings/fields:
+    get:
+      tags: [Mappings]
+      summary: Mapping fields by profile
+      operationId: mappingsFieldsList
+      parameters:
+        - name: hepid
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: profile
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingFieldsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /hepsubs:
+    get:
+      tags: [Hepsub]
+      summary: List HEP subscriptions
+      operationId: hepsubsList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/FilterMappingProfile"
+        - $ref: "#/components/parameters/FilterHepId"
+        - $ref: "#/components/parameters/FilterHepAlias"
+      responses:
+        "200":
+          description: HEP subscriptions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HepsubListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Hepsub]
+      summary: Create HEP subscription (admin)
+      operationId: hepsubsCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HepsubUpsert"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /hepsubs/{hepsubId}:
+    get:
+      tags: [Hepsub]
+      summary: HEP subscription by ID
+      operationId: hepsubsGet
+      parameters:
+        - $ref: "#/components/parameters/HepsubId"
+      responses:
+        "200":
+          description: HEP subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HepsubResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags: [Hepsub]
+      summary: Update HEP subscription (admin)
+      operationId: hepsubsUpdate
+      parameters:
+        - $ref: "#/components/parameters/HepsubId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HepsubUpsert"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Hepsub]
+      summary: Delete HEP subscription (admin)
+      operationId: hepsubsDelete
+      parameters:
+        - $ref: "#/components/parameters/HepsubId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /aliases:
+    get:
+      tags: [Aliases]
+      summary: List aliases
+      operationId: aliasesList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/FilterAlias"
+        - $ref: "#/components/parameters/FilterIp"
+        - $ref: "#/components/parameters/FilterCaptureId"
+      responses:
+        "200":
+          description: Aliases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AliasListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Aliases]
+      summary: Create alias (admin)
+      operationId: aliasesCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AliasUpsert"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /aliases/{aliasId}:
+    put:
+      tags: [Aliases]
+      summary: Update alias (admin)
+      operationId: aliasesUpdate
+      parameters:
+        - $ref: "#/components/parameters/AliasId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AliasUpsert"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Aliases]
+      summary: Delete alias (admin)
+      operationId: aliasesDelete
+      parameters:
+        - $ref: "#/components/parameters/AliasId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /ipaliases:
+    get:
+      tags: [Aliases]
+      summary: List IP aliases
+      operationId: ipaliasesList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - name: "filter[alias]"
+          in: query
+          schema:
+            type: string
+        - name: "filter[ip]"
+          in: query
+          schema:
+            type: string
+        - name: "filter[capture_id]"
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of IP aliases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AliasListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Aliases]
+      summary: Create IP alias (admin)
+      operationId: ipaliasesCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AliasUpsert"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /ipaliases/{aliasId}:
+    put:
+      tags: [Aliases]
+      summary: Update IP alias (admin)
+      operationId: ipaliasesUpdate
+      parameters:
+        - $ref: "#/components/parameters/AliasId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AliasUpsert"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Aliases]
+      summary: Delete IP alias (admin)
+      operationId: ipaliasesDelete
+      parameters:
+        - $ref: "#/components/parameters/AliasId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /advanced:
+    get:
+      tags: [Settings]
+      summary: List global settings
+      operationId: advancedList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - name: "filter[category]"
+          in: query
+          schema:
+            type: string
+        - name: "filter[param]"
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of global settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalSettingListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Settings]
+      summary: Create global setting (admin)
+      operationId: advancedCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GlobalSettingUpsert"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /advanced/{guid}:
+    get:
+      tags: [Settings]
+      summary: Get global setting by GUID
+      operationId: advancedGet
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Global setting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalSettingResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags: [Settings]
+      summary: Update global setting (admin)
+      operationId: advancedUpdate
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GlobalSettingUpsert"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Settings]
+      summary: Delete global setting (admin)
+      operationId: advancedDelete
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /scripts:
+    get:
+      tags: [Settings]
+      summary: List HEP scripts
+      operationId: scriptsList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - name: "filter[profile]"
+          in: query
+          schema:
+            type: string
+        - name: "filter[type]"
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of HEP scripts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HepScriptListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Settings]
+      summary: Create HEP script (admin)
+      operationId: scriptsCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HepScriptUpsert"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /scripts/{scriptId}:
+    get:
+      tags: [Settings]
+      summary: Get HEP script by ID
+      operationId: scriptsGet
+      parameters:
+        - name: scriptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: HEP script
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HepScriptResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags: [Settings]
+      summary: Update HEP script (admin)
+      operationId: scriptsUpdate
+      parameters:
+        - name: scriptId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HepScriptUpsert"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Settings]
+      summary: Delete HEP script (admin)
+      operationId: scriptsDelete
+      parameters:
+        - name: scriptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /openapi.json:
+    get:
+      tags: [System]
+      summary: Get OpenAPI specification
+      operationId: openapiSpec
+      security: []
+      responses:
+        "200":
+          description: OpenAPI 3.0 specification in JSON format
+          content:
+            application/json:
+              schema:
+                type: object
+  /auth-tokens:
+    get:
+      tags: [Tokens]
+      summary: List auth tokens (admin)
+      operationId: authTokensList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/FilterTokenName"
+        - $ref: "#/components/parameters/FilterTokenActive"
+      responses:
+        "200":
+          description: Tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Tokens]
+      summary: Create auth token (admin)
+      operationId: authTokensCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthTokenCreate"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenCreateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /auth-tokens/{tokenId}:
+    get:
+      tags: [Tokens]
+      summary: Get auth token (admin)
+      operationId: authTokensGet
+      parameters:
+        - $ref: "#/components/parameters/AuthTokenId"
+      responses:
+        "200":
+          description: Token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags: [Tokens]
+      summary: Update auth token (admin)
+      operationId: authTokensUpdate
+      parameters:
+        - $ref: "#/components/parameters/AuthTokenId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthTokenUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Tokens]
+      summary: Delete auth token (admin)
+      operationId: authTokensDelete
+      parameters:
+        - $ref: "#/components/parameters/AuthTokenId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /agents/subscriptions:
+    get:
+      tags: [Agents]
+      summary: Agent subscriptions
+      operationId: agentSubscriptionsList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/FilterAgentType"
+        - $ref: "#/components/parameters/FilterAgentNode"
+      responses:
+        "200":
+          description: Subscriptions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSubListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      tags: [Agents]
+      summary: Create agent subscription (Auth-Token)
+      operationId: agentSubscriptionsCreate
+      security:
+        - authTokenHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentSubUpsert"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /agents/subscriptions/{subscriptionId}:
+    get:
+      tags: [Agents]
+      summary: Agent subscription by ID
+      operationId: agentSubscriptionsGet
+      parameters:
+        - $ref: "#/components/parameters/AgentSubId"
+      responses:
+        "200":
+          description: Subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSubResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    put:
+      tags: [Agents]
+      summary: Update agent subscription
+      operationId: agentSubscriptionsUpdate
+      parameters:
+        - $ref: "#/components/parameters/AgentSubId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentSubUpsert"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    delete:
+      tags: [Agents]
+      summary: Delete agent subscription
+      operationId: agentSubscriptionsDelete
+      parameters:
+        - $ref: "#/components/parameters/AgentSubId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /agents/types:
+    get:
+      tags: [Agents]
+      summary: Agent types
+      operationId: agentTypesList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Search"
+      responses:
+        "200":
+          description: Types
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentTypeListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /agents/types/{type}:
+    get:
+      tags: [Agents]
+      summary: Agent subscriptions by type
+      operationId: agentTypesSubscriptionsList
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Subscriptions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSubListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /agents/search:
+    post:
+      tags: [Agents]
+      summary: Search subscriptions
+      operationId: agentSubscriptionsSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentSearchRequest"
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSubListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /db/nodes:
+    get:
+      tags: [System]
+      summary: DB nodes
+      operationId: dbNodesList
+      responses:
+        "200":
+          description: Nodes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /modules:
+    get:
+      tags: [System]
+      summary: Modules status
+      operationId: modulesStatusGet
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModulesStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /statistics/query:
+    post:
+      tags: [Statistics]
+      summary: Statistics query
+      operationId: statisticsQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatisticQuery"
+      responses:
+        "200":
+          description: Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /statistics/databases:
+    get:
+      tags: [Statistics]
+      summary: Statistics databases
+      operationId: statisticsDatabasesList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Databases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticDbResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /statistics/measurements:
+    get:
+      tags: [Statistics]
+      summary: Measurements by DB
+      operationId: statisticsMeasurementsList
+      parameters:
+        - name: db
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Measurements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticMeasurementsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /statistics/metrics:
+    get:
+      tags: [Statistics]
+      summary: Metrics by DB
+      operationId: statisticsMetricsList
+      parameters:
+        - name: db
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticMetricsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /statistics/tags:
+    get:
+      tags: [Statistics]
+      summary: Tags by DB
+      operationId: statisticsTagsList
+      parameters:
+        - name: db
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Tags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatisticTagsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /logs/loki/labels:
+    get:
+      tags: [Logs]
+      summary: Loki labels
+      operationId: lokiLabelsList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Labels
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LokiLabelsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /logs/loki/values:
+    get:
+      tags: [Logs]
+      summary: Loki values
+      operationId: lokiValuesList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LokiValuesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /logs/loki/query:
+    post:
+      tags: [Logs]
+      summary: Loki query
+      operationId: lokiQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LokiQuery"
+      responses:
+        "200":
+          description: Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LokiQueryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /integrations/grafana/status:
+    get:
+      tags: [Integrations]
+      summary: Grafana status
+      operationId: grafanaStatusGet
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrafanaStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /integrations/grafana/folders:
+    get:
+      tags: [Integrations]
+      summary: Grafana folders
+      operationId: grafanaFoldersList
+      parameters:
+        - $ref: "#/components/parameters/PageLimit"
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: Folders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrafanaFoldersResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /integrations/grafana/dashboards/{uid}:
+    get:
+      tags: [Integrations]
+      summary: Grafana dashboard by UID
+      operationId: grafanaDashboardGet
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrafanaDashboardResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+  /stream/hep:
+    get:
+      tags: [Stream]
+      summary: WebSocket HEP stream
+      operationId: hepStreamConnect
+      responses:
+        "101":
+          description: Switching Protocols
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    authTokenHeader:
+      type: apiKey
+      in: header
+      name: Auth-Token
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+    Provider:
+      name: provider
+      in: path
+      required: true
+      schema:
+        type: string
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema:
+        type: string
+    ExportId:
+      name: exportId
+      in: path
+      required: true
+      schema:
+        type: string
+    DashboardId:
+      name: dashboardId
+      in: path
+      required: true
+      schema:
+        type: string
+    MappingId:
+      name: mappingId
+      in: path
+      required: true
+      schema:
+        type: string
+    HepsubId:
+      name: hepsubId
+      in: path
+      required: true
+      schema:
+        type: string
+    AliasId:
+      name: aliasId
+      in: path
+      required: true
+      schema:
+        type: string
+    AuthTokenId:
+      name: tokenId
+      in: path
+      required: true
+      schema:
+        type: string
+    AgentSubId:
+      name: subscriptionId
+      in: path
+      required: true
+      schema:
+        type: string
+    Category:
+      name: category
+      in: path
+      required: true
+      schema:
+        type: string
+    From:
+      name: from
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int64
+    To:
+      name: to
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int64
+    PageLimit:
+      name: page[limit]
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+    PageCursor:
+      name: page[cursor]
+      in: query
+      required: false
+      schema:
+        type: string
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: "Sort, format: field or -field"
+      schema:
+        type: string
+    Search:
+      name: search
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterTransactionId:
+      name: filter[transaction_id]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterSrcIp:
+      name: filter[src_ip]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterDstIp:
+      name: filter[dst_ip]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterProtocol:
+      name: filter[protocol]
+      in: query
+      required: false
+      schema:
+        type: integer
+    FilterMethod:
+      name: filter[method]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterUsername:
+      name: filter[username]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterEmail:
+      name: filter[email]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterUserGroup:
+      name: filter[user_group]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterEnabled:
+      name: filter[enabled]
+      in: query
+      required: false
+      schema:
+        type: boolean
+    FilterAlias:
+      name: filter[alias]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterIp:
+      name: filter[ip]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterCaptureId:
+      name: filter[capture_id]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterMappingProfile:
+      name: filter[profile]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterHepId:
+      name: filter[hepid]
+      in: query
+      required: false
+      schema:
+        type: integer
+    FilterHepAlias:
+      name: filter[hep_alias]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterTokenName:
+      name: filter[name]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterTokenActive:
+      name: filter[active]
+      in: query
+      required: false
+      schema:
+        type: boolean
+    FilterAgentType:
+      name: filter[type]
+      in: query
+      required: false
+      schema:
+        type: string
+    FilterAgentNode:
+      name: filter[node]
+      in: query
+      required: false
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      deprecated: true
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      deprecated: true
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServerError:
+      description: Server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/Error"
+    Error:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          example: https://api.homer/errors/invalid_argument
+        title:
+          type: string
+          example: Invalid argument
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+          example: Field `from` must be <= `to`
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+    FieldError:
+      type: object
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+    Meta:
+      type: object
+      properties:
+        request_id:
+          type: string
+        trace_id:
+          type: string
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        message:
+          type: string
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+        next_cursor:
+          type: string
+        prev_cursor:
+          type: string
+        total:
+          type: integer
+        has_more:
+          type: boolean
+    IdResponse:
+      type: object
+      properties:
+        data:
+          type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: sipcapture
+    LoginResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+              description: JWT token
+            scope:
+              type: string
+              example: b9f6q23a-0bde-41ce-cd36-da3dbc17ea12
+            user:
+              type: object
+              properties:
+                admin:
+                  type: boolean
+        meta:
+          $ref: "#/components/schemas/Meta"
+    OAuth2TokenExchange:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          example: token
+    AuthProvidersResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            internal:
+              type: object
+              properties:
+                enable:
+                  type: boolean
+                name:
+                  type: string
+                position:
+                  type: integer
+                type:
+                  type: string
+            oauth2:
+              type: array
+              maxItems: 1
+              description: At most one OAuth2 provider; coordinator config uses a single oauth2_provider object.
+              items:
+                type: object
+                properties:
+                  enable:
+                    type: boolean
+                  name:
+                    type: string
+                  position:
+                    type: integer
+                  provider_image:
+                    type: string
+                  provider_name:
+                    type: string
+                  type:
+                    type: string
+                  url:
+                    type: string
+                  auto_redirect:
+                    type: boolean
+        meta:
+          $ref: "#/components/schemas/Meta"
+    UserCreate:
+      type: object
+      required: [username, partid, email, firstname, lastname, department, user_group]
+      properties:
+        username:
+          type: string
+        partid:
+          type: integer
+          example: 10
+        email:
+          type: string
+        password:
+          type: string
+        name:
+          type: string
+          description: Display name (stored as users.full_name)
+        enabled:
+          type: boolean
+        firstname:
+          type: string
+        lastname:
+          type: string
+        department:
+          type: string
+        user_group:
+          type: string
+    UserPatch:
+      type: object
+      properties:
+        partid:
+          type: integer
+        email:
+          type: string
+        password:
+          type: string
+        name:
+          type: string
+          description: Display name (users.full_name)
+        enabled:
+          type: boolean
+        firstname:
+          type: string
+        lastname:
+          type: string
+        department:
+          type: string
+        user_group:
+          type: string
+    User:
+      type: object
+      properties:
+        guid:
+          type: string
+          example: e71771a2-1ea0-498f-8d27-391713e10664
+        username:
+          type: string
+        name:
+          type: string
+          description: Display name
+        partid:
+          type: integer
+        email:
+          type: string
+        enabled:
+          type: boolean
+        firstname:
+          type: string
+        lastname:
+          type: string
+        department:
+          type: string
+        user_group:
+          type: string
+    UserResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/User"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    UserListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/User"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    UserProfile:
+      type: object
+      properties:
+        guid:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+        avatar:
+          type: string
+        group:
+          type: string
+        admin:
+          type: boolean
+        external_auth:
+          type: boolean
+        external_profile:
+          type: string
+    UserProfileResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/UserProfile"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    UserSetting:
+      type: object
+      properties:
+        category:
+          type: string
+        data:
+          $ref: "#/components/schemas/DashboardElement"
+        guid:
+          type: string
+        id:
+          type: integer
+        param:
+          type: string
+        partid:
+          type: integer
+        user_name:
+          type: string
+    UserSettingUpsert:
+      type: object
+      required: [param, data]
+      properties:
+        category:
+          type: string
+        param:
+          type: string
+        data:
+          type: object
+    UserSettingListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserSetting"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    SearchObject:
+      type: object
+      properties:
+        filter:
+          type: object
+          properties:
+            proto_type:
+              type: integer
+              description: Protocol type (e.g. 1 for SIP)
+            event_type:
+              type: string
+              description: Transaction/event type
+              enum: [call, registration, rtp, rtcp, log]
+            method:
+              type: string
+            call_id:
+              type: string
+            ruri_user:
+              type: string
+            from_user:
+              type: string
+            to_user:
+              type: string
+            user_agent:
+              type: string
+            src_ip:
+              type: string
+            dst_ip:
+              type: string
+            src_port:
+              type: integer
+            dst_port:
+              type: integer
+            capture_id:
+              type: integer
+            node:
+              type: string
+        param:
+          type: object
+          properties:
+            transaction:
+              type: object
+            limit:
+              type: integer
+              example: 200
+            search:
+              type: object
+              additionalProperties: true
+            orlogic:
+              type: boolean
+            whitelist:
+              type: array
+              items:
+                type: string
+            location:
+              type: object
+              properties:
+                node:
+                  type: array
+                  items:
+                    type: string
+            timezone:
+              type: object
+              properties:
+                value:
+                  type: integer
+                name:
+                  type: string
+        timestamp:
+          type: object
+          properties:
+            from:
+              type: integer
+              format: int64
+              description: Unix epoch milliseconds (UTC).
+            to:
+              type: integer
+              format: int64
+              description: Unix epoch milliseconds (UTC).
+    CallSearchRequest:
+      $ref: "#/components/schemas/SearchObject"
+    TransactionSessionRequest:
+      type: object
+      description: >
+        Use session_id for one Call-ID, or session_ids (non-empty, max 50) for an OR filter across sessions.
+        When session_ids is set it takes precedence over session_id. Supported on messages, qos, logs,
+        callinfo, events, sub, hepsub, and export endpoints; responses include session_id on rows for grouping.
+        For SIP call (proto_type=1, event_type=call), POST /transactions/callinfo returns one summary object per Call-ID
+        (ringing_seconds, call_duration_seconds, codecs, UAC/UAS, setup delays, status, from_party, ruri_party,
+        methods_distribution for the legacy methods chart, etc.).
+      properties:
+        session_id:
+          type: string
+          description: Session identifier to lookup messages/logs/QoS.
+        session_ids:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+          description: Multiple Call-IDs (OR filter; B2B leg matching where applicable).
+        proto_type:
+          type: integer
+          description: HEP protocol type (default 1).
+        event_type:
+          type: string
+          description: Event type (call, registration, default).
+    ProtocolHeader:
+      type: object
+      properties:
+        dst_ip:
+          type: string
+        src_ip:
+          type: string
+        dst_port:
+          type: integer
+        src_port:
+          type: integer
+        protocol:
+          type: integer
+        capture_id:
+          type: integer
+        capture_pass:
+          type: string
+        payload_type:
+          type: integer
+        time_seconds:
+          type: integer
+        time_useconds:
+          type: integer
+        protocol_family:
+          type: integer
+    DataHeader:
+      type: object
+      properties:
+        call_id:
+          type: string
+        method:
+          type: string
+        to_tag:
+          type: string
+        to_user:
+          type: string
+        from_tag:
+          type: string
+        pid_user:
+          type: string
+        auth_user:
+          type: string
+        from_user:
+          type: string
+        ruri_user:
+          type: string
+        user_agent:
+          type: string
+        ruri_domain:
+          type: string
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        sid:
+          type: string
+        protocol_header:
+          $ref: "#/components/schemas/ProtocolHeader"
+        data_header:
+          $ref: "#/components/schemas/DataHeader"
+        raw:
+          type: string
+    CallElement:
+      type: object
+      properties:
+        id:
+          type: number
+        sid:
+          type: string
+        dst_host:
+          type: string
+        src_host:
+          type: string
+        dst_id:
+          type: string
+        src_id:
+          type: string
+        src_ip:
+          type: string
+        dst_ip:
+          type: string
+        src_port:
+          type: number
+        dst_port:
+          type: number
+        alias_src:
+          type: string
+        alias_dst:
+          type: string
+        method:
+          type: string
+        method_text:
+          type: string
+        create_date:
+          type: integer
+          format: int64
+        protocol:
+          type: number
+        msg_color:
+          type: string
+        table:
+          type: string
+        ruri_user:
+          type: string
+        destination:
+          type: integer
+        micro_ts:
+          type: integer
+          format: int64
+        storage_lake:
+          type: string
+        storage_volume:
+          type: string
+    CallListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/CallElement"
+            keys:
+              type: array
+              items:
+                type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    MessageResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/Message"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    MessageListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Message"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    MessageDecoded:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+    MessageDecodedResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/MessageDecoded"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    SearchTransactionRtp:
+      type: object
+      properties:
+        id:
+          type: number
+        sid:
+          type: string
+        dst_ip:
+          type: string
+        src_ip:
+          type: string
+        dst_port:
+          type: number
+        src_port:
+          type: number
+        payload_type:
+          type: integer
+        micro_ts:
+          type: integer
+          format: int64
+    SearchTransactionRtcp:
+      type: object
+      properties:
+        id:
+          type: number
+        sid:
+          type: string
+        dst_ip:
+          type: string
+        src_ip:
+          type: string
+        dst_port:
+          type: number
+        src_port:
+          type: number
+        payload_type:
+          type: integer
+        micro_ts:
+          type: integer
+          format: int64
+    SearchTransactionRtpList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchTransactionRtp"
+    SearchTransactionRtcpList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchTransactionRtcp"
+    SearchTransactionQos:
+      type: object
+      properties:
+        rtcp:
+          $ref: "#/components/schemas/SearchTransactionRtcpList"
+        rtp:
+          $ref: "#/components/schemas/SearchTransactionRtpList"
+    SearchTransactionLog:
+      type: object
+      properties:
+        capture_id:
+          type: string
+        capture_pass:
+          type: string
+        correlation_id:
+          type: string
+        create_date:
+          type: string
+        dbnode:
+          type: string
+        dst_ip:
+          type: string
+        src_ip:
+          type: string
+        dst_port:
+          type: number
+        src_port:
+          type: number
+        id:
+          type: number
+        payload_type:
+          type: integer
+        profile:
+          type: string
+        proto:
+          type: string
+        protocol:
+          type: integer
+        protocol_family:
+          type: integer
+        raw:
+          type: string
+        sid:
+          type: string
+        time_seconds:
+          type: integer
+        time_useconds:
+          type: integer
+        node:
+          type: array
+          items:
+            type: string
+    QosResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/SearchTransactionQos"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    LogListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/SearchTransactionLog"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ExportRequest:
+      type: object
+      required: [type, query]
+      properties:
+        type:
+          type: string
+          enum: [pcap, text]
+        query:
+          type: object
+    ExportResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            export_id:
+              type: string
+            status:
+              type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ExportStatusResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            export_id:
+              type: string
+            status:
+              type: string
+            download_url:
+              type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ImportResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            inserted:
+              type: integer
+            rejected:
+              type: integer
+        meta:
+          $ref: "#/components/schemas/Meta"
+    DashboardElement:
+      type: object
+      properties:
+        cssclass:
+          type: string
+        href:
+          type: string
+        id:
+          type: string
+        owner:
+          type: string
+        name:
+          type: string
+        param:
+          type: string
+        shared:
+          type: boolean
+        type:
+          type: integer
+        weight:
+          type: number
+    DashboardUpsert:
+      $ref: "#/components/schemas/DashboardElement"
+    DashboardResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/DashboardElement"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    DashboardListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/DashboardElement"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    MappingSchema:
+      type: object
+      properties:
+        guid:
+          type: string
+        profile:
+          type: string
+        hepid:
+          type: integer
+        hep_alias:
+          type: string
+        partid:
+          type: integer
+        version:
+          type: integer
+        retention:
+          type: integer
+        partition_step:
+          type: integer
+        create_index:
+          type: object
+        create_table:
+          type: string
+        correlation_mapping:
+          type: object
+        fields_mapping:
+          type: object
+        fields_settings:
+          type: object
+        schema_mapping:
+          type: object
+        schema_settings:
+          type: object
+    MappingUpsert:
+      $ref: "#/components/schemas/MappingSchema"
+    MappingResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/MappingSchema"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    MappingListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/MappingSchema"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    SmartSearchField:
+      type: object
+      properties:
+        category:
+          type: string
+        name:
+          type: string
+        value:
+          type: string
+    MappingFieldsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/SmartSearchField"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    HepsubSchema:
+      type: object
+      properties:
+        guid:
+          type: string
+        profile:
+          type: string
+        hepid:
+          type: integer
+        hep_alias:
+          type: string
+        version:
+          type: integer
+        mapping:
+          type: object
+    HepsubUpsert:
+      $ref: "#/components/schemas/HepsubSchema"
+    HepsubResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/HepsubSchema"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    HepsubListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/HepsubSchema"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AliasStruct:
+      type: object
+      properties:
+        id:
+          type: integer
+        guid:
+          type: string
+        alias:
+          type: string
+        ip:
+          type: string
+        port:
+          type: integer
+        mask:
+          type: integer
+        capture_id:
+          type: string
+        status:
+          type: boolean
+        custom_image:
+          type: string
+          description: Optional image URL shown with this alias in the UI / enriched rows
+        tag1:
+          type: string
+          description: Free-form tag (e.g. device type)
+        tag2:
+          type: string
+          description: Free-form tag (e.g. OS)
+        tag3:
+          type: string
+        tag4:
+          type: string
+    AliasUpsert:
+      $ref: "#/components/schemas/AliasStruct"
+    AliasListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AliasStruct"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AuthTokenItem:
+      type: object
+      properties:
+        guid:
+          type: string
+        creator_guid:
+          type: string
+        name:
+          type: string
+        user_object:
+          type: object
+          properties:
+            username:
+              type: string
+            firstname:
+              type: string
+            lastname:
+              type: string
+            email:
+              type: string
+            user_group:
+              type: string
+            id:
+              type: integer
+            partid:
+              type: integer
+        ip_address:
+          type: string
+        create_date:
+          type: string
+        lastusage_date:
+          type: string
+        expire_date:
+          type: string
+        usage_calls:
+          type: integer
+        limit_calls:
+          type: integer
+        active:
+          type: boolean
+    AuthTokenCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        expire_date:
+          type: string
+          format: date-time
+        limit_calls:
+          type: integer
+        active:
+          type: boolean
+    AuthTokenUpdate:
+      allOf:
+        - $ref: "#/components/schemas/AuthTokenCreate"
+    AuthTokenCreateResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AuthTokenResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/AuthTokenItem"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AuthTokenListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AuthTokenItem"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AgentSub:
+      type: object
+      properties:
+        uuid:
+          type: string
+        gid:
+          type: integer
+        host:
+          type: string
+        port:
+          type: integer
+        protocol:
+          type: string
+        path:
+          type: string
+        node:
+          type: string
+        type:
+          type: string
+        ttl:
+          type: integer
+        create_date:
+          type: string
+        expire_date:
+          type: string
+        active:
+          type: integer
+    AgentSubUpsert:
+      $ref: "#/components/schemas/AgentSub"
+    AgentSubResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/AgentSub"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AgentSubListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AgentSub"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AgentTypeListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    AgentSearchRequest:
+      type: object
+      properties:
+        guid:
+          type: string
+        type:
+          type: string
+    Node:
+      type: object
+      properties:
+        arhive:
+          type: boolean
+        db_archive:
+          type: string
+        db_name:
+          type: string
+        host:
+          type: string
+        name:
+          type: string
+        node:
+          type: string
+        online:
+          type: boolean
+        primary:
+          type: boolean
+        table_prefix:
+          type: string
+        value:
+          type: string
+    NodeListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Node"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ModulesStatusResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            loki:
+              type: object
+              properties:
+                enable:
+                  type: boolean
+                template:
+                  type: string
+                external_url:
+                  type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    StatisticQuery:
+      type: object
+      properties:
+        param:
+          type: object
+          properties:
+            limit:
+              type: integer
+            precision:
+              type: integer
+            query:
+              type: array
+              items:
+                type: object
+                properties:
+                  main:
+                    type: string
+                  database:
+                    type: string
+                  retention:
+                    type: string
+                  rawquery:
+                    type: string
+                  type:
+                    type: array
+                    items:
+                      type: string
+                  tag:
+                    type: array
+                    items:
+                      type: string
+            bfrom:
+              type: integer
+            total:
+              type: boolean
+        timestamp:
+          type: object
+          properties:
+            from:
+              type: integer
+              format: int64
+              description: Unix epoch milliseconds (UTC).
+            to:
+              type: integer
+              format: int64
+              description: Unix epoch milliseconds (UTC).
+    StatisticResponse:
+      type: object
+      properties:
+        data:
+          type: object
+        total:
+          type: integer
+        meta:
+          $ref: "#/components/schemas/Meta"
+    StatisticDbResponse:
+      type: object
+      properties:
+        data:
+          type: object
+        status:
+          type: string
+        total:
+          type: integer
+        meta:
+          $ref: "#/components/schemas/Meta"
+    StatisticMeasurementsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    StatisticMetricsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    StatisticTagsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    LokiLabelsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    LokiValuesResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+    LokiQuery:
+      type: object
+      properties:
+        param:
+          type: object
+          properties:
+            limit:
+              type: integer
+            search:
+              type: string
+            server:
+              type: string
+            timezone:
+              type: object
+        timestamp:
+          type: object
+          properties:
+            from:
+              type: integer
+              format: int64
+              description: Unix epoch milliseconds (UTC).
+            to:
+              type: integer
+              format: int64
+              description: Unix epoch milliseconds (UTC).
+    LokiQueryResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              custom_1:
+                type: string
+              custom_2:
+                type: string
+              id:
+                type: integer
+              micro_ts:
+                type: integer
+                format: int64
+        total:
+          type: integer
+        meta:
+          $ref: "#/components/schemas/Meta"
+    GrafanaStatusResponse:
+      type: object
+      properties:
+        data:
+          type: object
+        meta:
+          $ref: "#/components/schemas/Meta"
+    GrafanaFoldersResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+        meta:
+          $ref: "#/components/schemas/Meta"
+    GrafanaDashboardResponse:
+      type: object
+      properties:
+        data:
+          type: object
+        meta:
+          $ref: "#/components/schemas/Meta"
+    GlobalSettingUpsert:
+      type: object
+      required: [category]
+      properties:
+        guid:
+          type: string
+        partid:
+          type: integer
+        category:
+          type: string
+        param:
+          type: string
+        data:
+          type: object
+    GlobalSetting:
+      type: object
+      properties:
+        id:
+          type: integer
+        guid:
+          type: string
+        partid:
+          type: integer
+        category:
+          type: string
+        param:
+          type: string
+        data:
+          type: object
+    GlobalSettingListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/GlobalSetting"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    GlobalSettingResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/GlobalSetting"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    HepScriptUpsert:
+      type: object
+      properties:
+        guid:
+          type: string
+        profile:
+          type: string
+        hep_alias:
+          type: string
+        type:
+          type: string
+        hepid:
+          type: integer
+        status:
+          type: boolean
+        script:
+          type: string
+    HepScript:
+      type: object
+      properties:
+        id:
+          type: integer
+        guid:
+          type: string
+        profile:
+          type: string
+        hep_alias:
+          type: string
+        type:
+          type: string
+        hepid:
+          type: integer
+        status:
+          type: boolean
+        script:
+          type: string
+    HepScriptListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/HepScript"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    HepScriptResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/HepScript"
+        meta:
+          $ref: "#/components/schemas/Meta"

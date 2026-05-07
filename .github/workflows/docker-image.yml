@@ -1,0 +1,62 @@
+# TEMPORARILY DISABLED (set job `if: true` and uncomment `release:` below to re-enable).
+name: Docker GHCR publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref_name:
+        description: Release Version
+        required: true
+      release:
+        required: false
+        type: boolean
+  # release:
+  #   types: [created]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  docker-ghcr-push:
+    if: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3.3.0
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3.8.0
+    - name: Log in to the Container registry
+      uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5.5.1
+      with:
+        images: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          latest
+          ${{ (github.event_name == 'workflow_dispatch') && github.event.inputs.ref_name || github.ref_name }}
+
+    - name: Build and push
+      uses: docker/build-push-action@v6.13.0
+      with:
+        context: .
+        file: Dockerfile
+        push: ${{ (github.event_name == 'workflow_dispatch') && github.event.inputs.release || github.event_name == 'release' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        platforms: linux/amd64,linux/arm64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

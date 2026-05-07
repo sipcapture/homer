@@ -1,0 +1,83 @@
+{
+  "description": "Default mapping_schema rows inserted by SeedDefaultMappingSchema (settings DuckDB). Authoritative Go: src/coordinator/services/mapping_seed.go",
+  "insert_template": {
+    "partid": 10,
+    "version": 1,
+    "retention": 14,
+    "partition_step": 3600,
+    "create_index": {},
+    "create_table": "CREATE TABLE test(id integer, data text);",
+    "correlation_mapping": [],
+    "mapping_settings": {},
+    "schema_mapping": {},
+    "schema_settings": {}
+  },
+  "rows": [
+    {
+      "guid": "a1111111-1111-4111-8111-111111111101",
+      "profile": "call",
+      "hepid": 1,
+      "hep_alias": "SIP",
+      "fields_mapping_file": "fields_sip_call.json"
+    },
+    {
+      "guid": "a1111111-1111-4111-8111-111111111102",
+      "profile": "default",
+      "hepid": 1,
+      "hep_alias": "SIP",
+      "fields_mapping_file": "fields_sip_default.json"
+    },
+    {
+      "guid": "a1111111-1111-4111-8111-111111111103",
+      "profile": "registration",
+      "hepid": 1,
+      "hep_alias": "SIP",
+      "fields_mapping_file": "fields_sip_registration.json"
+    },
+    {
+      "guid": "a1111111-1111-4111-8111-111111111104",
+      "profile": "default",
+      "hepid": 5,
+      "hep_alias": "RTCP",
+      "fields_mapping_file": "fields_rtcp_5_default.json"
+    },
+    {
+      "guid": "a1111111-1111-4111-8111-111111111105",
+      "profile": "default",
+      "hepid": 53,
+      "hep_alias": "DNS",
+      "fields_mapping_file": "fields_dns_53_default.json"
+    },
+    {
+      "guid": "a1111111-1111-4111-8111-111111111106",
+      "profile": "default",
+      "hepid": 100,
+      "hep_alias": "LOG",
+      "fields_mapping_file": "fields_log_100_default.json"
+    },
+    {
+      "guid": "a1111111-1111-4111-8111-111111111107",
+      "profile": "default",
+      "hepid": 200,
+      "hep_alias": "OTLP_TRACES",
+      "fields_mapping_file": "fields_otlp_traces.json"
+    },
+    {
+      "guid": "a1111111-1111-4111-8111-111111111108",
+      "profile": "default",
+      "hepid": 201,
+      "hep_alias": "OTLP_METRICS",
+      "fields_mapping_file": "fields_otlp_metrics.json"
+    },
+    {
+      "guid": "a1111111-1111-4111-8111-111111111109",
+      "profile": "default",
+      "hepid": 202,
+      "hep_alias": "OTLP_LOGS",
+      "fields_mapping_file": "fields_otlp_logs.json"
+    }
+  ],
+  "not_seeded_here": [
+    "Line Protocol (virtual hepid 300) rows are created/updated at runtime by lp_mapping_sync when lp_* tables appear — see src/coordinator/services/lp_mapping_sync.go"
+  ]
+}

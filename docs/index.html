@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Homer Next-Gen API (OpenAPI)</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"
+    />
+    <style>
+      body {
+        margin: 0;
+        background: #f7f7f7;
+      }
+      .topbar {
+        padding: 12px 16px;
+        background: #1f2937;
+        color: #f9fafb;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 14px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .topbar input[type="file"] {
+        color: #f9fafb;
+      }
+      .hint {
+        opacity: 0.9;
+      }
+      .examples {
+        padding: 8px 16px 12px;
+        background: #111827;
+        color: #e5e7eb;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+        border-bottom: 1px solid #374151;
+        white-space: pre-wrap;
+      }
+      .examples strong {
+        color: #93c5fd;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <strong>Homer Next-Gen API</strong>
+      <span class="hint" id="status">Loading ./openapi.yaml…</span>
+      <a class="hint" href="./MCP_UI_GUIDE.md" style="color:#93c5fd;">MCP UI Guide</a>
+      <label class="hint">
+        Load file:
+        <input id="fileInput" type="file" accept=".yaml,.yml,.json" />
+      </label>
+      <span class="hint">If opened via file://, use a local server.</span>
+    </div>
+    <div class="examples">
+      <strong>Examples (v4)</strong>
+      POST /api/v4/transactions/messages
+      {
+        "session_id": "kgdq3n@127.0.0.1_b2b-1",
+        "proto_type": 1,
+        "event_type": "call"
+      }
+
+      POST /api/v4/transactions/qos
+      { "session_id": "kgdq3n@127.0.0.1_b2b-1" }
+    </div>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/js-yaml@4/dist/js-yaml.min.js"></script>
+    <script>
+      const statusEl = document.getElementById("status");
+      const fileInput = document.getElementById("fileInput");
+      const defaultUrl = new URL("openapi.yaml", window.location.href).toString();
+
+      const ui = SwaggerUIBundle({
+        url: defaultUrl,
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        layout: "BaseLayout",
+        presets: [SwaggerUIBundle.presets.apis],
+      });
+
+      function loadSpecText(text) {
+        const spec = jsyaml.load(text);
+        ui.specActions.updateSpec(JSON.stringify(spec));
+        ui.specActions.updateUrl("");
+        statusEl.textContent = "Specification loaded";
+      }
+
+      async function checkDefault() {
+        try {
+          const res = await fetch(defaultUrl, { cache: "no-store" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          statusEl.textContent = "Loading openapi.yaml…";
+        } catch (err) {
+          statusEl.textContent =
+            "Failed to load openapi.yaml. Please choose the file manually.";
+        }
+      }
+
+      fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const text = await file.text();
+        loadSpecText(text);
+      });
+
+      checkDefault();
+    </script>
+  </body>
+</html>

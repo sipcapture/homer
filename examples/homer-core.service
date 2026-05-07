@@ -1,0 +1,19 @@
+
+# cp homer-core.service /etc/systemd/system/
+# systemctl daemon-reload
+# systemctl start homer-core
+# systemctl enable homer-core
+
+[Unit]
+Description=HEPAgent
+After=network.target
+
+[Service]
+Environment="HOME=/usr/local/homer-core"
+ExecStart=/usr/local/homer-core/bin/homer -config-path /usr/local/homer-core/etc/homer.json
+Restart=always
+RestartSec=3s
+Type=simple
+
+[Install]
+WantedBy=multi-user.target

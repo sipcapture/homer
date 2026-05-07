@@ -1,0 +1,61 @@
+Examples — copy-paste is the sincerest form of flattery
+========================================================
+
+This directory is not a second product: it is **gravity wells** for good
+defaults. Each file is a starting point you are expected to fork, trim,
+and blame in your own repo when something breaks at 03:00.
+
+What lives here
+---------------
+
+**JSON layouts** (`homer-*.json`) — topology sketches: coordinator,
+writer, node, edge, modular. Treat them as
+**diagrams that happen to parse**: read the keys before you paste them
+into production; names lie, comments in your runbook should not.
+
+**`homer-coordinator-oauth2-fake-dev.json`** — merge under `coordinator`
+for a **dev-only** OAuth button: `oauth2_provider.url` points straight at
+`/api/v4/auth/oauth2/{name}/callback?username=…` so no real IdP is needed
+(homer-core callback does not validate an authorization `code`). Replace
+`127.0.0.1:8080` with your coordinator base URL and keep `name` in the path
+in sync with `oauth2_provider.name`. **Never use this pattern in production.**
+
+**`homer-coordinator-ldap-fake-dev.json`** — merge under `coordinator` for
+**local LDAP dev**: `host`/`port` match a throwaway directory on your machine
+(e.g. `docker run --rm -p 389:389 -e LDAP_ORGANISATION=Example -e LDAP_DOMAIN=example.org -e LDAP_ADMIN_PASSWORD=admin osixia/openldap:1.5.0`).
+Admin DN/password match that image (`cn=admin,dc=example,dc=org` / `admin`).
+`admin_group` and `user_group` are empty so a successful **user bind** is
+enough (no group entries required). Add users under `base` with `uid=` matching
+`user_filter`. **Do not ship default passwords or this layout to production.**
+
+**Service glue** (`homer-core.service`, `homer-core.init`) — systemd and
+SysV-style starters. Paths inside are opinions; your package layout is
+law.
+
+**`mappings/`** — JSON **field lists** shipped into `mapping_schema` (SIP /
+RTCP / DNS / LOG / OTLP defaults). See `mappings/README.md` and
+`mappings/default_seed_rows.json`.
+
+**`lua/correlation/`** — default SIP **correlation** Lua (same text as seeded
+into `correlation_scripts`; see `lua/README.md`).
+
+**`otlp_synthetic/`** — a small Go program that fabricates a **dense**
+OTLP export (traces, metrics, logs) over HTTP. Use it when you want to
+prove the receiver, storage, and UI agree before you point a real
+collector at the box. See `otlp_synthetic/README.md`.
+
+**`scripts-loki-labels/`** — Lua snippets for label shaping where
+“smart” defaults beat “clever” regexes.
+
+How to use this folder
+----------------------
+
+1. Pick the JSON closest to how you deploy (single writer vs split vs
+   edge).
+2. Diff it against your current config; merge deliberately, not wholesale.
+3. For OTLP or LP ingest smoke tests, run the synthetic tools **before**
+   you load customer traffic.
+
+If a file here feels outdated, that is a bug: open a PR or an issue
+with what you run in production — examples only stay honest when they
+are exercised.
