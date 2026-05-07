@@ -218,7 +218,6 @@ See the `examples/` directory:
 - [Storage Architecture](docs/STORAGE_ARCHITECTURE.md) - DuckLake storage
 - [Storage Policies](docs/STORAGE_POLICIES.md) - Tiered storage (hot/cold)
 - [Compaction Setup](docs/COMPACTION_SETUP.md) - File compaction
-- [Migrating from Homer 7](docs/MIGRATION_HOMER7.md) - `homer-core migrate` for settings + HEP data from a homer-app PostgreSQL deployment
 
 ## License
 
