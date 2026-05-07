@@ -4,6 +4,8 @@
 
 `homer` is the *all-in-one* HEP capture and API server monolith powering Homer 11.x data lake
 
+> 100% Opensource Telecom Observability since 2011
+
 <img width="600"  alt="homer11" src="https://github.com/user-attachments/assets/1ee359d4-f2e1-41d3-9965-22a244d06e1e" />
 
 ## Features
