@@ -8,15 +8,26 @@
       "multicore": true
     },
     "tcp": {
-      "enable": false
+      "enable": true,
+      "host": "0.0.0.0",
+      "port": 9060,
+      "multicore": true
     },
     "tls": {
-      "enable": false
+      "enable": false,
+      "host": "0.0.0.0",
+      "port": 9061,
+      "cert": "/etc/homer/certs/server.crt",
+      "key": "/etc/homer/certs/server.key",
+      "min_tls_version": "TLS1.2"
     },
     "http": {
       "enable": true,
       "host": "0.0.0.0",
       "port": 9080,
+      "read_timeout": 30,
+      "write_timeout": 30,
+      "max_request_body_size": 67108864,
       "websocket_enable": false
     },
     "https": {
@@ -28,41 +39,12 @@
       "protobuf_enable": true,
       "deduplicate": false
     },
-    "hep_stream": {
-      "enable": true,
-      "buffer_size": 10000,
-      "max_subscribers": 32,
-      "per_sub_queue_len": 256,
-      "rate_per_sub_pps": 500
-    },
-    "otlp": {
-      "enable": false,
-      "max_recv_msg_bytes": 4194304,
-      "grpc": {
-        "enable": true,
-        "listen": ":4317"
-      },
-      "http": {
-        "enable": true,
-        "listen": ":4318",
-        "read_timeout_sec": 30,
-        "write_timeout_sec": 30
-      },
-      "sinks": {
-        "store_traces": true,
-        "store_metrics": true,
-        "store_logs": true
-      }
-    },
-    "line_protocol": {
-      "enable": false,
-      "listen": ":8086",
-      "max_body_bytes": 8388608,
-      "default_precision": "ns",
-      "default_db": "",
-      "table_prefix": "lp_",
-      "read_timeout_sec": 30,
-      "write_timeout_sec": 30
+    "sip": {
+      "censored_methods": [],
+      "discard_methods": [],
+      "aleg_ids": ["X-CID", "X-Session-ID"],
+      "custom_headers": [],
+      "force_aleg_id": false
     }
   },
   "storage": {
@@ -73,7 +55,18 @@
       "data_path": "/data/homer/parquet",
       "lake_name": "homer_lake",
       "batch_size": 10000,
-      "flush_interval_sec": 30
+      "flush_interval_sec": 30,
+      "search_buffer": true,
+      "compaction": {
+        "enable": true,
+        "check_interval_sec": 1800,
+        "retention_days": 30,
+        "snapshot_expire_interval_sec": 3600,
+        "min_age_sec": 3600,
+        "min_file_size_bytes": 0,
+        "max_file_size_bytes": 134217728,
+        "max_compacted_files": 100
+      }
     }
   },
   "node": {
@@ -81,6 +74,7 @@
     "flight_server": {
       "host": "0.0.0.0",
       "port": 50051,
+      "auth_token": "your-secret-token-here",
       "max_message_size": 16777216
     },
     "flightsql_server": {
@@ -91,10 +85,16 @@
       "catalog_refresh_interval_sec": 30
     },
     "ducklake": {
-      "catalog_type": "sqlite",
-      "catalog_path": "/data/homer/homer_catalog.sqlite",
-      "data_path": "/data/homer/parquet",
-      "lake_name": "homer_lake"
+      "lake_name": "homer_lake",
+      "volumes": [
+        {
+          "name": "default",
+          "type": "local",
+          "catalog_type": "sqlite",
+          "catalog_path": "/data/homer/homer_catalog.sqlite",
+          "path": "/data/homer/parquet"
+        }
+      ]
     }
   },
   "coordinator": {
@@ -104,14 +104,18 @@
       "host": "0.0.0.0",
       "port": 8080,
       "read_timeout": 30,
-      "write_timeout": 30
+      "write_timeout": 30,
+      "static_path": "/usr/local/homer-core/dist"
     },
     "nodes": [
       {
         "name": "local",
         "host": "127.0.0.1",
         "port": 50051,
-        "flightsql_port": 0
+        "flightsql_port": 0,
+        "use_tls": false,
+        "token": "your-secret-token-here",
+        "priority": 1
       }
     ],
     "flightsql_server": {
@@ -121,19 +125,14 @@
       "auth_token": "",
       "catalog_refresh_interval_sec": 30
     },
+    "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
     "jwt": {
-      "secret": "change-me-in-production",
+      "secret": "change-this-to-a-secure-random-string-in-production",
       "expire_hours": 24
     },
     "auth": {
       "admin_user": "admin",
-      "admin_password_hash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
-    },
-    "hep_stream": {
-      "enable": true,
-      "allow_payload": false,
-      "fan_out_timeout_ms": 2000,
-      "history_limit": 200
+      "admin_password_hash": "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
     }
   },
   "log": {
@@ -158,7 +157,7 @@
     }
   },
   "prometheus": {
-    "enable": false,
+    "enable": true,
     "host": "0.0.0.0",
     "port": 9090,
     "path": "/metrics"
