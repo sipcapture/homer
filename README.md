@@ -2,7 +2,7 @@
 
 # homer eleven
 
-`homer` is the *all-in-one* HEP capture and API server monolith powering Homer 11.x
+`homer` is the *all-in-one* HEP capture and API server monolith powering Homer 11.x data lake
 
 <img width="600"  alt="homer11" src="https://github.com/user-attachments/assets/1ee359d4-f2e1-41d3-9965-22a244d06e1e" />
 
@@ -10,9 +10,10 @@
 
 - All-in-One Application *(Writer, Reader, Coordinator, Compactor, API)*
 - Modern Codebase in golang for X64/ARM64 on Linux/MacOS
-- Powered by DuckDB 1.5/DuckLake 1.0 and Apache Arrow IPC/Parquet
-- End-to-End Columnar OTLP Design w/ on-demand execution
-- Linear Scaling to query over the same shared Object Storage pool
+- Powered by DuckDB 1.5 and Apache Arrow/IPC/Parquet
+- Datalake design based on DuckLake Catalog and Local/Object Storage
+- End-to-End Columnar OTLP Design w/ on-demand query execution
+- Linear Scaling to query over shared Object Storage catalog/pool
 - Flexible Schema support for growing problems and protocols
 - Backwards compatible with all HEPv3 Agents
 - Easy to maintain, operate and scale *(down to zero!)*
