@@ -40,7 +40,8 @@ homer_catalog.duckdb
 # Build artifacts and local binaries
 bin/
 nfpm
-homer.json
+# Only ignore wizard/local output at repo root (tracked example lives under examples/).
+/homer.json
 
 # Benchmark run data
 bechmarks/runs/

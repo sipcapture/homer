@@ -8,7 +8,7 @@ and blame in your own repo when something breaks at 03:00.
 What lives here
 ---------------
 
-**JSON layouts** (`homer-*.json`) — topology sketches: coordinator,
+**JSON layouts** (`homer.json`, `homer-*.json`) — topology sketches: coordinator,
 writer, node, edge, modular. Treat them as
 **diagrams that happen to parse**: read the keys before you paste them
 into production; names lie, comments in your runbook should not.
