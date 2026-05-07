@@ -69,8 +69,8 @@
     "enable": true,
     "ducklake": {
       "catalog_type": "sqlite",
-      "catalog_path": "/data/homer_catalog.sqlite",
-      "data_path": "/data/homer_parquet",
+      "catalog_path": "/data/homer/homer_catalog.sqlite",
+      "data_path": "/data/homer/parquet",
       "lake_name": "homer_lake",
       "batch_size": 10000,
       "flush_interval_sec": 30
@@ -92,8 +92,8 @@
     },
     "ducklake": {
       "catalog_type": "sqlite",
-      "catalog_path": "/data/homer_catalog.sqlite",
-      "data_path": "/data/homer_parquet",
+      "catalog_path": "/data/homer/homer_catalog.sqlite",
+      "data_path": "/data/homer/parquet",
       "lake_name": "homer_lake"
     }
   },
