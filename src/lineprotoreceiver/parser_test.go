@@ -8,6 +8,7 @@ package lineprotoreceiver
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -189,8 +190,9 @@ func TestSanitizeIdent(t *testing.T) {
 		"":              "_",
 		"with space":    "with_space",
 		"http.req/2xx":  "http_req_2xx",
-		"мой_измеритель": "______________",
 	}
+	// non-ASCII letters (e.g. €) become underscores
+	cases[strings.Repeat("\u20ac", 14)] = "______________"
 	for in, want := range cases {
 		if got := SanitizeIdent(in); got != want {
 			t.Errorf("SanitizeIdent(%q) = %q, want %q", in, got, want)

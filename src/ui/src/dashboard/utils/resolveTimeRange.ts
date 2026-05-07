@@ -147,7 +147,7 @@ function resolveCalendarPreset(
     return { from, to: now }
   }
 
-  // yesterday — полные сутки предыдущего календарного дня в зоне
+  // yesterday: full previous calendar day in the active timezone
   if (tz === 'local') {
     const d = new Date(now)
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, 0, 0, 0, 0)
