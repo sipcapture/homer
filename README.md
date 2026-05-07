@@ -20,14 +20,14 @@ Homer Core uses a modular architecture with four main components:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Homer Core                                         │
+│                           Homer Core                                        │
 │                                                                             │
-│  ┌─────────────┐   ┌─────────────┐   ┌──────────┐   ┌─────────────────┐   │
-│  │   Ingest    │   │   Storage   │   │   Node    │   │   Coordinator   │   │
-│  │  (HEP recv) │──▶│  (DuckLake) │──▶│ gRPC/HTTP │──▶│    (REST API)   │   │
-│  └─────────────┘   └─────────────┘   └──────────┘   └─────────────────┘   │
-│   UDP/TCP/HTTP      Parquet+S3     Airport :50051     HTTP :8080          │
-│                                    FlightSQL :50055  (opt. proxy :32010)  │
+│  ┌─────────────┐   ┌─────────────┐   ┌──────────┐   ┌─────────────────┐     │
+│  │   Ingest    │   │   Storage   │   │   Node   │   │   Coordinator   │     │
+│  │  (HEP recv) │──▶│  (DuckLake) │──▶│ gRPC/HTTP│──▶│    (REST API)   │     │
+│  └─────────────┘   └─────────────┘   └──────────┘   └─────────────────┘     │
+│   UDP/TCP/HTTP      Parquet+S3     Airport :50051     HTTP :8080            │
+│                                    FlightSQL :50055  (opt. proxy :32010)    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
