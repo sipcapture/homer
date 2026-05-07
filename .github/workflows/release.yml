@@ -1,4 +1,3 @@
-# ARM64 packages temporarily disabled — add arm64 back to matrix.goarch to re-enable.
 name: Build-n-Release
 
 on:
@@ -24,7 +23,7 @@ jobs:
     strategy:
       matrix:
         goos: [linux]
-        goarch: [amd64]
+        goarch: [amd64, arm64]
     steps:
     - uses: actions/checkout@v4
       with:
