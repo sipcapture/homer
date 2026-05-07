@@ -69,6 +69,13 @@ const MINI_CELL_MAX_PX = 18
 const BOARD_SNAPSHOT_INTERVAL_MS = 250
 /** Minimum time between score updates so a soft-drop doesn't flood the relay. */
 const SCORE_UPDATE_INTERVAL_MS = 250
+/** While we're matched but the server hasn't broadcast `start` yet, the
+ *  client re-sends `ready` at this cadence. The server treats duplicate
+ *  ready frames as no-ops (`p.ready = true` is idempotent), so the cost
+ *  is one tiny WS frame every couple of seconds in exchange for healing
+ *  any lost-frame / late-pairing race that would otherwise leave both
+ *  players stuck on "Ready · waiting" forever. */
+const READY_RESEND_INTERVAL_MS = 2000
 
 type ConnState =
   | 'idle'         // not connected; lobby controls visible
@@ -661,11 +668,27 @@ export default function NetrisPanel() {
   )
 
   const sendReady = useCallback(() => {
-    if (selfReady) return
     sendIfOpen({ type: 'ready' })
     setSelfReady(true)
     showBanner('Ready — waiting for opponent…')
-  }, [selfReady, sendIfOpen, showBanner])
+  }, [sendIfOpen, showBanner])
+
+  // Auto-resend `ready` while we're matched and waiting for the
+  // server to broadcast `start`. The very first `ready` occasionally
+  // gets lost (network blip, mid-flight reconnect, late pairing) and
+  // historically the workaround was for the human to keep clicking
+  // the button. Doing it on a small interval makes the matchmaking
+  // self-healing — once `start` arrives the conn flips to 'playing'
+  // and the effect's cleanup tears the interval down. Reset paths
+  // (opponent_left → waiting, leaveSession, beginGame, …) clear
+  // selfReady, which also stops the loop.
+  useEffect(() => {
+    if (conn !== 'matched' || !selfReady) return
+    const id = window.setInterval(() => {
+      sendIfOpen({ type: 'ready' })
+    }, READY_RESEND_INTERVAL_MS)
+    return () => window.clearInterval(id)
+  }, [conn, selfReady, sendIfOpen])
 
   const leaveSession = useCallback(() => {
     cancelAnimationFrame(rafRef.current)
@@ -865,10 +888,9 @@ export default function NetrisPanel() {
                 size="sm"
                 className="h-8 px-3 text-xs"
                 onClick={sendReady}
-                disabled={selfReady}
                 title={
                   selfReady
-                    ? 'Waiting for opponent to ready up'
+                    ? 'Still waiting for opponent — click again to re-send ready'
                     : 'Tell the server you are ready to start'
                 }
               >
