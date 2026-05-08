@@ -52,6 +52,9 @@ Homer uses a modular architecture with four main components:
 
 ## Quick Start
 
+### Install
+Download a [release](https://github.com/sipcapture/homer/releases) and install the `homer` package on your OS/arch
+
 ### All-in-One Deployment
 
 ```json
