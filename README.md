@@ -79,6 +79,9 @@ Homer uses a modular architecture with four main components:
 }
 ```
 
+> For more storage options consult the available [STORAGE POLICIES](https://github.com/sipcapture/homer/blob/homer11/docs/STORAGE_POLICIES.md)
+
+
 ### Build & Run
 
 ```bash
