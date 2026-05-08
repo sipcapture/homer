@@ -20,17 +20,7 @@ env:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            platform: linux/amd64
-            arch: amd64
-          - runner: ubuntu-24.04-arm
-            platform: linux/arm64
-            arch: arm64
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -39,6 +29,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v3
 
@@ -53,46 +45,16 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest-${{ matrix.arch }}
-            type=raw,value=${{ env.VERSION }}-${{ matrix.arch }}
+            type=raw,value=latest
+            type=raw,value=${{ env.VERSION }}
 
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64
           push: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release) || github.event_name == 'release' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  merge:
-    needs: build
-    runs-on: ubuntu-latest
-    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release) || github.event_name == 'release' }}
-    permissions:
-      contents: read
-      packages: write
-    env:
-      VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref_name || github.ref_name }}
-
-    steps:
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Publish multi-arch manifests
-        run: |
-          IMG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          VER="${{ env.VERSION }}"
-          docker buildx imagetools create \
-            --tag "${IMG}:latest" \
-            "${IMG}:latest-amd64" "${IMG}:latest-arm64"
-          docker buildx imagetools create \
-            --tag "${IMG}:${VER}" \
-            "${IMG}:${VER}-amd64" "${IMG}:${VER}-arm64"
