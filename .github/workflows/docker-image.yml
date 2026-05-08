@@ -1,62 +1,98 @@
-# TEMPORARILY DISABLED (set job `if: true` and uncomment `release:` below to re-enable).
 name: Docker GHCR publish
 
 on:
   workflow_dispatch:
     inputs:
       ref_name:
-        description: Release Version
+        description: Release version tag (e.g. v1.2.3)
         required: true
       release:
+        description: Push images to GHCR
         required: false
         type: boolean
-  # release:
-  #   types: [created]
+        default: false
+  release:
+    types: [created]
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  docker-ghcr-push:
-    if: false
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
-      attestations: write
-      id-token: write
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref_name || github.ref_name }}
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3.3.0
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3.8.0
-    - name: Log in to the Container registry
-      uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Docker meta
-      id: meta
-      uses: docker/metadata-action@v5.5.1
-      with:
-        images: |
-          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          latest
-          ${{ (github.event_name == 'workflow_dispatch') && github.event.inputs.ref_name || github.ref_name }}
+      - uses: actions/checkout@v4
 
-    - name: Build and push
-      uses: docker/build-push-action@v6.13.0
-      with:
-        context: .
-        file: Dockerfile
-        push: ${{ (github.event_name == 'workflow_dispatch') && github.event.inputs.release || github.event_name == 'release' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        platforms: linux/amd64,linux/arm64
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest-${{ matrix.arch }}
+            type=raw,value=${{ env.VERSION }}-${{ matrix.arch }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release) || github.event_name == 'release' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release) || github.event_name == 'release' }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref_name || github.ref_name }}
+
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Publish multi-arch manifests
+        run: |
+          IMG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          VER="${{ env.VERSION }}"
+          docker buildx imagetools create \
+            --tag "${IMG}:latest" \
+            "${IMG}:latest-amd64" "${IMG}:latest-arm64"
+          docker buildx imagetools create \
+            --tag "${IMG}:${VER}" \
+            "${IMG}:${VER}-amd64" "${IMG}:${VER}-arm64"
