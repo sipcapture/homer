@@ -6,7 +6,7 @@ require (
 	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/VictoriaMetrics/fastcache v1.13.2
 	github.com/apache/arrow-go/v18 v18.5.1
-	github.com/buger/jsonparser v1.1.1
+	github.com/buger/jsonparser v1.1.2
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/charmbracelet/bubbles v0.21.1
 	github.com/charmbracelet/bubbletea v1.3.10
