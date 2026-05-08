@@ -59,6 +59,7 @@ Homer uses a modular architecture with four main components:
   "ingest": {
     "enable": true,
     "udp": { "enable": true, "port": 9060 },
+    "tcp": { "enable": true, "port": 9061 },
     "http": { "enable": true, "port": 9080 }
   },
   "storage": {
