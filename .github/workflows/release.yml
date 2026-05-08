@@ -120,7 +120,7 @@ jobs:
 
     - name: Apply glibc polyfill
       if: matrix.goarch == 'amd64'
-      uses: lmangani/polyfill-glibc-action@v1.1.5
+      uses: lmangani/polyfill-glibc-action@1.1.5
       with:
         glibc: '2.34'
         target: ${{ github.workspace }}/homer-core_${{ matrix.goarch }}
