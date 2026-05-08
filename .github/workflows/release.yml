@@ -123,7 +123,11 @@ jobs:
       uses: lmangani/polyfill-glibc-action@1.1.5
       with:
         glibc: '2.34'
-        target: ${{ github.workspace }}/homer-core_${{ matrix.goarch }}
+        target: ${{ github.workspace }}/homer
+
+    - name: Sync homer-core release binary after polyfill
+      if: matrix.goarch == 'amd64'
+      run: cp homer homer-core_${{ matrix.goarch }}
 
     - name: get NFPM
       if:  github.event_name == 'release' || ${{ inputs.release }}
