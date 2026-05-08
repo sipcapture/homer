@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/sipcapture/homer-core/src/decoder"
+	"github.com/sipcapture/homer-core/src/pcapwriter"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 )
 
@@ -29,7 +30,7 @@ func minimalInvite() string {
 }
 
 func TestPcapSyntheticInvitePipeline(t *testing.T) {
-	w, err := NewPCAPWriter()
+	w, err := pcapwriter.NewPCAPWriter()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func TestPcapSyntheticInvitePipeline(t *testing.T) {
 }
 
 func TestPcapForceInviteIntoRegistrationTable(t *testing.T) {
-	w, err := NewPCAPWriter()
+	w, err := pcapwriter.NewPCAPWriter()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func TestPcapForceInviteIntoRegistrationTable(t *testing.T) {
 }
 
 func TestPcapSyntheticRegisterRouting(t *testing.T) {
-	w, err := NewPCAPWriter()
+	w, err := pcapwriter.NewPCAPWriter()
 	if err != nil {
 		t.Fatal(err)
 	}

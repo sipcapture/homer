@@ -24,6 +24,7 @@ const (
 	FormatJSON     OutputFormat = "json"
 	FormatChart    OutputFormat = "chart"
 	FormatCallflow OutputFormat = "callflow"
+	FormatPcap     OutputFormat = "pcap"
 )
 
 // ParseFormat converts a user-supplied string to an OutputFormat.
@@ -39,6 +40,8 @@ func ParseFormat(s string) OutputFormat {
 		return FormatChart
 	case "callflow", "flow", "ladder":
 		return FormatCallflow
+	case "pcap":
+		return FormatPcap
 	default:
 		return FormatTable
 	}
@@ -68,6 +71,8 @@ func RenderResults(items []map[string]interface{}, keys []string, format OutputF
 		renderChart(items)
 	case FormatCallflow:
 		renderCallflow(items)
+	case FormatPcap:
+		fmt.Fprintln(os.Stderr, "pcap output requires --format pcap --output path.pcap in non-interactive homer search.")
 	default:
 		renderTable(items, keys)
 	}
