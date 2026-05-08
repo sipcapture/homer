@@ -159,4 +159,4 @@ Each table has the following columns:
 
 - DuckDB v1.1.0+ with Airport Extension
 - Go 1.25+
-- github.com/hugr-lab/airport-go v0.1.3+
+- github.com/hugr-lab/airport-go v0.2.1+
