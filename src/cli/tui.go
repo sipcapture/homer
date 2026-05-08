@@ -199,7 +199,7 @@ func newModel(client *Client, f SearchFlags) model {
 		inputs[fieldLimit].SetValue("50")
 	}
 
-	inputs[fieldFormat].Placeholder = "table (table, vertical, csv, json, chart, callflow)"
+	inputs[fieldFormat].Placeholder = "table (table, vertical, csv, json, chart, callflow; pcap is CLI-only)"
 	inputs[fieldFormat].Prompt = "Format:     "
 	if f.Format != "" {
 		inputs[fieldFormat].SetValue(f.Format)
@@ -304,6 +304,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case FormatChart:
 					m.inputs[fieldFormat].SetValue("callflow")
 				case FormatCallflow:
+					m.inputs[fieldFormat].SetValue("table")
+				case FormatPcap:
 					m.inputs[fieldFormat].SetValue("table")
 				}
 				m.resultText = m.renderResultsToString()
@@ -465,6 +467,8 @@ func (m model) renderResultsToString() string {
 		sb.WriteString(renderChartToString(items))
 	case FormatCallflow:
 		sb.WriteString(buildCallflowString(items))
+	case FormatPcap:
+		sb.WriteString("Format \"pcap\" is only for one-shot CLI: homer search ... --format pcap --output trace.pcap\n")
 	}
 
 	sb.WriteString(fmt.Sprintf("\n%d rows in set", len(items)))

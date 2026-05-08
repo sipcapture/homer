@@ -10,6 +10,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 	"github.com/ijt/go-anytime/v2"
 	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
+	"github.com/sipcapture/homer-core/src/pcapwriter"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -1082,12 +1084,12 @@ func (h *SearchHandler) V4TransactionExportText(c echo.Context) error {
 func (h *SearchHandler) writeTransactionExportText(c echo.Context, rows []map[string]interface{}, filename string) error {
 	var buf strings.Builder
 	for _, row := range rows {
-		ts := rowTime(row, "timestamp")
-		srcIP := rowStr(row, "src_ip")
-		dstIP := rowStr(row, "dst_ip")
-		srcPort := rowInt(row, "src_port")
-		dstPort := rowInt(row, "dst_port")
-		payload := rowStr(row, "payload")
+		ts := pcapwriter.RowTime(row, "timestamp")
+		srcIP := pcapwriter.RowStr(row, "src_ip")
+		dstIP := pcapwriter.RowStr(row, "dst_ip")
+		srcPort := pcapwriter.RowInt(row, "src_port")
+		dstPort := pcapwriter.RowInt(row, "dst_port")
+		payload := pcapwriter.RowStr(row, "payload")
 		if payload == "" {
 			continue
 		}
@@ -1112,32 +1114,16 @@ func (h *SearchHandler) V4TransactionExportPcap(c echo.Context) error {
 }
 
 func (h *SearchHandler) writeTransactionExportPcap(c echo.Context, rows []map[string]interface{}, filename string) error {
-	pw, werr := NewPCAPWriter()
-	if werr != nil {
-		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to create PCAP writer")
-	}
-
-	for _, row := range rows {
-		payload := rowStr(row, "payload")
-		if payload == "" {
-			continue
+	raw, err := pcapwriter.SIPSearchRowsToPCAP(rows)
+	if err != nil {
+		if errors.Is(err, pcapwriter.ErrNoSIPPacketsInRows) {
+			return writeError(c, http.StatusBadRequest, "Bad Request", "No exportable SIP payload in result set")
 		}
-		ts := rowTime(row, "timestamp")
-		srcIP := rowStr(row, "src_ip")
-		dstIP := rowStr(row, "dst_ip")
-		srcPort := uint16(rowInt(row, "src_port"))
-		dstPort := uint16(rowInt(row, "dst_port"))
-		if srcPort == 0 {
-			srcPort = 5060
-		}
-		if dstPort == 0 {
-			dstPort = 5060
-		}
-		_ = pw.WritePacket(ts, srcIP, dstIP, srcPort, dstPort, []byte(payload))
+		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to build PCAP")
 	}
 
 	c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-	return c.Blob(http.StatusOK, "application/vnd.tcpdump.pcap", pw.Bytes())
+	return c.Blob(http.StatusOK, "application/vnd.tcpdump.pcap", raw)
 }
 
 // buildTransactionExportSQL builds the full SELECT for SIP export rows and returns session ids for naming.
