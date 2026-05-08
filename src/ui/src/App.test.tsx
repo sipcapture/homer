@@ -1,6 +1,18 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from './App'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConfirmProvider } from '@/components/ui/confirm-dialog'
+
+function renderApp() {
+  return render(
+    <TooltipProvider delayDuration={200}>
+      <ConfirmProvider>
+        <App />
+      </ConfirmProvider>
+    </TooltipProvider>,
+  )
+}
 
 describe('App smoke/integration', () => {
   beforeEach(() => {
@@ -28,17 +40,18 @@ describe('App smoke/integration', () => {
   })
 
   it('renders login form', () => {
-    render(<App />)
-    expect(screen.getByText('Login')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('admin')).toBeInTheDocument()
+    renderApp()
+    expect(screen.getByLabelText('Login')).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('performs login and stores token', async () => {
-    render(<App />)
+    renderApp()
 
-    fireEvent.change(screen.getByPlaceholderText('admin'), { target: { value: 'admin' } })
-    fireEvent.change(screen.getByPlaceholderText('••••••'), { target: { value: 'secret' } })
-    fireEvent.click(screen.getByText('Sign in'))
+    fireEvent.change(screen.getByLabelText('Login'), { target: { value: 'admin' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => {
       expect(localStorage.getItem('homer_v4_token')).toBe('test-token')
