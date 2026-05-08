@@ -1,10 +1,10 @@
 <img src="https://github.com/user-attachments/assets/3fc9d420-938a-44cd-b2ab-47a574e00c55" width=200 />
+<img src="https://github.com/user-attachments/assets/85d47c71-0feb-452a-b45a-2519b44a7fac" width=215 />
 
 # homer eleven
+> 100% Opensource Telecom Observability since 2011
 
 `homer` is the *all-in-one* HEP capture and API server monolith powering Homer 11.x data lake
-
-> 100% Opensource Telecom Observability since 2011
 
 <img width="600"  alt="homer11" src="https://github.com/user-attachments/assets/1ee359d4-f2e1-41d3-9965-22a244d06e1e" />
 
