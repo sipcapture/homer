@@ -64,6 +64,7 @@
   },
   "overrides": {
     "express-rate-limit": "8.5.1",
-    "ip-address": "10.2.0"
+    "ip-address": "10.2.0",
+    "hono": "4.12.18"
   }
 }
