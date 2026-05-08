@@ -77,6 +77,15 @@ func TestAsyncQueueFullReturnsError(t *testing.T) {
 	if err := q.PushTraces(context.Background(), req); err != nil {
 		t.Fatalf("first push: %v", err)
 	}
+	// Ensure the worker has dequeued the first job and is blocked inside inner;
+	// otherwise the channel may still hold batch 1 and the second push races as "full".
+	deadline := time.Now().Add(2 * time.Second)
+	for inner.innerStarted.Load() < 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("worker did not start inner PushTraces")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 	if err := q.PushTraces(context.Background(), req); err != nil {
 		t.Fatalf("second push: %v", err)
 	}

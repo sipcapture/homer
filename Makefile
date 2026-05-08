@@ -1,5 +1,9 @@
 NAME=homer
 
+# Without this, the first rule ($(STATIC_CXX_DIR)/libstdc++.a) becomes the default
+# and plain `make` only prepares the static C++ wrapper — not the binary/UI.
+.DEFAULT_GOAL := all
+
 # Version variables
 VERSION ?= $(shell grep 'VERSION_APPLICATION = ' src/version.go | head -1 | cut -d'"' -f2)
 BUILD_DATE := $(shell date +%Y-%m-%d)
@@ -9,10 +13,9 @@ GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 # Build flags
 LDFLAGS := -s -w -X main.VERSION_APPLICATION=$(VERSION) -X main.BuildDate=$(BUILD_DATE) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)
 
-# GLIBC polyfill target version — set to match the oldest supported distro.
-# RHEL 8 / AlmaLinux 8 / Rocky Linux 8 ship GLIBC 2.28.
-# RHEL 9 ships GLIBC 2.34. Override via: make GLIBC_TARGET=2.34
-GLIBC_TARGET ?= 2.28
+# Used only by target glibc-polyfill (plain make release/all does not patch).
+# Example: make glibc-polyfill GLIBC_TARGET=2.28
+GLIBC_TARGET ?= 2.34
 
 # Static libstdc++ wrapper directory: contains ONLY libstdc++.a (no .so symlink).
 # Placed first in the linker search path so that -lstdc++ (including the one
@@ -50,14 +53,24 @@ endef
 # go:embed in static.go requires src/dist; "all" must build the UI first (Dockerfile and CI use make all).
 release: frontend $(STATIC_CXX_DIR)/libstdc++.a
 	cd src && CGO_LDFLAGS="-L$(STATIC_CXX_DIR)" go build -ldflags "$(LDFLAGS_COMPAT)" -o ../$(NAME)
-	$(call apply-glibc-polyfill,./$(NAME))
 
 all: release
 
 # Go binary only — run after frontend (Dockerfile calls: make frontend && make homer-only).
 homer-only: $(STATIC_CXX_DIR)/libstdc++.a
 	cd src && CGO_LDFLAGS="-L$(STATIC_CXX_DIR)" go build -ldflags "$(LDFLAGS_COMPAT)" -o ../$(NAME)
+
+# Patch existing binary with polyfill-glibc (not part of release/homer-only).
+# Requires ./$(NAME); default target glibc is $(GLIBC_TARGET) (2.34). Override: make glibc-polyfill GLIBC_TARGET=2.28
+glibc-polyfill:
+	@if [ ! -f ./$(NAME) ]; then \
+		echo "error: ./$(NAME) missing — run make release or make homer-only first"; \
+		exit 1; \
+	fi
 	$(call apply-glibc-polyfill,./$(NAME))
+
+# Alias for glibc-polyfill (same spelling as in docs/tools).
+glibc-polyfil: glibc-polyfill
 
 frontend:
 	cd src/ui && npm install && npm run build
@@ -68,6 +81,6 @@ debug:
 modules:
 	cd src && go get ./...
 
-.PHONY: all release homer-only clean frontend debug modules
+.PHONY: all release homer-only clean frontend debug modules glibc-polyfill glibc-polyfil
 clean:
 	rm -fr $(NAME) src/dist $(STATIC_CXX_DIR)

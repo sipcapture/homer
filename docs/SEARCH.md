@@ -1,6 +1,6 @@
 # Homer Search CLI
 
-The `homer search` subcommand lets you search Homer data from the terminal via the coordinator API. It supports multiple output formats including tables, vertical rows, CSV, JSON, ASCII charts, and SIP call flow diagrams.
+The `homer search` subcommand lets you search Homer data from the terminal via the coordinator API. It supports multiple output formats including tables, vertical rows, CSV, JSON, ASCII charts, SIP call flow diagrams, and **PCAP** export for SIP payloads.
 
 ## Quick Start
 
@@ -112,6 +112,8 @@ Protocol types (`--proto` accepts the **Name** or the **Proto** integer; hyphens
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--format <fmt>` | Output format (see below) | `table` |
+| `--output <path>` | Output file path (**required** with `--format pcap`) | - |
+| `-o <path>` | Shorthand for `--output` | - |
 | `--fields <list>` | Comma-separated fields to show | all |
 | `--grep <pattern>` | Post-filter: include only matching rows | - |
 | `--exclude <pattern>` | Post-filter: exclude matching rows | - |
@@ -286,6 +288,30 @@ Call-IDs: abc123@host
 ```
 
 Also accepts aliases: `--format flow` or `--format ladder`.
+
+### pcap (SIP capture file)
+
+Writes a **libpcap** file from the search result rows. Framing matches the coordinator API **`POST /api/v4/transactions/export/pcap`** (Ethernet + IPv4/IPv6 + UDP + raw SIP payload per row).
+
+**Requirements:**
+
+- **`--output path`** or **`-o path`** — required (binary output is never written to stdout).
+- **SIP only** — use default `--proto` / `sip` / `1`; other protocols are rejected.
+- **Not available with `--interactive`** — use a one-shot command.
+- Each exported row needs a non-empty **`payload`** plus **`src_ip`** / **`dst_ip`** (and optional **`src_port`** / **`dst_port`**; zero ports default to **5060**). Rows are sorted by **`timestamp`** ascending before writing.
+
+Works with structured search or **`--sql`**, as long as returned columns include those fields.
+
+```bash
+# Export one call to Wireshark/tcpdump
+homer search --host coordinator:8081 --call-id 'abc123@host' --limit 500 --format pcap -o /tmp/call.pcap
+
+# Same with long flag
+homer search --host coordinator:8081 --user admin --pass secret \
+  --from 30m --method INVITE --limit 200 --format pcap --output captures/invite-sample.pcap
+```
+
+If no row contains a SIP payload after filters, the command fails with a clear error.
 
 ## Field Selection
 

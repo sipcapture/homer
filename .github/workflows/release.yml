@@ -100,9 +100,8 @@ jobs:
         GIT_COMMIT=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +%Y-%m-%d)
         BUILD_TIME=$(date +%H:%M:%S)
-        # Set up static libstdc++ wrapper dir (RHEL 8 / GLIBC 2.28 compatibility).
-        # Contains ONLY libstdc++.a so -lstdc++ from DuckDB's #cgo LDFLAGS resolves
-        # to the static archive before the shared lib in /usr/lib/gcc/.../13/.
+        # Static libstdc++ wrapper dir (amd64): ONLY libstdc++.a so DuckDB #cgo -lstdc++
+        # resolves to the archive before the shared lib in /usr/lib/gcc/.../.
         if [ "${{ matrix.goarch }}" == "amd64" ]; then
           STATIC_CXX_DIR="$(pwd)/.static-cxx-link"
           mkdir -p "${STATIC_CXX_DIR}"
@@ -119,21 +118,16 @@ jobs:
         cd src && go build -ldflags "${LDFLAGS}" -o ../homer && cd ..
         cp homer homer-core_${{ matrix.goarch }}
 
-    - name: Apply glibc polyfill (RHEL 8 / GLIBC 2.28 compatibility)
+    - name: Apply glibc polyfill
       if: matrix.goarch == 'amd64'
-      run: |
-        if command -v polyfill-glibc >/dev/null 2>&1; then
-          polyfill-glibc --target-glibc=2.28 homer-core_${{ matrix.goarch }} || \
-            echo "Warning: polyfill-glibc failed, continuing without glibc patching..."
-        else
-          pip install polyfill-glibc --quiet || true
-          if command -v polyfill-glibc >/dev/null 2>&1; then
-            polyfill-glibc --target-glibc=2.28 homer-core_${{ matrix.goarch }} || \
-              echo "Warning: polyfill-glibc failed, continuing without glibc patching..."
-          else
-            echo "polyfill-glibc not available, skipping glibc compatibility patch"
-          fi
-        fi
+      uses: lmangani/polyfill-glibc-action@1.1.5
+      with:
+        glibc: '2.34'
+        target: ${{ github.workspace }}/homer
+
+    - name: Sync homer-core release binary after polyfill
+      if: matrix.goarch == 'amd64'
+      run: cp homer homer-core_${{ matrix.goarch }}
 
     - name: get NFPM
       if:  github.event_name == 'release' || ${{ inputs.release }}

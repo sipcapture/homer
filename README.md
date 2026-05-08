@@ -127,7 +127,7 @@ homer --config-path /etc/homer/homer.json --log-level debug --syslog-disable
 
 ### Search (via coordinator API)
 
-Search Homer data from the command line with table, vertical, CSV, JSON, chart, or call flow output.
+Search Homer data from the command line with table, vertical, CSV, JSON, chart, call flow, or **PCAP** output (SIP only; use `--format pcap` with `-o` / `--output`).
 
 ```bash
 # Basic SIP search (last hour)
@@ -135,6 +135,9 @@ homer search --host 10.0.0.1:8081 --user admin --pass secret
 
 # Search INVITE messages with call flow diagram
 homer search --host 10.0.0.1:8081 --method INVITE --format callflow
+
+# Export SIP messages to a pcap file (same framing as API /transactions/export/pcap)
+homer search --host 10.0.0.1:8081 --call-id "abc123@host" --format pcap -o /tmp/call.pcap
 
 # Search by Call-ID
 homer search --host 10.0.0.1:8081 --call-id "abc123@host" --format vertical

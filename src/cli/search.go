@@ -1,13 +1,17 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sipcapture/homer-core/src/pcapwriter"
 )
 
 // SearchFlags holds all CLI flags for the search sub-command.
@@ -49,6 +53,9 @@ type SearchFlags struct {
 	// Post-filters (client-side, applied after API response)
 	Grep    string // include only rows matching pattern
 	Exclude string // exclude rows matching pattern
+
+	// Output file (e.g. --format pcap)
+	Output string // set from --output or -o
 }
 
 // searchFlagRefs holds pointers for flag.FlagSet parsing.
@@ -79,6 +86,8 @@ type searchFlagRefs struct {
 	Debug       *bool
 	Grep        *string
 	Exclude     *string
+	Output      *string
+	OutputShort *string
 }
 
 // RegisterSearchFlags creates a FlagSet for "homer search" subcommand.
@@ -108,12 +117,14 @@ func RegisterSearchFlags() (*flag.FlagSet, *searchFlagRefs) {
 	refs.Select = fs.String("select", "", "custom SELECT columns/aggregations (e.g. \"method, count(*) as cnt\")")
 	refs.GroupBy = fs.String("group-by", "", "GROUP BY clause (e.g. \"method\")")
 	refs.OrderBy = fs.String("order-by", "", "custom ORDER BY (e.g. \"cnt DESC\", default: timestamp DESC)")
-	refs.Format = fs.String("format", "table", "output format: table, vertical, csv, json, chart, callflow")
+	refs.Format = fs.String("format", "table", "output format: table, vertical, csv, json, chart, callflow, pcap")
 	refs.Fields = fs.String("fields", "", "comma-separated fields to display (e.g. timestamp,method,source_ip,call_id)")
 	refs.Interactive = fs.Bool("interactive", false, "launch interactive TUI search mode")
 	refs.Debug = fs.Bool("debug", false, "print request/response debug info to stderr")
 	refs.Grep = fs.String("grep", "", "post-filter: include rows matching pattern (e.g. INVITE or event=INVITE)")
 	refs.Exclude = fs.String("exclude", "", "post-filter: exclude rows matching pattern (e.g. \"100 Trying\")")
+	refs.Output = fs.String("output", "", "output file path (required with --format pcap)")
+	refs.OutputShort = fs.String("o", "", "shorthand for --output (pcap file path)")
 
 	return fs, refs
 }
@@ -147,7 +158,17 @@ func ParseSearchFlags(refs *searchFlagRefs) SearchFlags {
 		Debug:       *refs.Debug,
 		Grep:        *refs.Grep,
 		Exclude:     *refs.Exclude,
+		Output:      mergeOutputPath(*refs.Output, *refs.OutputShort),
 	}
+}
+
+func mergeOutputPath(primary, alt string) string {
+	primary = strings.TrimSpace(primary)
+	alt = strings.TrimSpace(alt)
+	if primary != "" {
+		return primary
+	}
+	return alt
 }
 
 // RunSearch is the main entry point. It dispatches to either the interactive
@@ -155,6 +176,10 @@ func ParseSearchFlags(refs *searchFlagRefs) SearchFlags {
 func RunSearch(f SearchFlags) error {
 	if f.Host == "" {
 		return fmt.Errorf("--host is required (coordinator address, e.g. 10.0.0.1:8081)")
+	}
+
+	if f.Interactive && ParseFormat(f.Format) == FormatPcap {
+		return fmt.Errorf("--format pcap cannot be used with --interactive; run without -i and set --output (-o) for the pcap file path")
 	}
 
 	client := NewClient(f.Host)
@@ -214,6 +239,14 @@ func runOneShotSearch(client *Client, f SearchFlags) error {
 	}
 
 	format := ParseFormat(f.Format)
+	if format == FormatPcap {
+		if err := writeSearchPcap(items, f); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Query completed. %d rows fetched in %.2f ms\n", len(items), float64(queryElapsed.Microseconds())/1000.0)
+		return nil
+	}
+
 	keys := resp.Data.Keys
 	if f.Fields != "" {
 		keys = FilterKeys(keys, f.Fields, items)
@@ -222,6 +255,39 @@ func runOneShotSearch(client *Client, f SearchFlags) error {
 
 	// Print query timing summary
 	fmt.Fprintf(os.Stderr, "Query completed. %d rows returned in %.2f ms\n", len(items), float64(queryElapsed.Microseconds())/1000.0)
+	return nil
+}
+
+// writeSearchPcap writes SIP search rows to a PCAP file (same framing as API export/pcap).
+func writeSearchPcap(items []map[string]interface{}, f SearchFlags) error {
+	proto := f.Proto
+	if proto == 0 {
+		proto = 1
+	}
+	if proto != 1 {
+		return fmt.Errorf("--format pcap is only supported for SIP (use default or --proto sip / 1); got proto_type %d", f.Proto)
+	}
+	out := strings.TrimSpace(f.Output)
+	if out == "" {
+		return fmt.Errorf("--output (-o) is required when using --format pcap")
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return pcapwriter.RowTime(items[i], "timestamp").Before(pcapwriter.RowTime(items[j], "timestamp"))
+	})
+
+	raw, err := pcapwriter.SIPSearchRowsToPCAP(items)
+	if err != nil {
+		if errors.Is(err, pcapwriter.ErrNoSIPPacketsInRows) {
+			return fmt.Errorf("no SIP payloads in results (need non-empty payload plus src_ip/dst_ip); widen search or use SIP proto")
+		}
+		return err
+	}
+	if err := os.WriteFile(out, raw, 0o644); err != nil {
+		return fmt.Errorf("write pcap file: %w", err)
+	}
+	n := pcapwriter.SIPSearchRowsPacketCount(items)
+	fmt.Fprintf(os.Stderr, "Wrote %d packets to %s\n", n, out)
 	return nil
 }
 
