@@ -1,5 +1,9 @@
 NAME=homer
 
+# Without this, the first rule ($(STATIC_CXX_DIR)/libstdc++.a) becomes the default
+# and plain `make` only prepares the static C++ wrapper — not the binary/UI.
+.DEFAULT_GOAL := all
+
 # Version variables
 VERSION ?= $(shell grep 'VERSION_APPLICATION = ' src/version.go | head -1 | cut -d'"' -f2)
 BUILD_DATE := $(shell date +%Y-%m-%d)
