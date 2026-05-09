@@ -54,8 +54,7 @@ jobs:
           context: .
           file: Dockerfile
           platforms: ${{ matrix.platform }}
-          push: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release) || github.event_name == 'release' }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},name-canonical=true,push-by-digest=true,push=true
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},name-canonical=true,push-by-digest=true,push=${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.release) || github.event_name == 'release' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha
