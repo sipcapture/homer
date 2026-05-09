@@ -1,0 +1,90 @@
+# Homer 11 + RustFS (S3-compatible cold tier). See README.md and ../../docs/STORAGE_POLICIES.md.
+services:
+  rustfs-init:
+    image: alpine:3.20
+    volumes:
+      - rustfs_data_0:/data0
+      - rustfs_data_1:/data1
+      - rustfs_data_2:/data2
+      - rustfs_data_3:/data3
+      - rustfs_logs:/logs
+    command: >
+      sh -c "chown -R 10001:10001 /data0 /data1 /data2 /data3 /logs && echo rustfs volume permissions ok"
+    restart: "no"
+    networks:
+      - homer-compose
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    security_opt:
+      - "no-new-privileges:true"
+    environment:
+      RUSTFS_VOLUMES: /data/rustfs{0...3}
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_CORS_ALLOWED_ORIGINS: "*"
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      RUSTFS_OBS_LOGGER_LEVEL: info
+      RUSTFS_TLS_PATH: /opt/tls
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: ${RUSTFS_UNSAFE_BYPASS_DISK_CHECK:-false}
+    volumes:
+      - rustfs_data_0:/data/rustfs0
+      - rustfs_data_1:/data/rustfs1
+      - rustfs_data_2:/data/rustfs2
+      - rustfs_data_3:/data/rustfs3
+      - rustfs_logs:/app/logs
+    ports:
+      - "${RUSTFS_S3_PORT:-9000}:9000"
+      - "${RUSTFS_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -fsS http://127.0.0.1:9000/health && curl -fsS http://127.0.0.1:9001/rustfs/console/health",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 45s
+    depends_on:
+      rustfs-init:
+        condition: service_completed_successfully
+    networks:
+      - homer-compose
+    restart: unless-stopped
+
+  homer:
+    image: ${HOMER_IMAGE:-ghcr.io/sipcapture/homer:latest}
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    volumes:
+      - homer_data:/data/homer
+      - ./config/homer.json:/etc/homer/homer.json:ro
+    command: ["--config-path", "/etc/homer/homer.json"]
+    ports:
+      - "9060:9060/tcp"
+      - "9060:9060/udp"
+      - "9080:9080/tcp"
+      - "8080:8080/tcp"
+      - "50051:50051/tcp"
+      - "9090:9090/tcp"
+    networks:
+      - homer-compose
+    restart: unless-stopped
+
+networks:
+  homer-compose:
+    driver: bridge
+
+volumes:
+  rustfs_data_0:
+  rustfs_data_1:
+  rustfs_data_2:
+  rustfs_data_3:
+  rustfs_logs:
+  homer_data:
