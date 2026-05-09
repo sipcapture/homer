@@ -3,6 +3,8 @@ package handlers
 import (
 	"strings"
 	"testing"
+
+	"github.com/sipcapture/homer-core/src/coordinator/services"
 )
 
 func TestBuildSearchSQLV4_CaptureID(t *testing.T) {
@@ -11,7 +13,7 @@ func TestBuildSearchSQLV4_CaptureID(t *testing.T) {
 	req.Filter.EventType = "call"
 	req.Filter.CaptureID = 42
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +31,7 @@ func TestBuildSearchSQLV4_SIPDefaultUsesDataExtraHosts(t *testing.T) {
 	req.Filter.EventType = "default"
 	req.Filter.FromUser = "alice.net"
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +49,7 @@ func TestBuildSearchSQLV4_SIPRegistrationUsesAOR(t *testing.T) {
 	req.Filter.EventType = "registration"
 	req.Filter.Aor = "bob@"
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +64,7 @@ func TestBuildSearchSQLV4_UserAgentRegistrationColumn(t *testing.T) {
 	req.Filter.EventType = "registration"
 	req.Filter.UserAgent = "Polycom"
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +82,7 @@ func TestBuildSearchSQLV4_SIPMethodAndResponseMultiFilter(t *testing.T) {
 	req.Filter.ResponseCode = "200"
 	req.Filter.ResponseCodes = []string{"486", "603"}
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +101,7 @@ func TestBuildSearchSQLV4_SIPMethodDedupe(t *testing.T) {
 	req.Filter.Method = "INVITE"
 	req.Filter.Methods = []string{"INVITE", "ACK"}
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +141,7 @@ func TestBuildSearchSQLV4_LPRoutesToTimeColumn(t *testing.T) {
 	req.Timestamp.To = 1714403600000
 	req.Param.Limit = 100
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatalf("buildSearchSQLV4 LP: %v", err)
 	}
@@ -199,7 +201,7 @@ func TestBuildSearchSQLV4_OTLPTracesByTraceID(t *testing.T) {
 	req.Timestamp.From = 1714400000000
 	req.Timestamp.To = 1714403600000
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +225,7 @@ func TestBuildSearchSQLV4_OTLPLogsBodyAndService(t *testing.T) {
 	req.Filter.Payload = "panic"
 	req.Filter.UserAgent = "checkout-svc"
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +248,7 @@ func TestBuildSearchSQLV4_OTLPMetricsByName(t *testing.T) {
 	req.Filter.ProtoType = otlpHepIDMetrics
 	req.Filter.SessionID = "http.server.duration"
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +266,7 @@ func TestBuildSearchSQLV4_OTLPMetricsExplicitNameEquality(t *testing.T) {
 	req.Filter.Name = "queue.depth"
 	req.Filter.SessionID = "ignored-when-name-set"
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +285,7 @@ func TestBuildSearchSQLV4_OTLPMetricsTypeInAndServiceName(t *testing.T) {
 	req.Filter.Types = []string{"gauge", "sum"}
 	req.Filter.ServiceName = "checkout"
 
-	sql, err := buildSearchSQLV4("homer_lake", &req)
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,5 +359,72 @@ func TestTransactionMessagesSelectSQL_SIPUsesSessionID(t *testing.T) {
 	}
 	if strings.Contains(q, "LIMIT 5000") {
 		t.Fatalf("SIP query must not apply OTLP span limit, got:\n%s", q)
+	}
+}
+
+func TestBuildSearchSQLV4_VirtualDataExtra(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.Virtual = map[string]string{"to_tag": "abc7"}
+
+	rules := map[string]services.VirtualFieldRule{
+		"to_tag": {
+			Kind:  services.VirtualKindDataExtraJSON,
+			Path:  "to_tag",
+			Match: services.VirtualMatchLike,
+		},
+	}
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "json_extract(data_extra, '$.to_tag')") {
+		t.Fatalf("expected virtual to_tag extract, got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "abc7") {
+		t.Fatalf("expected filter value in SQL, got:\n%s", sql)
+	}
+}
+
+func TestBuildSearchSQLV4_VirtualDataExtraEquals(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.Virtual = map[string]string{"branch": "z9hG4bK1"}
+
+	rules := map[string]services.VirtualFieldRule{
+		"branch": {
+			Kind:  services.VirtualKindDataExtraJSON,
+			Path:  "branch",
+			Match: services.VirtualMatchEquals,
+		},
+	}
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "json_extract(data_extra, '$.branch')") {
+		t.Fatalf("expected branch extract, got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "= 'z9hG4bK1'") {
+		t.Fatalf("expected equals clause, got:\n%s", sql)
+	}
+}
+
+func TestBuildSearchSQLV4_VirtualUnknownKeyIgnored(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.Virtual = map[string]string{"not_in_rules": "x"}
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, map[string]services.VirtualFieldRule{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(sql, "not_in_rules") {
+		t.Fatalf("unknown virtual key must be ignored, got:\n%s", sql)
 	}
 }

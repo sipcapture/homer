@@ -402,6 +402,18 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
         const val = form[f.id]
         if (val === undefined || val === null || val === '') return
 
+        // Virtual fields (fields_mapping.virtual): values go under filter.virtual[id]
+        if (f.virtual && typeof f.virtual === 'object' && f.virtual.kind) {
+          if (!filter.virtual) filter.virtual = {}
+          if (Array.isArray(val)) {
+            if (val.length === 0) return
+            filter.virtual[f.id] = val.length === 1 ? val[0] : val.join(',')
+          } else {
+            filter.virtual[f.id] = val
+          }
+          return
+        }
+
         // Handle multiselect arrays
         if (Array.isArray(val)) {
           if (val.length === 0) return

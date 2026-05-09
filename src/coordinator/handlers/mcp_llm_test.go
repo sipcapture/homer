@@ -70,7 +70,7 @@ func newLLMTestHandler(t *testing.T, llmHandler http.HandlerFunc, apiKey string)
 	}
 
 	fs := services.NewFlightService(nil, 0)
-	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0)
+	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0, nil)
 	return h, ts.Close
 }
 
@@ -155,7 +155,7 @@ func TestTryLLMStructured_DisabledReturnsZeroResult(t *testing.T) {
 	cfg := &config.MCPConfig{}
 	cfg.LLM = config.MCPLLMConfig{Enable: false}
 	fs := services.NewFlightService(nil, 0)
-	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0)
+	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0, nil)
 
 	req, res := h.tryLLMStructured(context.Background(), "anything", 0, 0, 0)
 	if req != nil {
@@ -246,7 +246,7 @@ func TestV4MCPLLMStatus_OllamaPingNoAPIKey(t *testing.T) {
 		TimeoutSec: 2,
 	}
 	fs := services.NewFlightService(nil, 0)
-	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0)
+	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0, nil)
 
 	e := echo.New()
 	rec := httptest.NewRecorder()
@@ -290,7 +290,7 @@ func TestNewSearchHandler_LLMDisabledMeansNilClient(t *testing.T) {
 	cfg := &config.MCPConfig{}
 	cfg.LLM = config.MCPLLMConfig{Enable: false}
 	fs := services.NewFlightService(nil, 0)
-	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0)
+	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0, nil)
 	if h.llm != nil {
 		t.Fatalf("expected nil LLM client when Enable=false, got %#v", h.llm)
 	}
