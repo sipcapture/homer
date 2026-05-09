@@ -18,9 +18,12 @@ const (
 
 // VirtualMatchLike wraps the value with SQL LIKE '%value%' (escaped).
 // VirtualMatchEquals uses exact equality after trim.
+// VirtualMatchAbsent / VirtualMatchPresent are driven by filter.virtual_absent / virtual_present (checkboxes), not filter.virtual values.
 const (
-	VirtualMatchLike   = "like"
-	VirtualMatchEquals = "equals"
+	VirtualMatchLike    = "like"
+	VirtualMatchEquals  = "equals"
+	VirtualMatchAbsent  = "absent"
+	VirtualMatchPresent = "present"
 )
 
 var virtualPathSegmentRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -29,7 +32,7 @@ var virtualPathSegmentRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 type VirtualFieldRule struct {
 	Kind  string
 	Path  string // logical JSON path without leading $. (e.g. to_tag or nested foo_bar)
-	Match string // like | equals
+	Match string // like | equals | absent | present
 }
 
 // fieldMappingVirtualRaw is the optional virtual block on a mapping field row.
@@ -91,7 +94,7 @@ func validateVirtualRule(fieldID string, v *fieldMappingVirtualRaw) (VirtualFiel
 	if match == "" {
 		match = VirtualMatchLike
 	}
-	if match != VirtualMatchLike && match != VirtualMatchEquals {
+	if match != VirtualMatchLike && match != VirtualMatchEquals && match != VirtualMatchAbsent && match != VirtualMatchPresent {
 		return VirtualFieldRule{}, fmt.Errorf("unsupported virtual.match %q", v.Match)
 	}
 	_ = fieldID // reserved for future aliasing

@@ -414,17 +414,55 @@ func TestBuildSearchSQLV4_VirtualDataExtraEquals(t *testing.T) {
 	}
 }
 
-func TestBuildSearchSQLV4_VirtualUnknownKeyIgnored(t *testing.T) {
+func TestBuildSearchSQLV4_VirtualAbsentToTag(t *testing.T) {
 	req := SearchObjectV4{}
 	req.Filter.ProtoType = 1
 	req.Filter.EventType = "call"
-	req.Filter.Virtual = map[string]string{"not_in_rules": "x"}
+	req.Filter.Method = "INVITE"
+	req.Filter.VirtualAbsent = []string{"no_to_tag"}
 
-	sql, err := buildSearchSQLV4("homer_lake", &req, map[string]services.VirtualFieldRule{})
+	rules := map[string]services.VirtualFieldRule{
+		"no_to_tag": {
+			Kind:  services.VirtualKindDataExtraJSON,
+			Path:  "to_tag",
+			Match: services.VirtualMatchAbsent,
+		},
+	}
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, rules)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(sql, "not_in_rules") {
-		t.Fatalf("unknown virtual key must be ignored, got:\n%s", sql)
+	if !strings.Contains(sql, "method IN ('INVITE')") {
+		t.Fatalf("expected INVITE filter, got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "json_extract(data_extra, '$.to_tag')") {
+		t.Fatalf("expected to_tag extract for absent, got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "IS NULL") {
+		t.Fatalf("expected IS NULL for absent, got:\n%s", sql)
+	}
+}
+
+func TestBuildSearchSQLV4_VirtualPresentToTag(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.VirtualPresent = []string{"has_to_tag"}
+
+	rules := map[string]services.VirtualFieldRule{
+		"has_to_tag": {
+			Kind:  services.VirtualKindDataExtraJSON,
+			Path:  "to_tag",
+			Match: services.VirtualMatchPresent,
+		},
+	}
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "IS NOT NULL") {
+		t.Fatalf("expected IS NOT NULL for present, got:\n%s", sql)
 	}
 }

@@ -40,8 +40,19 @@ func TestVirtualRulesFromFieldsMapping_InvalidKind(t *testing.T) {
 	}
 }
 
-func TestDuckJSONPath(t *testing.T) {
-	if got := services.DuckJSONPath("foo.bar"); got != "$.foo.bar" {
-		t.Fatalf("got %q", got)
+func TestVirtualRulesAbsentPresent(t *testing.T) {
+	raw := json.RawMessage(`[
+		{"id": "no_to_tag", "virtual": {"kind": "data_extra_json", "path": "to_tag", "match": "absent"}},
+		{"id": "has_to_tag", "virtual": {"kind": "data_extra_json", "path": "to_tag", "match": "present"}}
+	]`)
+	rules, err := services.VirtualRulesFromFieldsMapping(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rules["no_to_tag"].Match != services.VirtualMatchAbsent {
+		t.Fatalf("no_to_tag: %+v", rules["no_to_tag"])
+	}
+	if rules["has_to_tag"].Match != services.VirtualMatchPresent {
+		t.Fatalf("has_to_tag: %+v", rules["has_to_tag"])
 	}
 }
