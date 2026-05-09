@@ -14,7 +14,7 @@ import (
 // SIP / RTCP / DNS / LOG field lists align with storage/ducklake/tables.go and
 // filter keys in buildSearchSQLV4 (coordinator/handlers/transactions_v4.go).
 // Optional fields_mapping[].virtual declares JSON data_extra filters — see
-// services.VirtualRulesFromFieldsMapping.
+// services.VirtualRulesFromFieldsMapping (match: like | equals | absent | present).
 
 //go:embed seeds/fields_sip_call.json
 var fieldsMappingSIPCall []byte

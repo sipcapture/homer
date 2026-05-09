@@ -168,6 +168,10 @@ type SearchObjectV4 struct {
 		// Virtual carries structured-search values for fields_mapping[].virtual (data_extra JSON, etc.).
 		// Keys are field ids; only keys declared in the active mapping row are applied.
 		Virtual map[string]string `json:"virtual,omitempty"`
+		// VirtualAbsent lists field ids (mapping virtual.match=absent) when the UI checkbox is on.
+		VirtualAbsent []string `json:"virtual_absent,omitempty"`
+		// VirtualPresent lists field ids (mapping virtual.match=present) when the UI checkbox is on.
+		VirtualPresent []string `json:"virtual_present,omitempty"`
 	} `json:"filter"`
 	Param struct {
 		Limit   int    `json:"limit"`
@@ -1907,8 +1911,17 @@ func buildMCPRawSQL(lakeName string, req *SearchObjectV4) string {
 	return sql
 }
 
-func appendVirtualDataExtraConditions(conditions []string, values map[string]string, rules map[string]services.VirtualFieldRule) []string {
-	if len(values) == 0 || len(rules) == 0 {
+func appendVirtualDataExtraConditions(conditions []string, req *SearchObjectV4, rules map[string]services.VirtualFieldRule) []string {
+	if len(rules) == 0 {
+		return conditions
+	}
+	conditions = appendVirtualValueConditions(conditions, req.Filter.Virtual, rules)
+	conditions = appendVirtualAbsentPresentConditions(conditions, req.Filter.VirtualAbsent, req.Filter.VirtualPresent, rules)
+	return conditions
+}
+
+func appendVirtualValueConditions(conditions []string, values map[string]string, rules map[string]services.VirtualFieldRule) []string {
+	if len(values) == 0 {
 		return conditions
 	}
 	keys := make([]string, 0, len(values))
@@ -1919,6 +1932,9 @@ func appendVirtualDataExtraConditions(conditions []string, values map[string]str
 	for _, id := range keys {
 		rule, ok := rules[id]
 		if !ok {
+			continue
+		}
+		if rule.Match == services.VirtualMatchAbsent || rule.Match == services.VirtualMatchPresent {
 			continue
 		}
 		raw := strings.TrimSpace(values[id])
@@ -1942,9 +1958,50 @@ func appendVirtualDataExtraConditions(conditions []string, values map[string]str
 	return conditions
 }
 
+func appendVirtualAbsentPresentConditions(conditions []string, absentIDs, presentIDs []string, rules map[string]services.VirtualFieldRule) []string {
+	normalizeIDs := func(ids []string) []string {
+		seen := make(map[string]struct{})
+		out := make([]string, 0, len(ids))
+		for _, raw := range ids {
+			id := strings.TrimSpace(raw)
+			if id == "" {
+				continue
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			out = append(out, id)
+		}
+		sort.Strings(out)
+		return out
+	}
+	for _, id := range normalizeIDs(absentIDs) {
+		rule, ok := rules[id]
+		if !ok || rule.Kind != services.VirtualKindDataExtraJSON || rule.Match != services.VirtualMatchAbsent {
+			continue
+		}
+		jp := services.DuckJSONPath(rule.Path)
+		inner := fmt.Sprintf("trim(CAST(json_extract(data_extra, '%s') AS VARCHAR))", jp)
+		clause := fmt.Sprintf("(json_extract(data_extra, '%s') IS NULL OR %s = '' OR lower(%s) = 'null')", jp, inner, inner)
+		conditions = append(conditions, clause)
+	}
+	for _, id := range normalizeIDs(presentIDs) {
+		rule, ok := rules[id]
+		if !ok || rule.Kind != services.VirtualKindDataExtraJSON || rule.Match != services.VirtualMatchPresent {
+			continue
+		}
+		jp := services.DuckJSONPath(rule.Path)
+		inner := fmt.Sprintf("trim(CAST(json_extract(data_extra, '%s') AS VARCHAR))", jp)
+		clause := fmt.Sprintf("(json_extract(data_extra, '%s') IS NOT NULL AND %s <> '' AND lower(%s) <> 'null')", jp, inner, inner)
+		conditions = append(conditions, clause)
+	}
+	return conditions
+}
+
 // loadVirtualRulesForReq resolves fields_mapping virtual rules for structured search.
 func (h *SearchHandler) loadVirtualRulesForReq(ctx context.Context, req *SearchObjectV4) map[string]services.VirtualFieldRule {
-	if h.mappingService == nil || len(req.Filter.Virtual) == 0 {
+	if h.mappingService == nil || (len(req.Filter.Virtual) == 0 && len(req.Filter.VirtualAbsent) == 0 && len(req.Filter.VirtualPresent) == 0) {
 		return nil
 	}
 	proto := req.Filter.ProtoType
@@ -2128,7 +2185,7 @@ func buildSearchSQLV4(lakeName string, req *SearchObjectV4, virtualRules map[str
 	if req.Filter.Payload != "" {
 		conditions = append(conditions, fmt.Sprintf("payload LIKE '%%%s%%'", sqlvalidator.SafeString(req.Filter.Payload)))
 	}
-	conditions = appendVirtualDataExtraConditions(conditions, req.Filter.Virtual, virtualRules)
+	conditions = appendVirtualDataExtraConditions(conditions, req, virtualRules)
 
 	// Validate and use custom SELECT columns/aggregations or default to SELECT *
 	selectClause := "*"
