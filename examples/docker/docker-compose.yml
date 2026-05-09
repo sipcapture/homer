@@ -1,15 +1,10 @@
-# Homer 11 + RustFS (S3-compatible cold tier). See README.md and ../../docs/STORAGE_POLICIES.md.
+# Homer 11 + RustFS (single-disk, S3 cold tier). See README.md and ../../docs/STORAGE_POLICIES.md.
 services:
   rustfs-init:
     image: alpine:3.20
     volumes:
-      - rustfs_data_0:/data0
-      - rustfs_data_1:/data1
-      - rustfs_data_2:/data2
-      - rustfs_data_3:/data3
-      - rustfs_logs:/logs
-    command: >
-      sh -c "chown -R 10001:10001 /data0 /data1 /data2 /data3 /logs && echo rustfs volume permissions ok"
+      - rustfs_data:/data
+    command: sh -c "chown -R 10001:10001 /data && echo rustfs data volume ok"
     restart: "no"
     networks:
       - homer-compose
@@ -19,7 +14,7 @@ services:
     security_opt:
       - "no-new-privileges:true"
     environment:
-      RUSTFS_VOLUMES: /data/rustfs{0...3}
+      RUSTFS_VOLUMES: /data
       RUSTFS_ADDRESS: 0.0.0.0:9000
       RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
       RUSTFS_CONSOLE_ENABLE: "true"
@@ -27,14 +22,9 @@ services:
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
       RUSTFS_OBS_LOGGER_LEVEL: info
-      RUSTFS_TLS_PATH: /opt/tls
       RUSTFS_UNSAFE_BYPASS_DISK_CHECK: ${RUSTFS_UNSAFE_BYPASS_DISK_CHECK:-false}
     volumes:
-      - rustfs_data_0:/data/rustfs0
-      - rustfs_data_1:/data/rustfs1
-      - rustfs_data_2:/data/rustfs2
-      - rustfs_data_3:/data/rustfs3
-      - rustfs_logs:/app/logs
+      - rustfs_data:/data
     ports:
       - "${RUSTFS_S3_PORT:-9000}:9000"
       - "${RUSTFS_CONSOLE_PORT:-9001}:9001"
@@ -82,9 +72,5 @@ networks:
     driver: bridge
 
 volumes:
-  rustfs_data_0:
-  rustfs_data_1:
-  rustfs_data_2:
-  rustfs_data_3:
-  rustfs_logs:
+  rustfs_data:
   homer_data:
