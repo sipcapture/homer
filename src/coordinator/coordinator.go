@@ -179,7 +179,8 @@ func (c *Coordinator) setupRoutes() {
 	viewTokenSvc := services.NewTransactionViewTokenService(c.settingsDB)
 	aliasSvc := services.NewAliasService(c.settingsDB, time.Duration(c.config.IPAliasCacheTTLSec)*time.Second)
 	authTokenSvc := services.NewAuthTokenService(c.settingsDB)
-	searchHandler := handlers.NewSearchHandler(c.flightService, aliasSvc, &c.config.MCP, shareExportSvc, viewTokenSvc, c.config.TransactionViewMaxOpens)
+	mapSvc := services.NewMappingService(c.settingsDB)
+	searchHandler := handlers.NewSearchHandler(c.flightService, aliasSvc, &c.config.MCP, shareExportSvc, viewTokenSvc, c.config.TransactionViewMaxOpens, mapSvc)
 	if c.correlation != nil {
 		searchHandler.SetCorrelator(correlatorAdapter{engine: c.correlation})
 	}
@@ -200,7 +201,7 @@ func (c *Coordinator) setupRoutes() {
 	usersHandler := handlers.NewUsersHandler(userService)
 	userSettingsHandler := handlers.NewUserSettingsHandler(userSettingsService, userMappingService)
 	dashboardsHandler := handlers.NewDashboardsHandler(services.NewDashboardService(c.settingsDB))
-	mappingsHandler := handlers.NewMappingsHandler(services.NewMappingService(c.settingsDB), userMappingService)
+	mappingsHandler := handlers.NewMappingsHandler(mapSvc, userMappingService)
 	hepsubsHandler := handlers.NewHepsubsHandler(services.NewHepsubService(c.settingsDB))
 	aliasesHandler := handlers.NewAliasesHandler(aliasSvc)
 	authTokensHandler := handlers.NewAuthTokensHandler(authTokenSvc)

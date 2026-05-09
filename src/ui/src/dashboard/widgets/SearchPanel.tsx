@@ -399,8 +399,37 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
       const eventType = config.protocol_profile ?? ''
       filter = { proto_type: Number(protoType), event_type: eventType }
       configuredFields.forEach((f) => {
+        // Virtual absent/present: checkbox only — handle before empty-value skip
+        if (f.virtual && typeof f.virtual === 'object' && f.virtual.kind) {
+          const vm = String(f.virtual.match || 'like').toLowerCase()
+          if (vm === 'absent' || vm === 'present') {
+            const checked = form[f.id] === true || form[f.id] === '1'
+            if (!checked) return
+            if (vm === 'absent') {
+              if (!filter.virtual_absent) filter.virtual_absent = []
+              filter.virtual_absent.push(f.id)
+            } else {
+              if (!filter.virtual_present) filter.virtual_present = []
+              filter.virtual_present.push(f.id)
+            }
+            return
+          }
+        }
+
         const val = form[f.id]
         if (val === undefined || val === null || val === '') return
+
+        // Virtual string fields (like / equals): values go under filter.virtual[id]
+        if (f.virtual && typeof f.virtual === 'object' && f.virtual.kind) {
+          if (!filter.virtual) filter.virtual = {}
+          if (Array.isArray(val)) {
+            if (val.length === 0) return
+            filter.virtual[f.id] = val.length === 1 ? val[0] : val.join(',')
+          } else {
+            filter.virtual[f.id] = val
+          }
+          return
+        }
 
         // Handle multiselect arrays
         if (Array.isArray(val)) {
@@ -507,6 +536,22 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
   // Render a single dynamic field from fields_mapping metadata
   const renderDynamicField = (field) => {
     const { id, name, form_type, selector, type } = field
+    const vMatch = field.virtual?.match != null ? String(field.virtual.match).toLowerCase() : ''
+    if (field.virtual?.kind && (vMatch === 'absent' || vMatch === 'present')) {
+      const checked = form[id] === true || form[id] === '1'
+      return (
+        <div className="flex items-center gap-2 py-0.5" key={id}>
+          <Checkbox
+            id={`sp-${id}`}
+            checked={checked}
+            onCheckedChange={(v) => handleChange(id, v === true)}
+          />
+          <Label htmlFor={`sp-${id}`} className="cursor-pointer text-[11px] text-muted-foreground">
+            {name}
+          </Label>
+        </div>
+      )
+    }
     if (config?.preset === 'otlp_metrics' && id === 'name') {
       return (
         <div className="grid gap-1" key={id}>
