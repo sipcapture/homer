@@ -74,7 +74,7 @@ int _dl_find_object(void *address, struct dl_find_object *result)
     errno = ENOSYS;
     return -1;
 }
-#endif /* !__GLIBC_PREREQ(2, 35) */
+#endif // !__GLIBC_PREREQ(2, 35)
 
 // __libc_single_threaded stub — must be a writable data symbol (char).
 // Initialise to 0 (multi-threaded) so locks are never skipped.
