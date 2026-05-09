@@ -1,4 +1,4 @@
-# Homer 11 + RustFS (single-disk, S3 cold tier). See README.md and ../../docs/STORAGE_POLICIES.md.
+# Homer 11 + RustFS (single-disk, S3 cold tier). Configuration via HOMER_* env vars only — see ../../docs/ENVIRONMENT_VARIABLES.md and .env.example.
 services:
   rustfs-init:
     image: alpine:3.20
@@ -52,10 +52,10 @@ services:
     depends_on:
       rustfs:
         condition: service_healthy
+    env_file:
+      - .env
     volumes:
       - homer_data:/data/homer
-      - ./config/homer.json:/etc/homer/homer.json:ro
-    command: ["--config-path", "/etc/homer/homer.json"]
     ports:
       - "9060:9060/tcp"
       - "9060:9060/udp"
