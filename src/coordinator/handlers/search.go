@@ -70,11 +70,13 @@ type SearchHandler struct {
 	// correlation runs Lua-based session_id expansion inside /transactions/messages.
 	// nil means correlation is disabled; handlers must nil-check.
 	correlation Correlator
+	// mappingService loads mapping_schema rows for fields_mapping virtual filters (optional).
+	mappingService *services.MappingService
 }
 
 // NewSearchHandler creates a new search handler.
 // aliasSvc may be nil; transaction rows will not get aliasSrc/aliasDst in that case.
-func NewSearchHandler(fs *services.FlightService, aliasSvc *services.AliasService, mcpCfg *config.MCPConfig, share *services.ShareExportService, viewTok *services.TransactionViewTokenService, transactionViewMaxOpens int) *SearchHandler {
+func NewSearchHandler(fs *services.FlightService, aliasSvc *services.AliasService, mcpCfg *config.MCPConfig, share *services.ShareExportService, viewTok *services.TransactionViewTokenService, transactionViewMaxOpens int, mappingSvc *services.MappingService) *SearchHandler {
 	if transactionViewMaxOpens <= 0 {
 		transactionViewMaxOpens = 3
 	}
@@ -95,6 +97,7 @@ func NewSearchHandler(fs *services.FlightService, aliasSvc *services.AliasServic
 		shareExports:            share,
 		viewTokens:              viewTok,
 		transactionViewMaxOpens: transactionViewMaxOpens,
+		mappingService:          mappingSvc,
 	}
 }
 

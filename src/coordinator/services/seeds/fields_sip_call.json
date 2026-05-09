@@ -205,5 +205,33 @@
     "form_type": "input",
     "position": 16,
     "hide": true
+  },
+  {
+    "id": "from_tag",
+    "name": "From tag (JSON)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 17,
+    "hide": true,
+    "virtual": {
+      "kind": "data_extra_json",
+      "path": "from_tag",
+      "match": "like"
+    }
+  },
+  {
+    "id": "to_tag",
+    "name": "To tag (JSON)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 18,
+    "hide": true,
+    "virtual": {
+      "kind": "data_extra_json",
+      "path": "to_tag",
+      "match": "like"
+    }
   }
 ]
