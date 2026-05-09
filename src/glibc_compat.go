@@ -16,6 +16,9 @@ package main
 //                    fast-paths. Defaulting to 0 (multi-threaded) is safe.
 
 /*
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include <dlfcn.h>
 #include <errno.h>
 #include <stddef.h>
