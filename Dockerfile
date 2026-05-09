@@ -1,6 +1,6 @@
 # Debian/glibc: DuckDB static libs expect glibc (backtrace, malloc_trim, resolver);
 # Alpine/musl link fails. Runtime must match libc linked into the binary.
-FROM golang:bullseye AS builder
+FROM golang:1.26.2-bullseye AS builder
 
 # Base build deps (no Debian nodejs — distro package is too old for Vite 7).
 RUN apt-get update && apt-get install -y --no-install-recommends \
