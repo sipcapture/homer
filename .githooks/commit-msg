@@ -1,0 +1,11 @@
+#!/bin/sh
+# Reject commit messages that attribute the Cursor agent as co-author.
+# Install:  git config core.hooksPath .githooks
+# (Repository root; use absolute path in submodules if needed.)
+set -e
+test -f "$1" || exit 0
+if grep -qE 'cursoragent@cursor\.com' "$1" 2>/dev/null; then
+	printf '%s\n' "error: commit message must not include Cursor/cursoragent co-author (cursoragent@cursor.com). See .cursor/rules/git-no-cursor-coauthor.mdc" >&2
+	exit 1
+fi
+exit 0

@@ -1,0 +1,19 @@
+# Optional git hooks
+
+## `commit-msg`
+
+Blocks any commit message line containing `cursoragent@cursor.com` (Cursor agent `Co-authored-by` trailers).
+
+Enable from the repository root:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+To disable later:
+
+```bash
+git config --unset core.hooksPath
+```
+
+This is optional; the canonical policy for AI agents is in `.cursor/rules/git-no-cursor-coauthor.mdc`.

@@ -58,4 +58,7 @@ agent_planning/
 # release pipeline publishes them as Github releases instead).
 homer-core_*.deb
 homer-core_*.rpm
-.cursor/
+# Cursor IDE — ignore local workspace state; keep shared agent rules
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**

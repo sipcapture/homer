@@ -1,0 +1,12 @@
+---
+description: Never add Cursor/cursoragent as co-author in git commits; human attribution only
+alwaysApply: true
+---
+
+# Git commit messages
+
+- **Do not** add `Co-authored-by: Cursor <cursoragent@cursor.com>`, or **any** line containing `cursoragent@cursor.com`.
+- **Do not** add `Co-authored-by` trailers for AI tools (Cursor, Copilot, chat agents) unless a maintainer **explicitly** asks for a one-off exception in that task.
+- Use the **human** author for commits; this repository does not credit automated agents in history.
+
+Optional local enforcement: `git config core.hooksPath .githooks` (see `.githooks/README`).
