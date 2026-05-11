@@ -94,7 +94,16 @@
       "catalog_type": "sqlite",
       "catalog_path": "/data/homer/homer_catalog.sqlite",
       "data_path": "/data/homer/parquet",
-      "lake_name": "homer_lake"
+      "lake_name": "homer_lake",
+      "volumes": [
+        {
+          "name": "default",
+          "type": "local",
+          "catalog_type": "sqlite",
+          "catalog_path": "/data/homer/homer_catalog.sqlite",
+          "path": "/data/homer/parquet"
+        }
+      ]
     }
   },
   "coordinator": {

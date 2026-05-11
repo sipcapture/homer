@@ -53,7 +53,9 @@ Minimal additions under `node`:
 - **`auth_token`**: if non-empty, clients must send `Authorization: Bearer <token>`.
 - **`catalog_refresh_interval_sec`**: periodic catalog refresh on the node when it does **not** share the writer’s DuckDB (`sharedDB`). With an all-in-one writer+node process, hot rows usually come from the shared DB path instead.
 
-Use the **same** lake name as `storage.ducklake.lake_name` / `node.ducklake.lake_name` (default `homer_lake`).
+Use the **same** lake name as `storage.ducklake.lake_name` / `node.ducklake.lake_name` (default `homer_lake`). In all-in-one deployments, **`node.ducklake`** should mirror **`storage.ducklake`** (same `lake_name`, `catalog_path`, data `path`, and volume `name` entries where applicable). If you use **tiered** storage, keep **`node.ducklake.volumes`** aligned with **`storage.ducklake.storage_policy.volumes`** (see [NODE.md](NODE.md) and [STORAGE_POLICIES.md](STORAGE_POLICIES.md)).
+
+The minimal JSON above omits `volumes`; the supported layout is the **`volumes`** array under `node.ducklake` as in [NODE.md](NODE.md) — use that as the source of truth when copying config.
 
 ---
 

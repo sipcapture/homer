@@ -185,12 +185,20 @@ func (s *DashboardService) ResetDashboards(ctx context.Context, username string)
 		return err
 	}
 
-	// Default "Home" dashboard with clock widget
+	// Default "Home": SIP Call Search + Results Table + Clock
 	homeData, _ := json.Marshal(map[string]interface{}{
 		"name": "Home", "param": "home", "shared": false, "type": 0, "weight": 10,
 		"config": map[string]interface{}{"columns": 12, "grid_type": "fit", "locked": false},
 		"widgets": []map[string]interface{}{
-			{"id": "clock-1", "type": "clock", "x": 5, "y": 0, "w": 2, "h": 3, "title": "Clock"},
+			{
+				"id": "search-1", "type": "search", "x": 0, "y": 0, "w": 3, "h": 14, "title": "SIP Call Search",
+				"config": map[string]interface{}{
+					"preset":       "sip_call",
+					"targetWidget": "results-1",
+				},
+			},
+			{"id": "results-1", "type": "results", "x": 3, "y": 0, "w": 6, "h": 14, "title": "Results Table"},
+			{"id": "clock-1", "type": "clock", "x": 9, "y": 0, "w": 3, "h": 14, "title": "Clock"},
 		},
 	})
 	if _, err := s.CreateDashboard(ctx, username, "home", homeData); err != nil {

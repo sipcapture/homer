@@ -78,6 +78,15 @@ func (h *DashboardsHandler) V4DashboardsList(c echo.Context) error {
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to list dashboards: "+err.Error())
 	}
+	if len(settings) == 0 {
+		if err := h.service.ResetDashboards(c.Request().Context(), username); err != nil {
+			return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to seed default dashboards: "+err.Error())
+		}
+		settings, err = h.service.ListDashboards(c.Request().Context(), username)
+		if err != nil {
+			return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to list dashboards: "+err.Error())
+		}
+	}
 
 	items := make([]DashboardElementV4, 0, len(settings))
 	for _, setting := range settings {

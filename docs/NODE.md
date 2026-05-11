@@ -138,7 +138,7 @@ See [FLIGHTSQL.md](FLIGHTSQL.md) for Grafana setup and coordinator proxy (`coord
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `name` | string | - | Volume name (hot, cold, default) |
+| `name` | string | - | Volume label. Use **`"default"`** for the primary single-volume catalog (see below). Other labels (`hot`, `cold`, …) form the DuckDB catalog name together with `lake_name`. |
 | `type` | string | "local" | Storage type: "local" or "s3" |
 | `catalog_type` | string | "sqlite" | DuckLake catalog — sqlite |
 | `catalog_path` | string | - | Path to catalog file |
@@ -148,6 +148,17 @@ See [FLIGHTSQL.md](FLIGHTSQL.md) for Grafana setup and coordinator proxy (`coord
 | `s3_secret_access_key` | string | - | AWS Secret Access Key |
 | `s3_endpoint` | string | - | Custom S3 endpoint (MinIO, R2) |
 | `s3_use_ssl` | bool | true | Use SSL for S3 connections |
+
+### Volume `name` and the DuckDB catalog
+
+When Node attaches DuckLake, the volume’s **`name`** determines the **DuckDB catalog** identifier used in SQL (e.g. `homer_lake.main.hep_proto_1_call`):
+
+- If **`name`** is **`"default"`**, the catalog is attached **as** `node.ducklake.lake_name` only (e.g. `homer_lake`). This matches the default single-catalog writer (`storage.ducklake.lake_name`).
+- For any **other** `name`, the catalog is **`{lake_name}_{name}`** — the same pattern as in the [Multiple Volumes](#multiple-volumes-tiered-storage) example (`homer_lake_hot`, `homer_lake_cold`).
+
+API rows may include a **`storage_volume`** column (your volume label). Qualified **`FROM`** clauses must use the **catalog** name, not the label alone; the coordinator typically emits `lake_name.main…`, and Node may rewrite it per volume.
+
+For **tiered storage**, keep **`node.ducklake.volumes`** in sync with **`storage.ducklake.storage_policy.volumes`** (same `name` values and matching `catalog_path` / `path` per volume). See [STORAGE_POLICIES.md](STORAGE_POLICIES.md).
 
 ## How Multi-Volume Works
 
@@ -288,7 +299,23 @@ Ingest, Storage and Node modules work together:
 └────────────────────────────────────────────────────────────┘
 ```
 
-**Important:** Storage and Node must use the same volumes with identical `catalog_path` for each volume.
+**Important:** Storage and Node must use the same volumes with identical `catalog_path` (and data `path`) for each volume. For a **single** logical DuckLake that the writer owns, the node volume must point at the **same** catalog and Parquet tree as `storage.ducklake`.
+
+### Writer + Node (all-in-one process)
+
+When **Ingest**, **Storage**, and **Node** are enabled together, Node uses the **writer’s DuckDB connection** for queries so in-memory buffer tables and freshly flushed Parquet stay visible without a second attach.
+
+- The SQL engine then only sees catalogs the **writer** actually attached — for the default (non–storage-policy) writer that is normally **`storage.ducklake.lake_name`** (e.g. `homer_lake`).
+- Set **`node.ducklake.lake_name`** to the **same** value as **`storage.ducklake.lake_name`**, and align **`catalog_path`** / **`path`** on the single volume with storage.
+- Using **`"name": "default"`** for that single volume keeps Node’s **own** DuckDB attach (used for catalog refresh when not sharing the writer DB) consistent with the writer catalog name.
+
+Current code also rewrites coordinator SQL to use **`node.ducklake.lake_name`** when executing on the shared writer connection with **one** volume (`duckLakeCatalogForQuery` in [`src/node/node.go`](../src/node/node.go)), which avoids Binder errors if `name` is not `default`. Path and `lake_name` alignment with storage remains mandatory.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---------|----------------|
+| `Binder Error: Catalog "homer_lake_…" does not exist` on search / API queries | Rewritten SQL referenced a suffixed catalog (from `volumes[].name`) that is not attached on the **connection** running the query — e.g. all-in-one with shared writer DB while the node volume used a non-`default` label. Fix: same `lake_name` and paths as storage, mirror tiered volume names with [STORAGE_POLICIES.md](STORAGE_POLICIES.md), use `"name": "default"` for the single primary volume, or use a build that includes shared-DB single-volume catalog normalization (see `duckLakeCatalogForQuery` in [`src/node/node.go`](../src/node/node.go)). |
 
 ## Example Configurations
 

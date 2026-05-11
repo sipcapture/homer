@@ -449,6 +449,18 @@ func (n *Node) prepareFlightSQLDataSQL(q string) string {
 	return n.addMemoryUnion(q)
 }
 
+// duckLakeCatalogForQuery returns the DuckLake catalog name used in rewritten SQL FROM clauses.
+// When the node shares the writer's DuckDB (SetSharedDB in main.go), queries run on the writer
+// connection, which attaches exactly node.ducklake.lake_name (the writer's DuckLake manager).
+// configureDuckLake on the node's own DB may still register baseLake+"_"+volume.Name for
+// non-"default" volume labels, so vol.LakeName can differ from the catalog on sharedDB.
+func (n *Node) duckLakeCatalogForQuery(vol VolumeInfo) string {
+	if n.sharedDB != nil && len(n.volumes) == 1 {
+		return n.config.DuckLake.LakeName
+	}
+	return vol.LakeName
+}
+
 // rewriteQueryForVolumes rewrites SQL query to use UNION ALL across all tiered storage volumes
 // Example: "SELECT * FROM homer_lake.main.hep_proto_1 WHERE date = '2026-01-30'"
 // Becomes: "SELECT * FROM homer_lake_hot.main.hep_proto_1 WHERE date = '2026-01-30'
@@ -460,11 +472,20 @@ func (n *Node) rewriteQueryForVolumes(sql string) string {
 		if len(n.volumes) == 1 {
 			baseLakeName := n.config.DuckLake.LakeName
 			if strings.Contains(sql, baseLakeName+".main.") {
-				// Rewrite base lake name to volume-specific lake name
-				rewritten := strings.ReplaceAll(sql, baseLakeName+".main.", n.volumes[0].LakeName+".main.")
-				return addStorageColumnsToQuery(rewritten, n.volumes[0].LakeName, n.volumes[0].Name)
+				cat := n.duckLakeCatalogForQuery(n.volumes[0])
+				rewritten := strings.ReplaceAll(sql, baseLakeName+".main.", cat+".main.")
+				return addStorageColumnsToQuery(rewritten, cat, n.volumes[0].Name)
 			}
 		}
+		return sql
+	}
+
+	// Writer shares ducklakeManager's DuckDB with the node (SetSharedDB). That
+	// connection only attaches storage.ducklake.lake_name (e.g. homer_lake).
+	// Tiered volume catalogs (homer_lake_hot, homer_lake_cold) live on a
+	// separate sql.DB inside TieredStorageManager — rewriting to suffixed
+	// names here causes Binder Error: catalog does not exist.
+	if n.sharedDB != nil {
 		return sql
 	}
 
@@ -515,9 +536,10 @@ func (n *Node) rewriteQueryForVolumes(sql string) string {
 	// Build UNION ALL subquery
 	var unionParts []string
 	for _, vol := range n.volumes {
-		volTableFQN := vol.LakeName + ".main." + tableName
+		cat := n.duckLakeCatalogForQuery(vol)
+		volTableFQN := cat + ".main." + tableName
 		rewrittenPart := strings.Replace(sql, tableFQN, volTableFQN, 1)
-		rewrittenPart = addStorageColumnsToQuery(rewrittenPart, vol.LakeName, vol.Name)
+		rewrittenPart = addStorageColumnsToQuery(rewrittenPart, cat, vol.Name)
 		unionParts = append(unionParts, "("+rewrittenPart+")")
 	}
 
