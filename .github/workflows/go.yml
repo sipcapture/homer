@@ -8,25 +8,125 @@ on:
     branches: [ "main" ]
 
 jobs:
-
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
 
-    - name: Install build requirements
-      run: |
-        sudo apt update && sudo apt install -y libluajit-5.1-dev
+      - name: Install build requirements
+        run: |
+          sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.26.0'
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.26.0'
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 22
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-    - name: Build
-      run: make release
+      - name: Build frontend
+        run: |
+          cd src/ui && npm ci && npm run build
+
+      - name: Test frontend
+        run: |
+          cd src/ui && npm run test
+
+      - name: Test Go
+        run: |
+          cd src && go test ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux]
+        goarch: [amd64, arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install build requirements
+        run: |
+          sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.26.0'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build frontend
+        run: |
+          cd src/ui && npm ci && npm run build
+
+      - name: Set up cross-compilation for ${{ matrix.goarch }}
+        run: |
+          echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
+          echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
+          if [ "${{ matrix.goarch }}" == "arm64" ]; then
+            sudo dpkg --add-architecture arm64
+            CODENAME=$(lsb_release -cs)
+            # Add arm64 repos (ports.ubuntu.com)
+            if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+              sudo sed -i '/^Types:/i Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+              sudo tee /etc/apt/sources.list.d/arm64-ports.sources <<EOF2
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports/
+          Suites: ${CODENAME} ${CODENAME}-updates
+          Components: main restricted universe multiverse
+          Architectures: arm64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF2
+            else
+              sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64-ports.list
+              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME}-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list
+            fi
+            sudo apt update
+            sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libluajit-5.1-dev:arm64
+            echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CXX=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          fi
+
+      - name: Set version
+        run: |
+          echo "VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+
+      - name: Compile homer-core ${{ matrix.goarch }}
+        env:
+          CGO_ENABLED: 1
+          GOARCH: ${{ matrix.goarch }}
+          GOOS: ${{ matrix.goos }}
+        run: |
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date +%Y-%m-%d)
+          BUILD_TIME=$(date +%H:%M:%S)
+          # Static libstdc++ wrapper dir (amd64): ONLY libstdc++.a so DuckDB #cgo -lstdc++
+          # resolves to the archive before the shared lib in /usr/lib/gcc/.../.
+          if [ "${{ matrix.goarch }}" == "amd64" ]; then
+            STATIC_CXX_DIR="$(pwd)/.static-cxx-link"
+            mkdir -p "${STATIC_CXX_DIR}"
+            LIBSTDCXX_A=$(gcc --print-file-name=libstdc++.a 2>/dev/null)
+            if [ -n "${LIBSTDCXX_A}" ] && [ -f "${LIBSTDCXX_A}" ]; then
+              ln -sf "${LIBSTDCXX_A}" "${STATIC_CXX_DIR}/libstdc++.a"
+              export CGO_LDFLAGS="-L${STATIC_CXX_DIR}"
+            fi
+            EXTLD="-extldflags '-static-libgcc -ldl'"
+          else
+            EXTLD=""
+          fi
+          LDFLAGS="-s -w -X main.VERSION_APPLICATION=${{ env.VERSION }} -X main.BuildDate=${BUILD_DATE} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} ${EXTLD}"
+          cd src && go build -ldflags "${LDFLAGS}" -o ../homer && cd ..
