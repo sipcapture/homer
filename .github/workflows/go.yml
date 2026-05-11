@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,7 +23,7 @@ jobs:
           sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.26.0'
 
@@ -59,7 +62,7 @@ jobs:
           sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: '1.26.0'
 
@@ -82,14 +85,14 @@ jobs:
             # Add arm64 repos (ports.ubuntu.com)
             if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
               sudo sed -i '/^Types:/i Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
-              sudo tee /etc/apt/sources.list.d/arm64-ports.sources <<EOF2
+              sudo tee /etc/apt/sources.list.d/arm64-ports.sources <<ARM64_SOURCES
           Types: deb
           URIs: http://ports.ubuntu.com/ubuntu-ports/
           Suites: ${CODENAME} ${CODENAME}-updates
           Components: main restricted universe multiverse
           Architectures: arm64
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-          EOF2
+          ARM64_SOURCES
             else
               sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
               echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports/ ${CODENAME} main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/arm64-ports.list
