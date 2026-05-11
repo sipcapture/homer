@@ -20,9 +20,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/mcuadros/go-defaults"
 	"github.com/spf13/viper"
 )
@@ -829,6 +831,12 @@ func Load(configPath string) (*Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
+	// AutomaticEnv() only reads ENV for keys that viper already "knows"
+	// (via SetDefault / config file). bindAllEnvs registers BindEnv for
+	// every scalar leaf of Config{} via reflection — without this,
+	// variables like HOMER_COORDINATOR_JWT_SECRET were silently ignored.
+	bindAllEnvs(v, reflect.TypeOf(Config{}), nil)
+
 	// Read config file
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -836,6 +844,12 @@ func Load(configPath string) (*Config, error) {
 		}
 		// Config file not found, use defaults + env vars
 	}
+
+	// Pre-scan ENV for indexed slices of structs
+	// (HOMER_*_VOLUMES_<idx>_*, HOMER_COORDINATOR_NODES_<idx>_*).
+	// Runs AFTER ReadInConfig so an operator can override volumes from
+	// homer.json via ENV in docker-compose.
+	applySliceEnvOverrides(v)
 
 	// Pre-populate the struct from `default:"..."` struct tags BEFORE
 	// Unmarshal. mapstructure's default decoder runs with ZeroFields=false,
@@ -852,7 +866,14 @@ func Load(configPath string) (*Config, error) {
 	var cfg Config
 	defaults.SetDefaults(&cfg)
 
-	if err := v.Unmarshal(&cfg); err != nil {
+	// WeaklyTypedInput enables type coercion at the mapstructure layer:
+	// strings "8" / "true" / "0.8" coming from ENV variables are
+	// correctly decoded into int / bool / float64 both for scalar fields
+	// and inside slice elements (volumes, nodes), which we feed into
+	// viper from applySliceEnvOverrides() as []map[string]any.
+	if err := v.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
+		dc.WeaklyTypedInput = true
+	}); err != nil {
 		return nil, fmt.Errorf("error unmarshaling config: %w", err)
 	}
 
