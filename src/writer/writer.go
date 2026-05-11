@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -99,11 +100,11 @@ type incomingPacket struct {
 
 // Stats holds packet processing statistics
 type Stats struct {
-	PktCount   uint64 // received (all packets that arrived)
-	DropCount  uint64 // dropped: queue full
-	ErrCount   uint64 // dropped: decode error
-	DupCount   uint64 // dropped: filtered (invalid proto, script discard)
-	HEPCount   uint64 // processed and written to storage
+	PktCount  uint64 // received (all packets that arrived)
+	DropCount uint64 // dropped: queue full
+	ErrCount  uint64 // dropped: decode error
+	DupCount  uint64 // dropped: filtered (invalid proto, script discard)
+	HEPCount  uint64 // processed and written to storage
 }
 
 const maxPktLen = 65507
@@ -294,9 +295,14 @@ func (w *Writer) Start() error {
 	// Start compaction service if enabled (on primary shard only — each shard
 	// has its own catalog, but compaction on the primary covers the main workload;
 	// for multi-shard compaction, a per-shard loop can be added later).
-	if w.storageConfig.DuckLake.Compaction.Enable {
+	//
+	// When multi-volume storage_policy is active with a local volume (hot parquet),
+	// compaction is always enabled on the writer DuckLake manager — hot data
+	// accumulates small files and cannot be safely turned off for that mode.
+	compactionEnable := w.storageConfig.DuckLake.Compaction.Enable || w.shouldAutoEnableCompactionForTieredHot()
+	if compactionEnable {
 		compactionCfg := CompactionConfig{
-			Enable:                    w.storageConfig.DuckLake.Compaction.Enable,
+			Enable:                    true,
 			CheckIntervalSec:          w.storageConfig.DuckLake.Compaction.CheckIntervalSec,
 			RetentionDays:             w.storageConfig.DuckLake.Compaction.RetentionDays,
 			SnapshotExpireIntervalSec: w.storageConfig.DuckLake.Compaction.SnapshotExpireIntervalSec,
@@ -304,6 +310,10 @@ func (w *Writer) Start() error {
 			MinFileSizeBytes:          w.storageConfig.DuckLake.Compaction.MinFileSizeBytes,
 			MaxFileSizeBytes:          w.storageConfig.DuckLake.Compaction.MaxFileSizeBytes,
 			MaxCompactedFiles:         w.storageConfig.DuckLake.Compaction.MaxCompactedFiles,
+		}
+		if !w.storageConfig.DuckLake.Compaction.Enable && w.shouldAutoEnableCompactionForTieredHot() {
+			logger.Info("Writer: DuckLake compaction auto-enabled (tiered storage with local hot volume)",
+				"lake", w.ducklakeManager.GetLakeName())
 		}
 		if compactionCfg.CheckIntervalSec <= 0 {
 			compactionCfg.CheckIntervalSec = 3600 // default 1 hour
@@ -526,8 +536,8 @@ func (w *Writer) EnqueuePacket(data []byte, protocol string) {
 
 	select {
 	case w.inputCh <- incomingPacket{
-		data:      buf[:n],
-		protocol:  protocol,
+		data:       buf[:n],
+		protocol:   protocol,
 		receivedAt: receivedAt,
 	}:
 		metrics.SetWorkerQueueDepth(float64(len(w.inputCh)))
@@ -843,18 +853,19 @@ func (w *Writer) startTieringService() error {
 	volumes := make([]ducklake.Volume, len(policy.Volumes))
 	for i, vol := range policy.Volumes {
 		volumes[i] = ducklake.Volume{
-			Name:           vol.Name,
-			Type:           ducklake.VolumeType(vol.Type),
-			Path:           vol.Path,
-			Priority:       vol.Priority,
-			MaxDataAgeDays: vol.MaxDataAgeDays,
-			MaxSizeGB:      vol.MaxSizeGB,
-			LakeName:       w.storageConfig.DuckLake.LakeName + "_" + vol.Name,
-			S3Region:       vol.S3Region,
-			S3AccessKey:    vol.S3AccessKeyID,
-			S3SecretKey:    vol.S3SecretKey,
-			S3Endpoint:     vol.S3Endpoint,
-			S3UseSSL:       vol.S3UseSSL,
+			Name:             vol.Name,
+			Type:             ducklake.VolumeType(vol.Type),
+			Path:             vol.Path,
+			Priority:         vol.Priority,
+			MaxDataAgeDays:   vol.MaxDataAgeDays,
+			MaxSizeGB:        vol.MaxSizeGB,
+			LakeName:         w.storageConfig.DuckLake.LakeName + "_" + vol.Name,
+			S3Region:         vol.S3Region,
+			S3AccessKey:      vol.S3AccessKeyID,
+			S3SecretKey:      vol.S3SecretKey,
+			S3Endpoint:       vol.S3Endpoint,
+			S3UseSSL:         vol.S3UseSSL,
+			OverrideDataPath: vol.OverrideDataPath,
 		}
 	}
 
@@ -905,6 +916,23 @@ func (w *Writer) startTieringService() error {
 
 	logger.Info("Writer: Tiering service started", "volumes", len(volumes))
 	return nil
+}
+
+// shouldAutoEnableCompactionForTieredHot reports whether DuckLake compaction must
+// stay on for the writer catalog: multi-volume storage_policy with at least one
+// local volume (hot parquet). In that mode hot data churns many small files;
+// compaction.enable=false is ignored so operators cannot accidentally disable it.
+func (w *Writer) shouldAutoEnableCompactionForTieredHot() bool {
+	p := w.storageConfig.DuckLake.StoragePolicy
+	if !p.Enable || len(p.Volumes) < 2 {
+		return false
+	}
+	for _, v := range p.Volumes {
+		if strings.EqualFold(strings.TrimSpace(v.Type), "local") {
+			return true
+		}
+	}
+	return false
 }
 
 // GetDB returns the underlying DuckDB connection used by the writer.

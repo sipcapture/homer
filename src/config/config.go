@@ -604,7 +604,7 @@ type VolumeConfig struct {
 	Name           string `json:"name" mapstructure:"name"`                                       // Volume name (e.g., "hot", "cold")
 	Type           string `json:"type" mapstructure:"type" default:"local"`                       // "local" or "s3"
 	Path           string `json:"path" mapstructure:"path"`                                       // Data path: local path or S3 URL (s3://bucket/path/)
-	CatalogType    string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"` // DuckLake catalog — sqlite
+	CatalogType    string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"`      // DuckLake catalog — sqlite
 	CatalogPath    string `json:"catalog_path" mapstructure:"catalog_path"`                       // Catalog path for this volume
 	Priority       int    `json:"priority" mapstructure:"priority" default:"0"`                   // Lower = higher priority (writes go to lowest)
 	MaxDataAgeDays int    `json:"max_data_age_days" mapstructure:"max_data_age_days" default:"0"` // Move data older than N days to next volume (0 = no limit)
@@ -614,10 +614,17 @@ type VolumeConfig struct {
 	S3SecretKey    string `json:"s3_secret_access_key" mapstructure:"s3_secret_access_key" default:""`
 	S3Endpoint     string `json:"s3_endpoint" mapstructure:"s3_endpoint" default:""` // For S3-compatible (R2, MinIO)
 	S3UseSSL       bool   `json:"s3_use_ssl" mapstructure:"s3_use_ssl" default:"true"`
+	// OverrideDataPath passes OVERRIDE_DATA_PATH TRUE to DuckLake ATTACH when the path
+	// in config intentionally differs from DATA_PATH stored in an existing catalog
+	// (e.g. bucket rename, or node path typo vs writer). Prefer matching paths first.
+	OverrideDataPath bool `json:"override_data_path" mapstructure:"override_data_path" default:"false"`
 }
 
 // CompactionConfig configures automatic compaction and retention
 type CompactionConfig struct {
+	// Enable turns on periodic compaction on the writer DuckLake catalog.
+	// When storage_policy has multiple volumes and at least one local volume,
+	// the writer forces compaction on regardless of this flag (hot parquet).
 	Enable           bool `json:"enable" mapstructure:"enable" default:"false"`
 	CheckIntervalSec int  `json:"check_interval_sec" mapstructure:"check_interval_sec" default:"3600"` // 1 hour
 	RetentionDays    int  `json:"retention_days" mapstructure:"retention_days" default:"0"`            // 0 = disabled
@@ -671,14 +678,14 @@ type CoordinatorHTTPServerConfig struct {
 
 // NodeEndpoint defines a FlightSQL node to query
 type NodeEndpoint struct {
-	Name     string `json:"name" mapstructure:"name"`
-	Host     string `json:"host" mapstructure:"host"`
-	Port     int    `json:"port" mapstructure:"port" default:"50051"`
+	Name string `json:"name" mapstructure:"name"`
+	Host string `json:"host" mapstructure:"host"`
+	Port int    `json:"port" mapstructure:"port" default:"50051"`
 	// FlightSQLPort is the node's Apache Arrow FlightSQL gRPC port (Grafana). Zero = not used by coordinator FlightSQL proxy.
 	FlightSQLPort int    `json:"flightsql_port" mapstructure:"flightsql_port" default:"0"`
-	UseTLS   bool   `json:"use_tls" mapstructure:"use_tls" default:"false"`
-	Token    string `json:"token" mapstructure:"token" default:""`
-	Priority int    `json:"priority" mapstructure:"priority" default:"0"`
+	UseTLS        bool   `json:"use_tls" mapstructure:"use_tls" default:"false"`
+	Token         string `json:"token" mapstructure:"token" default:""`
+	Priority      int    `json:"priority" mapstructure:"priority" default:"0"`
 }
 
 // JWTConfig configures JWT authentication

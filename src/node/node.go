@@ -765,9 +765,9 @@ func (n *Node) vacuumVolume(lakeName, expireOlderThan string) []map[string]inter
 		if vol.LakeName == lakeName && vol.Path != "" {
 			removed := removeEmptyDirs(filepath.Join(vol.Path, "main"))
 			results = append(results, map[string]interface{}{
-				"step":              "cleanup_empty_dirs",
-				"status":            "ok",
-				"dirs_removed":      removed,
+				"step":         "cleanup_empty_dirs",
+				"status":       "ok",
+				"dirs_removed": removed,
 			})
 			break
 		}
@@ -1000,9 +1000,13 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 	}
 
 	// Build attach statement (SQLite catalog only)
+	overrideOpt := ""
+	if vol.OverrideDataPath {
+		overrideOpt = ", OVERRIDE_DATA_PATH TRUE"
+	}
 	attachSQL := fmt.Sprintf(
-		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE);",
-		catalogPath, lakeName, vol.Path,
+		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE%s);",
+		catalogPath, lakeName, vol.Path, overrideOpt,
 	)
 	if _, err := db.Exec(attachSQL); err != nil {
 		return VolumeInfo{}, fmt.Errorf("failed to attach: %w", err)

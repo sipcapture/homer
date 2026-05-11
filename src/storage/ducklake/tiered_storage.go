@@ -45,6 +45,9 @@ type Volume struct {
 	S3SecretKey string
 	S3Endpoint  string
 	S3UseSSL    bool
+
+	// OverrideDataPath passes OVERRIDE_DATA_PATH TRUE to DuckLake ATTACH; see config.VolumeConfig.
+	OverrideDataPath bool
 }
 
 // TieredStorageConfig holds configuration for tiered storage
@@ -218,9 +221,13 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 	}
 
 	// Build attach statement (SQLite catalog only)
+	overrideOpt := ""
+	if vol.OverrideDataPath {
+		overrideOpt = ", OVERRIDE_DATA_PATH TRUE"
+	}
 	attachSQL := fmt.Sprintf(
-		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE);",
-		catalogPath, vol.LakeName, vol.Path,
+		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE%s);",
+		catalogPath, vol.LakeName, vol.Path, overrideOpt,
 	)
 
 	if _, err := tsm.db.Exec(attachSQL); err != nil {

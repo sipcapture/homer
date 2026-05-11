@@ -285,15 +285,24 @@ func (ts *TieringService) moveOldestPartitions(srcVol, dstVol *ducklake.Volume, 
 func (ts *TieringService) moveOldPartitions(srcVol, dstVol *ducklake.Volume) (int64, error) {
 	cutoffDate := time.Now().AddDate(0, 0, -srcVol.MaxDataAgeDays).Format("2006-01-02")
 
-	logger.Debug("TieringService: Checking for old partitions",
+	logger.Info("TieringService: TTL partition scan",
 		"source", srcVol.Name,
 		"dest", dstVol.Name,
-		"cutoff", cutoffDate)
+		"max_data_age_days", srcVol.MaxDataAgeDays,
+		"partition_date_cutoff", cutoffDate,
+		"rule", "SELECT DISTINCT date WHERE date < cutoff (calendar partition column, not ingest wall clock)")
 
 	// Get all tables in source volume
 	tables, err := ts.tieredStorage.GetTableNames(srcVol)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get table names: %w", err)
+	}
+	if len(tables) == 0 {
+		logger.Info("TieringService: No hep_proto* tables on tiered source volume — nothing to move by age",
+			"source", srcVol.Name,
+			"lake", srcVol.LakeName,
+			"hint", "Tiering runs on the TieredStorageManager DuckDB; if that catalog has no tables while ingest uses the writer DuckLake only, hot tier stays empty until writer and tiered paths share the same catalog data.")
+		return 0, nil
 	}
 
 	var totalMoved int64
@@ -353,6 +362,13 @@ func (ts *TieringService) moveOldPartitions(srcVol, dstVol *ducklake.Volume) (in
 	}
 
 	wg.Wait()
+	if totalMoved == 0 {
+		logger.Info("TieringService: TTL pass completed with no moves",
+			"source", srcVol.Name,
+			"tables_checked", len(tables),
+			"partition_date_cutoff", cutoffDate,
+			"hint", "No partition date values strictly before cutoff; fresh data often keeps all rows in recent calendar dates.")
+	}
 	return totalMoved, nil
 }
 

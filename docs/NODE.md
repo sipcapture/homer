@@ -148,6 +148,7 @@ See [FLIGHTSQL.md](FLIGHTSQL.md) for Grafana setup and coordinator proxy (`coord
 | `s3_secret_access_key` | string | - | AWS Secret Access Key |
 | `s3_endpoint` | string | - | Custom S3 endpoint (MinIO, R2) |
 | `s3_use_ssl` | bool | true | Use SSL for S3 connections |
+| `override_data_path` | bool | false | If true, DuckLake `ATTACH` uses `OVERRIDE_DATA_PATH TRUE` so `path` may differ from the `DATA_PATH` already stored in the catalog (e.g. bucket rename). Prefer keeping `path` identical to the writer volume that created the catalog. |
 
 ### Volume `name` and the DuckDB catalog
 
@@ -316,6 +317,7 @@ Current code also rewrites coordinator SQL to use **`node.ducklake.lake_name`** 
 | Symptom | Likely cause |
 |---------|----------------|
 | `Binder Error: Catalog "homer_lake_…" does not exist` on search / API queries | Rewritten SQL referenced a suffixed catalog (from `volumes[].name`) that is not attached on the **connection** running the query — e.g. all-in-one with shared writer DB while the node volume used a non-`default` label. Fix: same `lake_name` and paths as storage, mirror tiered volume names with [STORAGE_POLICIES.md](STORAGE_POLICIES.md), use `"name": "default"` for the single primary volume, or use a build that includes shared-DB single-volume catalog normalization (see `duckLakeCatalogForQuery` in [`src/node/node.go`](../src/node/node.go)). |
+| `DATA_PATH … does not match existing data path in the catalog` on Node attach | The S3/local `path` for a volume must match the path recorded when the catalog was first created (usually by the writer). Fix: align `path` with `storage.ducklake.storage_policy.volumes` for that volume, or set **`override_data_path": true`** on that volume (DuckLake `OVERRIDE_DATA_PATH`) if you intentionally moved data or renamed the bucket prefix. |
 
 ## Example Configurations
 
