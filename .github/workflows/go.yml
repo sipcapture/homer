@@ -37,5 +37,4 @@ jobs:
 
       - name: Compile project
         run: |
-          sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
           make release
