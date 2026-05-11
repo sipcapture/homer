@@ -1,32 +1,40 @@
-name: Go Builder
+name: Compile Check
 
 on:
-  push:
-    tags:
-      - 'v*'
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      go_version:
+        description: Go version override (e.g. 1.26.2)
+        required: false
+        default: "1.26.2"
+
+permissions:
+  contents: read
 
 jobs:
-
-  build:
+  compile:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
 
-    - name: Install build requirements
-      run: |
-        sudo apt update && sudo apt install -y libluajit-5.1-dev
+      - name: Install build requirements
+        run: |
+          sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.26.0'
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ github.event_name == 'workflow_dispatch' && inputs.go_version || '1.26.2' }}
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 22
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-    - name: Build
-      run: make release
+      - name: Compile project
+        run: |
+          make release
