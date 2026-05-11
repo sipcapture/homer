@@ -2,7 +2,7 @@ name: Compile Check
 
 on:
   pull_request:
-    branches: [ "main" ]
+    branches: [ "homer11" ]
   workflow_dispatch:
     inputs:
       go_version:
