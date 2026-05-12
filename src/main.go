@@ -28,6 +28,7 @@ import (
 	"time"
 
 	_ "github.com/duckdb/duckdb-go/v2"
+	_ "github.com/sipcapture/homer-core/src/glibcstub"
 	"github.com/mcuadros/go-defaults"
 	"github.com/sipcapture/homer-core/src/cli"
 	"github.com/sipcapture/homer-core/src/config"
