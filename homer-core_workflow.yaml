@@ -7,9 +7,13 @@ section: "default"
 priority: "extra"
 # No replaces/provides self-refs: Packagecloud has returned 500 on upload for this package;
 # they are redundant when the package name is already homer-core.
-#depends:
-#- dialog
-#runtime: go115
+overrides:
+  deb:
+    depends:
+      - libluajit-5.1-2
+  rpm:
+    depends:
+      - luajit
 
 maintainer: "QXIP <support@qxip.net>"
 description: |
