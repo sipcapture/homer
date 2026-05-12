@@ -176,10 +176,16 @@ jobs:
           ARCH: ${{ matrix.goarch }}
           OS: ${{ matrix.goos }}
       run: |
+          set -euo pipefail
           export VERSION="${VERSION#v}"
+          if [ "${{ matrix.goarch }}" = "amd64" ]; then export EXT_PLATFORM=linux_amd64; else export EXT_PLATFORM=linux_arm64; fi
+          export DUCKDB_VERSION=v1.5.2
+          ./scripts/download_duckdb_extensions.sh "$EXT_PLATFORM"
           sed -i 's/^arch: ".*"/arch: "${{ matrix.goarch }}"/' homer-core_workflow.yaml
-          ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.deb"
-          ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.rpm"
+          DUCKDB_VERSION="$DUCKDB_VERSION" EXT_PLATFORM="$EXT_PLATFORM" VERSION="$VERSION" \
+            ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.deb"
+          DUCKDB_VERSION="$DUCKDB_VERSION" EXT_PLATFORM="$EXT_PLATFORM" VERSION="$VERSION" \
+            ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.rpm"
 
     - name: Upload release
       if:  github.event_name == 'release' || ${{ inputs.release }}

@@ -39,6 +39,15 @@ contents:
   - src: ./examples/homer.json
     dst: /usr/local/homer-core/etc/homer.json.example
     type: config
+  # Pre-downloaded DuckDB extensions ($HOME/.duckdb; HOME=/usr/local/homer-core in homer-core.service).
+  # Build: scripts/download_duckdb_extensions.sh (see Makefile download-extensions).
+  # Set DUCKDB_VERSION and EXT_PLATFORM to match the script (CI sets both before nfpm).
+  - src: ./bundled_extensions/${DUCKDB_VERSION}/${EXT_PLATFORM}/ducklake.duckdb_extension
+    dst: /usr/local/homer-core/.duckdb/extensions/${DUCKDB_VERSION}/${EXT_PLATFORM}/ducklake.duckdb_extension
+    expand: true
+  - src: ./bundled_extensions/${DUCKDB_VERSION}/${EXT_PLATFORM}/sqlite_scanner.duckdb_extension
+    dst: /usr/local/homer-core/.duckdb/extensions/${DUCKDB_VERSION}/${EXT_PLATFORM}/sqlite_scanner.duckdb_extension
+    expand: true
 
 #  # These config files will not be replaced by new versions if they were
 #  # changed by the user. Corresponds to %config(noreplace).

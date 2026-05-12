@@ -37,6 +37,12 @@ contents:
   - src: /tmp/pkg/examples/homer.json
     dst: /usr/local/homer-core/etc/homer.json.example
     type: config
+  - src: /tmp/pkg/bundled_extensions/${DUCKDB_VERSION}/${EXT_PLATFORM}/ducklake.duckdb_extension
+    dst: /usr/local/homer-core/.duckdb/extensions/${DUCKDB_VERSION}/${EXT_PLATFORM}/ducklake.duckdb_extension
+    expand: true
+  - src: /tmp/pkg/bundled_extensions/${DUCKDB_VERSION}/${EXT_PLATFORM}/sqlite_scanner.duckdb_extension
+    dst: /usr/local/homer-core/.duckdb/extensions/${DUCKDB_VERSION}/${EXT_PLATFORM}/sqlite_scanner.duckdb_extension
+    expand: true
 
 #  # These config files will not be replaced by new versions if they were
 #  # changed by the user. Corresponds to %config(noreplace).

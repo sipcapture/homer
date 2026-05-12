@@ -13,6 +13,10 @@ GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 # Build flags
 LDFLAGS := -s -w -X main.VERSION_APPLICATION=$(VERSION) -X main.BuildDate=$(BUILD_DATE) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)
 
+# DuckDB extension bundle for deb/rpm — must match embedded DuckDB in src/go.mod
+# (github.com/duckdb/duckdb-go-bindings v0.10502.x → v1.5.2).
+DUCKDB_VERSION ?= v1.5.2
+
 # Used only by target glibc-polyfill (plain make release/all does not patch).
 # Example: make glibc-polyfill GLIBC_TARGET=2.28
 GLIBC_TARGET ?= 2.34
@@ -88,12 +92,16 @@ glibc-polyfil: glibc-polyfill
 frontend:
 	cd src/ui && npm install && npm run build
 
+# Pre-download extensions for nfpm packages (requires curl; run once per arch during CI/local package build).
+download-extensions:
+	DUCKDB_VERSION=$(DUCKDB_VERSION) ./scripts/download_duckdb_extensions.sh
+
 debug:
 	cd src && go build -ldflags "-X main.VERSION_APPLICATION=$(VERSION) -X main.BuildDate=$(BUILD_DATE) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)" -o ../$(NAME)
 
 modules:
 	cd src && go get ./...
 
-.PHONY: all release homer-only clean frontend debug modules glibc-polyfill glibc-polyfil
+.PHONY: all release homer-only clean frontend debug modules glibc-polyfill glibc-polyfil download-extensions
 clean:
-	rm -fr $(NAME) src/dist $(STATIC_CXX_DIR)
+	rm -fr $(NAME) src/dist $(STATIC_CXX_DIR) bundled_extensions
