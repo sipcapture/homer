@@ -485,14 +485,7 @@ func runServer() {
 	var nodeModule *node.Node
 
 	if isModular {
-		useStdout := false
-		for _, out := range cfg.Log.Output {
-			if out == "stdout" {
-				useStdout = true
-				break
-			}
-		}
-		logger.InitLoggerSimple(cfg.Log.Level, useStdout, cfg.Log.JSON)
+		logger.InitLoggerModular(&cfg.Log)
 		logger.Info("homer-core starting in modular mode...")
 		logger.Info("version", "version", VERSION_APPLICATION)
 		homerconfig.SystemSettingsGlobal.VersionApp = VERSION_APPLICATION
@@ -819,14 +812,7 @@ func runMCPSubcommand(args []string) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	useStdout := false
-	for _, out := range cfg.Log.Output {
-		if out == "stdout" {
-			useStdout = true
-			break
-		}
-	}
-	logger.InitLoggerSimple(cfg.Log.Level, useStdout, cfg.Log.JSON)
+	logger.InitLoggerModular(&cfg.Log)
 
 	m, err := homermcp.New(&cfg.MCP)
 	if err != nil {

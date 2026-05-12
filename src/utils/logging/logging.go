@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -28,6 +29,7 @@ import (
 
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/lmittmann/tint"
+	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/homerconfig"
 	"golang.org/x/term"
 )
@@ -69,6 +71,141 @@ func InitLogger() {
 	Logger = slog.New(handler)
 	Logger.Info("init logging system", "level", level.String())
 	slog.SetDefault(Logger)
+}
+
+// InitLoggerModular wires slog from config.Log (homer.json modular mode).
+// Supports multiple log.output destinations (e.g. file + stdout). Order is preserved
+// for io.MultiWriter. Empty output defaults to stdout.
+func InitLoggerModular(cfg *config.LogConfig) {
+	if cfg == nil {
+		InitLoggerSimple("info", true, false)
+		return
+	}
+
+	level := parseLevel(cfg.Level)
+	outputs := cfg.Output
+	if len(outputs) == 0 {
+		outputs = []string{"stdout"}
+	}
+
+	var writers []io.Writer
+	for _, raw := range outputs {
+		switch strings.ToLower(strings.TrimSpace(raw)) {
+		case "stdout":
+			writers = append(writers, os.Stdout)
+		case "file":
+			logPath := cfg.File.Path
+			logName := cfg.File.Name
+			if p := os.Getenv("HOMER_SERVER_LOGPATH"); p != "" {
+				logPath = p
+			}
+			if n := os.Getenv("HOMER_SERVER_LOGNAME"); n != "" {
+				logName = n
+			}
+			w, err := newRotateLogWriter(logPath, logName, cfg.File.MaxAgeDays, cfg.File.RotationHours, cfg.File.MaxSizeMB)
+			if err != nil {
+				log.Printf("logging: file output init failed: %v", err)
+				continue
+			}
+			writers = append(writers, w)
+		case "syslog":
+			sw := newModularSyslogWriter(cfg.Syslog, cfg.JSON)
+			if sw != nil {
+				writers = append(writers, sw)
+			}
+		default:
+			log.Printf("logging: unknown log.output %q ignored", raw)
+		}
+	}
+
+	writer := mergeWriters(writers)
+	log.SetOutput(writer)
+	handler := newHandler(writer, level, cfg.JSON)
+	Logger = slog.New(handler)
+	Logger.Info("init logging system", "level", level.String())
+	slog.SetDefault(Logger)
+}
+
+func mergeWriters(writers []io.Writer) io.Writer {
+	if len(writers) == 0 {
+		return os.Stderr
+	}
+	if len(writers) == 1 {
+		return writers[0]
+	}
+	return io.MultiWriter(writers...)
+}
+
+// newRotateLogWriter returns a size- and/or time-based rotating log writer.
+func newRotateLogWriter(logPath, logName string, maxAgeDays, rotationHours, maxSizeMB int) (io.Writer, error) {
+	if logPath == "" {
+		logPath = "/var/log/homer"
+	}
+	if logName == "" {
+		logName = "homer.log"
+	}
+	if err := os.MkdirAll(logPath, 0755); err != nil {
+		return nil, err
+	}
+	maxAge := maxAgeDays
+	if maxAge <= 0 {
+		maxAge = 7
+	}
+	rotH := rotationHours
+	if rotH <= 0 {
+		rotH = 24
+	}
+
+	fileLogExtension := filepath.Ext(logName)
+	fileLogBase := strings.TrimSuffix(logName, fileLogExtension)
+	pathAllLog := filepath.Join(logPath, fileLogBase+"_%Y%m%d%H%M"+fileLogExtension)
+	pathLog := filepath.Join(logPath, logName)
+
+	opts := []rotatelogs.Option{
+		rotatelogs.WithLinkName(pathLog),
+		rotatelogs.WithMaxAge(time.Duration(maxAge) * 24 * time.Hour),
+		rotatelogs.WithRotationTime(time.Duration(rotH) * time.Hour),
+	}
+	if maxSizeMB > 0 {
+		opts = append(opts, rotatelogs.WithRotationSize(int64(maxSizeMB)*1024*1024))
+	}
+
+	return rotatelogs.New(pathAllLog, opts...)
+}
+
+func newModularSyslogWriter(sys config.SyslogLogConfig, jsonFormat bool) io.Writer {
+	tag := strings.TrimSpace(sys.Tag)
+	if tag == "" {
+		tag = "homer-core"
+	}
+	pri := modularSyslogPriority(sys.Level)
+	w, err := dialModularSyslog(strings.TrimSpace(sys.URI), syslog.Priority(pri), tag)
+	if err != nil {
+		log.Printf("logging: syslog output init failed: %v", err)
+		return nil
+	}
+	return &syslogWriter{writer: w, jsonFormat: jsonFormat}
+}
+
+func modularSyslogPriority(level string) syslogPriority {
+	s := strings.ToLower(strings.TrimSpace(level))
+	s = strings.TrimPrefix(s, "log_")
+	return getSevirtyByName(s)
+}
+
+func dialModularSyslog(uri string, pri syslog.Priority, tag string) (*syslog.Writer, error) {
+	if uri == "" {
+		return syslog.New(pri, tag)
+	}
+	u := strings.TrimSpace(uri)
+	switch {
+	case strings.HasPrefix(u, "udp://"):
+		return syslog.Dial("udp", strings.TrimPrefix(u, "udp://"), pri, tag)
+	case strings.HasPrefix(u, "tcp://"):
+		return syslog.Dial("tcp", strings.TrimPrefix(u, "tcp://"), pri, tag)
+	default:
+		return nil, fmt.Errorf("syslog uri must be empty, udp://host:port, or tcp://host:port, got %q", uri)
+	}
 }
 
 // InitLoggerSimple initializes slog with simple settings.
@@ -158,7 +295,6 @@ func configureWriter(stdout bool, syslogEnabled bool, jsonFormat bool) io.Writer
 func configureLocalFileSystemHook() io.Writer {
 	logPath := homerconfig.MainConfig.Setting.LOG_SETTINGS.Path
 	logName := homerconfig.MainConfig.Setting.LOG_SETTINGS.Name
-	var err error
 
 	if configPath := os.Getenv("HOMER_SERVER_LOGPATH"); configPath != "" {
 		logPath = configPath
@@ -168,17 +304,12 @@ func configureLocalFileSystemHook() io.Writer {
 		logName = configName
 	}
 
-	fileLogExtension := filepath.Ext(logName)
-	fileLogBase := strings.TrimSuffix(logName, fileLogExtension)
-
-	pathAllLog := logPath + "/" + fileLogBase + "_%Y%m%d%H%M" + fileLogExtension
-	pathLog := logPath + "/" + logName
-
-	rotator, err := rotatelogs.New(
-		pathAllLog,
-		rotatelogs.WithLinkName(pathLog),
-		rotatelogs.WithMaxAge(time.Duration(homerconfig.MainConfig.Setting.LOG_SETTINGS.MaxAgeDays)*time.Hour*24),
-		rotatelogs.WithRotationTime(time.Duration(homerconfig.MainConfig.Setting.LOG_SETTINGS.RotationHours)*time.Hour),
+	rotator, err := newRotateLogWriter(
+		logPath,
+		logName,
+		int(homerconfig.MainConfig.Setting.LOG_SETTINGS.MaxAgeDays),
+		int(homerconfig.MainConfig.Setting.LOG_SETTINGS.RotationHours),
+		0,
 	)
 	if err != nil {
 		log.Printf("Local file system hook initialize fail: %v", err)
