@@ -162,13 +162,13 @@ jobs:
       run: cp homer homer-core_${{ matrix.goarch }}
 
     - name: get NFPM
-      if:  github.event_name == 'release' || ${{ inputs.release }}
+      if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release) }}
       run: |
           wget -qO- https://github.com/goreleaser/nfpm/releases/download/v2.41.1/nfpm_2.41.1_Linux_x86_64.tar.gz | tar --directory ./ -xz nfpm
           chmod +x nfpm
 
     - name: Create Packages ${{ matrix.goarch }}
-      if:  github.event_name == 'release' || ${{ inputs.release }}
+      if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release) }}
       env:
           VERSION: ${{ env.VERSION }}
           PACKAGE: "homer-core"
@@ -188,7 +188,7 @@ jobs:
             ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.rpm"
 
     - name: Upload release
-      if:  github.event_name == 'release' || ${{ inputs.release }}
+      if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release) }}
       uses: boxpositron/upload-multiple-releases@1.0.7
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -204,7 +204,7 @@ jobs:
         overwrite: true
 
     - name: Upload package artifacts (Packagecloud job)
-      if: github.event_name == 'release' || ${{ inputs.release }}
+      if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release) }}
       uses: actions/upload-artifact@v4
       with:
         name: homer-core-pkg-${{ matrix.goarch }}
