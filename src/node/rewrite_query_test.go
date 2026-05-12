@@ -69,6 +69,24 @@ func TestRewriteQueryForVolumes_sharedDBMultiVolumeSkipsUnion(t *testing.T) {
 	}
 }
 
+func TestDuckDBForTieredTablePresence(t *testing.T) {
+	cfg := &config.NodeConfig{DuckLake: config.DuckLakeConfig{LakeName: "homer_lake"}}
+	dbMain := new(sql.DB)
+	dbTier := new(sql.DB)
+	n := &Node{config: cfg, db: dbMain}
+	if g := n.duckDBForTieredTablePresence(); g != dbMain {
+		t.Fatalf("without sharedDB: got %p want db", g)
+	}
+	n.sharedDB = new(sql.DB)
+	if g := n.duckDBForTieredTablePresence(); g != dbMain {
+		t.Fatalf("sharedDB without tieredQueryDB: got %p want db", g)
+	}
+	n.tieredQueryDB = dbTier
+	if g := n.duckDBForTieredTablePresence(); g != dbTier {
+		t.Fatalf("sharedDB with tieredQueryDB: got %p want tieredQueryDB", g)
+	}
+}
+
 func TestTryBuildVolumeUnionSQL_multiVolume(t *testing.T) {
 	cfg := &config.NodeConfig{DuckLake: config.DuckLakeConfig{LakeName: "homer_lake"}}
 	n := &Node{

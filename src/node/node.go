@@ -674,8 +674,44 @@ func (n *Node) rewriteQueryForVolumes(sql string) string {
 	return sql
 }
 
+// duckDBForTieredTablePresence returns the DuckDB connection on which
+// tryBuildVolumeUnionSQL output will be executed for information_schema checks:
+// merged writer+tiered path uses tieredQueryDB; standalone multi-volume rewrites use n.db.
+func (n *Node) duckDBForTieredTablePresence() *sql.DB {
+	if n.sharedDB != nil {
+		if td := n.tieredQueryDBForRead(); td != nil {
+			return td
+		}
+	}
+	return n.db
+}
+
+func tieredSQLIdentLiteral(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
+
+// tieredTableExists reports whether main.<tableName> exists in lake <lakeName> on db.
+func tieredTableExists(db *sql.DB, lakeName, tableName string) bool {
+	if db == nil {
+		return false
+	}
+	q := fmt.Sprintf(`
+		SELECT COUNT(*) FROM information_schema.tables
+		WHERE table_catalog = '%s'
+		  AND table_schema = 'main'
+		  AND table_name = '%s'
+	`, tieredSQLIdentLiteral(lakeName), tieredSQLIdentLiteral(tableName))
+	var count int
+	if err := db.QueryRow(q).Scan(&count); err != nil {
+		return false
+	}
+	return count > 0
+}
+
 // tryBuildVolumeUnionSQL builds SELECT ... UNION ALL ... across configured volumes
 // for execution on the TieredStorageManager DuckDB (hot + cold catalogs).
+// Volumes where the table is missing in that DuckDB instance are skipped so a cold
+// lake without a given hep_proto_* table does not break the whole UNION.
 func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 	if len(n.volumes) <= 1 {
 		return "", false
@@ -714,13 +750,21 @@ func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 	tableFQN := sql[tableStart:tableEnd]
 	tableName := tableFQN[len(tablePattern):]
 
+	presenceDB := n.duckDBForTieredTablePresence()
 	var unionParts []string
 	for _, vol := range n.volumes {
 		cat := n.duckLakeCatalogForQuery(vol)
+		if presenceDB != nil && !tieredTableExists(presenceDB, cat, tableName) {
+			continue
+		}
 		volTableFQN := cat + ".main." + tableName
 		rewrittenPart := strings.Replace(sql, tableFQN, volTableFQN, 1)
 		rewrittenPart = addStorageColumnsToQuery(rewrittenPart, cat, vol.Name)
 		unionParts = append(unionParts, "("+rewrittenPart+")")
+	}
+
+	if len(unionParts) == 0 {
+		return "", false
 	}
 
 	return strings.Join(unionParts, " UNION ALL "), true
