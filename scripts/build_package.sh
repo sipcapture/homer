@@ -63,17 +63,49 @@ if [ -d "${SRC_DIR}/ui" ]; then
   cd "${BUILD_DIR}"
 fi
 
-# ── Compile homer ──────────────────────────────────────────────────────────────
+# ── Compile homer (static LuaJIT + amd64 static libstdc++ for DuckDB, same as CI) ─
 echo "==> Compiling ${BINARY} ..."
 LDFLAGS="-s -w \
   -X main.VERSION_APPLICATION=${VERSION} \
   -X main.BuildDate=${BUILD_DATE} \
   -X main.BuildTime=${BUILD_TIME} \
   -X main.GitCommit=${GIT_COMMIT}"
+STATIC_LINK_DIR="${BUILD_DIR}/.static-cgo-link"
+mkdir -p "${STATIC_LINK_DIR}"
+if [ "$ARCH" = "amd64" ]; then
+  LIBSTDCXX_A=$(gcc --print-file-name=libstdc++.a 2>/dev/null)
+  if [ -n "${LIBSTDCXX_A}" ] && [ -f "${LIBSTDCXX_A}" ]; then
+    ln -sf "${LIBSTDCXX_A}" "${STATIC_LINK_DIR}/libstdc++.a"
+  fi
+  LUAJIT_A=$(gcc --print-file-name=libluajit-5.1.a 2>/dev/null)
+  LDFLAGS="${LDFLAGS} -extldflags '-static-libgcc -ldl'"
+elif [ "$ARCH" = "arm64" ]; then
+  LUAJIT_A=$(gcc --print-file-name=libluajit-5.1.a 2>/dev/null)
+else
+  echo "Unsupported arch: $ARCH" >&2
+  exit 1
+fi
+if [ -z "${LUAJIT_A}" ] || [ ! -f "${LUAJIT_A}" ]; then
+  echo "error: libluajit-5.1.a not found (install libluajit-5.1-dev)" >&2
+  exit 1
+fi
+ln -sf "${LUAJIT_A}" "${STATIC_LINK_DIR}/libluajit-5.1.a"
+export CGO_LDFLAGS="-L${STATIC_LINK_DIR} -Wl,-Bstatic -lluajit-5.1 -Wl,-Bdynamic"
 
 cd "${SRC_DIR}"
 CGO_ENABLED=1 go build -ldflags "${LDFLAGS}" -o "${BUILD_DIR}/${BINARY}"
 cd "${BUILD_DIR}"
+
+if [ "$ARCH" = "amd64" ] && ldd "${BINARY}" 2>/dev/null | grep -q libluajit; then
+  echo "error: ${BINARY} still links libluajit dynamically" >&2
+  ldd "${BINARY}" || true
+  exit 1
+fi
+if [ "$ARCH" = "arm64" ] && command -v ldd >/dev/null && ldd "${BINARY}" 2>/dev/null | grep -q libluajit; then
+  echo "error: ${BINARY} still links libluajit dynamically" >&2
+  ldd "${BINARY}" || true
+  exit 1
+fi
 
 echo "    Binary: $(ls -lh "${BUILD_DIR}/${BINARY}" | awk '{print $5, $9}')"
 

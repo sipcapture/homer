@@ -20,7 +20,7 @@ RUN make modules && make all
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates bash sqlite3 libluajit-5.1-2 \
+    ca-certificates bash sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /

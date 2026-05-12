@@ -53,6 +53,7 @@ agent_planning/
 # Temp DuckDB files
 .tmp/.static-cxx-link/
 .static-cxx-link/
+.static-cgo-link/
 
 # Locally-built distribution artifacts (never belong in the repo;
 # release pipeline publishes them as Github releases instead).

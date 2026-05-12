@@ -99,9 +99,35 @@ jobs:
         GIT_COMMIT=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +%Y-%m-%d)
         BUILD_TIME=$(date +%H:%M:%S)
-        LDFLAGS="-s -w -X main.VERSION_APPLICATION=${{ env.VERSION }} -X main.BuildDate=${BUILD_DATE} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}"
+        STATIC_LINK_DIR="$(pwd)/.static-cgo-link"
+        mkdir -p "${STATIC_LINK_DIR}"
+        if [ "${{ matrix.goarch }}" == "amd64" ]; then
+          LIBSTDCXX_A=$(gcc --print-file-name=libstdc++.a 2>/dev/null)
+          if [ -n "${LIBSTDCXX_A}" ] && [ -f "${LIBSTDCXX_A}" ]; then
+            ln -sf "${LIBSTDCXX_A}" "${STATIC_LINK_DIR}/libstdc++.a"
+          fi
+          LUAJIT_A=$(gcc --print-file-name=libluajit-5.1.a 2>/dev/null)
+          EXTLD="-extldflags '-static-libgcc -ldl'"
+        else
+          LUAJIT_A=$(aarch64-linux-gnu-gcc --print-file-name=libluajit-5.1.a 2>/dev/null)
+          EXTLD=""
+        fi
+        if [ -z "${LUAJIT_A}" ] || [ ! -f "${LUAJIT_A}" ]; then
+          echo "ERROR: libluajit-5.1.a not found for ${{ matrix.goarch }} (install libluajit-5.1-dev)" >&2
+          exit 1
+        fi
+        ln -sf "${LUAJIT_A}" "${STATIC_LINK_DIR}/libluajit-5.1.a"
+        export CGO_LDFLAGS="-L${STATIC_LINK_DIR} -Wl,-Bstatic -lluajit-5.1 -Wl,-Bdynamic"
+        LDFLAGS="-s -w -X main.VERSION_APPLICATION=${{ env.VERSION }} -X main.BuildDate=${BUILD_DATE} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT} ${EXTLD}"
         cd src && go build -ldflags "${LDFLAGS}" -o ../homer && cd ..
         cp homer homer-core_${{ matrix.goarch }}
+        if [ "${{ matrix.goarch }}" == "amd64" ]; then
+          if ldd homer 2>/dev/null | grep -q libluajit; then
+            echo "ERROR: homer still links libluajit dynamically" >&2
+            ldd homer || true
+            exit 1
+          fi
+        fi
 
     - name: Apply glibc polyfill
       if: matrix.goarch == 'amd64'

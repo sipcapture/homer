@@ -6,13 +6,9 @@ version: "${VERSION}"
 section: "default"
 priority: "extra"
 # See homer-core_workflow.yaml — no replaces/provides self-refs (Packagecloud upload).
-overrides:
-  deb:
-    depends:
-      - libluajit-5.1-2
-  rpm:
-    depends:
-      - luajit
+#depends:
+#- dialog
+#runtime: go115
 
 maintainer: "QXIP <support@qxip.net>"
 description: |
