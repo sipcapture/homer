@@ -19,7 +19,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         goos: [linux]
@@ -134,10 +134,28 @@ jobs:
 
     - name: Apply glibc polyfill
       if: matrix.goarch == 'amd64'
-      uses: lmangani/polyfill-glibc-action@1.1.5
-      with:
-        glibc: '2.34'
-        target: ${{ github.workspace }}/homer
+      run: |
+        set -euo pipefail
+        # Image entrypoint uses "polyfill ... || echo" which masks failures; also
+        # needs GITHUB_OUTPUT set when not running inside GitHub's action runner.
+        docker run --rm \
+          -e GITHUB_OUTPUT=/dev/null \
+          -e INPUT_TARGET=/work/homer \
+          -e INPUT_GLIBC=2.34 \
+          -e INPUT_INSTALL= \
+          -v "${{ github.workspace }}:/work" \
+          ghcr.io/lmangani/polyfill-glibc-action:latest
+
+    - name: Verify glibc polyfill (amd64)
+      if: matrix.goarch == 'amd64'
+      run: |
+        set -euo pipefail
+        if objdump -T homer | grep -E '@GLIBC_2\.(3[5-9]|[4-9][0-9])'; then
+          echo "::error::homer still references GLIBC > 2.34 after polyfill (objdump -T)" >&2
+          objdump -T homer | grep GLIBC | sort -u || true
+          exit 1
+        fi
+        echo "OK: no GLIBC > 2.34 versioned symbols in dynamic table"
 
     - name: Sync homer-core release binary after polyfill
       if: matrix.goarch == 'amd64'

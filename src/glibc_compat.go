@@ -11,8 +11,11 @@ package main
 //                    RHEL 8 / glibc 2.28); on those builds the real symbol may
 //                    be found via dlsym at runtime and proxied, or -1 is
 //                    returned to trigger libgcc's legacy FDE lookup fallback.
-//                    On glibc 2.35+ the stub is suppressed entirely to avoid a
-//                    "conflicting types" error — the real symbol is used directly.
+//                    On glibc 2.36+ the stub is suppressed to avoid a "conflicting
+//                    types" error with <dlfcn.h> on very new distros. On glibc
+//                    2.35 (Ubuntu 22.04 / jammy) the stub stays enabled so release
+//                    binaries do not record _dl_find_object@GLIBC_2.35 — otherwise
+//                    polyfill-glibc cannot lower them to 2.34.
 //
 // __libc_single_threaded — added in glibc 2.32; a global flag used by mutex
 //                    fast-paths. Defaulting to 0 (multi-threaded) is safe.
@@ -39,8 +42,8 @@ package main
 // system headers already provide a declaration — redeclaring with a different
 // struct name (struct _dl_find_object_result vs. struct dl_find_object)
 // triggers a "conflicting types" compiler error on Ubuntu 24.04 ARM64
-// (glibc 2.38) and other platforms shipping glibc 2.35+.
-#if !__GLIBC_PREREQ(2, 35)
+// (glibc 2.38) and other platforms shipping glibc 2.36+.
+#if !__GLIBC_PREREQ(2, 36)
 // Forward-declare the public struct introduced in glibc 2.35.  The stub
 // never accesses any fields, so an incomplete type is sufficient here.
 struct dl_find_object;
@@ -74,7 +77,7 @@ int _dl_find_object(void *address, struct dl_find_object *result)
     errno = ENOSYS;
     return -1;
 }
-#endif // !__GLIBC_PREREQ(2, 35)
+#endif // !__GLIBC_PREREQ(2, 36)
 
 // __libc_single_threaded stub — must be a writable data symbol (char).
 // Initialise to 0 (multi-threaded) so locks are never skipped.
