@@ -160,12 +160,16 @@ Parquet files can live on S3 while the catalog remains a local SQLite file:
       "s3": {
         "region": "us-east-1",
         "access_key_id": "AKIA...",
-        "secret_access_key": "..."
+        "secret_access_key": "...",
+        "endpoint": "http://127.0.0.1:9000",
+        "use_ssl": false
       }
     }
   }
 }
 ```
+
+For **S3-compatible** endpoints (MinIO, RustFS, R2, …), set `s3.endpoint` to your base URL (for example `http://127.0.0.1:9000`); the writer strips the `http(s)://` scheme for DuckDB, enables **path-style** URLs (`s3_url_style=path`), and creates a matching **DuckDB `TYPE S3` secret** (same idea as the Flight node’s per-volume `CREATE SECRET`) so DuckLake maintenance (`delete_orphaned_files`, …) does not send `read_blob` to the wrong host. Ensure the **bucket** named in `data_path` (for example `s3://my-bucket/...`) already exists on that server — a missing bucket often returns **HTTP 404** on flush.
 
 ## Catalog
 

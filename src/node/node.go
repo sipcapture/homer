@@ -1104,23 +1104,16 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 		return nil, fmt.Errorf("failed to install DuckLake: %w", err)
 	}
 
-	// Configure S3 if needed (global settings)
-	if cfg.DuckLake.S3.AccessKeyID != "" {
-		_, err = db.Exec(`
-			SET s3_region = ?;
-			SET s3_access_key_id = ?;
-			SET s3_secret_access_key = ?;
-		`, cfg.DuckLake.S3.Region, cfg.DuckLake.S3.AccessKeyID, cfg.DuckLake.S3.SecretAccessKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to configure S3: %w", err)
-		}
-
-		if cfg.DuckLake.S3.Endpoint != "" {
-			_, err = db.Exec("SET s3_endpoint = ?;", cfg.DuckLake.S3.Endpoint)
-			if err != nil {
-				return nil, fmt.Errorf("failed to set S3 endpoint: %w", err)
-			}
-		}
+	// Global S3 client (same rules as writer): path-style + trimmed endpoint for
+	// s3:// default volume and any path that does not use per-volume secrets.
+	if err := ducklake.ApplyDuckDBS3ClientSettings(db,
+		cfg.DuckLake.S3.Region,
+		cfg.DuckLake.S3.AccessKeyID,
+		cfg.DuckLake.S3.SecretAccessKey,
+		cfg.DuckLake.S3.Endpoint,
+		cfg.DuckLake.S3.UseSSL,
+	); err != nil {
+		return nil, fmt.Errorf("failed to configure S3: %w", err)
 	}
 
 	// Get volumes config
@@ -1184,6 +1177,10 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 			endpoint = strings.TrimPrefix(endpoint, "http://")
 			endpoint = strings.TrimPrefix(endpoint, "https://")
 		}
+		region := strings.TrimSpace(vol.S3Region)
+		if region == "" && endpoint != "" {
+			region = "us-east-1"
+		}
 
 		// Create secret
 		var createSecret string
@@ -1198,7 +1195,7 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 					URL_STYLE 'path',
 					USE_SSL %t
 				);
-			`, secretName, vol.S3AccessKeyID, vol.S3SecretKey, vol.S3Region, endpoint, vol.S3UseSSL)
+			`, secretName, vol.S3AccessKeyID, vol.S3SecretKey, region, endpoint, vol.S3UseSSL)
 		} else {
 			createSecret = fmt.Sprintf(`
 				CREATE SECRET %s (
@@ -1207,7 +1204,7 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 					SECRET '%s',
 					REGION '%s'
 				);
-			`, secretName, vol.S3AccessKeyID, vol.S3SecretKey, vol.S3Region)
+			`, secretName, vol.S3AccessKeyID, vol.S3SecretKey, region)
 		}
 
 		if _, err := db.Exec(createSecret); err != nil {

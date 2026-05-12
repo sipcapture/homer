@@ -1,8 +1,117 @@
-# External authentication: LDAP and OAuth2 (Coordinator)
+# Authentication: internal, LDAP, and OAuth2 (Coordinator)
 
-This guide describes how to enable **LDAP / Active Directory** password login and **OAuth2** redirects in the homer-core **coordinator** API v4, how the **web UI** discovers providers, and which JSON keys to set in configuration.
+This guide describes **local (internal) authentication** in the coordinator settings DuckDB, how to enable **LDAP / Active Directory** password login and **OAuth2** redirects in the homer-core **coordinator** API v4, how the **web UI** discovers providers, and which JSON keys to set in configuration.
 
 For JWT lifecycle and logout, see the notes at the end.
+
+---
+
+## Internal DuckDB authentication
+
+> **Implementation:** homer-core accepts **`coordinator.auth`** as a JSON **string** (`"internal"`, backward compatible), as **`{"type":"internal"}`** (recommended), or as a legacy **object** with only `admin_user` / `admin_password_hash`. **`--reset-admin-password`** is documented below.
+
+Password login with **`type`** omitted or **`internal`** on `POST /api/v4/auth/sessions` checks credentials **only** against rows in the coordinator **settings DuckDB** table **`users`** (`coordinator.settings_db_path`). There is **no** separate “login from JSON only” path: a user must exist in `users` with a matching **SHA-256** `password_hash` (hex) of the presented password.
+
+If **`coordinator.auth` is omitted** entirely (no `auth` key), the loader behaves like **`{"type":"internal"}`**: default admin `admin`, default bootstrap hash for **`sipcapture`**, and the same startup insert into **`users`** when missing.
+
+### Recommended: `coordinator.auth` object with `type`
+
+```json
+"coordinator": {
+  "auth": { "type": "internal" }
+}
+```
+
+Optional explicit admin (otherwise defaults apply):
+
+```json
+"auth": {
+  "type": "internal",
+  "admin_user": "admin",
+  "admin_password_hash": "<64-char hex sha256>"
+}
+```
+
+Other **`type`** values (no internal bootstrap; LDAP/OAuth still follow their own sections):
+
+```json
+"auth": { "type": "ldap" }
+```
+
+```json
+"auth": { "type": "oauth" }
+```
+
+### Backward compatible: `coordinator.auth` as the string `"internal"`
+
+```json
+"coordinator": {
+  "auth": "internal"
+}
+```
+
+Meaning (string or `{"type":"internal"}` without custom hash):
+
+- The loader treats **`"internal"`** (case-insensitive) or **`{"type":"internal"}`** as **built-in local auth** with default admin name **`admin`** and a **fixed bootstrap password hash** (SHA-256 hex of **`sipcapture`**):  
+  `883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90`.
+- On coordinator startup, if there is **no** row in `users` whose **`username`** equals the configured admin name (default `admin`), the coordinator **inserts** that admin once (`is_admin` / `is_active` true) with that hash. If a row for that username **already** exists, nothing is inserted automatically (empty `password_hash` may still be repaired on startup in recent builds).
+- After first login, operators should **change the password** (Settings → Users, or `UPDATE` on `users` in DuckDB). Further logins use the stored hash only.
+
+### Legacy object: only `admin_user` / `admin_password_hash` (no `type`)
+
+You may still use an object **without** `type` (for environment overrides, config fragments, or tooling):
+
+```json
+"auth": {
+  "admin_user": "admin",
+  "admin_password_hash": "<64-char lower-case hex sha256>"
+}
+```
+
+- If **`admin_user`** is unset or **`admin`** and **`admin_password_hash`** is empty or equals the default sipcapture hash, the loader treats this as **`internal`** (same bootstrap as `{"type":"internal"}`). Any other combination is legacy credentials-only: provision **`users`** via API / SQL, or set **`{"type":"internal"}`** explicitly.
+- Generate a hash: `echo -n 'your-password' | sha256sum` (see also [COORDINATOR.md](./COORDINATOR.md#auth)).
+
+### Reset admin password
+
+The homer-core CLI flag **`--reset-admin-password`** (together with **`--config-path`**) applies **`coordinator.auth.admin_password_hash`** to the **`users`** table in **`coordinator.settings_db_path`**.
+
+**Requirements**
+
+1. **Modular homer-core** with **`--config-path`** pointing at your `homer.json` (or equivalent). The flag is **mandatory**; without it the command exits with an error.
+2. **`coordinator.settings_db_path`** must be non-empty in the loaded config — it must be the **same** settings DuckDB file the coordinator uses.
+3. After `config.Load`, the command reads **`coordinator.auth.admin_password_hash`** and **`coordinator.auth.admin_user`** (if `admin_user` is empty, **`admin`** is used). **`admin_password_hash` must be non-empty** in the effective config or the command fails.
+
+**Hash generation:** `echo -n 'your-new-password' | sha256sum` (64 lowercase hex chars).
+
+**Example `coordinator.auth` fragment (recommended object with `type`):**
+
+```json
+"coordinator": {
+  "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
+  "auth": {
+    "type": "internal",
+    "admin_user": "admin",
+    "admin_password_hash": "PASTE_64_CHAR_HEX_SHA256_HERE"
+  }
+}
+```
+
+If you only set **`"auth": "internal"`** (string) or **`{"type":"internal"}`** without an explicit `admin_password_hash`, config normalization still supplies the **default** hash for cleartext **`sipcapture`**. In that case **`--reset-admin-password` will write that default hash** into `users` (useful to “reset” the account to the well-known bootstrap password).
+
+**Environment overrides:** you can set **`HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`** (and optionally **`HOMER_COORDINATOR_AUTH_ADMIN_USER`**) instead of embedding the hash in JSON — see `config/env.go` / `env_test` in this repo.
+
+**Run (does not start the HTTP server; exits after updating DuckDB):**
+
+```bash
+homer --config-path /etc/homer/homer.json --reset-admin-password
+```
+
+On success the process prints a short message to stdout confirming the update for the configured username.
+
+### LDAP / OAuth2 interaction
+
+- **LDAP** is independent: it does not read `users` for password verification. Internal and LDAP can both be enabled; the UI sends `type` accordingly.
+- **OAuth2** is orthogonal to password backends (see below).
 
 ---
 
@@ -42,7 +151,7 @@ For JWT lifecycle and logout, see the notes at the end.
 }
 ```
 
-- **`internal`** — local users in the coordinator settings DuckDB (`users` table) plus optional bootstrap **`coordinator.auth.admin_user`** / **`admin_password_hash`**.
+- **`internal`** — local users in the coordinator settings DuckDB (`users` table). Prefer **`coordinator.auth`** as **`{"type":"internal"}`** (or omitted `auth` / string **`"internal"`**) for first-time bootstrap (see [Internal DuckDB authentication](#internal-duckdb-authentication)); explicit **`admin_user`** / **`admin_password_hash`** in JSON or env supports **`--reset-admin-password`**.
 - **`ldap.enable`** is `true` only when **`coordinator.ldap.enable`** is true **and** **`coordinator.ldap.host`** is non-empty.
 - **`oauth2`** — **zero or one** entry: the single active OAuth2 provider (see below).
 
@@ -189,4 +298,5 @@ The IdP must accept that callback URL.
 ## See also
 
 - OpenAPI: `src/coordinator/docs/openapi.yaml` — `LoginRequest`, `AuthProvidersResponse`, OAuth routes.
-- Legacy OAuth-only notes: `docs/AUTH_OAUTH.md` (short); this file is the **canonical** LDAP + OAuth guide.
+- UI and tokens overview: [UI_COORDINATOR_AUTH_AND_TOKENS.md](./UI_COORDINATOR_AUTH_AND_TOKENS.md).
+- Legacy OAuth-only pointer: [AUTH_OAUTH.md](./AUTH_OAUTH.md); this file is the **canonical** internal + LDAP + OAuth guide.

@@ -78,10 +78,7 @@ The Coordinator module provides REST API for frontend applications and orchestra
       "secret": "your-jwt-secret-minimum-32-characters",
       "expire_hours": 24
     },
-    "auth": {
-      "admin_user": "admin",
-      "admin_password_hash": "your-sha256-password-hash"
-    }
+    "auth": { "type": "internal" }
   }
 }
 ```
@@ -131,10 +128,7 @@ The Coordinator module provides REST API for frontend applications and orchestra
       "secret": "your-jwt-secret-minimum-32-characters",
       "expire_hours": 24
     },
-    "auth": {
-      "admin_user": "admin",
-      "admin_password_hash": "your-sha256-password-hash"
-    }
+    "auth": { "type": "internal" }
   }
 }
 ```
@@ -161,10 +155,7 @@ The Coordinator module provides REST API for frontend applications and orchestra
       "secret": "your-jwt-secret",
       "expire_hours": 24
     },
-    "auth": {
-      "admin_user": "admin",
-      "admin_password_hash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
-    },
+    "auth": { "type": "internal" },
     "oauth2_provider": {
       "enable": true,
       "name": "google",
@@ -213,12 +204,27 @@ The Coordinator module provides REST API for frontend applications and orchestra
 
 ### auth
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `admin_user` | string | "admin" | Default admin username |
-| `admin_password_hash` | string | - | SHA256 hash of admin password |
+`coordinator.auth` may be a **string** (legacy), or an **object** with a **`type`** field:
 
-**Generating password hash:**
+| Form | Description |
+|------|-------------|
+| **`{"type":"internal"}`** (recommended) | Same bootstrap and defaults as the string `"internal"` (admin `admin`, default hash for **`sipcapture`**). On startup, if no `users` row exists for that admin username, the coordinator inserts it once. Login checks **`users`** only. |
+| **String** `"internal"` | Backward compatible; same semantics as `{"type":"internal"}`. |
+| **`{"type":"ldap"}`** / **`{"type":"oauth"}`** | Declares preferred password-auth mode metadata; does **not** enable LDAP/OAuth by itself (`coordinator.ldap`, `oauth2_provider` still apply). No internal bootstrap. |
+| **Omitted** (`coordinator` without `auth`) | Same as **`{"type":"internal"}`** (default admin + sipcapture bootstrap), unless legacy credentials below apply. |
+| **Object** without `type` | If `admin_user` is unset or `admin` and `admin_password_hash` is empty or the default sipcapture hash → **`internal`**. Otherwise legacy `admin_user` / `admin_password_hash` only — see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md). |
+
+**First login (`type` internal or string `"internal"`):** username `admin`, password `sipcapture` until changed in Settings → Users or in DuckDB.
+
+**Reset admin password** — set `coordinator.auth.admin_password_hash` (and optional `admin_user`) in modular `homer.json` or via **`HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`**, then run:
+
+```bash
+homer --config-path /path/to/homer.json --reset-admin-password
+```
+
+The process opens **`coordinator.settings_db_path`**, ensures schema, updates or inserts the **`users`** row for `admin_user`, and **exits** (no HTTP server). Details, JSON examples, and env overrides: [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password).
+
+**Generating a password hash (for object / reset):**
 
 ```bash
 # Linux/macOS
@@ -227,6 +233,12 @@ echo -n "your-password" | sha256sum | cut -d' ' -f1
 # Example: password "sipcapture" produces:
 # 883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90
 ```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `type` | string | *(see table above)* | `internal`, `ldap`, or `oauth`. If the whole `auth` section is omitted, the effective type is **`internal`**. |
+| `admin_user` | string | "admin" | Admin username (`type` internal or legacy object). |
+| `admin_password_hash` | string | "" | SHA256 hex. For **`type` internal** (or omitted auth normalized to internal), empty means the default **`sipcapture`** hash after load. **`--reset-admin-password`** reads this field; it must be non-empty in the loaded config (default internal configs satisfy this after normalization). |
 
 ### oauth2_provider
 
@@ -254,7 +266,7 @@ The deprecated **`oauth2_providers`** array is still accepted at startup and mig
 |--------|----------|-------------|
 | POST | `/api/v4/auth/sessions` | Create session (login) |
 | DELETE | `/api/v4/auth/sessions/:id` | Delete session (logout) |
-| GET | `/api/v4/auth/providers` | List OAuth2 providers |
+| GET | `/api/v4/auth/providers` | List password backends (`internal`, `ldap`) and OAuth2 provider metadata |
 | GET | `/api/v4/me` | Get current user info |
 
 ### Transactions (Search)

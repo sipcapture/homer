@@ -324,12 +324,26 @@ func (w *Writer) Start() error {
 		if compactionCfg.MinAgeSec <= 0 {
 			compactionCfg.MinAgeSec = 3600 // default 1 hour
 		}
+		var compactionS3 *CompactionS3Client
+		if ducklake.IsRemoteLakeDataPath(w.storageConfig.DuckLake.DataPath) {
+			s := w.storageConfig.DuckLake.S3
+			if ak := strings.TrimSpace(s.AccessKeyID); ak != "" {
+				compactionS3 = &CompactionS3Client{
+					Region:          s.Region,
+					AccessKeyID:     ak,
+					SecretAccessKey: s.SecretAccessKey,
+					Endpoint:        s.Endpoint,
+					UseSSL:          s.UseSSL,
+				}
+			}
+		}
 		w.compactionService = NewCompactionService(
 			w.ducklakeManager.GetDB(),
 			w.ducklakeManager.GetLakeName(),
 			w.storageConfig.DuckLake.DataPath,
 			compactionCfg,
 			w.ducklakeManager,
+			compactionS3,
 		)
 		if err := w.compactionService.Start(); err != nil {
 			logger.Error(fmt.Sprintf("Writer: Failed to start compaction service: %v", err))

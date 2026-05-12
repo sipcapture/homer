@@ -42,10 +42,7 @@
       "secret": "change-this-to-a-secure-random-string-in-production",
       "expire_hours": 24
     },
-    "auth": {
-      "admin_user": "admin",
-      "admin_password_hash": "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
-    },
+    "auth": { "type": "internal" },
     "api_settings": {
       "enable_token_access": false,
       "auth_token_header": "Auth-Token"

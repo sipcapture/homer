@@ -97,6 +97,29 @@ func isS3Path(path string) bool {
 	return strings.HasPrefix(path, "s3://") || strings.HasPrefix(path, "s3a://")
 }
 
+// IsRemoteLakeDataPath reports whether lake parquet roots live on object storage
+// (s3:// or s3a://) rather than the local filesystem.
+func IsRemoteLakeDataPath(p string) bool {
+	return isS3Path(p)
+}
+
+// JoinLakeDataPath appends path elements to a lake data root. For s3:// and s3a://
+// bases it uses URL-style '/' joining only — do not use filepath.Join, which on
+// Unix collapses "s3://" to "s3:/" and breaks object URLs.
+func JoinLakeDataPath(base string, elems ...string) string {
+	if isS3Path(base) {
+		out := strings.TrimRight(base, "/")
+		for _, e := range elems {
+			e = strings.Trim(e, "/")
+			if e != "" {
+				out += "/" + e
+			}
+		}
+		return out
+	}
+	return filepath.Join(append([]string{base}, elems...)...)
+}
+
 // NormalizeSQLiteCatalog returns sqlite for empty or "sqlite"; otherwise an error.
 func NormalizeSQLiteCatalog(ct CatalogType) (CatalogType, error) {
 	s := strings.TrimSpace(string(ct))
@@ -273,11 +296,12 @@ func (mtw *MultiTableWriter) connect() error {
 	if err != nil {
 		return fmt.Errorf("failed to open DuckDB: %w", err)
 	}
-	// Allow enough connections for concurrent batch inserts, flush workers,
-	// and read queries. DuckDB handles concurrent in-memory operations well;
-	// catalog writes are serialized by our catalogMu lock.
-	db.SetMaxOpenConns(0)
-	db.SetMaxIdleConns(4)
+	// Single connection: SET s3_* and CREATE SECRET from connect() apply per
+	// sql.DB connection; with MaxOpenConns>1 the pool can hand out a fresh
+	// connection without those settings → intermittent S3 404 / NoSuchBucket on
+	// flush (same pattern as node Flight DuckDB: SetMaxOpenConns(1)).
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 	mtw.db = db
 
 	// Apply DuckDB engine tuning (memory_limit, threads, temp_directory)
@@ -300,23 +324,24 @@ func (mtw *MultiTableWriter) connect() error {
 		logger.Warn(fmt.Sprintf("Failed to enable WAL mode for SQLite catalog (may cause lock errors): %v", err))
 	}
 
-	// Configure S3 if needed
-	if mtw.config.S3AccessKeyID != "" {
-		s3Config := fmt.Sprintf(`
-			SET s3_region = '%s';
-			SET s3_access_key_id = '%s';
-			SET s3_secret_access_key = '%s';
-		`, mtw.config.S3Region, mtw.config.S3AccessKeyID, mtw.config.S3SecretAccessKey)
-
-		if mtw.config.S3Endpoint != "" {
-			s3Config += fmt.Sprintf("SET s3_endpoint = '%s';", mtw.config.S3Endpoint)
-		}
-		if !mtw.config.S3UseSSL {
-			s3Config += "SET s3_use_ssl = false;"
-		}
-
-		if _, err := db.Exec(s3Config); err != nil {
-			return fmt.Errorf("failed to configure S3: %w", err)
+	if err := ApplyDuckDBS3ClientSettings(db,
+		mtw.config.S3Region,
+		mtw.config.S3AccessKeyID,
+		mtw.config.S3SecretAccessKey,
+		mtw.config.S3Endpoint,
+		mtw.config.S3UseSSL,
+	); err != nil {
+		return fmt.Errorf("failed to configure S3: %w", err)
+	}
+	if isS3Path(mtw.config.DataPath) {
+		if err := EnsureWriterS3Secret(db,
+			mtw.config.S3Region,
+			mtw.config.S3AccessKeyID,
+			mtw.config.S3SecretAccessKey,
+			mtw.config.S3Endpoint,
+			mtw.config.S3UseSSL,
+		); err != nil {
+			return fmt.Errorf("failed to configure S3 secret for DuckLake: %w", err)
 		}
 	}
 
@@ -408,11 +433,13 @@ func (mtw *MultiTableWriter) Start() {
 }
 
 // flushQueueWorker is the single goroutine that drains the centralized flush
-// queue. All DuckLake INSERT operations run here sequentially, so no catalog
-// mutex is needed and SQLite "database is locked" errors cannot occur.
+// queue. Jobs run sequentially; flushSlotDirect passes catalogMu so each
+// DuckLake INSERT is serialized with compaction (CatalogLock) without holding
+// the mutex across backoff sleeps — holding it for the full retry loop would
+// starve compaction and amplify S3/catalog races.
 func (mtw *MultiTableWriter) flushQueueWorker() {
 	for job := range mtw.flushQueueCh {
-		job.tw.flushSlotDirect(job.slotIdx)
+		job.tw.flushSlotDirect(job.slotIdx, &mtw.catalogMu)
 		mtw.flushQueueWg.Done()
 	}
 }

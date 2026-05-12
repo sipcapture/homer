@@ -197,8 +197,10 @@ func baseConfig() config.Config {
 				ExpireHours: 24,
 			},
 			Auth: config.AuthConfig{
-				AdminUser:         "admin",
-				AdminPasswordHash: config.HashPassword("sipcapture"),
+				Type:                   "internal",
+				AuthFromInternalString: true,
+				AdminUser:              "admin",
+				AdminPasswordHash:      config.DefaultInternalAuthPasswordHash,
 			},
 		},
 		Log: config.LogConfig{
@@ -810,6 +812,7 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 				ExpireHours: 24,
 			},
 			Auth: config.AuthConfig{
+				Type:              "internal",
 				AdminUser:         adminUser,
 				AdminPasswordHash: config.HashPassword(adminPass),
 			},

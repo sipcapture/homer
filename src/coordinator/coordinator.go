@@ -95,6 +95,25 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 		_ = settingsDB.Close()
 		return nil, fmt.Errorf("failed to ensure settings schema: %w", err)
 	}
+	// Always log how coordinator.auth was interpreted (no secrets). If
+	// auth_internal_string_form is false, JSON "internal" was not used
+	// and bootstrap admin user for default sipcapture is skipped.
+	logger.Info("coordinator: auth settings snapshot",
+		"auth_type", cfg.Auth.Type,
+		"auth_internal_bootstrap", cfg.Auth.AuthFromInternalString,
+		"admin_user", cfg.Auth.AdminUser,
+		"admin_password_hash_configured", strings.TrimSpace(cfg.Auth.AdminPasswordHash) != "",
+		"settings_db_path", cfg.SettingsDBPath)
+	if cfg.Auth.AuthFromInternalString {
+		if err := services.EnsureBootstrapAdminUser(context.Background(), settingsDB,
+			cfg.Auth.AdminUser, cfg.Auth.AdminPasswordHash); err != nil {
+			_ = settingsDB.Close()
+			return nil, fmt.Errorf("internal auth bootstrap: %w", err)
+		}
+		logger.Info("coordinator: internal authentication enabled",
+			"settings_db_path", cfg.SettingsDBPath,
+			"admin_user", cfg.Auth.AdminUser)
+	}
 	// First-run defaults for Settings → Protocol Mappings (SIP call / default / registration).
 	if err := services.SeedDefaultMappingSchema(context.Background(), settingsDB); err != nil {
 		_ = settingsDB.Close()
@@ -170,7 +189,7 @@ func (c *Coordinator) setupEcho() {
 // setupRoutes configures API routes
 func (c *Coordinator) setupRoutes() {
 	// Initialize user service for authentication from DuckDB
-	userService := services.NewUserService(c.settingsDB, c.config.Auth.AdminUser, c.config.Auth.AdminPasswordHash)
+	userService := services.NewUserService(c.settingsDB)
 	userSettingsService := services.NewUserSettingsService(c.settingsDB)
 	userMappingService := services.NewUserMappingService(c.settingsDB)
 

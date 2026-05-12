@@ -8,6 +8,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -600,5 +601,199 @@ func TestLoad_DuckDBTuningEmptySectionStaysZero(t *testing.T) {
 	tn := cfg.Storage.DuckLake.Tuning
 	if tn.MemoryLimit != "" || tn.Threads != 0 || tn.TempDirectory != "" {
 		t.Errorf("expected zero-valued tuning, got %+v", tn)
+	}
+}
+
+func TestLoad_CoordinatorAuthOmittedDefaultsToInternal(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": {
+    "enable": true
+  }
+}`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	a := cfg.Coordinator.Auth
+	if a.Type != "internal" {
+		t.Fatalf("Type: got %q, want internal", a.Type)
+	}
+	if !a.AuthFromInternalString {
+		t.Fatal("AuthFromInternalString: want true when auth omitted")
+	}
+	if a.AdminUser != "admin" || a.AdminPasswordHash != DefaultInternalAuthPasswordHash {
+		t.Fatalf("auth: %+v", a)
+	}
+}
+
+func TestLoad_CoordinatorAuthInternalString(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": {
+    "enable": true,
+    "auth": "internal"
+  }
+}`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	a := cfg.Coordinator.Auth
+	if !a.AuthFromInternalString {
+		t.Fatal("AuthFromInternalString: want true")
+	}
+	if a.AdminUser != "admin" {
+		t.Fatalf("AdminUser: got %q", a.AdminUser)
+	}
+	if a.AdminPasswordHash != DefaultInternalAuthPasswordHash {
+		t.Fatalf("AdminPasswordHash: got %q", a.AdminPasswordHash)
+	}
+	if a.Type != "internal" {
+		t.Fatalf("Type: got %q", a.Type)
+	}
+}
+
+func TestLoad_CoordinatorAuthObjectTypeInternal(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": {
+    "enable": true,
+    "auth": { "type": "internal" }
+  }
+}`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	a := cfg.Coordinator.Auth
+	if a.Type != "internal" {
+		t.Fatalf("Type: got %q", a.Type)
+	}
+	if !a.AuthFromInternalString {
+		t.Fatal("AuthFromInternalString: want true")
+	}
+	if a.AdminUser != "admin" {
+		t.Fatalf("AdminUser: got %q", a.AdminUser)
+	}
+	if a.AdminPasswordHash != DefaultInternalAuthPasswordHash {
+		t.Fatalf("AdminPasswordHash: got %q", a.AdminPasswordHash)
+	}
+}
+
+func TestLoad_CoordinatorAuthObjectTypeLDAP(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": {
+    "enable": true,
+    "auth": { "type": "ldap" }
+  }
+}`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	a := cfg.Coordinator.Auth
+	if a.Type != "ldap" {
+		t.Fatalf("Type: got %q", a.Type)
+	}
+	if a.AuthFromInternalString {
+		t.Fatal("AuthFromInternalString: want false for ldap type")
+	}
+}
+
+func TestLoad_CoordinatorAuthObjectTypeOAuth(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": {
+    "enable": true,
+    "auth": { "type": "oauth" }
+  }
+}`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	a := cfg.Coordinator.Auth
+	if a.Type != "oauth" {
+		t.Fatalf("Type: got %q", a.Type)
+	}
+	if a.AuthFromInternalString {
+		t.Fatal("AuthFromInternalString: want false for oauth type")
+	}
+}
+
+func TestLoad_CoordinatorAuthObjectTypeInvalid(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": { "enable": true, "auth": { "type": "saml" } }
+}`)
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for invalid coordinator.auth.type")
+	}
+}
+
+func TestLoad_CoordinatorAuthObjectKeepsFlagFalse(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": {
+    "enable": true,
+    "auth": {
+      "admin_user": "root",
+      "admin_password_hash": "deadbeef"
+    }
+  }
+}`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	a := cfg.Coordinator.Auth
+	if a.AuthFromInternalString {
+		t.Fatal("AuthFromInternalString: want false for object auth")
+	}
+	if a.Type != "" {
+		t.Fatalf("Type: want empty for legacy object, got %q", a.Type)
+	}
+	if a.AdminUser != "root" || a.AdminPasswordHash != "deadbeef" {
+		t.Fatalf("auth fields: %+v", a)
+	}
+}
+
+func TestLoad_CoordinatorAuthInvalidString(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": { "enable": true, "auth": "ldap-only" }
+}`)
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for invalid coordinator.auth string")
+	}
+}
+
+func TestAuthConfigMarshalJSON_Internal(t *testing.T) {
+	b, err := json.Marshal(AuthConfig{
+		AuthFromInternalString: true,
+		Type:                   "internal",
+		AdminUser:              "admin",
+		AdminPasswordHash:      DefaultInternalAuthPasswordHash,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != `{"type":"internal"}` {
+		t.Fatalf("marshal: want {\"type\":\"internal\"}, got %s", b)
+	}
+}
+
+func TestAuthConfigMarshalJSON_InternalCustomAdmin(t *testing.T) {
+	b, err := json.Marshal(AuthConfig{
+		AuthFromInternalString: true,
+		Type:                   "internal",
+		AdminUser:              "root",
+		AdminPasswordHash:      DefaultInternalAuthPasswordHash,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != `{"type":"internal","admin_user":"root"}` {
+		t.Fatalf("marshal: got %s", b)
 	}
 }

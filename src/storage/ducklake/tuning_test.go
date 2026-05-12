@@ -85,6 +85,36 @@ func TestApplyDuckDBTuning_NilDB(t *testing.T) {
 	ApplyDuckDBTuning(nil, 4, "1GB", "/tmp", "test")
 }
 
+func TestEnsureWriterS3Secret_MinIOStyle(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	if err := EnsureWriterS3Secret(db, "us-east-1", "k", "s", "http://127.0.0.1:9000", false); err != nil {
+		t.Fatalf("EnsureWriterS3Secret: %v", err)
+	}
+	if _, err := db.Exec("SELECT 1"); err != nil {
+		t.Fatalf("db after secret: %v", err)
+	}
+}
+
+func TestApplyDuckDBS3ClientSettings_MinIOStyleEndpoint(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	if err := ApplyDuckDBS3ClientSettings(db, "us-east-1", "testkey", "testsecret", "http://127.0.0.1:9000", false); err != nil {
+		t.Fatalf("ApplyDuckDBS3ClientSettings: %v", err)
+	}
+	if got := getSetting(t, db, "s3_url_style"); got != "path" {
+		t.Fatalf("s3_url_style = %q, want path", got)
+	}
+}
+
 func getSetting(t *testing.T, db *sql.DB, name string) string {
 	t.Helper()
 	var v string

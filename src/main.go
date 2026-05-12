@@ -85,12 +85,13 @@ func (m *metricsServerWrapper) End() {
 
 // ServerFlags holds flags for default server mode (no subcommand).
 type ServerFlags struct {
-	ConfigPath         *string
-	LogName            *string
-	LogPathHomerServer *string
-	SyslogDisable      *bool
-	LogLevel           *string
-	PidFile            *string
+	ConfigPath           *string
+	LogName              *string
+	LogPathHomerServer   *string
+	SyslogDisable        *bool
+	LogLevel             *string
+	PidFile              *string
+	ResetAdminPassword   *bool
 }
 
 func initServerFlags() ServerFlags {
@@ -101,6 +102,7 @@ func initServerFlags() ServerFlags {
 	sf.SyslogDisable = flag.Bool("syslog-disable", false, "disable syslog, use only stdout for logging")
 	sf.LogLevel = flag.String("log-level", "", "set log level: debug, info, warn, error, trace")
 	sf.PidFile = flag.String("pid-file", "/var/run/homer-core.pid", "path to PID file")
+	sf.ResetAdminPassword = flag.Bool("reset-admin-password", false, "set admin password in settings DuckDB from coordinator.auth.admin_password_hash and exit")
 	return sf
 }
 
@@ -128,6 +130,7 @@ Server flags (no subcommand):
   --log-level <level>           Set log level: debug, info, warn, error, trace
   --syslog-disable              Disable syslog, use only stdout
   --pid-file <path>             Path to PID file (default: /var/run/homer-core.pid)
+  --reset-admin-password        Set admin password in settings DB from config hash and exit
   -v, --version                 Show version and exit
 
 search -- Search Homer data via coordinator API:
@@ -480,6 +483,18 @@ func runServer() {
 	}
 
 	cfg, isModular := tryLoadModularConfig(configPath)
+
+	if sf.ResetAdminPassword != nil && *sf.ResetAdminPassword {
+		if !isModular {
+			fmt.Fprintf(os.Stderr, "--reset-admin-password requires modular config (--config-path)\n")
+			os.Exit(1)
+		}
+		if err := cli.RunResetAdminPassword(configPath); err != nil {
+			fmt.Fprintf(os.Stderr, "reset-admin-password: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 
 	var writerModule *writer.Writer
 	var nodeModule *node.Node

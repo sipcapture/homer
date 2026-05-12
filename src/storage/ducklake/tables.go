@@ -651,9 +651,38 @@ const (
 	flushBaseBackoff = 50 * time.Millisecond
 )
 
+// isFlushRetriableError classifies errors that often clear with a short backoff:
+// SQLite catalog contention, DuckLake transaction conflicts, and HTTP transport
+// flakes from S3-compatible backends (timeouts, 429/5xx, intermittent 404).
+// Permanent config/auth/bucket-missing errors are excluded.
+func isFlushRetriableError(errStr string) bool {
+	if errStr == "" {
+		return false
+	}
+	if strings.Contains(errStr, "NoSuchBucket") {
+		return false
+	}
+	if strings.Contains(errStr, "InvalidAccessKeyId") ||
+		strings.Contains(errStr, "SignatureDoesNotMatch") {
+		return false
+	}
+	if strings.Contains(errStr, "database is locked") ||
+		strings.Contains(errStr, "Could not set lock") ||
+		strings.Contains(errStr, "catalog") ||
+		strings.Contains(errStr, "transaction conflict") {
+		return true
+	}
+	// DuckDB httpfs surfaces remote I/O as "HTTP Error: ..."
+	if strings.Contains(errStr, "HTTP Error") {
+		return true
+	}
+	return false
+}
+
 // flushWorker is the dedicated goroutine that processes flush jobs.
 // It reads from flushCh and for each job copies data from the standby
-// memory table to DuckLake with retry on catalog contention.
+// memory table to DuckLake with retry on transient errors (catalog lock,
+// S3 HTTP flakes).
 func (tw *TableWriter) flushWorker() {
 	defer tw.flushWg.Done()
 	for job := range tw.flushCh {
@@ -664,7 +693,7 @@ func (tw *TableWriter) flushWorker() {
 // flushSlotToDuckLake copies all rows from the given memory table slot to
 // the DuckLake persistent table, then truncates the memory table asynchronously.
 // Acquires catalogMu for the catalog-modifying INSERT and retries with
-// exponential backoff on catalog contention errors.
+// exponential backoff on transient errors (catalog contention, S3 HTTP).
 func (tw *TableWriter) flushSlotToDuckLake(slot int) {
 	start := time.Now()
 	memName := tw.memTables[slot]
@@ -681,18 +710,14 @@ func (tw *TableWriter) flushSlotToDuckLake(slot int) {
 			break
 		}
 		errStr := err.Error()
-		isCatalogContention := strings.Contains(errStr, "database is locked") ||
-			strings.Contains(errStr, "Could not set lock") ||
-			strings.Contains(errStr, "catalog") ||
-			strings.Contains(errStr, "transaction conflict")
-		if !isCatalogContention || attempt == flushMaxRetries {
+		if !isFlushRetriableError(errStr) || attempt == flushMaxRetries {
 			metrics.RecordPipelineStageError("ducklake", "flush", "insert_error")
 			logger.Error(fmt.Sprintf("flush %s → %s failed after %d attempts: %v",
 				memName, tw.tableFQN, attempt+1, err))
 			return
 		}
-		logger.Warn(fmt.Sprintf("flush %s: catalog contention (attempt %d/%d), retrying in %v",
-			memName, attempt+1, flushMaxRetries, backoff))
+		logger.Warn(fmt.Sprintf("flush %s: retriable error (attempt %d/%d), retrying in %v: %v",
+			memName, attempt+1, flushMaxRetries+1, backoff, err))
 		time.Sleep(backoff)
 		backoff *= 2
 	}
@@ -719,11 +744,11 @@ func (tw *TableWriter) flushSlotToDuckLake(slot int) {
 		"elapsed", elapsed.Round(time.Millisecond), "rec_per_sec", fmt.Sprintf("%.0f", float64(rowsFlushed)/elapsedSec))
 }
 
-// flushSlotDirect copies rows from the given memory table slot to DuckLake
-// WITHOUT acquiring catalogMu. This is safe only when called from the
-// centralized single-writer flush queue (one goroutine, sequential execution).
-// Retries on transient errors (e.g. DuckLake internal contention).
-func (tw *TableWriter) flushSlotDirect(slot int) {
+// flushSlotDirect copies rows from the given memory table slot to DuckLake.
+// When catalogMu is non-nil, it is locked only around each db.Exec attempt (not
+// during backoff sleep), matching flushSlotToDuckLake and allowing compaction
+// CatalogLock to run between retries on the same shared *sql.DB.
+func (tw *TableWriter) flushSlotDirect(slot int, catalogMu *sync.Mutex) {
 	start := time.Now()
 	memName := tw.memTables[slot]
 
@@ -732,23 +757,25 @@ func (tw *TableWriter) flushSlotDirect(slot int) {
 	backoff := flushBaseBackoff
 
 	for attempt := 0; attempt <= flushMaxRetries; attempt++ {
+		if catalogMu != nil {
+			catalogMu.Lock()
+		}
 		result, err = tw.db.Exec(tw.flushInsertSQL[slot])
+		if catalogMu != nil {
+			catalogMu.Unlock()
+		}
 		if err == nil {
 			break
 		}
 		errStr := err.Error()
-		isCatalogContention := strings.Contains(errStr, "database is locked") ||
-			strings.Contains(errStr, "Could not set lock") ||
-			strings.Contains(errStr, "catalog") ||
-			strings.Contains(errStr, "transaction conflict")
-		if !isCatalogContention || attempt == flushMaxRetries {
+		if !isFlushRetriableError(errStr) || attempt == flushMaxRetries {
 			metrics.RecordPipelineStageError("ducklake", "flush", "insert_error")
 			logger.Error(fmt.Sprintf("flush %s → %s failed after %d attempts: %v",
 				memName, tw.tableFQN, attempt+1, err))
 			return
 		}
-		logger.Warn(fmt.Sprintf("flush %s: catalog contention (attempt %d/%d), retrying in %v",
-			memName, attempt+1, flushMaxRetries, backoff))
+		logger.Warn(fmt.Sprintf("flush %s: retriable error (attempt %d/%d), retrying in %v: %v",
+			memName, attempt+1, flushMaxRetries+1, backoff, err))
 		time.Sleep(backoff)
 		backoff *= 2
 	}

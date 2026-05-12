@@ -51,12 +51,25 @@
     "enable": true,
     "ducklake": {
       "catalog_type": "sqlite",
-      "catalog_path": "/data/homer/homer_catalog.sqlite",
-      "data_path": "/data/homer/parquet",
+      "catalog_path": "/var/lib/homer/homer_catalog.sqlite",
+      "data_path": "s3://homer-data/lake/",
       "lake_name": "homer_lake",
       "batch_size": 10000,
       "flush_interval_sec": 30,
       "search_buffer": true,
+      "data_inlining_row_limit": 0,
+      "tuning": {
+        "threads": 0,
+        "memory_limit": "",
+        "temp_directory": "/var/tmp/homer-duckdb-writer"
+      },
+      "s3": {
+        "region": "us-east-1",
+        "access_key_id": "YOUR_ACCESS_KEY_ID",
+        "secret_access_key": "YOUR_SECRET_ACCESS_KEY",
+        "endpoint": "http://127.0.0.1:9000",
+        "use_ssl": false
+      },
       "compaction": {
         "enable": true,
         "check_interval_sec": 1800,
@@ -66,6 +79,14 @@
         "min_file_size_bytes": 0,
         "max_file_size_bytes": 134217728,
         "max_compacted_files": 100
+      },
+      "storage_policy": {
+        "enable": false,
+        "volumes": [],
+        "ttl_move_interval_sec": 3600,
+        "move_factor": 0.8,
+        "concurrent_moves": 2,
+        "move_on_startup": false
       }
     }
   },
@@ -89,10 +110,15 @@
       "volumes": [
         {
           "name": "default",
-          "type": "local",
+          "type": "s3",
           "catalog_type": "sqlite",
-          "catalog_path": "/data/homer/homer_catalog.sqlite",
-          "path": "/data/homer/parquet"
+          "catalog_path": "/var/lib/homer/homer_catalog.sqlite",
+          "path": "s3://homer-data/lake/",
+          "s3_region": "us-east-1",
+          "s3_access_key_id": "YOUR_ACCESS_KEY_ID",
+          "s3_secret_access_key": "YOUR_SECRET_ACCESS_KEY",
+          "s3_endpoint": "http://127.0.0.1:9000",
+          "s3_use_ssl": false
         }
       ]
     }
@@ -130,7 +156,9 @@
       "secret": "change-this-to-a-secure-random-string-in-production",
       "expire_hours": 24
     },
-    "auth": { "type": "internal" }
+    "auth": {
+      "type": "internal"
+    }
   },
   "log": {
     "level": "info",

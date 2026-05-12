@@ -115,20 +115,18 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to open DuckDB: %w", err)
 	}
 
-	if cfg.S3AccessKeyID != "" {
-		s3Queries := []string{
-			fmt.Sprintf("SET s3_region='%s'", cfg.S3Region),
-			fmt.Sprintf("SET s3_access_key_id='%s'", cfg.S3AccessKeyID),
-			fmt.Sprintf("SET s3_secret_access_key='%s'", cfg.S3SecretAccessKey),
-		}
-		if cfg.S3Endpoint != "" {
-			s3Queries = append(s3Queries, fmt.Sprintf("SET s3_endpoint='%s'", cfg.S3Endpoint))
-		}
-		for _, q := range s3Queries {
-			if _, err := db.Exec(q); err != nil {
-				db.Close()
-				return nil, fmt.Errorf("failed to configure S3: %w", err)
-			}
+	if err := ducklake.ApplyDuckDBS3ClientSettings(db,
+		cfg.S3Region, cfg.S3AccessKeyID, cfg.S3SecretAccessKey, cfg.S3Endpoint, cfg.S3UseSSL,
+	); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to configure S3: %w", err)
+	}
+	if ducklake.IsRemoteLakeDataPath(cfg.DataPath) {
+		if err := ducklake.EnsureWriterS3Secret(db,
+			cfg.S3Region, cfg.S3AccessKeyID, cfg.S3SecretAccessKey, cfg.S3Endpoint, cfg.S3UseSSL,
+		); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to configure S3 secret: %w", err)
 		}
 	}
 

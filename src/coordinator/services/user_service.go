@@ -34,9 +34,7 @@ type User struct {
 
 // UserService handles user management through FlightSQL
 type UserService struct {
-	db          *sql.DB
-	defaultUser string
-	defaultPass string
+	db *sql.DB
 }
 
 // UserListFilters represents filter and sort options for user listing
@@ -51,43 +49,25 @@ type UserListFilters struct {
 }
 
 // NewUserService creates a new user service
-func NewUserService(db *sql.DB, defaultUser, defaultPass string) *UserService {
-	return &UserService{
-		db:          db,
-		defaultUser: defaultUser,
-		defaultPass: defaultPass,
-	}
+func NewUserService(db *sql.DB) *UserService {
+	return &UserService{db: db}
 }
 
-// Authenticate validates username and password
+// Authenticate validates username and password against the users table only.
 func (s *UserService) Authenticate(ctx context.Context, username, password string) (*User, error) {
-	// First try to authenticate from database
+	username = strings.TrimSpace(username)
+	password = strings.TrimSpace(password)
 	user, err := s.GetUserByUsername(ctx, username)
-	if err == nil && user != nil {
-		// Verify password
-		if s.verifyPassword(password, user.PasswordHash) {
-			if !user.IsActive {
-				return nil, fmt.Errorf("user is disabled")
-			}
-			return user, nil
-		}
-		return nil, fmt.Errorf("invalid password")
+	if err != nil || user == nil {
+		return nil, fmt.Errorf("invalid credentials")
 	}
-
-	// Fallback to default admin credentials if no users in DB
-	if username == s.defaultUser && s.defaultPass != "" {
-		// Check if password matches the configured hash
-		if s.HashPassword(password) == s.defaultPass {
-			return &User{
-				ID:       0,
-				Username: username,
-				IsAdmin:  true,
-				IsActive: true,
-			}, nil
-		}
+	if !s.verifyPassword(password, user.PasswordHash) {
+		return nil, fmt.Errorf("invalid credentials")
 	}
-
-	return nil, fmt.Errorf("invalid credentials")
+	if !user.IsActive {
+		return nil, fmt.Errorf("user is disabled")
+	}
+	return user, nil
 }
 
 // GetUserByUsername retrieves a user by username from DuckDB
@@ -95,14 +75,15 @@ func (s *UserService) GetUserByUsername(ctx context.Context, username string) (*
 	if s.db == nil {
 		return nil, fmt.Errorf("settings db not available")
 	}
+	username = strings.TrimSpace(username)
 
-	query := fmt.Sprintf(`
-		SELECT id, username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at 
-		FROM users 
-		WHERE username = '%s' 
-		LIMIT 1
-	`, sqlvalidator.SafeString(username))
-	row := s.db.QueryRowContext(ctx, query)
+	// Case-insensitive match: legacy rows may use different casing than the UI.
+	const query = `
+		SELECT id, username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at
+		FROM users
+		WHERE lower(trim(username)) = lower(trim(?))
+		LIMIT 1`
+	row := s.db.QueryRowContext(ctx, query, username)
 	return scanUserRow(row)
 }
 
@@ -286,7 +267,12 @@ func (s *UserService) HashPassword(password string) string {
 
 // verifyPassword checks if password matches hash
 func (s *UserService) verifyPassword(password, hash string) bool {
-	return s.HashPassword(password) == hash
+	want := strings.TrimSpace(hash)
+	if want == "" {
+		return false
+	}
+	got := s.HashPassword(password)
+	return strings.EqualFold(got, want)
 }
 
 // scanUserRow converts a single row to User struct.
@@ -319,8 +305,11 @@ func scanUserRow(row *sql.Row) (*User, error) {
 	if isAdmin.Valid {
 		user.IsAdmin = isAdmin.Bool
 	}
+	// NULL is_active is treated as active (legacy rows / DuckDB nullable without DEFAULT).
 	if isActive.Valid {
 		user.IsActive = isActive.Bool
+	} else {
+		user.IsActive = true
 	}
 	if createdAt.Valid {
 		user.CreatedAt = createdAt.Time
@@ -357,8 +346,11 @@ func scanUserRows(rows *sql.Rows) (*User, error) {
 	if isAdmin.Valid {
 		user.IsAdmin = isAdmin.Bool
 	}
+	// NULL is_active is treated as active (legacy rows / DuckDB nullable without DEFAULT).
 	if isActive.Valid {
 		user.IsActive = isActive.Bool
+	} else {
+		user.IsActive = true
 	}
 	if createdAt.Valid {
 		user.CreatedAt = createdAt.Time

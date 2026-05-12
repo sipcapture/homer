@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -36,9 +37,15 @@ func catalogPathToAbs(dataPath, tableName, catalogPath string) string {
 	}
 	// Paths that already start with "main/" carry their own table subdirectory.
 	if strings.HasPrefix(catalogPath, "main/") {
+		if ducklake.IsRemoteLakeDataPath(dataPath) {
+			return ducklake.JoinLakeDataPath(dataPath, catalogPath)
+		}
 		return filepath.Join(dataPath, catalogPath)
 	}
 	// Current DuckLake format: path is relative to {DataPath}/main/{tableName}/
+	if ducklake.IsRemoteLakeDataPath(dataPath) {
+		return ducklake.JoinLakeDataPath(dataPath, "main", tableName, catalogPath)
+	}
 	return filepath.Join(dataPath, "main", tableName, catalogPath)
 }
 
@@ -122,6 +129,16 @@ type CatalogLocker interface {
 	CatalogUnlock()
 }
 
+// CompactionS3Client holds DuckDB httpfs S3 settings for maintenance calls that
+// read s3:// objects (ducklake_cleanup_old_files / ducklake_delete_orphaned_files).
+// Some DuckLake versions appear to evaluate read_blob without inheriting prior
+// session SET s3_* on the shared *sql.DB; re-applying avoids spurious 403/404.
+// Nil or empty AccessKeyID means skip (ApplyDuckDBS3ClientSettings is a no-op).
+type CompactionS3Client struct {
+	Region, AccessKeyID, SecretAccessKey, Endpoint string
+	UseSSL                                           bool
+}
+
 // CompactionService handles periodic compaction and retention
 type CompactionService struct {
 	db            *sql.DB
@@ -130,6 +147,7 @@ type CompactionService struct {
 	config        CompactionConfig
 	tables        []string
 	catalogLocker CatalogLocker // serializes catalog access with writer flush
+	s3Client      *CompactionS3Client
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -145,7 +163,8 @@ type CompactionService struct {
 // NewCompactionService creates a new compaction service.
 // catalogLocker serializes catalog access with writer flush to prevent "database is locked".
 // dataPath is the root directory for Parquet files; catalog paths are relative to it.
-func NewCompactionService(db *sql.DB, lakeName, dataPath string, config CompactionConfig, catalogLocker CatalogLocker) *CompactionService {
+// s3Client may be nil when data_path is local or credentials are not used.
+func NewCompactionService(db *sql.DB, lakeName, dataPath string, config CompactionConfig, catalogLocker CatalogLocker, s3Client *CompactionS3Client) *CompactionService {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &CompactionService{
@@ -154,8 +173,31 @@ func NewCompactionService(db *sql.DB, lakeName, dataPath string, config Compacti
 		dataPath:      dataPath,
 		config:        config,
 		catalogLocker: catalogLocker,
+		s3Client:      s3Client,
 		ctx:           ctx,
 		cancel:        cancel,
+	}
+}
+
+// ensureS3ClientSettings reapplies DuckDB SET s3_* before procedures that list s3://.
+func (c *CompactionService) ensureS3ClientSettings() {
+	if c == nil || c.db == nil || c.s3Client == nil {
+		return
+	}
+	s := c.s3Client
+	if err := ducklake.ApplyDuckDBS3ClientSettings(c.db, s.Region, s.AccessKeyID, s.SecretAccessKey, s.Endpoint, s.UseSSL); err != nil {
+		logger.Warn("CompactionService: ApplyDuckDBS3ClientSettings failed", "error", err)
+	}
+}
+
+func (c *CompactionService) warnMaintenanceS3Failure(op string, err error) {
+	logger.Warn("CompactionService: "+op+" failed", "error", err)
+	if err == nil {
+		return
+	}
+	if strings.Contains(err.Error(), "NoSuchBucket") && ducklake.IsRemoteLakeDataPath(c.dataPath) {
+		logger.Warn("CompactionService: NoSuchBucket — bucket missing or wrong name for data_path; create it on storage.ducklake.s3.endpoint or fix data_path",
+			"data_path", c.dataPath)
 	}
 }
 
@@ -444,24 +486,26 @@ func (c *CompactionService) runMerge(tables []string) error {
 
 	// 3. Cleanup old files — lock for this call only
 	c.withCatalogLock(func() {
+		c.ensureS3ClientSettings()
 		logger.Info("CompactionService: Cleanup old files", "lake", c.lakeName)
 		cleanupSQL := fmt.Sprintf("CALL ducklake_cleanup_old_files('%s', cleanup_all => true)", c.lakeName)
 		if _, err := c.execWithRetry(cleanupSQL); err != nil {
-			logger.Warn("CompactionService: cleanup_old_files failed", "error", err)
+			c.warnMaintenanceS3Failure("cleanup_old_files", err)
 		}
 	})
 
 	// 4. Delete orphaned files — lock for this call only
 	c.withCatalogLock(func() {
+		c.ensureS3ClientSettings()
 		logger.Info("CompactionService: Delete orphaned files", "lake", c.lakeName)
 		orphanSQL := fmt.Sprintf("CALL ducklake_delete_orphaned_files('%s', cleanup_all => true)", c.lakeName)
 		if _, err := c.execWithRetry(orphanSQL); err != nil {
-			logger.Warn("CompactionService: delete_orphaned_files failed", "error", err)
+			c.warnMaintenanceS3Failure("delete_orphaned_files", err)
 		}
 	})
 
 	// 5. Remove empty directories (no catalog lock needed — filesystem only)
-	if c.dataPath != "" {
+	if c.dataPath != "" && !ducklake.IsRemoteLakeDataPath(c.dataPath) {
 		removed := cleanupEmptyDirs(filepath.Join(c.dataPath, "main"))
 		if removed > 0 {
 			logger.Info("CompactionService: Removed empty directories", "lake", c.lakeName, "count", removed)
@@ -645,6 +689,14 @@ func (c *CompactionService) getSnapshotCount() (int64, error) {
 // last one. The scan touches only the catalog (SQLite metadata), not the
 // Parquet files themselves, so it is fast even with thousands of entries.
 func (c *CompactionService) recoverGhostFiles() {
+	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
+		// filepath.Join corrupts s3:// to s3:/; os.Open does not read object storage.
+		// Ghost detection is local-parquet only; DuckLake maintenance handles remote blobs.
+		logger.Info("CompactionService: skip local ghost scan (remote data_path)",
+			"data_path", c.dataPath)
+		return
+	}
+
 	metadataSchema := fmt.Sprintf("__ducklake_metadata_%s", c.lakeName)
 
 	// Scan ALL active catalog entries (end_snapshot IS NULL).
@@ -715,7 +767,12 @@ func (c *CompactionService) removeBrokenCatalogEntry(tableName, absPath string) 
 
 	// Build the relative path as stored in the catalog.
 	relPath := absPath
-	prefix := filepath.Join(c.dataPath, "main", tableName) + "/"
+	var prefix string
+	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
+		prefix = ducklake.JoinLakeDataPath(c.dataPath, "main", tableName) + "/"
+	} else {
+		prefix = filepath.Join(c.dataPath, "main", tableName) + "/"
+	}
 	if strings.HasPrefix(absPath, prefix) {
 		relPath = strings.TrimPrefix(absPath, prefix)
 	}

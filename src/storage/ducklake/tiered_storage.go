@@ -119,6 +119,10 @@ func (tsm *TieredStorageManager) Start() error {
 		return fmt.Errorf("failed to open DuckDB: %w", err)
 	}
 	tsm.db = db
+	// One connection so S3 secrets/SET from attachVolume stay on every Exec
+	// (pool growth would otherwise yield connections without credentials).
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
 
 	// Load DuckLake extension
 	if _, err := db.Exec("LOAD ducklake;"); err != nil {
@@ -164,6 +168,10 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 			endpoint = strings.TrimPrefix(endpoint, "http://")
 			endpoint = strings.TrimPrefix(endpoint, "https://")
 		}
+		region := strings.TrimSpace(vol.S3Region)
+		if region == "" && endpoint != "" {
+			region = "us-east-1"
+		}
 
 		// Create secret with S3 credentials
 		var createSecret string
@@ -178,7 +186,7 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 					URL_STYLE 'path',
 					USE_SSL %t
 				);
-			`, secretName, vol.S3AccessKey, vol.S3SecretKey, vol.S3Region, endpoint, vol.S3UseSSL)
+			`, secretName, vol.S3AccessKey, vol.S3SecretKey, region, endpoint, vol.S3UseSSL)
 		} else {
 			createSecret = fmt.Sprintf(`
 				CREATE SECRET %s (
@@ -187,7 +195,7 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 					SECRET '%s',
 					REGION '%s'
 				);
-			`, secretName, vol.S3AccessKey, vol.S3SecretKey, vol.S3Region)
+			`, secretName, vol.S3AccessKey, vol.S3SecretKey, region)
 		}
 
 		logger.Info("TieredStorageManager: Creating S3 secret",

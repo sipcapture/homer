@@ -694,10 +694,128 @@ type JWTConfig struct {
 	ExpireHours int    `json:"expire_hours" mapstructure:"expire_hours" default:"24"`
 }
 
+// DefaultInternalAuthPasswordHash is the SHA-256 hex digest of the default
+// bootstrap password when coordinator.auth is the JSON string "internal",
+// or {"type":"internal"} without admin_password_hash (cleartext: sipcapture).
+const DefaultInternalAuthPasswordHash = "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
+
 // AuthConfig configures authentication
 type AuthConfig struct {
-	AdminUser         string `json:"admin_user" mapstructure:"admin_user" default:"admin"`
-	AdminPasswordHash string `json:"admin_password_hash" mapstructure:"admin_password_hash" default:""`
+	// Type selects the primary password-auth mode: "internal" (DuckDB users +
+	// optional bootstrap), "ldap", or "oauth". Empty with only admin_user /
+	// admin_password_hash is legacy object form (no internal bootstrap).
+	Type              string `json:"type,omitempty" mapstructure:"type"`
+	AdminUser         string `json:"admin_user,omitempty" mapstructure:"admin_user" default:"admin"`
+	AdminPasswordHash string `json:"admin_password_hash,omitempty" mapstructure:"admin_password_hash" default:""`
+	// AuthFromInternalString is true when coordinator.auth was the JSON string "internal",
+	// or after normalization when type is "internal" (DuckDB bootstrap path).
+	AuthFromInternalString bool `json:"-" mapstructure:"-"`
+}
+
+// MarshalJSON writes {"type":"internal", ...} for internal mode; otherwise
+// an object with type (if set) plus admin_user / admin_password_hash when present.
+func (a AuthConfig) MarshalJSON() ([]byte, error) {
+	if a.AuthFromInternalString || strings.EqualFold(strings.TrimSpace(a.Type), "internal") {
+		type out struct {
+			Type              string `json:"type"`
+			AdminUser         string `json:"admin_user,omitempty"`
+			AdminPasswordHash string `json:"admin_password_hash,omitempty"`
+		}
+		o := out{Type: "internal"}
+		if u := strings.TrimSpace(a.AdminUser); u != "" && u != "admin" {
+			o.AdminUser = a.AdminUser
+		}
+		if h := strings.TrimSpace(a.AdminPasswordHash); h != "" && h != DefaultInternalAuthPasswordHash {
+			o.AdminPasswordHash = a.AdminPasswordHash
+		}
+		return json.Marshal(o)
+	}
+	type out struct {
+		Type              string `json:"type,omitempty"`
+		AdminUser         string `json:"admin_user,omitempty"`
+		AdminPasswordHash string `json:"admin_password_hash,omitempty"`
+	}
+	return json.Marshal(out{
+		Type:              strings.TrimSpace(a.Type),
+		AdminUser:         a.AdminUser,
+		AdminPasswordHash: a.AdminPasswordHash,
+	})
+}
+
+var authConfigReflectType = reflect.TypeOf(AuthConfig{})
+
+func decodeCoordinatorAuthHook(from reflect.Type, to reflect.Type, data any) (any, error) {
+	if to != authConfigReflectType {
+		return data, nil
+	}
+	if from == nil || from.Kind() != reflect.String {
+		return data, nil
+	}
+	s, ok := data.(string)
+	if !ok {
+		return data, nil
+	}
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, fmt.Errorf("coordinator.auth: empty string is not allowed")
+	}
+	if strings.EqualFold(s, "internal") {
+		return AuthConfig{
+			Type:                   "internal",
+			AdminUser:              "admin",
+			AdminPasswordHash:      DefaultInternalAuthPasswordHash,
+			AuthFromInternalString: true,
+		}, nil
+	}
+	return nil, fmt.Errorf("coordinator.auth: unsupported string value %q (use \"internal\" or {\"type\":\"internal\"})", s)
+}
+
+// normalizeCoordinatorAuth applies coordinator.auth.type after Unmarshal (object
+// {"type":"internal"} vs legacy string "internal" from decodeCoordinatorAuthHook).
+func normalizeCoordinatorAuth(cfg *CoordinatorConfig) error {
+	auth := &cfg.Auth
+	t := strings.TrimSpace(strings.ToLower(auth.Type))
+	auth.Type = t
+
+	if auth.AuthFromInternalString && auth.Type == "" {
+		auth.Type = "internal"
+		t = "internal"
+	}
+
+	switch auth.Type {
+	case "internal":
+		auth.AuthFromInternalString = true
+		if strings.TrimSpace(auth.AdminUser) == "" {
+			auth.AdminUser = "admin"
+		}
+		if strings.TrimSpace(auth.AdminPasswordHash) == "" {
+			auth.AdminPasswordHash = DefaultInternalAuthPasswordHash
+		}
+	case "ldap", "oauth":
+		auth.AuthFromInternalString = false
+	case "":
+		// Omitted coordinator.auth, or legacy object without type.
+		// Default to internal when there is no explicit non-default credential pair:
+		// only admin (or unset) and empty or default sipcapture hash.
+		u := strings.TrimSpace(auth.AdminUser)
+		if u == "" {
+			u = "admin"
+		}
+		hash := strings.TrimSpace(auth.AdminPasswordHash)
+		if !strings.EqualFold(u, "admin") {
+			break
+		}
+		if hash != "" && !strings.EqualFold(hash, DefaultInternalAuthPasswordHash) {
+			break
+		}
+		auth.AuthFromInternalString = true
+		auth.Type = "internal"
+		auth.AdminUser = "admin"
+		auth.AdminPasswordHash = DefaultInternalAuthPasswordHash
+	default:
+		return fmt.Errorf("coordinator.auth.type: unsupported %q (allowed: internal, ldap, oauth, or omit)", auth.Type)
+	}
+	return nil
 }
 
 // LDAPConfig configures optional LDAP / Active Directory password authentication for the coordinator.
@@ -880,6 +998,9 @@ func Load(configPath string) (*Config, error) {
 	// viper from applySliceEnvOverrides() as []map[string]any.
 	if err := v.Unmarshal(&cfg, func(dc *mapstructure.DecoderConfig) {
 		dc.WeaklyTypedInput = true
+		dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(
+			decodeCoordinatorAuthHook,
+		)
 	}); err != nil {
 		return nil, fmt.Errorf("error unmarshaling config: %w", err)
 	}
@@ -888,6 +1009,10 @@ func Load(configPath string) (*Config, error) {
 
 	// Legacy safety net for fields that don't carry struct tags yet.
 	applyDefaults(&cfg)
+
+	if err := normalizeCoordinatorAuth(&cfg.Coordinator); err != nil {
+		return nil, err
+	}
 
 	if err := validateDuckLakeCatalogTypes(&cfg); err != nil {
 		return nil, err

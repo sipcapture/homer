@@ -19,7 +19,7 @@ There is no separate “auth mode” flag in the UI alone: available methods are
 
 | Mode | Coordinator | Password / flow | Typical `POST /api/v4/auth/sessions` body |
 |------|----------------|-----------------|---------------------------------------------|
-| **Local (internal)** | Always advertised as enabled | Users in the coordinator **settings DuckDB** (`users` table), plus optional bootstrap **`coordinator.auth.admin_user`** / **`admin_password_hash`**. | `{"username":"…","password":"…"}` or `"type":"internal"` (default). |
+| **Local (internal)** | Always advertised as enabled | Users in the coordinator **settings DuckDB** (`users` table). Credentials are checked **only** against `users` (no config-only login). Recommended: **`"coordinator.auth": {"type":"internal"}`** (or omit `auth` / string **`"internal"`**) — first startup inserts **`admin`** once (default password **`sipcapture`**, SHA-256 `883ffc1f…`) if no row exists for that username; change the password after login. Explicit **`admin_user`** / **`admin_password_hash`** in JSON or env supports **`--reset-admin-password`** (see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password)). | `{"username":"…","password":"…"}` or `"type":"internal"` (default). |
 | **LDAP** | Advertised only if **`coordinator.ldap.enable`** is true **and** **`coordinator.ldap.host`** is non-empty | Directory bind + optional group rules for admin vs user. | `{"username":"…","password":"…","type":"ldap"}`. |
 | **OAuth2** | Optional; **at most one** provider from **`coordinator.oauth2_provider`** | Browser redirect to IdP `url`, callback to coordinator, then token exchange (see below). | No password session; use OAuth routes. |
 
@@ -47,7 +47,7 @@ The UI (`src/ui/src/loginProviders.ts`, `LoginPage.tsx`):
 
 **Switching at deployment level (operators):**
 
-- **Local only:** leave LDAP disabled or omit host; remove or disable `oauth2_provider`.
+- **Local only:** set **`"coordinator.auth": {"type":"internal"}`** (recommended), omit `auth` (defaults to internal), or legacy string **`"internal"`**; leave LDAP disabled or omit host; remove or disable `oauth2_provider`.
 - **Local + LDAP:** set `coordinator.ldap` with `enable: true` and a non-empty `host` (see canonical doc).
 - **Add OAuth2:** set `coordinator.oauth2_provider` with `enable: true`, stable `name`, `url`, `callback_url`, etc.; restart coordinator.
 - **Force OAuth-first UX:** set `auto_redirect: true` on the single OAuth provider (users still need internal/LDAP if you keep password methods for break-glass accounts).
@@ -102,7 +102,7 @@ Tokens support optional **expiry**, **call limits**, and **active** flag; the se
 
 | Goal | Mechanism |
 |------|-----------|
-| Local users | DuckDB `users` + `POST /auth/sessions` with `type` omitted or `internal`. |
+| Local users | DuckDB `users` + `POST /auth/sessions` with `type` omitted or `internal`. Prefer **`{"type":"internal"}`** / omitted `auth` / string **`"internal"`** for bootstrap; use **`--reset-admin-password`** with `admin_password_hash` in config (or env) for recovery — [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password). |
 | LDAP users | Configure LDAP; `POST /auth/sessions` with `"type":"ldap"`. |
 | OAuth2 users | Configure single `oauth2_provider`; redirect + **`POST /auth/oauth2/token`**. |
 | Scripts / integrations without JWT | Enable `api_settings.enable_token_access`; send **`Auth-Token`**. |
