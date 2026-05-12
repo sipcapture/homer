@@ -20,7 +20,8 @@
 //   - GET  /health             — InfluxDB v2 health probe
 //
 // Recognised query parameters: ?precision=ns|us|ms|s, ?db=<name>,
-// ?bucket=<name> (synonym for db).
+// ?bucket=<name> (synonym for db), ?hep_table=call (optional; see
+// docs/LINE_PROTOCOL.md — requires ingest.line_protocol.allow_hep_sip_call).
 package lineprotoreceiver
 
 import (

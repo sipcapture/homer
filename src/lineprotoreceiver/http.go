@@ -139,6 +139,23 @@ func (h *httpServer) handleWrite(w http.ResponseWriter, r *http.Request, endpoin
 		metrics.RecordLineProtoRequest(endpoint, "method_not_allowed")
 		return
 	}
+
+	hepTable := strings.TrimSpace(strings.ToLower(queryParam(r, "hep_table", "")))
+	if hepTable != "" {
+		if !h.cfg.AllowHepSipCall {
+			writeJSONError(w, http.StatusBadRequest, "hep_table ingest is disabled (set ingest.line_protocol.allow_hep_sip_call to true)")
+			metrics.RecordLineProtoRequest(endpoint, "hep_table_disabled")
+			return
+		}
+		switch hepTable {
+		case "call":
+		default:
+			writeJSONError(w, http.StatusBadRequest, "unknown hep_table value (supported: call)")
+			metrics.RecordLineProtoRequest(endpoint, "hep_table_unknown")
+			return
+		}
+	}
+
 	body, reason, ok := h.readBody(w, r)
 	if !ok {
 		metrics.RecordLineProtoRequest(endpoint, reason)
@@ -150,13 +167,14 @@ func (h *httpServer) handleWrite(w http.ResponseWriter, r *http.Request, endpoin
 		return
 	}
 	precision := ParsePrecision(queryParam(r, "precision", h.cfg.DefaultPrecision))
-	n, err := h.ing.Ingest(r.Context(), dbName, body, precision)
+	n, err := h.ing.Ingest(r.Context(), dbName, body, precision, hepTable)
 	if err != nil {
 		// Differentiate parse-vs-write so dashboards / metrics can
 		// tell client misbehaviour from server-side problems.
 		status := http.StatusInternalServerError
 		outcome := "write_error"
-		if strings.Contains(err.Error(), "parse error") {
+		if strings.Contains(err.Error(), "parse error") ||
+			strings.HasPrefix(err.Error(), "point ") {
 			status = http.StatusBadRequest
 			outcome = "parse_error"
 		}
