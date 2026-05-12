@@ -19,6 +19,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,16 +45,17 @@ type VolumeInfo struct {
 
 // Node is the FlightSQL node module
 type Node struct {
-	config     *config.NodeConfig
-	grpcServer *grpc.Server
-	httpServer *http.Server
-	catalog    *DuckLakeCatalog
-	listener   net.Listener
-	db         *sql.DB
-	sharedDB   *sql.DB // shared with writer module for real-time visibility
-	mu         sync.RWMutex
-	running    bool
-	volumes    []VolumeInfo // Attached storage volumes for tiered storage
+	config        *config.NodeConfig
+	grpcServer    *grpc.Server
+	httpServer    *http.Server
+	catalog       *DuckLakeCatalog
+	listener      net.Listener
+	db            *sql.DB
+	sharedDB      *sql.DB // shared with writer module for real-time visibility
+	tieredQueryDB *sql.DB // writer TieredStorageManager DuckDB (homer_lake_hot / _cold)
+	mu            sync.RWMutex
+	running       bool
+	volumes       []VolumeInfo // Attached storage volumes for tiered storage
 
 	// fsql is the optional Apache Arrow FlightSQL server (Grafana / InfluxDB FlightSQL).
 	fsql *fsqlServer
@@ -334,6 +338,162 @@ func addStorageColumnsToQuery(sql, lakeName, volumeName string) string {
 	return sql[:selectIdx+len("SELECT")] + " " + newSelect + " " + sql[fromIdx:]
 }
 
+var sqlLimitRegexp = regexp.MustCompile(`(?is)\s+LIMIT\s+(\d+)\s*$`)
+
+func extractSQLLimit(sql string) int {
+	m := sqlLimitRegexp.FindStringSubmatch(sql)
+	if len(m) < 2 {
+		return 0
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+func scanAllSQLRows(rows *sql.Rows) ([]map[string]interface{}, []string, error) {
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, nil, err
+	}
+	var out []map[string]interface{}
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		ptrs := make([]interface{}, len(columns))
+		for i := range values {
+			ptrs[i] = &values[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			continue
+		}
+		row := make(map[string]interface{}, len(columns))
+		for i, c := range columns {
+			row[c] = values[i]
+		}
+		out = append(out, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	return out, columns, nil
+}
+
+func mergeColumnOrder(a, b []string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, c := range a {
+		if c != "" && !seen[c] {
+			seen[c] = true
+			out = append(out, c)
+		}
+	}
+	for _, c := range b {
+		if c != "" && !seen[c] {
+			seen[c] = true
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func rowDedupKey(m map[string]interface{}) string {
+	if u, ok := m["uuid"]; ok && u != nil {
+		return "u:" + fmt.Sprint(u)
+	}
+	return "f:" + fmt.Sprint(m["session_id"]) + "|" + fmt.Sprint(m["timestamp"])
+}
+
+func rowTimestampSortKey(m map[string]interface{}) int64 {
+	v, ok := m["timestamp"]
+	if !ok || v == nil {
+		return 0
+	}
+	switch t := v.(type) {
+	case time.Time:
+		return t.UnixNano()
+	case []byte:
+		ts, err := time.Parse("2006-01-02 15:04:05.999999999", string(t))
+		if err != nil {
+			ts, err = time.Parse("2006-01-02 15:04:05", string(t))
+		}
+		if err == nil {
+			return ts.UnixNano()
+		}
+	}
+	return 0
+}
+
+func mergeSelectResults(a, b []map[string]interface{}, colsA, colsB []string, limit int) ([]map[string]interface{}, []string) {
+	cols := mergeColumnOrder(colsA, colsB)
+	byKey := make(map[string]map[string]interface{})
+	for _, row := range a {
+		k := rowDedupKey(row)
+		byKey[k] = row
+	}
+	for _, row := range b {
+		k := rowDedupKey(row)
+		if ex, ok := byKey[k]; ok {
+			if rowTimestampSortKey(row) > rowTimestampSortKey(ex) {
+				byKey[k] = row
+			}
+		} else {
+			byKey[k] = row
+		}
+	}
+	merged := make([]map[string]interface{}, 0, len(byKey))
+	for _, row := range byKey {
+		nr := make(map[string]interface{}, len(cols))
+		for _, c := range cols {
+			if v, ok := row[c]; ok {
+				nr[c] = v
+			} else {
+				nr[c] = nil
+			}
+		}
+		merged = append(merged, nr)
+	}
+	sort.Slice(merged, func(i, j int) bool {
+		return rowTimestampSortKey(merged[i]) > rowTimestampSortKey(merged[j])
+	})
+	if limit > 0 && len(merged) > limit {
+		merged = merged[:limit]
+	}
+	return merged, cols
+}
+
+func (n *Node) querySelectMerged(ctx context.Context, sharedSQL string, sharedDB *sql.DB, tieredSQL string, tieredDB *sql.DB, originalSQL string) ([]map[string]interface{}, []string, error) {
+	rows1, err := sharedDB.QueryContext(ctx, sharedSQL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("shared query: %w", err)
+	}
+	defer rows1.Close()
+	data1, cols1, err := scanAllSQLRows(rows1)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rows2, err := tieredDB.QueryContext(ctx, tieredSQL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("tiered query: %w", err)
+	}
+	defer rows2.Close()
+	data2, cols2, err := scanAllSQLRows(rows2)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	limit := extractSQLLimit(originalSQL)
+	merged, cols := mergeSelectResults(data1, data2, cols1, cols2, limit)
+	return merged, cols, nil
+}
+
+func (n *Node) tieredQueryDBForRead() *sql.DB {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.tieredQueryDB
+}
+
 // handleQuery handles POST /query requests
 func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -386,6 +546,22 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 			Count:   0,
 		})
 		return
+	}
+
+	tieredUnion, tieredOk := n.tryBuildVolumeUnionSQL(req.SQL)
+	tieredDB := n.tieredQueryDBForRead()
+	if tieredOk && tieredDB != nil && n.sharedDB != nil {
+		merged, columns, err := n.querySelectMerged(r.Context(), rewrittenSQL, db, tieredUnion, tieredDB, req.SQL)
+		if err == nil {
+			logger.Info("Node: handleQuery: returning merged results", "rows", len(merged), "columns", fmt.Sprintf("%v", columns))
+			writeJSON(w, http.StatusOK, QueryResponse{
+				Success: true,
+				Data:    merged,
+				Count:   len(merged),
+			})
+			return
+		}
+		logger.Warn("Node: merged writer+tiered query failed, falling back to writer-only", "error", err)
 	}
 
 	rows, err := db.QueryContext(r.Context(), rewrittenSQL)
@@ -466,6 +642,9 @@ func (n *Node) duckLakeCatalogForQuery(vol VolumeInfo) string {
 // Becomes: "SELECT * FROM homer_lake_hot.main.hep_proto_1 WHERE date = '2026-01-30'
 //
 //	UNION ALL SELECT * FROM homer_lake_cold.main.hep_proto_1 WHERE date = '2026-01-30'"
+//
+// When SetSharedDB is used (writer connection), this returns sql unchanged; the
+// tiered UNION is executed separately on tieredQueryDB — see handleQuery.
 func (n *Node) rewriteQueryForVolumes(sql string) string {
 	// Skip if single volume or no volumes configured
 	if len(n.volumes) <= 1 {
@@ -489,38 +668,40 @@ func (n *Node) rewriteQueryForVolumes(sql string) string {
 		return sql
 	}
 
-	baseLakeName := n.config.DuckLake.LakeName
+	if u, ok := n.tryBuildVolumeUnionSQL(sql); ok {
+		return u
+	}
+	return sql
+}
 
-	// Check if query references the base lake name
-	// Pattern: "homer_lake.main.tablename" or "FROM homer_lake.main.tablename"
-	if !strings.Contains(sql, baseLakeName+".main.") {
-		return sql
+// tryBuildVolumeUnionSQL builds SELECT ... UNION ALL ... across configured volumes
+// for execution on the TieredStorageManager DuckDB (hot + cold catalogs).
+func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
+	if len(n.volumes) <= 1 {
+		return "", false
 	}
 
-	// For simple SELECT queries, we can do pattern-based rewriting
-	// This handles queries like: SELECT ... FROM lake.main.table WHERE ...
+	baseLakeName := n.config.DuckLake.LakeName
+	if !strings.Contains(sql, baseLakeName+".main.") {
+		return "", false
+	}
 
 	upperSQL := strings.ToUpper(sql)
-
-	// Only handle SELECT queries for now
 	if !strings.HasPrefix(strings.TrimSpace(upperSQL), "SELECT") {
-		return sql
+		return "", false
 	}
 
-	// Find FROM clause position
 	fromIdx := strings.Index(upperSQL, "FROM")
 	if fromIdx == -1 {
-		return sql
+		return "", false
 	}
 
-	// Extract table reference pattern: lake.main.table
 	tablePattern := baseLakeName + ".main."
 	tableStart := strings.Index(sql, tablePattern)
 	if tableStart == -1 {
-		return sql
+		return "", false
 	}
 
-	// Find table name end (space, comma, or end of string)
 	tableEnd := tableStart + len(tablePattern)
 	for tableEnd < len(sql) {
 		ch := sql[tableEnd]
@@ -533,7 +714,6 @@ func (n *Node) rewriteQueryForVolumes(sql string) string {
 	tableFQN := sql[tableStart:tableEnd]
 	tableName := tableFQN[len(tablePattern):]
 
-	// Build UNION ALL subquery
 	var unionParts []string
 	for _, vol := range n.volumes {
 		cat := n.duckLakeCatalogForQuery(vol)
@@ -543,7 +723,7 @@ func (n *Node) rewriteQueryForVolumes(sql string) string {
 		unionParts = append(unionParts, "("+rewrittenPart+")")
 	}
 
-	return strings.Join(unionParts, " UNION ALL ")
+	return strings.Join(unionParts, " UNION ALL "), true
 }
 
 // addMemoryUnion rewrites a SELECT query to include unflushed rows from the
@@ -820,6 +1000,18 @@ func (n *Node) SetSharedDB(db *sql.DB) {
 	defer n.mu.Unlock()
 	n.sharedDB = db
 	logger.Info("Node: using shared DuckDB connection from writer module")
+}
+
+// SetTieredQueryDB sets the TieredStorageManager DuckDB used for hot/cold
+// catalogs when running alongside the writer. Optional; when nil, only the
+// shared writer connection is queried.
+func (n *Node) SetTieredQueryDB(db *sql.DB) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.tieredQueryDB = db
+	if db != nil {
+		logger.Info("Node: tiered storage DuckDB wired for merged search (hot+cold)")
+	}
 }
 
 // queryDB returns the best DuckDB connection for queries.

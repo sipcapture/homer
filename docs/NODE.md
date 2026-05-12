@@ -312,6 +312,8 @@ When **Ingest**, **Storage**, and **Node** are enabled together, Node uses the *
 
 Current code also rewrites coordinator SQL to use **`node.ducklake.lake_name`** when executing on the shared writer connection with **one** volume (`duckLakeCatalogForQuery` in [`src/node/node.go`](../src/node/node.go)), which avoids Binder errors if `name` is not `default`. Path and `lake_name` alignment with storage remains mandatory.
 
+With **multi-volume** `node.ducklake.volumes` and a writer **storage_policy**, the Node’s HTTP **`/query`** path (coordinator → local node) **merges** results from the writer DuckDB (`homer_lake` + memory buffer) and the writer’s **TieredStorageManager** DuckDB (`homer_lake_hot` / `homer_lake_cold` UNION), so cold-tier data is visible in search. Apache Arrow FlightSQL still uses the writer connection only until extended similarly.
+
 ## Troubleshooting
 
 | Symptom | Likely cause |

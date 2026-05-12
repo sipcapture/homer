@@ -68,3 +68,32 @@ func TestRewriteQueryForVolumes_sharedDBMultiVolumeSkipsUnion(t *testing.T) {
 		t.Fatalf("unexpected UNION ALL rewrite on sharedDB: %s", got)
 	}
 }
+
+func TestTryBuildVolumeUnionSQL_multiVolume(t *testing.T) {
+	cfg := &config.NodeConfig{DuckLake: config.DuckLakeConfig{LakeName: "homer_lake"}}
+	n := &Node{
+		config: cfg,
+		volumes: []VolumeInfo{
+			{Name: "hot", LakeName: "homer_lake_hot"},
+			{Name: "cold", LakeName: "homer_lake_cold"},
+		},
+		sharedDB: new(sql.DB),
+	}
+	sql := "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE 1=1"
+	out, ok := n.tryBuildVolumeUnionSQL(sql)
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if !strings.Contains(out, "homer_lake_hot") || !strings.Contains(out, "UNION ALL") || !strings.Contains(out, "homer_lake_cold") {
+		t.Fatalf("expected union across hot+cold: %s", out)
+	}
+}
+
+func TestExtractSQLLimit(t *testing.T) {
+	if g := extractSQLLimit("SELECT 1 ORDER BY x DESC LIMIT 25"); g != 25 {
+		t.Fatalf("got %d", g)
+	}
+	if g := extractSQLLimit("SELECT 1"); g != 0 {
+		t.Fatalf("got %d", g)
+	}
+}

@@ -945,6 +945,15 @@ func (w *Writer) GetDB() *sql.DB {
 	return nil
 }
 
+// GetTieredQueryDB returns the TieredStorageManager DuckDB when multi-volume
+// tiering is active, or nil. Used by the Node for merged search across hot+cold.
+func (w *Writer) GetTieredQueryDB() *sql.DB {
+	if w.tieredStorage == nil {
+		return nil
+	}
+	return w.tieredStorage.GetDB()
+}
+
 // GetDuckLakeManager returns the writer's DuckLake manager so that
 // peer modules (e.g. the OTLP receiver) can reuse it for their own
 // auxiliary tables instead of opening a second DuckDB.

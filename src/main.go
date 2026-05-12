@@ -33,9 +33,9 @@ import (
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator"
 	"github.com/sipcapture/homer-core/src/homerconfig"
+	"github.com/sipcapture/homer-core/src/lineprotoreceiver"
 	homermcp "github.com/sipcapture/homer-core/src/mcp"
 	"github.com/sipcapture/homer-core/src/node"
-	"github.com/sipcapture/homer-core/src/lineprotoreceiver"
 	"github.com/sipcapture/homer-core/src/otlpreceiver"
 	otlpsink "github.com/sipcapture/homer-core/src/otlpreceiver/sink"
 	input "github.com/sipcapture/homer-core/src/server"
@@ -480,6 +480,9 @@ func runServer() {
 
 	cfg, isModular := tryLoadModularConfig(configPath)
 
+	var writerModule *writer.Writer
+	var nodeModule *node.Node
+
 	if isModular {
 		useStdout := false
 		for _, out := range cfg.Log.Output {
@@ -515,7 +518,6 @@ func runServer() {
 		}
 
 		// Start Writer module if ingest + storage are enabled
-		var writerModule *writer.Writer
 		if cfg.Ingest.Enable && cfg.Storage.Enable {
 			w, err := writer.New(&cfg.Ingest, &cfg.Storage, &cfg.Prometheus, &cfg.RemoteLogging)
 			if err != nil {
@@ -548,6 +550,7 @@ func runServer() {
 				n.SetBroker(liveBroker)
 			}
 			mm.AddModule(n)
+			nodeModule = n
 			logger.Info("Node module configured")
 		}
 
@@ -771,6 +774,14 @@ func runServer() {
 	if err := mm.Start(); err != nil {
 		logger.Error(fmt.Sprintf("Failed to start: %v", err))
 		os.Exit(1)
+	}
+
+	// TieredStorageManager DuckDB is created in Writer.Start; wire it for
+	// merged HTTP /query search (writer homer_lake + hot/cold tier catalogs).
+	if writerModule != nil && nodeModule != nil {
+		if tdb := writerModule.GetTieredQueryDB(); tdb != nil {
+			nodeModule.SetTieredQueryDB(tdb)
+		}
 	}
 
 	for {
