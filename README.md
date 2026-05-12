@@ -1,4 +1,3 @@
-<img src="https://github.com/user-attachments/assets/3fc9d420-938a-44cd-b2ab-47a574e00c55" width=200 />
 <img src="https://github.com/user-attachments/assets/85d47c71-0feb-452a-b45a-2519b44a7fac" width=215 />
 
 # homer eleven
