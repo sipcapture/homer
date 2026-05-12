@@ -108,14 +108,23 @@ If **`allow_hep_sip_call`** is `false` (default) and the client sends **`?hep_ta
 
 **Security:** an exposed LP port with `allow_hep_sip_call=true` allows unauthenticated append to the call table unless you use network controls or mTLS (`cacert`).
 
-**Column mapping:** tags and fields are merged (Influx-sanitised identifiers). Use **quoted** strings for text fields (`caller="alice"`). Ports and `protocol` should be integer fields (`5060i`, `17i`). Optional **`data_extra`** must be a JSON **object** string (e.g. `data_extra="{}"`); if omitted, `{}` is stored. The LP **measurement** name is ignored when `hep_table=call`.
+**Column mapping:** tags and fields are merged (Influx-sanitised identifiers). Use **quoted** strings for text fields (`caller="alice"`). **`timestamp`** can be the line-ending epoch (as in normal LP), a tag/field `timestamp` with RFC3339 / `YYYY-MM-DD HH:MM:SS` / epoch integer, or falls back to wall clock if absent. **`date`**: optional tag/field `date="YYYY-MM-DD"`; if omitted, **`date` is set from the resolved `timestamp` (UTC calendar day)** — that value is what DuckLake uses for **`date=…`** partitioning. Ports and `protocol` should be integer fields (`5060i`, `17i`). Optional **`data_extra`** must be a JSON **object** string (e.g. `data_extra="{}"`); if omitted, `{}` is stored. The LP **measurement** name is ignored when `hep_table=call`.
 
-Example:
+Example (partition `date` is inferred from the line timestamp — here 2023-11-14 UTC):
 
 ```bash
 curl -i -X POST "http://127.0.0.1:8086/write?hep_table=call&precision=ns" \
   --data-binary 'sip,method=INVITE,session_id=abc caller="alice",callee="bob",src_ip="10.0.0.1",dst_ip="10.0.0.2",src_port=5060i,dst_port=5060i,protocol=17i,payload="INVITE sip:b SIP/2.0" 1700000000000000000'
 ```
+
+Example with **explicit `date`** as a **tag** (partition `date=2023-11-14/…`; keep it consistent with `timestamp`):
+
+```bash
+curl -i -X POST "http://127.0.0.1:8086/write?hep_table=call&precision=ns" \
+  --data-binary 'sip,method=INVITE,session_id=abc,date=2023-11-14 caller="alice",callee="bob",src_ip="10.0.0.1",dst_ip="10.0.0.2",src_port=5060i,dst_port=5060i,protocol=17i,payload="INVITE sip:b SIP/2.0" 1700000000000000000'
+```
+
+You can also send **`date` as a string field** (quoted): `...,date="2023-11-14"` in the field set.
 
 ### Query parameters
 
