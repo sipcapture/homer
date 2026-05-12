@@ -110,7 +110,7 @@ The `move_factor` parameter works similar to ClickHouse storage policies. It con
 | `type` | string | "local" | Storage type: "local" or "s3" |
 | `path` | string | required | Local path or S3 URL |
 | `priority` | int | 0 | Lower = higher priority. Writes go to lowest priority |
-| `max_data_age_days` | int | 0 | Move data older than N days to next volume (0 = no limit) |
+| `max_data_age_days` | int | 0 | Tiering moves rows in partitions whose DuckLake **`date`** is **on or before** `calendar(today) − N days` (inclusive). Example: `N=1` on May 12 includes partition `date=2026-05-11`. `0` disables TTL-based moves. |
 | `max_size_gb` | int | 0 | Max volume size in GB (0 = no limit) |
 
 ### S3-specific Settings (for `type: "s3"`)

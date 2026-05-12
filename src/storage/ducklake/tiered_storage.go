@@ -395,14 +395,18 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 	return nil
 }
 
-// GetPartitionsOlderThan returns partitions older than the given date
+// GetPartitionsOlderThan returns distinct partition dates that should be
+// tiered off the volume: those with date on or before cutoffDate (inclusive).
+// Callers pass cutoffDate = calendar(today) minus MaxDataAgeDays, so for
+// max_data_age_days=1 on 2026-05-12 the cutoff is 2026-05-11 and the partition
+// date=2026-05-11 is included (yesterday's data can move to cold).
 func (tsm *TieredStorageManager) GetPartitionsOlderThan(vol *Volume, tableName string, cutoffDate string) ([]string, error) {
 	tableFQN := fmt.Sprintf("%s.main.%s", vol.LakeName, tableName)
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT date
 		FROM %s
-		WHERE date < ?
+		WHERE date <= ?
 		ORDER BY date
 	`, tableFQN)
 

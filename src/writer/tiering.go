@@ -290,7 +290,7 @@ func (ts *TieringService) moveOldPartitions(srcVol, dstVol *ducklake.Volume) (in
 		"dest", dstVol.Name,
 		"max_data_age_days", srcVol.MaxDataAgeDays,
 		"partition_date_cutoff", cutoffDate,
-		"rule", "SELECT DISTINCT date WHERE date < cutoff (calendar partition column, not ingest wall clock)")
+		"rule", "partition date <= cutoff (inclusive); cutoff is calendar today minus max_data_age_days")
 
 	// Get all tables in source volume
 	tables, err := ts.tieredStorage.GetTableNames(srcVol)
@@ -367,7 +367,7 @@ func (ts *TieringService) moveOldPartitions(srcVol, dstVol *ducklake.Volume) (in
 			"source", srcVol.Name,
 			"tables_checked", len(tables),
 			"partition_date_cutoff", cutoffDate,
-			"hint", "No partition date values strictly before cutoff; fresh data often keeps all rows in recent calendar dates.")
+			"hint", "No partition dates on or before cutoff; increase max_data_age_days or wait for older calendar partitions.")
 	}
 	return totalMoved, nil
 }
