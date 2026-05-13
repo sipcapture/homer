@@ -137,3 +137,5 @@ require (
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
+
+replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.2
