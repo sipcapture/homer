@@ -42,16 +42,16 @@ def build_hep3(
     return b"HEP3" + struct.pack(">H", total) + body
 
 
-def send_udp(host: str, port: int, pkt: bytes, count: int) -> None:
+def send_udp(host: str, port: int, pkts: list[bytes]) -> None:
     addr = (host, port)
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        for i in range(count):
+        for pkt in pkts:
             s.sendto(pkt, addr)
 
 
-def send_tcp(host: str, port: int, pkt: bytes, count: int) -> None:
+def send_tcp(host: str, port: int, pkts: list[bytes]) -> None:
     with socket.create_connection((host, port), timeout=30) as s:
-        for _ in range(count):
+        for pkt in pkts:
             s.sendall(pkt)
 
 
@@ -93,14 +93,12 @@ def main() -> None:
     t0 = time.perf_counter()
     if args.udp:
         h, p = args.udp.rsplit(":", 1)
-        pkt0 = one_pkt(0)
-        for i in range(args.count):
-            send_udp(h, int(p), pkt0 if args.burst else one_pkt(i), 1)
+        pkts = [one_pkt(0)] * args.count if args.burst else [one_pkt(i) for i in range(args.count)]
+        send_udp(h, int(p), pkts)
     if args.tcp:
         h, p = args.tcp.rsplit(":", 1)
-        for i in range(args.count):
-            pkt = one_pkt(i) if args.burst <= 0 else one_pkt(0)
-            send_tcp(h, int(p), pkt, 1)
+        pkts = [one_pkt(0)] * args.count if args.burst else [one_pkt(i) for i in range(args.count)]
+        send_tcp(h, int(p), pkts)
     dt = time.perf_counter() - t0
     print(f"sent {args.count} pkt(s) per protocol in {dt:.3f}s ({args.count / max(dt, 1e-9):.0f} pkt/s combined)")
 

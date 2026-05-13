@@ -506,11 +506,9 @@ var sbPool = sync.Pool{New: func() interface{} {
 
 // buildExtraJSON builds the data_extra JSON string directly without
 // map allocation or reflection-based encoding/json.Marshal.
-// Uses a pooled []byte buffer; the result string borrows from it via unsafe
-// so the caller must not hold the string after the pool slot is reclaimed.
-// Since the string is passed to TableWriter.Write which appends it to a batch
-// slice ([]interface{}), and the batch is flushed (copied into DuckDB Appender)
-// before the pool slot can be reused, this is safe.
+// Uses a pooled []byte buffer; the result is a copy (string(b)) so
+// the caller may hold the string indefinitely — the pool slot is returned
+// before this function returns.
 func buildExtraJSON(hep *decoder.HEP) string {
 	bp := sbPool.Get().(*[]byte)
 	b := (*bp)[:0]

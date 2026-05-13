@@ -371,6 +371,7 @@ func (w *Writer) Start() error {
 	}
 
 	// Start workers
+	// Auto-detect: NumCPU/2, minimum 2 (even on single-core hosts/containers), maximum 4.
 	numWorkers := w.ingestConfig.WorkerCount
 	if numWorkers <= 0 {
 		numWorkers = runtime.NumCPU() / 2

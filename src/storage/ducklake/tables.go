@@ -545,14 +545,18 @@ func (tw *TableWriter) flushBatch() error {
 		return nil
 	}
 	// Swap batch with a recycled slice to avoid allocation on the hot path.
-	var rows [][]interface{}
+	// We get a recycled slice from the pool, assign it to tw.batch, and later
+	// return the flushed rows (after clearing) to the pool. This keeps the pool
+	// size stable without leaking the pooled pointer.
+	rows := tw.batch
 	if p := batchSlicePool.Get(); p != nil {
 		recycled := p.(*[][]interface{})
-		rows = tw.batch
-		tw.batch = (*recycled)[:0]
-		*recycled = rows // keep pointer alive for pool return below
+		if cap(*recycled) >= tw.batchSize {
+			tw.batch = (*recycled)[:0]
+		} else {
+			tw.batch = make([][]interface{}, 0, tw.batchSize)
+		}
 	} else {
-		rows = tw.batch
 		tw.batch = make([][]interface{}, 0, tw.batchSize)
 	}
 	slot := int(tw.activeIdx.Load())
@@ -580,6 +584,14 @@ func (tw *TableWriter) flushBatch() error {
 	sqlConn, err := tw.db.Conn(ctx)
 	if err != nil {
 		driverValPool.Put(&vals)
+		// Clear per-row references and return row slices to pool before returning
+		// the outer slice, so packet payload strings are not retained in pooled memory.
+		for _, row := range rows {
+			putRowSlice(row)
+		}
+		for i := range rows {
+			rows[i] = nil
+		}
 		batchSlicePool.Put(&rows)
 		metrics.RecordPipelineStageError("ducklake", "batch_insert", "conn_error")
 		return fmt.Errorf("appender conn for %s: %w", memTable, err)
@@ -587,7 +599,11 @@ func (tw *TableWriter) flushBatch() error {
 	defer sqlConn.Close()
 
 	err = sqlConn.Raw(func(driverConn interface{}) error {
-		appender, appErr := duckdb.NewAppenderFromConn(driverConn.(driver.Conn), "", memTable)
+		dc, ok := driverConn.(driver.Conn)
+		if !ok {
+			return fmt.Errorf("raw conn does not implement driver.Conn (got %T)", driverConn)
+		}
+		appender, appErr := duckdb.NewAppenderFromConn(dc, "", memTable)
 		if appErr != nil {
 			return appErr
 		}

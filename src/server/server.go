@@ -425,7 +425,7 @@ func (h *HEPInput) reloadWorker() {
 }
 
 // resolveWorkerCount determines the number of worker goroutines.
-// Priority: config value > auto-detect (NumCPU/2 capped at 4).
+// Priority: config value > auto-detect (NumCPU/2, minimum 2, maximum 4).
 func resolveWorkerCount() int {
 	if homerconfig.MainConfig != nil {
 		if wc := homerconfig.MainConfig.Setting.SERVER_SETTINGS.WorkerCount; wc > 0 {

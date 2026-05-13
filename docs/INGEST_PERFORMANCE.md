@@ -1,6 +1,6 @@
 # Ingest and writer CPU tuning (modular config)
 
-When the HEP writer is under very high packet rates, CPU time is dominated by decoding, DuckLake appends, and (to a lesser extent) Prometheus counter updates on the ingest path. The **defaults in code are unchanged**; operators tune behaviour via JSON / YAML / environment variables.
+When the HEP writer is under very high packet rates, CPU time is dominated by decoding, DuckLake appends, and (to a lesser extent) Prometheus counter updates on the ingest path. This PR adjusts several defaults (see sections below for the new values); operators can further tune behaviour via JSON / YAML / environment variables.
 
 ## `ingest.udp.multicore` / `ingest.tcp.multicore`
 
@@ -84,9 +84,15 @@ Artifacts after the script: `cpu.pb.gz`, `pprof-top.txt`, `homer.log` under `OUT
 
 Homer pulls DuckDB’s CGO stack through **`github.com/duckdb/duckdb-go/v2`**, which depends on the prebuilt static libs in **[`github.com/duckdb/duckdb-go-bindings`](https://github.com/duckdb/duckdb-go-bindings)** (see that repo for versioning, e.g. DuckDB `v1.5.2` → module tag **`v0.10502.0`**).
 
-By default **`src/go.mod` has no `replace`** — you get the upstream bindings version that matches `duckdb-go/v2`.
+By default **`src/go.mod` contains a `replace` directive** pointing to a fork that eliminates per-string CGO malloc/free in the Appender hot path (visible as `VectorAssignStringElementLen` + `duckdb_free` per-column in profiles). This fork has been benchmarked against upstream and showed a measurable reduction in CGO overhead at high PPS.
 
-For experiments (e.g. reduced `CString` churn on the hot path), you can temporarily override in `src/go.mod`:
+The current `replace` in `src/go.mod`:
+
+```go
+replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.2
+```
+
+To revert to upstream bindings, remove this `replace` line and run `go mod tidy`. For experiments (e.g. additional optimisations), you can update the fork reference:
 
 ```go
 replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.2

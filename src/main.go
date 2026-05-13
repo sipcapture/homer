@@ -19,6 +19,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -777,6 +778,14 @@ func runServer() {
 
 	if sf.PprofListen != nil && *sf.PprofListen != "" {
 		addr := *sf.PprofListen
+		// Warn if the pprof server will bind to a non-loopback address, since
+		// /debug/pprof exposes process internals and should not be publicly reachable.
+		if host, _, err := net.SplitHostPort(addr); err == nil {
+			ip := net.ParseIP(host)
+			if ip == nil || !ip.IsLoopback() {
+				logger.Warn("pprof: binding to a non-loopback address exposes profiling endpoints; use 127.0.0.1 unless you have network-level access controls", "addr", addr)
+			}
+		}
 		go func() {
 			logger.Info("pprof: use go tool pprof http://"+addr+"/debug/pprof/profile?seconds=30", "addr", addr)
 			if err := http.ListenAndServe(addr, nil); err != nil {
