@@ -23,5 +23,6 @@ Field names follow the `mapstructure` tags on [`Config` in `src/config/config.go
 ## References
 
 - Loader: `config.Load` — `SetEnvPrefix("HOMER")`, `SetEnvKeyReplacer(".", "_")`, `AutomaticEnv()` ([source](../src/config/config.go)).
+- SIP ingest (`ingest.sip`): `aleg_ids`, `custom_headers`, `force_aleg_id`; see [LUA_CORRELATION.md](LUA_CORRELATION.md#sip-header-lists-writer-ingest) (CID / correlation).
 - Tiered storage fields: [`docs/STORAGE_POLICIES.md`](STORAGE_POLICIES.md) (conceptual); same paths appear under `storage.ducklake.storage_policy` and `node.ducklake` in JSON — mirror them as `HOMER_*` as above.
 - Example with variables declared inline in Compose: [`examples/docker/docker-compose.yml`](../examples/docker/docker-compose.yml) (`homer.environment`).

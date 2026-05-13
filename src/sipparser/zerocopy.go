@@ -17,8 +17,23 @@ package sipparser
 
 import (
 	"errors"
+	"strings"
 	"unsafe"
 )
+
+// ZeroCopyOpts configures optional SIP header extraction for ParseMsgZeroCopy.
+// Nil opts or both slices empty: no extra matching (same as legacy callers).
+//
+// AlegIDs lists SIP header names (case-insensitive). While scanning headers top
+// to bottom, the first line whose name matches any entry sets SipMsg.XCallID;
+// later lines do not overwrite a non-empty XCallID.
+//
+// CustomHeaders lists extra header names to copy into SipMsg.CustomHeader; map
+// keys are the configured strings (stable for data_extra JSON).
+type ZeroCopyOpts struct {
+	AlegIDs       []string
+	CustomHeaders []string
+}
 
 // btos converts []byte to string without copying.
 func btos(b []byte) string {
@@ -30,10 +45,12 @@ var (
 	errTooShort = errors.New("ParseMsgZeroCopy: message too short")
 )
 
-// ParseMsgZeroCopy parses a SIP message from raw bytes with minimal heap allocations.
-// All string fields point into the original data buffer via unsafe.
-// The caller must keep data alive while the returned SipMsg is in use.
-func ParseMsgZeroCopy(data []byte) *SipMsg {
+// ParseMsgZeroCopy parses a SIP message from raw bytes with minimal allocations.
+// String fields reference the original buffer via unsafe; keep data alive while
+// using the returned SipMsg.
+// If opts is non-nil and lists are non-empty, AlegIDs and CustomHeaders populate
+// XCallID and CustomHeader respectively.
+func ParseMsgZeroCopy(data []byte, opts *ZeroCopyOpts) *SipMsg {
 	if len(data) < 16 {
 		return &SipMsg{Error: errTooShort}
 	}
@@ -47,8 +64,9 @@ func ParseMsgZeroCopy(data []byte) *SipMsg {
 	}
 
 	s := &SipMsg{
-		Msg: btos(data),
-		eof: headersEnd,
+		Msg:       btos(data),
+		eof:       headersEnd,
+		zcHdrOpts: opts,
 	}
 
 	if bodyStart := headersEnd + 4; bodyStart < len(data) {
@@ -57,6 +75,51 @@ func ParseMsgZeroCopy(data []byte) *SipMsg {
 
 	zcParseHeaders(data[:headersEnd+2], s)
 	return s
+}
+
+// ParseMsgZeroCopyLegacy is equivalent to ParseMsgZeroCopy(data, nil).
+func ParseMsgZeroCopyLegacy(data []byte) *SipMsg {
+	return ParseMsgZeroCopy(data, nil)
+}
+
+// zcApplyAlegCustomHeaders applies ingest aleg_ids and custom_headers for one header line.
+func zcApplyAlegCustomHeaders(name, val []byte, s *SipMsg) {
+	o := s.zcHdrOpts
+	if o == nil {
+		return
+	}
+	if len(o.AlegIDs) == 0 && len(o.CustomHeaders) == 0 {
+		return
+	}
+	nameStr := btos(name)
+	valStr := btos(zcTrimWS(val))
+
+	if len(o.AlegIDs) > 0 && s.XCallID == "" {
+		for _, id := range o.AlegIDs {
+			if id == "" {
+				continue
+			}
+			if strings.EqualFold(nameStr, id) {
+				s.XCallID = valStr
+				break
+			}
+		}
+	}
+	if len(o.CustomHeaders) == 0 {
+		return
+	}
+	for _, h := range o.CustomHeaders {
+		if h == "" {
+			continue
+		}
+		if strings.EqualFold(nameStr, h) {
+			if s.CustomHeader == nil {
+				s.CustomHeader = make(map[string]string)
+			}
+			s.CustomHeader[h] = valStr
+			break
+		}
+	}
 }
 
 func zcFindLastCRLF(data []byte) int {
@@ -284,6 +347,7 @@ func zcParseHeaderLine(line []byte, s *SipMsg) {
 			s.RTPStatVal = btos(zcTrimWS(val))
 		}
 	}
+	zcApplyAlegCustomHeaders(name, val, s)
 }
 
 // zcParseFromTo extracts user, host, tag from From/To header value.

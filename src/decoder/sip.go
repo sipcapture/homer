@@ -30,16 +30,28 @@ func stob(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
+// parseSIP decodes the SIP payload. When ingest lists aleg_ids / custom_headers,
+// they are passed into ParseMsgZeroCopy so XCallID and CustomHeader are filled
+// before CID selection (see sipparser.ZeroCopyOpts).
 func (h *HEP) parseSIP() error {
 	var forceALegID bool
+	var zcOpts *sipparser.ZeroCopyOpts
 
 	if h.decoder != nil && h.decoder.config != nil {
-		forceALegID = h.decoder.config.ForceALegID
+		cfg := h.decoder.config
+		forceALegID = cfg.ForceALegID
+		if len(cfg.AlegIDs) > 0 || len(cfg.CustomHeaders) > 0 {
+			zcOpts = &sipparser.ZeroCopyOpts{AlegIDs: cfg.AlegIDs, CustomHeaders: cfg.CustomHeaders}
+		}
 	} else if homerconfig.MainConfig != nil {
-		forceALegID = homerconfig.MainConfig.Setting.SIP_SETTINGS.ForceALegID
+		sip := homerconfig.MainConfig.Setting.SIP_SETTINGS
+		forceALegID = sip.ForceALegID
+		if len(sip.AlegIDs) > 0 || len(sip.CustomHeaders) > 0 {
+			zcOpts = &sipparser.ZeroCopyOpts{AlegIDs: sip.AlegIDs, CustomHeaders: sip.CustomHeaders}
+		}
 	}
 
-	h.SIP = sipparser.ParseMsgZeroCopy(stob(h.Payload))
+	h.SIP = sipparser.ParseMsgZeroCopy(stob(h.Payload), zcOpts)
 
 	if h.SIP.Error != nil {
 		return h.SIP.Error

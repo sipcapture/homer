@@ -212,13 +212,15 @@ type HomerServerSettings struct {
 		} `json:"flight_server" mapstructure:"flight_server"`
 	} `json:"server_settings" mapstructure:"server_settings"`
 
-	// hep settings
+	// hep / SIP capture tuning (legacy homerconfig)
 	SIP_SETTINGS struct {
 		CensorMethod   []string `json:"censored_methods" mapstructure:"censored_methods" default:"[]"`
 		DiscardMethods []string `json:"discard_methods" mapstructure:"discard_methods" default:"[]"`
-		AlegIDs        []string `json:"aleg_ids" mapstructure:"aleg_ids" default:"[]"`
-		CustomHeaders  []string `json:"custom_headers" mapstructure:"custom_headers" default:"[]"`
-		//ForceALegID
+		// AlegIDs: header names whose first wire-order match fills XCallID (see sipparser.ZeroCopyOpts).
+		AlegIDs []string `json:"aleg_ids" mapstructure:"aleg_ids" default:"[]"`
+		// CustomHeaders: extra header names stored in SipMsg.CustomHeader / data_extra.
+		CustomHeaders []string `json:"custom_headers" mapstructure:"custom_headers" default:"[]"`
+		// ForceALegID: when true, decoder prefers XCallID over an existing HEP CID when XCallID is set.
 		ForceALegID bool `json:"force_aleg_id" mapstructure:"force_aleg_id" default:"false"`
 	} `json:"sip_settings" mapstructure:"sip_settings"`
 
