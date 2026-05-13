@@ -36,7 +36,7 @@ func New(cfg *config.LineProtoConfig, db *sql.DB, lakeName string) (*Module, err
 	if db == nil {
 		return nil, fmt.Errorf("line-proto receiver: db is required")
 	}
-	ing := NewIngester(db, lakeName, cfg.TablePrefix)
+	ing := NewIngester(db, lakeName, cfg)
 	hs, err := newHTTPServer(cfg, ing)
 	if err != nil {
 		return nil, fmt.Errorf("line-proto http: %w", err)

@@ -30,7 +30,7 @@ func newTestServer(t *testing.T) (*httptest.Server, string) {
 		ReadTimeoutSec:   10,
 		WriteTimeoutSec:  10,
 	}
-	ing := NewIngester(db, lake, cfg.TablePrefix)
+	ing := NewIngester(db, lake, cfg)
 	hs, err := newHTTPServer(cfg, ing)
 	if err != nil {
 		t.Fatalf("newHTTPServer: %v", err)
@@ -196,7 +196,7 @@ func TestHTTP_BodyTooLarge(t *testing.T) {
 		ReadTimeoutSec:  10,
 		WriteTimeoutSec: 10,
 	}
-	ing := NewIngester(db, lake, "lp_")
+	ing := NewIngester(db, lake, cfg)
 	hs, err := newHTTPServer(cfg, ing)
 	if err != nil {
 		t.Fatalf("newHTTPServer: %v", err)
@@ -212,5 +212,75 @@ func TestHTTP_BodyTooLarge(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status: got %d, want 413", resp.StatusCode)
+	}
+}
+
+func TestHTTP_WriteHepCall(t *testing.T) {
+	db, lake := newLPDB(t)
+	createTestHepCallTable(t, db, lake)
+	cfg := &config.LineProtoConfig{
+		Enable:           true,
+		Listen:           ":0",
+		MaxBodyBytes:     8 * 1024 * 1024,
+		DefaultPrecision: "ns",
+		TablePrefix:      "lp_",
+		ReadTimeoutSec:   10,
+		WriteTimeoutSec:  10,
+		AllowHepSipCall:  true,
+	}
+	ing := NewIngester(db, lake, cfg)
+	hs, err := newHTTPServer(cfg, ing)
+	if err != nil {
+		t.Fatalf("newHTTPServer: %v", err)
+	}
+	srv := httptest.NewServer(hs.server.Handler)
+	defer srv.Close()
+
+	lp := `sip,method=BYE,session_id=s1 caller="alice",callee="bob",src_ip="10.0.0.1",dst_ip="10.0.0.2",src_port=5060i,dst_port=5060i,protocol=17i,payload="BYE sip:x SIP/2.0" 1700000000000000000`
+	resp, err := http.Post(srv.URL+"/write?hep_table=call&precision=ns", "text/plain", strings.NewReader(lp))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status: got %d body=%s", resp.StatusCode, string(body))
+	}
+	var n int
+	if err := db.QueryRow("SELECT count(*) FROM test_lake.main.hep_proto_1_call").Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("rows in hep_proto_1_call: want 1, got %d", n)
+	}
+}
+
+func TestHTTP_WriteHepTableDisabled(t *testing.T) {
+	db, lake := newLPDB(t)
+	cfg := &config.LineProtoConfig{
+		Enable:           true,
+		Listen:           ":0",
+		MaxBodyBytes:     8 * 1024 * 1024,
+		DefaultPrecision: "ns",
+		TablePrefix:      "lp_",
+		ReadTimeoutSec:   10,
+		WriteTimeoutSec:  10,
+		AllowHepSipCall:  false,
+	}
+	ing := NewIngester(db, lake, cfg)
+	hs, err := newHTTPServer(cfg, ing)
+	if err != nil {
+		t.Fatalf("newHTTPServer: %v", err)
+	}
+	srv := httptest.NewServer(hs.server.Handler)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/write?hep_table=call", "text/plain", strings.NewReader("cpu v=1i"))
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want 400", resp.StatusCode)
 	}
 }

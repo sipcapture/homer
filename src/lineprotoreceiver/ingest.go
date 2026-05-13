@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"github.com/sipcapture/homer-core/src/utils/metrics"
 )
 
@@ -31,9 +33,10 @@ const defaultTablePrefix = "lp_"
 // HTTP handlers. The underlying *sql.DB and lakeName come from the
 // writer's primary DuckLake shard (see writer.GetDuckLakeManager).
 type Ingester struct {
-	db          *sql.DB
-	lakeName    string
-	tablePrefix string
+	db              *sql.DB
+	lakeName        string
+	tablePrefix     string
+	allowHepSipCall bool
 
 	tablesMu    sync.Mutex
 	tablesState map[string]map[string]string // fqTable → col → SQL type
@@ -44,17 +47,23 @@ type Ingester struct {
 
 // NewIngester returns a ready-to-use Ingester. lakeName is the DuckLake
 // catalog identifier ("homer_lake" by default) used to qualify table
-// names. tablePrefix defaults to "lp_" when empty.
-func NewIngester(db *sql.DB, lakeName, tablePrefix string) *Ingester {
-	if tablePrefix == "" {
-		tablePrefix = defaultTablePrefix
+// names. cfg may be nil (defaults: lp_ prefix, hep sip call ingest off).
+func NewIngester(db *sql.DB, lakeName string, cfg *config.LineProtoConfig) *Ingester {
+	tp := defaultTablePrefix
+	allow := false
+	if cfg != nil {
+		if cfg.TablePrefix != "" {
+			tp = cfg.TablePrefix
+		}
+		allow = cfg.AllowHepSipCall
 	}
 	return &Ingester{
-		db:             db,
-		lakeName:       lakeName,
-		tablePrefix:    tablePrefix,
-		tablesState:    make(map[string]map[string]string),
-		schemasCreated: make(map[string]bool),
+		db:              db,
+		lakeName:        lakeName,
+		tablePrefix:     tp,
+		allowHepSipCall: allow,
+		tablesState:     make(map[string]map[string]string),
+		schemasCreated:  make(map[string]bool),
 	}
 }
 
@@ -64,10 +73,19 @@ func NewIngester(db *sql.DB, lakeName, tablePrefix string) *Ingester {
 // (mirrors the InfluxDB v1 / gigapi `?db=…` semantics).
 //
 // Returns (rowsWritten, error). On a parse error, no rows are written.
-func (i *Ingester) Ingest(ctx context.Context, dbName string, body []byte, precision LineProtoPrecision) (int, error) {
+// hepTable must be empty for standard LP tables, or "call" when writing
+// into hep_proto_1_call (requires allowHepSipCall on the ingester).
+func (i *Ingester) Ingest(ctx context.Context, dbName string, body []byte, precision LineProtoPrecision, hepTable string) (int, error) {
 	if i == nil || i.db == nil {
 		return 0, fmt.Errorf("line-proto ingester: not initialised")
 	}
+	if hepTable == "call" {
+		if !i.allowHepSipCall {
+			return 0, fmt.Errorf("hep_table sip call ingest is disabled")
+		}
+		return i.ingestHepSIPCallLP(ctx, body, precision)
+	}
+
 	pts, badIdx, err := ParseLineProtocol(body, precision)
 	if err != nil {
 		metrics.RecordLineProtoWriteError("parse")
@@ -96,6 +114,36 @@ func (i *Ingester) Ingest(ctx context.Context, dbName string, body []byte, preci
 		}
 	}
 	return total, nil
+}
+
+func (i *Ingester) ingestHepSIPCallLP(ctx context.Context, body []byte, precision LineProtoPrecision) (int, error) {
+	pts, badIdx, err := ParseLineProtocol(body, precision)
+	if err != nil {
+		metrics.RecordLineProtoWriteError("parse")
+		return 0, fmt.Errorf("parse error at line %d: %w", badIdx+1, err)
+	}
+	if len(pts) == 0 {
+		return 0, nil
+	}
+	key := ducklake.TableKey{ProtoType: ducklake.ProtoTypeSIP, SubType: ducklake.SIPTypeCall}
+	rows := make([][]interface{}, 0, len(pts))
+	for li := range pts {
+		row, err := lineProtoPointToSIPCallRow(&pts[li])
+		if err != nil {
+			metrics.RecordLineProtoWriteError("hep_sip_call_map")
+			return 0, fmt.Errorf("point %d: %w", li+1, err)
+		}
+		rows = append(rows, row)
+	}
+	sql, err := ducklake.BuildInsertMultiValues(i.lakeName, key, rows)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := i.db.ExecContext(ctx, sql); err != nil {
+		metrics.RecordLineProtoWriteError("hep_sip_call_write")
+		return 0, fmt.Errorf("write hep_proto_1_call: %w", err)
+	}
+	return len(rows), nil
 }
 
 // ensureSchema creates "<lakeName>.<schema>" on first use and memoises

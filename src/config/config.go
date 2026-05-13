@@ -169,6 +169,11 @@ type LineProtoConfig struct {
 	// separate from HEP / OTLP tables.
 	TablePrefix string `json:"table_prefix" mapstructure:"table_prefix" default:"lp_"`
 
+	// AllowHepSipCall enables ?hep_table=call on LP write endpoints so
+	// points can be inserted into hep_proto_1_call (SIP call table).
+	// When false, ?hep_table= is rejected with HTTP 400.
+	AllowHepSipCall bool `json:"allow_hep_sip_call" mapstructure:"allow_hep_sip_call" default:"false"`
+
 	// ReadTimeoutSec / WriteTimeoutSec apply to the HTTP server.
 	ReadTimeoutSec  int `json:"read_timeout_sec" mapstructure:"read_timeout_sec" default:"30"`
 	WriteTimeoutSec int `json:"write_timeout_sec" mapstructure:"write_timeout_sec" default:"30"`
@@ -1242,6 +1247,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("ingest.line_protocol.default_precision", "ns")
 	v.SetDefault("ingest.line_protocol.default_db", "")
 	v.SetDefault("ingest.line_protocol.table_prefix", "lp_")
+	v.SetDefault("ingest.line_protocol.allow_hep_sip_call", false)
 	v.SetDefault("ingest.line_protocol.read_timeout_sec", 30)
 	v.SetDefault("ingest.line_protocol.write_timeout_sec", 30)
 	v.SetDefault("coordinator.hep_stream.enable", true)

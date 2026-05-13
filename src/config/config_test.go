@@ -549,6 +549,26 @@ func TestLoad_LineProtoIngestDefaultsHonoured(t *testing.T) {
 		t.Errorf("ingest.line_protocol timeouts: want 30/30, got %d/%d",
 			lp.ReadTimeoutSec, lp.WriteTimeoutSec)
 	}
+	if lp.AllowHepSipCall {
+		t.Errorf("ingest.line_protocol.allow_hep_sip_call: want false (default), got true")
+	}
+}
+
+// TestLoad_LineProtoIngestAllowHepSipCallOverride checks explicit
+// allow_hep_sip_call in JSON.
+func TestLoad_LineProtoIngestAllowHepSipCallOverride(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "ingest": {
+    "line_protocol": { "enable": true, "allow_hep_sip_call": true }
+  }
+}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if !cfg.Ingest.LineProto.AllowHepSipCall {
+		t.Fatalf("allow_hep_sip_call: want true, got false")
+	}
 }
 
 // TestLoad_LineProtoIngestPartialEnableKeepsTagDefaults mirrors the

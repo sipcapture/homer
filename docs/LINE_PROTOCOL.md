@@ -58,6 +58,7 @@ process will not start this listener.
       "default_precision": "ns",
       "default_db": "",
       "table_prefix": "lp_",
+      "allow_hep_sip_call": false,
       "read_timeout_sec": 30,
       "write_timeout_sec": 30,
       "cert": "",
@@ -76,6 +77,7 @@ process will not start this listener.
 | `default_precision`  | `ns`        | Used when the client doesn't pass `?precision=`. Valid: `ns`, `us`, `ms`, `s`.                    |
 | `default_db`         | empty       | Used when the client doesn't pass `?db=` / `?bucket=`. Empty ⇒ DuckDB's default schema (`main`). |
 | `table_prefix`       | `lp_`       | Prepended to the (sanitised) measurement name to form the table name. Keeps LP data namespaced.   |
+| `allow_hep_sip_call` | `false`     | When `true`, allows `?hep_table=call` to insert into `{lake}.main.hep_proto_1_call` (see below). When `false`, any `?hep_table=` request returns **400**. |
 | `read/write_timeout_sec` | `30`    | HTTP server timeouts.                                                                             |
 | `cert` / `key`       | empty       | Optional TLS material; both empty disables HTTPS.                                                 |
 | `cacert`             | empty       | If set together with `cert`+`key`, mTLS is enforced.                                              |
@@ -98,6 +100,34 @@ Same convention as the rest of homer-core:
 | GET    | `/ping`               | InfluxDB v1 health probe |
 | GET    | `/health`             | InfluxDB v2 health probe |
 
+### Optional: `hep_proto_1_call` (SIP call table)
+
+When **`ingest.line_protocol.allow_hep_sip_call`** is `true`, add **`?hep_table=call`** to a write request. Each parsed LP line becomes one row in **`{lakeName}.main.hep_proto_1_call`** (same layout as SIP call rows from HEP). In this mode **`?db=` / `?bucket=`** do not change the destination table.
+
+If **`allow_hep_sip_call`** is `false` (default) and the client sends **`?hep_table=`** with any value, the server returns **400** before ingesting.
+
+**Security:** an exposed LP port with `allow_hep_sip_call=true` allows unauthenticated append to the call table unless you use network controls or mTLS (`cacert`).
+
+**Column mapping:** tags and fields are merged (Influx-sanitised identifiers). Use **quoted** strings for text fields (`caller="alice"`). **`timestamp`** can be the line-ending epoch (as in normal LP), a tag/field `timestamp` with RFC3339 / `YYYY-MM-DD HH:MM:SS` / epoch integer, or falls back to wall clock if absent. **`date`**: optional tag/field `date="YYYY-MM-DD"`; if omitted, **`date` is set from the resolved `timestamp` (UTC calendar day)** — that value is what DuckLake uses for **`date=…`** partitioning. Ports and `protocol` should be integer fields (`5060i`, `17i`). Optional **`data_extra`** must be a JSON **object** string (e.g. `data_extra="{}"`); if omitted, `{}` is stored. The LP **measurement** name is ignored when `hep_table=call`.
+
+**Line layout (Influx LP):** `measurement,tag_key=tag_val,... field_key=field_val,... timestamp` — the **first unescaped space** separates **tags** (comma-separated) from **fields** (comma-separated). There is **no** comma between the last tag and the first field.
+
+Example (partition `date` is inferred from the line timestamp — here 2023-11-14 UTC):
+
+```bash
+curl -i -X POST "http://127.0.0.1:8086/write?hep_table=call&precision=ns" \
+  --data-binary 'sip,method=INVITE,session_id=abc caller="alice",callee="bob",src_ip="10.0.0.1",dst_ip="10.0.0.2",src_port=5060i,dst_port=5060i,protocol=17i,payload="INVITE sip:b SIP/2.0" 1700000000000000000'
+```
+
+Example with **explicit `date`** as a **tag** (partition `date=2023-11-14/…`; keep it consistent with `timestamp`):
+
+```bash
+curl -i -X POST "http://127.0.0.1:8086/write?hep_table=call&precision=ns" \
+  --data-binary 'sip,method=INVITE,session_id=abc,date=2023-11-14 caller="alice",callee="bob",src_ip="10.0.0.1",dst_ip="10.0.0.2",src_port=5060i,dst_port=5060i,protocol=17i,payload="INVITE sip:b SIP/2.0" 1700000000000000000'
+```
+
+You can also send **`date` as a string field** (quoted): `...,date="2023-11-14"` in the field set.
+
 ### Query parameters
 
 | Param         | v1 / v2     | Meaning                                                                                |
@@ -106,6 +136,7 @@ Same convention as the rest of homer-core:
 | `bucket`      | v2          | Same as `db`. v2 clients use this; v1 clients use `db`.                                |
 | `org`         | v2          | Accepted for compatibility, ignored.                                                   |
 | `precision`   | both        | `ns` / `us` / `ms` / `s`. Falls back to `default_precision`.                           |
+| `hep_table`   | both        | `call` — write into `hep_proto_1_call` when `allow_hep_sip_call` is true; otherwise **400**. |
 | `rp`          | v1          | Accepted for compatibility, ignored (DuckLake handles retention separately).           |
 
 ### Body format
@@ -127,7 +158,7 @@ must be backslash-escaped, exactly as in InfluxDB.
 | Code | When                                                                       |
 |------|----------------------------------------------------------------------------|
 | `204 No Content` | All points written successfully.                                  |
-| `400 Bad Request` | Parse error, invalid precision, or zero parseable points.        |
+| `400 Bad Request` | Parse error, invalid precision, `hep_table` rejected (feature off or unknown value), mapping error (e.g. invalid `data_extra`), or zero parseable points. |
 | `405 Method Not Allowed` | Wrong HTTP verb on `/write*`.                              |
 | `413 Request Entity Too Large` | Body exceeded `max_body_bytes`.                      |
 | `500 Internal Server Error` | DuckLake DDL or INSERT failed (see `homer_lp_write_errors_total`). |
