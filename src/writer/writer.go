@@ -57,6 +57,9 @@ type Writer struct {
 	// Pipeline profiling (atomic counters, always active)
 	profile pipelineProfile
 
+	// Batched Prometheus flush interval (packets per worker); set from ingest config.
+	metricsFlushPackets int
+
 	// Active connection count (TCP, TLS - connection-oriented protocols)
 	connCount int64
 
@@ -108,6 +111,9 @@ type Stats struct {
 
 const maxPktLen = 65507
 
+// defaultWorkerMetricsFlushPackets is used when ingest.worker_metrics_flush_packets is 0.
+const defaultWorkerMetricsFlushPackets = 128
+
 // New creates a new Writer module
 func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promCfg *config.PrometheusConfig, remoteLogCfg *config.RemoteLogConfig) (*Writer, error) {
 	queueSize := ingestCfg.QueueSize
@@ -126,6 +132,14 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 		quit:             make(chan struct{}),
 		exitWorker:       make(chan struct{}),
 	}
+
+	mfp := ingestCfg.WorkerMetricsFlushPackets
+	if mfp <= 0 {
+		mfp = defaultWorkerMetricsFlushPackets
+	} else if mfp > 1<<20 {
+		mfp = 1 << 20
+	}
+	w.metricsFlushPackets = mfp
 
 	// Initialize decoder with ingest config
 	w.decoder = decoder.NewDecoder(&decoder.DecoderConfig{
@@ -575,8 +589,6 @@ type workerMetrics struct {
 	count     int
 }
 
-const metricsFlushInterval = 128
-
 func (wm *workerMetrics) flush(protocol string) {
 	if wm.count == 0 {
 		return
@@ -644,7 +656,7 @@ func (w *Writer) worker() {
 				atomic.AddUint64(&w.stats.ErrCount, 1)
 				metrics.RecordHEPPacketFailed(protocol, "decode_error")
 				w.buffer.Put(msg.data[:cap(msg.data)])
-				if wm.count >= metricsFlushInterval {
+				if wm.count >= w.metricsFlushPackets {
 					wm.flush(protocol)
 				}
 				continue
@@ -654,7 +666,7 @@ func (w *Writer) worker() {
 				atomic.AddUint64(&w.stats.DupCount, 1)
 				metrics.RecordHEPPacketFailed(protocol, "invalid_proto")
 				w.buffer.Put(msg.data[:cap(msg.data)])
-				if wm.count >= metricsFlushInterval {
+				if wm.count >= w.metricsFlushPackets {
 					wm.flush(protocol)
 				}
 				continue
@@ -669,7 +681,7 @@ func (w *Writer) worker() {
 					atomic.AddUint64(&w.stats.DupCount, 1)
 					metrics.RecordHEPPacketFailed(protocol, "script_discard")
 					w.buffer.Put(msg.data[:cap(msg.data)])
-					if wm.count >= metricsFlushInterval {
+					if wm.count >= w.metricsFlushPackets {
 						wm.flush(protocol)
 					}
 					continue
@@ -732,7 +744,7 @@ func (w *Writer) worker() {
 
 			w.buffer.Put(msg.data[:cap(msg.data)])
 
-			if wm.count >= metricsFlushInterval {
+			if wm.count >= w.metricsFlushPackets {
 				wm.flush(protocol)
 			}
 		}

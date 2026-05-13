@@ -10,13 +10,12 @@ package ducklake
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"math/rand"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/sipcapture/homer-core/src/decoder"
 )
@@ -58,26 +57,29 @@ func fastUUID() string {
 	hex.Encode(buf[19:23], raw[8:10])
 	buf[23] = '-'
 	hex.Encode(buf[24:36], raw[10:16])
-	return string(buf[:])
+	return unsafe.String(&buf[0], 36)
 }
 
-// cachedDate caches the formatted date string, refreshing only when the day changes.
+// cachedDuckDate caches the calendar DATE value (UTC midnight), refreshing when the day changes.
 var (
-	cachedDateStr  atomic.Value // stores string
+	cachedDuckDate atomic.Value // stores time.Time
 	cachedDateDay  atomic.Int32 // day-of-year * 1000 + year%1000
 )
 
-func fastDate(ts time.Time) string {
+// fastDuckDate returns a time.Time at UTC midnight for ts's calendar date, for DuckDB DATE columns
+// (DuckDB Appender rejects string values for DATE).
+func fastDuckDate(ts time.Time) time.Time {
 	dayKey := int32(ts.YearDay()*1000 + ts.Year()%1000)
 	if dayKey == cachedDateDay.Load() {
-		if v := cachedDateStr.Load(); v != nil {
-			return v.(string)
+		if v := cachedDuckDate.Load(); v != nil {
+			return v.(time.Time)
 		}
 	}
-	s := ts.Format("2006-01-02")
-	cachedDateStr.Store(s)
+	u := ts.UTC()
+	d := time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
+	cachedDuckDate.Store(d)
 	cachedDateDay.Store(dayKey)
-	return s
+	return d
 }
 
 // nodeIDCache caches strconv.FormatUint results for NodeID values.
@@ -177,7 +179,7 @@ func (a *MultiTableAdapter) convertHEPToValues(hep *decoder.HEP) (TableKey, []in
 func (a *MultiTableAdapter) convertHEPToValuesWithSIPSubtype(hep *decoder.HEP, forcedSIPSubtype string) (TableKey, []interface{}) {
 	// Calculate timestamp as time.Time for DuckDB TIMESTAMP type
 	ts := time.Unix(int64(hep.Tsec), int64(hep.Tmsec)*1000)
-	date := fastDate(ts)
+	date := fastDuckDate(ts)
 	uid := fastUUID()
 	nodeID := fastNodeID(hep.NodeID)
 
@@ -203,7 +205,7 @@ func (a *MultiTableAdapter) convertHEPToValuesWithSIPSubtype(hep *decoder.HEP, f
 }
 
 // buildSIPValues builds values for SIP packets based on sub-type
-func (a *MultiTableAdapter) buildSIPValues(hep *decoder.HEP, uid string, date string, ts time.Time, nodeID string, sipType string) []interface{} {
+func (a *MultiTableAdapter) buildSIPValues(hep *decoder.HEP, uid string, date time.Time, ts time.Time, nodeID string, sipType string) []interface{} {
 	switch sipType {
 	case SIPTypeCall:
 		return a.buildSIPCallValues(hep, uid, date, ts, nodeID)
@@ -215,7 +217,7 @@ func (a *MultiTableAdapter) buildSIPValues(hep *decoder.HEP, uid string, date st
 }
 
 // buildSIPCallValues builds values for SIP call messages (INVITE, BYE, etc.)
-func (a *MultiTableAdapter) buildSIPCallValues(hep *decoder.HEP, uid string, date string, ts time.Time, nodeID string) []interface{} {
+func (a *MultiTableAdapter) buildSIPCallValues(hep *decoder.HEP, uid string, date time.Time, ts time.Time, nodeID string) []interface{} {
 	var sessionID, caller, callee, method, responseCode, cseqMethod string
 
 	if hep.SIP != nil {
@@ -232,21 +234,34 @@ func (a *MultiTableAdapter) buildSIPCallValues(hep *decoder.HEP, uid string, dat
 	// Columns: uuid, date, timestamp, session_id, caller, callee, src_ip, dst_ip,
 	//          src_port, dst_port, method, response_code, cseq_method,
 	//          protocol, node_id, cid, payload, data_extra
-	return []interface{}{
-		uid, date, ts, sessionID, caller, callee,
-		hep.SrcIP, hep.DstIP, hep.SrcPort, hep.DstPort,
-		method, responseCode, cseqMethod,
-		hep.Protocol, nodeID, hep.CID, hep.Payload, extraJSON,
-	}
+	row := getRowSlice(18)
+	row[0] = uid
+	row[1] = date
+	row[2] = ts
+	row[3] = sessionID
+	row[4] = caller
+	row[5] = callee
+	row[6] = hep.SrcIP
+	row[7] = hep.DstIP
+	row[8] = hep.SrcPort
+	row[9] = hep.DstPort
+	row[10] = method
+	row[11] = responseCode
+	row[12] = cseqMethod
+	row[13] = hep.Protocol
+	row[14] = nodeID
+	row[15] = hep.CID
+	row[16] = hep.Payload
+	row[17] = extraJSON
+	return row
 }
 
 // buildSIPRegistrationValues builds values for REGISTER messages
-func (a *MultiTableAdapter) buildSIPRegistrationValues(hep *decoder.HEP, uid string, date string, ts time.Time, nodeID string) []interface{} {
+func (a *MultiTableAdapter) buildSIPRegistrationValues(hep *decoder.HEP, uid string, date time.Time, ts time.Time, nodeID string) []interface{} {
 	var sessionID, aor, contact, expires, userAgent, method, responseCode string
 
 	if hep.SIP != nil {
 		sessionID = hep.SIP.CallID
-		// AOR is typically the To URI for REGISTER
 		aor = hep.SIP.ToUser + "@" + hep.SIP.ToHost
 		contact = hep.SIP.ContactVal
 		expires = hep.SIP.Expires
@@ -260,16 +275,30 @@ func (a *MultiTableAdapter) buildSIPRegistrationValues(hep *decoder.HEP, uid str
 	// Columns: uuid, date, timestamp, session_id, aor, contact, expires, user_agent,
 	//          src_ip, dst_ip, src_port, dst_port, method, response_code,
 	//          protocol, node_id, payload, data_extra
-	return []interface{}{
-		uid, date, ts, sessionID, aor, contact, expires, userAgent,
-		hep.SrcIP, hep.DstIP, hep.SrcPort, hep.DstPort,
-		method, responseCode,
-		hep.Protocol, nodeID, hep.Payload, extraJSON,
-	}
+	row := getRowSlice(18)
+	row[0] = uid
+	row[1] = date
+	row[2] = ts
+	row[3] = sessionID
+	row[4] = aor
+	row[5] = contact
+	row[6] = expires
+	row[7] = userAgent
+	row[8] = hep.SrcIP
+	row[9] = hep.DstIP
+	row[10] = hep.SrcPort
+	row[11] = hep.DstPort
+	row[12] = method
+	row[13] = responseCode
+	row[14] = hep.Protocol
+	row[15] = nodeID
+	row[16] = hep.Payload
+	row[17] = extraJSON
+	return row
 }
 
 // buildSIPDefaultValues builds values for other SIP messages (OPTIONS, NOTIFY, etc.)
-func (a *MultiTableAdapter) buildSIPDefaultValues(hep *decoder.HEP, uid string, date string, ts time.Time, nodeID string) []interface{} {
+func (a *MultiTableAdapter) buildSIPDefaultValues(hep *decoder.HEP, uid string, date time.Time, ts time.Time, nodeID string) []interface{} {
 	var sessionID, method, responseCode string
 
 	if hep.SIP != nil {
@@ -283,60 +312,103 @@ func (a *MultiTableAdapter) buildSIPDefaultValues(hep *decoder.HEP, uid string, 
 	// Columns: uuid, date, timestamp, session_id, src_ip, dst_ip,
 	//          src_port, dst_port, method, response_code,
 	//          protocol, node_id, cid, payload, data_extra
-	return []interface{}{
-		uid, date, ts, sessionID,
-		hep.SrcIP, hep.DstIP, hep.SrcPort, hep.DstPort,
-		method, responseCode,
-		hep.Protocol, nodeID, hep.CID, hep.Payload, extraJSON,
-	}
+	row := getRowSlice(15)
+	row[0] = uid
+	row[1] = date
+	row[2] = ts
+	row[3] = sessionID
+	row[4] = hep.SrcIP
+	row[5] = hep.DstIP
+	row[6] = hep.SrcPort
+	row[7] = hep.DstPort
+	row[8] = method
+	row[9] = responseCode
+	row[10] = hep.Protocol
+	row[11] = nodeID
+	row[12] = hep.CID
+	row[13] = hep.Payload
+	row[14] = extraJSON
+	return row
 }
 
 // buildRTCPValues builds values for RTCP/RTP packets
-func (a *MultiTableAdapter) buildRTCPValues(hep *decoder.HEP, uid string, date string, ts time.Time, nodeID string) []interface{} {
+func (a *MultiTableAdapter) buildRTCPValues(hep *decoder.HEP, uid string, date time.Time, ts time.Time, nodeID string) []interface{} {
 	sessionID := hep.CID
-
 	// Columns: uuid, date, timestamp, session_id, src_ip, dst_ip,
 	//          src_port, dst_port, protocol, node_id, cid, payload, data_extra
-	return []interface{}{
-		uid, date, ts, sessionID,
-		hep.SrcIP, hep.DstIP, hep.SrcPort, hep.DstPort,
-		hep.Protocol, nodeID, hep.CID, hep.Payload, buildSimpleExtraJSON(hep),
-	}
+	row := getRowSlice(13)
+	row[0] = uid
+	row[1] = date
+	row[2] = ts
+	row[3] = sessionID
+	row[4] = hep.SrcIP
+	row[5] = hep.DstIP
+	row[6] = hep.SrcPort
+	row[7] = hep.DstPort
+	row[8] = hep.Protocol
+	row[9] = nodeID
+	row[10] = hep.CID
+	row[11] = hep.Payload
+	row[12] = buildSimpleExtraJSON(hep)
+	return row
 }
 
 // buildDNSValues builds values for DNS packets
-func (a *MultiTableAdapter) buildDNSValues(hep *decoder.HEP, uid string, date string, ts time.Time, nodeID string) []interface{} {
+func (a *MultiTableAdapter) buildDNSValues(hep *decoder.HEP, uid string, date time.Time, ts time.Time, nodeID string) []interface{} {
 	// Columns: uuid, date, timestamp, src_ip, dst_ip,
 	//          src_port, dst_port, protocol, node_id, payload, data_extra
-	return []interface{}{
-		uid, date, ts,
-		hep.SrcIP, hep.DstIP, hep.SrcPort, hep.DstPort,
-		hep.Protocol, nodeID, hep.Payload, buildSimpleExtraJSON(hep),
-	}
+	row := getRowSlice(11)
+	row[0] = uid
+	row[1] = date
+	row[2] = ts
+	row[3] = hep.SrcIP
+	row[4] = hep.DstIP
+	row[5] = hep.SrcPort
+	row[6] = hep.DstPort
+	row[7] = hep.Protocol
+	row[8] = nodeID
+	row[9] = hep.Payload
+	row[10] = buildSimpleExtraJSON(hep)
+	return row
 }
 
 // buildLOGValues builds values for LOG packets
-func (a *MultiTableAdapter) buildLOGValues(hep *decoder.HEP, uid string, date string, ts time.Time, nodeID string) []interface{} {
+func (a *MultiTableAdapter) buildLOGValues(hep *decoder.HEP, uid string, date time.Time, ts time.Time, nodeID string) []interface{} {
 	sessionID := hep.CID
-
 	// Columns: uuid, date, timestamp, session_id, src_ip, dst_ip, node_id, payload, data_extra
-	return []interface{}{
-		uid, date, ts, sessionID,
-		hep.SrcIP, hep.DstIP, nodeID, hep.Payload, buildSimpleExtraJSON(hep),
-	}
+	row := getRowSlice(9)
+	row[0] = uid
+	row[1] = date
+	row[2] = ts
+	row[3] = sessionID
+	row[4] = hep.SrcIP
+	row[5] = hep.DstIP
+	row[6] = nodeID
+	row[7] = hep.Payload
+	row[8] = buildSimpleExtraJSON(hep)
+	return row
 }
 
 // buildDefaultValues builds values for unknown proto_types
-func (a *MultiTableAdapter) buildDefaultValues(hep *decoder.HEP, uid string, date string, ts time.Time, nodeID string) []interface{} {
+func (a *MultiTableAdapter) buildDefaultValues(hep *decoder.HEP, uid string, date time.Time, ts time.Time, nodeID string) []interface{} {
 	sessionID := hep.CID
-
 	// Columns: uuid, date, timestamp, session_id, src_ip, dst_ip,
 	//          src_port, dst_port, protocol, node_id, cid, payload, data_extra
-	return []interface{}{
-		uid, date, ts, sessionID,
-		hep.SrcIP, hep.DstIP, hep.SrcPort, hep.DstPort,
-		hep.Protocol, nodeID, hep.CID, hep.Payload, buildSimpleExtraJSON(hep),
-	}
+	row := getRowSlice(13)
+	row[0] = uid
+	row[1] = date
+	row[2] = ts
+	row[3] = sessionID
+	row[4] = hep.SrcIP
+	row[5] = hep.DstIP
+	row[6] = hep.SrcPort
+	row[7] = hep.DstPort
+	row[8] = hep.Protocol
+	row[9] = nodeID
+	row[10] = hep.CID
+	row[11] = hep.Payload
+	row[12] = buildSimpleExtraJSON(hep)
+	return row
 }
 
 // GetWriter returns the underlying writer
@@ -383,141 +455,146 @@ func (a *HEPAdapter) convertHEP(hep *decoder.HEP) HEPRecord {
 	return record
 }
 
-// jsonEscape escapes a string for safe embedding in JSON values.
-func jsonEscape(s string) string {
-	// Fast path: no special chars
-	needsEscape := false
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == '"' || c == '\\' || c < 0x20 {
-			needsEscape = true
-			break
-		}
-	}
-	if !needsEscape {
-		return s
-	}
-	var b strings.Builder
-	b.Grow(len(s) + 8)
+// writeJSONStringEscaped appends s JSON-string-escaped (contents only, no quotes)
+// to b without allocating an intermediate string.
+func writeJSONStringEscaped(b *[]byte, s string) {
 	for i := 0; i < len(s); i++ {
 		c := s[i]
 		switch c {
 		case '"':
-			b.WriteString(`\"`)
+			*b = append(*b, '\\', '"')
 		case '\\':
-			b.WriteString(`\\`)
+			*b = append(*b, '\\', '\\')
 		case '\n':
-			b.WriteString(`\n`)
+			*b = append(*b, '\\', 'n')
 		case '\r':
-			b.WriteString(`\r`)
+			*b = append(*b, '\\', 'r')
 		case '\t':
-			b.WriteString(`\t`)
+			*b = append(*b, '\\', 't')
 		default:
 			if c < 0x20 {
-				fmt.Fprintf(&b, `\u%04x`, c)
+				*b = append(*b, '\\', 'u', '0', '0',
+					"0123456789abcdef"[c>>4],
+					"0123456789abcdef"[c&0xf])
 			} else {
-				b.WriteByte(c)
+				*b = append(*b, c)
 			}
 		}
 	}
-	return b.String()
 }
 
-// appendJSONField appends ,"key":"value" to the builder (comma-separated).
-// Returns true if a field was written (for comma tracking).
-func appendJSONField(sb *strings.Builder, first *bool, key, value string) {
+// appendJSONField appends ,"key":"value" to the buffer (comma-separated).
+func appendJSONField(b *[]byte, first *bool, key, value string) {
 	if value == "" {
 		return
 	}
 	if !*first {
-		sb.WriteByte(',')
+		*b = append(*b, ',')
 	}
 	*first = false
-	sb.WriteByte('"')
-	sb.WriteString(key)
-	sb.WriteString(`":"`)
-	sb.WriteString(jsonEscape(value))
-	sb.WriteByte('"')
+	*b = append(*b, '"')
+	writeJSONStringEscaped(b, key)
+	*b = append(*b, '"', ':', '"')
+	writeJSONStringEscaped(b, value)
+	*b = append(*b, '"')
 }
 
 var sbPool = sync.Pool{New: func() interface{} {
-	b := new(strings.Builder)
-	b.Grow(256)
-	return b
+	b := make([]byte, 0, 256)
+	return &b
 }}
 
 // buildExtraJSON builds the data_extra JSON string directly without
 // map allocation or reflection-based encoding/json.Marshal.
+// Uses a pooled []byte buffer; the result string borrows from it via unsafe
+// so the caller must not hold the string after the pool slot is reclaimed.
+// Since the string is passed to TableWriter.Write which appends it to a batch
+// slice ([]interface{}), and the batch is flushed (copied into DuckDB Appender)
+// before the pool slot can be reused, this is safe.
 func buildExtraJSON(hep *decoder.HEP) string {
-	sb := sbPool.Get().(*strings.Builder)
-	sb.Reset()
-	sb.WriteByte('{')
+	bp := sbPool.Get().(*[]byte)
+	b := (*bp)[:0]
 
-	first := true
-	sb.WriteString(`"version":`)
-	sb.WriteString(strconv.FormatUint(uint64(hep.Version), 10))
-	first = false
+	b = append(b, '{')
+	b = append(b, `"version":`...)
+	b = strconv.AppendUint(b, uint64(hep.Version), 10)
+	first := false
 
 	if hep.SIP != nil {
-		appendJSONField(sb, &first, "from_host", hep.SIP.FromHost)
-		appendJSONField(sb, &first, "to_host", hep.SIP.ToHost)
-		appendJSONField(sb, &first, "user_agent", hep.SIP.UserAgent)
-		appendJSONField(sb, &first, "server", hep.SIP.Server)
-		appendJSONField(sb, &first, "via", hep.SIP.ViaOne)
-		appendJSONField(sb, &first, "contact", hep.SIP.ContactVal)
-		appendJSONField(sb, &first, "authorization", hep.SIP.AuthVal)
-		appendJSONField(sb, &first, "content_type", hep.SIP.ContentType)
-		appendJSONField(sb, &first, "content_length", hep.SIP.ContentLength)
-		appendJSONField(sb, &first, "cseq", hep.SIP.CseqVal)
-		appendJSONField(sb, &first, "expires", hep.SIP.Expires)
-		appendJSONField(sb, &first, "max_forwards", hep.SIP.MaxForwards)
-		appendJSONField(sb, &first, "response_code", hep.SIP.FirstResp)
-		appendJSONField(sb, &first, "response_reason", hep.SIP.FirstRespText)
-		appendJSONField(sb, &first, "request_uri", hep.SIP.URIRaw)
-		appendJSONField(sb, &first, "from_tag", hep.SIP.FromTag)
-		appendJSONField(sb, &first, "to_tag", hep.SIP.ToTag)
-		appendJSONField(sb, &first, "branch", hep.SIP.ViaOneBranch)
-		appendJSONField(sb, &first, "x_call_id", hep.SIP.XCallID)
+		appendJSONField(&b, &first, "from_host", hep.SIP.FromHost)
+		appendJSONField(&b, &first, "to_host", hep.SIP.ToHost)
+		appendJSONField(&b, &first, "user_agent", hep.SIP.UserAgent)
+		appendJSONField(&b, &first, "server", hep.SIP.Server)
+		appendJSONField(&b, &first, "via", hep.SIP.ViaOne)
+		appendJSONField(&b, &first, "contact", hep.SIP.ContactVal)
+		appendJSONField(&b, &first, "authorization", hep.SIP.AuthVal)
+		appendJSONField(&b, &first, "content_type", hep.SIP.ContentType)
+		appendJSONField(&b, &first, "content_length", hep.SIP.ContentLength)
+		appendJSONField(&b, &first, "cseq", hep.SIP.CseqVal)
+		appendJSONField(&b, &first, "expires", hep.SIP.Expires)
+		appendJSONField(&b, &first, "max_forwards", hep.SIP.MaxForwards)
+		appendJSONField(&b, &first, "response_code", hep.SIP.FirstResp)
+		appendJSONField(&b, &first, "response_reason", hep.SIP.FirstRespText)
+		appendJSONField(&b, &first, "request_uri", hep.SIP.URIRaw)
+		appendJSONField(&b, &first, "from_tag", hep.SIP.FromTag)
+		appendJSONField(&b, &first, "to_tag", hep.SIP.ToTag)
+		appendJSONField(&b, &first, "branch", hep.SIP.ViaOneBranch)
+		appendJSONField(&b, &first, "x_call_id", hep.SIP.XCallID)
 
 		if len(hep.SIP.CustomHeader) > 0 {
 			if !first {
-				sb.WriteByte(',')
+				b = append(b, ',')
 			}
-			first = false
-			sb.WriteString(`"custom_headers":{`)
+			b = append(b, `"custom_headers":{`...)
 			cfirst := true
 			for k, v := range hep.SIP.CustomHeader {
 				if !cfirst {
-					sb.WriteByte(',')
+					b = append(b, ',')
 				}
 				cfirst = false
-				sb.WriteByte('"')
-				sb.WriteString(jsonEscape(k))
-				sb.WriteString(`":"`)
-				sb.WriteString(jsonEscape(v))
-				sb.WriteByte('"')
+				b = append(b, '"')
+				writeJSONStringEscaped(&b, k)
+				b = append(b, '"', ':', '"')
+				writeJSONStringEscaped(&b, v)
+				b = append(b, '"')
 			}
-			sb.WriteByte('}')
+			b = append(b, '}')
 		}
 	}
 
-	sb.WriteByte('}')
-	s := sb.String()
-	sbPool.Put(sb)
+	b = append(b, '}')
+	// string(b) copies the bytes — necessary because the pool slot is returned
+	// immediately below and could be reused by another goroutine before
+	// the Appender consumes this row from tw.batch.
+	s := string(b)
+	*bp = b
+	sbPool.Put(bp)
 	return s
 }
 
+// simpleExtraCache caches "{\"version\":N,\"proto_type\":M}" strings for non-SIP packets.
+// Keyed by version<<16 | protoType (both fit in 16 bits for known HEP protos).
+var simpleExtraCache sync.Map // uint32 -> string
+
 // buildSimpleExtraJSON builds a minimal extra JSON for non-SIP packets.
+// Result is cached since version and proto_type rarely change between packets.
 func buildSimpleExtraJSON(hep *decoder.HEP) string {
-	sb := sbPool.Get().(*strings.Builder)
-	sb.Reset()
-	sb.WriteString(`{"version":`)
-	sb.WriteString(strconv.FormatUint(uint64(hep.Version), 10))
-	sb.WriteString(`,"proto_type":`)
-	sb.WriteString(strconv.FormatUint(uint64(hep.ProtoType), 10))
-	sb.WriteByte('}')
-	s := sb.String()
-	sbPool.Put(sb)
+	key := uint32(hep.Version)<<16 | (hep.ProtoType & 0xffff)
+	if v, ok := simpleExtraCache.Load(key); ok {
+		return v.(string)
+	}
+	bp := sbPool.Get().(*[]byte)
+	b := (*bp)[:0]
+	b = append(b, `{"version":`...)
+	b = strconv.AppendUint(b, uint64(hep.Version), 10)
+	b = append(b, `,"proto_type":`...)
+	b = strconv.AppendUint(b, uint64(hep.ProtoType), 10)
+	b = append(b, '}')
+	// For the cache we need a real heap string (lives indefinitely).
+	s := string(b)
+	*bp = b
+	sbPool.Put(bp)
+	simpleExtraCache.Store(key, s)
 	return s
 }
 

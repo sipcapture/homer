@@ -16,6 +16,7 @@ import (
 	"github.com/panjf2000/gnet/v2"
 	"github.com/sipcapture/homer-core/src/config"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
+	"github.com/sipcapture/homer-core/src/utils/sysctl"
 )
 
 // UDPServer handles UDP HEP packet reception
@@ -54,6 +55,13 @@ func (s *UDPServer) Start() error {
 	}
 	if s.config.ReadBufferCap > 0 {
 		readBufCap = s.config.ReadBufferCap
+	}
+
+	origRecv := socketRecvBuf
+	socketRecvBuf = sysctl.EffectiveUDPSocketRecvBuffer(socketRecvBuf)
+	if socketRecvBuf != origRecv {
+		logger.Info("Writer: UDP socket_recv_buffer capped by net.core.rmem_max",
+			"requested", origRecv, "effective", socketRecvBuf)
 	}
 
 	warnWriterUDPSysctlLimits(socketRecvBuf)

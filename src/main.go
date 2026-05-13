@@ -19,6 +19,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -28,11 +29,11 @@ import (
 	"time"
 
 	_ "github.com/duckdb/duckdb-go/v2"
-	_ "github.com/sipcapture/homer-core/src/glibcstub"
 	"github.com/mcuadros/go-defaults"
 	"github.com/sipcapture/homer-core/src/cli"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator"
+	_ "github.com/sipcapture/homer-core/src/glibcstub"
 	"github.com/sipcapture/homer-core/src/homerconfig"
 	"github.com/sipcapture/homer-core/src/lineprotoreceiver"
 	homermcp "github.com/sipcapture/homer-core/src/mcp"
@@ -45,6 +46,8 @@ import (
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"github.com/sipcapture/homer-core/src/utils/metrics"
 	"github.com/sipcapture/homer-core/src/writer"
+
+	_ "net/http/pprof" // register /debug/pprof on DefaultServeMux when --pprof is set
 )
 
 const (
@@ -85,13 +88,14 @@ func (m *metricsServerWrapper) End() {
 
 // ServerFlags holds flags for default server mode (no subcommand).
 type ServerFlags struct {
-	ConfigPath           *string
-	LogName              *string
-	LogPathHomerServer   *string
-	SyslogDisable        *bool
-	LogLevel             *string
-	PidFile              *string
-	ResetAdminPassword   *bool
+	ConfigPath         *string
+	LogName            *string
+	LogPathHomerServer *string
+	SyslogDisable      *bool
+	LogLevel           *string
+	PidFile            *string
+	ResetAdminPassword *bool
+	PprofListen        *string
 }
 
 func initServerFlags() ServerFlags {
@@ -103,6 +107,7 @@ func initServerFlags() ServerFlags {
 	sf.LogLevel = flag.String("log-level", "", "set log level: debug, info, warn, error, trace")
 	sf.PidFile = flag.String("pid-file", "/var/run/homer-core.pid", "path to PID file")
 	sf.ResetAdminPassword = flag.Bool("reset-admin-password", false, "set admin password in settings DuckDB from coordinator.auth.admin_password_hash and exit")
+	sf.PprofListen = flag.String("pprof", "", "optional net/http/pprof listen address, e.g. 127.0.0.1:6060 (CPU: go tool pprof http://ADDR/debug/pprof/profile)")
 	return sf
 }
 
@@ -130,6 +135,7 @@ Server flags (no subcommand):
   --log-level <level>           Set log level: debug, info, warn, error, trace
   --syslog-disable              Disable syslog, use only stdout
   --pid-file <path>             Path to PID file (default: /var/run/homer-core.pid)
+  --pprof <host:port>           Optional pprof HTTP (e.g. 127.0.0.1:6060); see net/http/pprof
   --reset-admin-password        Set admin password in settings DB from config hash and exit
   -v, --version                 Show version and exit
 
@@ -768,6 +774,16 @@ func runServer() {
 	}
 
 	logger.Info("go runtime info", "go_version", runtime.Version(), "cpu_cores", runtime.NumCPU(), "GOMAXPROCS", runtime.GOMAXPROCS(0))
+
+	if sf.PprofListen != nil && *sf.PprofListen != "" {
+		addr := *sf.PprofListen
+		go func() {
+			logger.Info("pprof: use go tool pprof http://"+addr+"/debug/pprof/profile?seconds=30", "addr", addr)
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				logger.Error("pprof ListenAndServe exited", "addr", addr, "error", err)
+			}
+		}()
+	}
 
 	pidFile := *sf.PidFile
 	if err := writePidFile(pidFile); err != nil {

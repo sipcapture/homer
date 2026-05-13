@@ -29,6 +29,7 @@ import (
 	"github.com/sipcapture/homer-core/src/homerconfig"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"github.com/sipcapture/homer-core/src/utils/metrics"
+	"github.com/sipcapture/homer-core/src/utils/sysctl"
 )
 
 // udpServer implements gnet.EventHandler for high-performance UDP server
@@ -178,6 +179,13 @@ func (h *HEPInput) serveUDP(addr string) {
 		if udpCfg.ReadBufferCap > 0 {
 			readBufCap = udpCfg.ReadBufferCap
 		}
+	}
+
+	origRecv := socketRecvBuf
+	socketRecvBuf = sysctl.EffectiveUDPSocketRecvBuffer(socketRecvBuf)
+	if socketRecvBuf != origRecv {
+		logger.Info("UDP socket_recv_buffer capped by net.core.rmem_max",
+			"requested", origRecv, "effective", socketRecvBuf)
 	}
 
 	warnUDPSysctlLimits(socketRecvBuf)

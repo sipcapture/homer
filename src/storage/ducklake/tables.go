@@ -376,6 +376,37 @@ func GetDefaultSchema(key TableKey) *TableSchema {
 	}
 }
 
+// rowValuesPool recycles []interface{} row slices used in convertHEPToValues.
+// The pool stores pointers to slices with capacity up to maxRowCols (18 columns).
+// Lifecycle: alloc in build*Values → stored in tw.batch → flushBatch copies to
+// DuckDB Appender → flushBatch returns slice to pool after clearing references.
+const maxRowCols = 20
+
+var rowValuesPool = sync.Pool{New: func() interface{} {
+	s := make([]interface{}, 0, maxRowCols)
+	return &s
+}}
+
+// getRowSlice returns a recycled or fresh []interface{} with len=n.
+func getRowSlice(n int) []interface{} {
+	p := rowValuesPool.Get().(*[]interface{})
+	if cap(*p) >= n {
+		*p = (*p)[:n]
+		return *p
+	}
+	rowValuesPool.Put(p) // wrong size, discard
+	return make([]interface{}, n)
+}
+
+// putRowSlice returns a row slice to the pool, clearing all references.
+func putRowSlice(row []interface{}) {
+	for i := range row {
+		row[i] = nil
+	}
+	p := row[:0]
+	rowValuesPool.Put(&p)
+}
+
 // TableWriter handles writes to a specific table using Go-side batch buffering,
 // double-buffered DuckDB in-memory tables, and a dedicated flush goroutine.
 //
@@ -496,6 +527,12 @@ func (tw *TableWriter) Write(values []interface{}) error {
 	return nil
 }
 
+// driverValPool recycles []driver.Value slices to avoid per-row allocation in flushBatch.
+var driverValPool sync.Pool // elements: *[]driver.Value
+
+// batchSlicePool recycles the outer [][]interface{} slices swapped out in flushBatch.
+var batchSlicePool sync.Pool // elements: *[][]interface{}
+
 // flushBatch drains the Go-side batch into the currently active in-memory
 // DuckDB table using the Appender API. This bypasses SQL parsing entirely —
 // rows are written directly via DuckDB's columnar DataChunk interface.
@@ -507,8 +544,17 @@ func (tw *TableWriter) flushBatch() error {
 		tw.batchMu.Unlock()
 		return nil
 	}
-	rows := tw.batch
-	tw.batch = make([][]interface{}, 0, tw.batchSize)
+	// Swap batch with a recycled slice to avoid allocation on the hot path.
+	var rows [][]interface{}
+	if p := batchSlicePool.Get(); p != nil {
+		recycled := p.(*[][]interface{})
+		rows = tw.batch
+		tw.batch = (*recycled)[:0]
+		*recycled = rows // keep pointer alive for pool return below
+	} else {
+		rows = tw.batch
+		tw.batch = make([][]interface{}, 0, tw.batchSize)
+	}
 	slot := int(tw.activeIdx.Load())
 	tw.batchMu.Unlock()
 
@@ -516,9 +562,25 @@ func (tw *TableWriter) flushBatch() error {
 	nRows := len(rows)
 	memTable := tw.memTables[slot]
 
+	// Grab a reusable vals slice sized for this table's column count.
+	nCols := len(rows[0])
+	var vals []driver.Value
+	if p := driverValPool.Get(); p != nil {
+		v := p.(*[]driver.Value)
+		if cap(*v) >= nCols {
+			vals = (*v)[:nCols]
+		} else {
+			vals = make([]driver.Value, nCols)
+		}
+	} else {
+		vals = make([]driver.Value, nCols)
+	}
+
 	ctx := context.Background()
 	sqlConn, err := tw.db.Conn(ctx)
 	if err != nil {
+		driverValPool.Put(&vals)
+		batchSlicePool.Put(&rows)
 		metrics.RecordPipelineStageError("ducklake", "batch_insert", "conn_error")
 		return fmt.Errorf("appender conn for %s: %w", memTable, err)
 	}
@@ -529,7 +591,6 @@ func (tw *TableWriter) flushBatch() error {
 		if appErr != nil {
 			return appErr
 		}
-		vals := make([]driver.Value, len(rows[0]))
 		for _, row := range rows {
 			for i, v := range row {
 				vals[i] = v
@@ -542,12 +603,25 @@ func (tw *TableWriter) flushBatch() error {
 		return appender.Close()
 	})
 
+	// Return pooled slices regardless of error outcome.
+	driverValPool.Put(&vals)
+	// Return row slices to pool: Appender has already copied the data.
+	for _, row := range rows {
+		putRowSlice(row)
+	}
+	// Clear row references before returning outer slice to pool.
+	for i := range rows {
+		rows[i] = nil
+	}
+	batchSlicePool.Put(&rows)
+
 	if err != nil {
 		metrics.RecordPipelineStageError("ducklake", "batch_insert", "insert_error")
 		return fmt.Errorf("appender INSERT into %s (%d rows): %w", memTable, nRows, err)
 	}
 
 	metrics.RecordPipelineStageDuration("ducklake", "batch_insert", time.Since(start).Seconds())
+
 	return nil
 }
 

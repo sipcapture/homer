@@ -99,6 +99,11 @@ type IngestConfig struct {
 	// Ingest load control (0 = auto-detect NumCPU/2, capped at 4)
 	WorkerCount int `json:"worker_count" mapstructure:"worker_count" default:"0"`
 	QueueSize   int `json:"queue_size" mapstructure:"queue_size" default:"200000"`
+	// WorkerMetricsFlushPackets controls how many packets each writer worker
+	// handles before flushing batched Prometheus counters (received/processed/bytes).
+	// Larger values reduce metric-update overhead at the cost of coarser time series.
+	// 0 means use the built-in default (128).
+	WorkerMetricsFlushPackets int `json:"worker_metrics_flush_packets" mapstructure:"worker_metrics_flush_packets" default:"0"`
 
 	// HEP receivers
 	UDP   UDPServerConfig   `json:"udp" mapstructure:"udp"`
@@ -1153,6 +1158,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("ingest.udp.host", "0.0.0.0")
 	v.SetDefault("ingest.udp.port", 9060)
 	v.SetDefault("ingest.udp.multicore", true)
+	v.SetDefault("ingest.worker_metrics_flush_packets", 0)
 	v.SetDefault("ingest.http.enable", true)
 	v.SetDefault("ingest.http.host", "0.0.0.0")
 	v.SetDefault("ingest.http.port", 9080)

@@ -102,6 +102,10 @@ debug:
 modules:
 	cd src && go get ./...
 
-.PHONY: all release homer-only clean frontend debug modules glibc-polyfill glibc-polyfil download-extensions
+# CPU profile: modular homer + UDP HEP3/SIP load (see docs/INGEST_PERFORMANCE.md)
+profile-ingest:
+	bash "$(CURDIR)/scripts/profile_ingest_load.sh" --kill-ports
+
+.PHONY: all release homer-only clean frontend debug modules glibc-polyfill glibc-polyfil download-extensions profile-ingest
 clean:
 	rm -fr $(NAME) src/dist $(STATIC_CXX_DIR) bundled_extensions
