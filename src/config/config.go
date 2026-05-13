@@ -675,9 +675,11 @@ type HEPConfig struct {
 type SIPConfig struct {
 	CensorMethods  []string `json:"censored_methods" mapstructure:"censored_methods"`
 	DiscardMethods []string `json:"discard_methods" mapstructure:"discard_methods"`
-	AlegIDs        []string `json:"aleg_ids" mapstructure:"aleg_ids"`
-	CustomHeaders  []string `json:"custom_headers" mapstructure:"custom_headers"`
-	ForceALegID    bool     `json:"force_aleg_id" mapstructure:"force_aleg_id" default:"false"`
+	// AlegIDs lists SIP header names (case-insensitive). The first matching header in wire order sets XCallID; used for HEP CID when the chunk has no CID (see sipparser.ParseMsgZeroCopy).
+	AlegIDs []string `json:"aleg_ids" mapstructure:"aleg_ids"`
+	// CustomHeaders lists optional SIP header names copied into data_extra.custom_headers in storage.
+	CustomHeaders []string `json:"custom_headers" mapstructure:"custom_headers"`
+	ForceALegID   bool     `json:"force_aleg_id" mapstructure:"force_aleg_id" default:"false"`
 }
 
 // CoordinatorHTTPServerConfig configures the Coordinator API server

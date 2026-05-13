@@ -67,7 +67,9 @@ type DecoderConfig struct {
 	Deduplicate    bool
 
 	// SIP settings
-	AlegIDs        []string
+	// AlegIDs: SIP header names (case-insensitive); first matching header in wire order fills XCallID during zero-copy parse (see sipparser.ZeroCopyOpts).
+	AlegIDs []string
+	// CustomHeaders: optional SIP header names whose values are stored in CustomHeader / data_extra.custom_headers.
 	CustomHeaders  []string
 	ForceALegID    bool
 	CensorMethods  []string

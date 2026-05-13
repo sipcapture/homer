@@ -134,6 +134,10 @@ type SipMsg struct {
 	//Supported          []string
 	//Warning            *Warning
 	//WWWAuthenticate    *Authorization
+
+	// zcHdrOpts is only set during ParseMsgZeroCopy for optional aleg_ids /
+	// custom_headers matching; it is not read after parsing finishes.
+	zcHdrOpts *ZeroCopyOpts
 }
 
 func (s *SipMsg) run() {

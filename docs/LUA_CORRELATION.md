@@ -16,6 +16,16 @@ re-queries the data layer.
 - CRUD UI: **Settings → Scripts** (`src/ui/src/settings/ScriptsPanel.tsx`)
 - Package README (developer-facing): `src/scripting/correlation/README.md`
 
+## SIP header lists (writer ingest)
+
+SIP messages are parsed on the **zero-copy** path (`sipparser.ParseMsgZeroCopy`). The writer / modular `ingest.sip` settings are:
+
+- **`ingest.sip.aleg_ids`**: list of SIP header names (case-insensitive). The **first** header in **message order** that matches any configured name sets `SipMsg.XCallID`. The decoder uses that for the HEP **CID** when the HEP chunk carries no CID (`src/decoder/sip.go`).
+- **`ingest.sip.custom_headers`**: optional header names; matching values go into `SipMsg.CustomHeader` and into DuckLake `data_extra.custom_headers` JSON (`src/storage/ducklake/hep_adapter.go`).
+- **`ingest.sip.force_aleg_id`**: when true, replaces an existing HEP CID with `XCallID` when `XCallID` is non-empty.
+
+This path uses the **full** header value only (no regex capture). Environment overrides use indexed keys such as `HOMER_INGEST_SIP_ALEG_IDS_0`, `HOMER_INGEST_SIP_CUSTOM_HEADERS_0`, etc.; see [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md).
+
 ---
 
 ## 1. How it works
