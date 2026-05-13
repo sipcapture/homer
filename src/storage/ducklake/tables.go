@@ -549,15 +549,12 @@ func (tw *TableWriter) flushBatch() error {
 	// return the flushed rows (after clearing) to the pool. This keeps the pool
 	// size stable without leaking the pooled pointer.
 	rows := tw.batch
+	tw.batch = make([][]interface{}, 0, tw.batchSize)
 	if p := batchSlicePool.Get(); p != nil {
 		recycled := p.(*[][]interface{})
 		if cap(*recycled) >= tw.batchSize {
 			tw.batch = (*recycled)[:0]
-		} else {
-			tw.batch = make([][]interface{}, 0, tw.batchSize)
 		}
-	} else {
-		tw.batch = make([][]interface{}, 0, tw.batchSize)
 	}
 	slot := int(tw.activeIdx.Load())
 	tw.batchMu.Unlock()

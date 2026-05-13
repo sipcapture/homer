@@ -781,8 +781,11 @@ func runServer() {
 		// Warn if the pprof server will bind to a non-loopback address, since
 		// /debug/pprof exposes process internals and should not be publicly reachable.
 		if host, _, err := net.SplitHostPort(addr); err == nil {
-			ip := net.ParseIP(host)
-			if ip == nil || !ip.IsLoopback() {
+			if host == "" {
+				// empty host binds to all interfaces (equivalent to 0.0.0.0)
+				logger.Warn("pprof: binding to all interfaces exposes profiling endpoints; use 127.0.0.1 unless you have network-level access controls", "addr", addr)
+			} else if ip := net.ParseIP(host); ip != nil && !ip.IsLoopback() {
+				// explicit non-loopback IP address
 				logger.Warn("pprof: binding to a non-loopback address exposes profiling endpoints; use 127.0.0.1 unless you have network-level access controls", "addr", addr)
 			}
 		}
