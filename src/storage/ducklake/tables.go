@@ -404,8 +404,14 @@ type TableWriter struct {
 
 	// Pre-built full SQL for the common case (exactly batchSize rows).
 	// One per buffer slot so the INSERT targets the correct memory table.
-	fullBatchSQL [2]string
-	argsPool     sync.Pool // recycled []interface{} slices for batch INSERT
+	fullBatchSQL  [2]string
+	fullBatchStmt [2]*sql.Stmt // prepared statements for fullBatchSQL (avoids re-parsing)
+	argsPool      sync.Pool    // recycled []interface{} slices for batch INSERT
+
+	// Cache for partial-batch prepared statements (flush-by-timer with < batchSize rows).
+	// Key: nRows*2 + slotIdx → avoids rebuilding + re-parsing SQL for the same size.
+	partialStmtMu sync.Mutex
+	partialStmts  map[int]*sql.Stmt
 
 	// Pre-built flush/truncate SQL per buffer slot.
 	flushInsertSQL   [2]string // "INSERT INTO <lakeFQN> SELECT * FROM <memTable_N>"
@@ -452,6 +458,8 @@ func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize 
 		tw.flushTruncateSQL[i] = "TRUNCATE TABLE " + tw.memTables[i]
 	}
 
+	tw.partialStmts = make(map[int]*sql.Stmt)
+
 	tw.argsPool = sync.Pool{New: func() interface{} {
 		s := make([]interface{}, 0, batchSize*tw.numCols)
 		return &s
@@ -483,6 +491,18 @@ func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize 
 		memCreateSQL := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", mem, schema.CreateSQL)
 		if _, err := db.Exec(memCreateSQL); err != nil {
 			return nil, fmt.Errorf("failed to create memory table %s: %w", mem, err)
+		}
+	}
+
+	// Prepare full-batch INSERT statements (parse SQL once, reuse for every batch).
+	// This avoids re-parsing a ~500KB SQL string with 90K placeholders on every flush.
+	for i := 0; i < 2; i++ {
+		stmt, err := db.Prepare(tw.fullBatchSQL[i])
+		if err != nil {
+			logger.Warn(fmt.Sprintf("Failed to prepare batch INSERT for %s slot %d, will use unprepared: %v",
+				tw.memTables[i], i, err))
+		} else {
+			tw.fullBatchStmt[i] = stmt
 		}
 	}
 
@@ -584,18 +604,24 @@ func (tw *TableWriter) flushBatch() error {
 	start := time.Now()
 	nRows := len(rows)
 
-	sqlStr := tw.fullBatchSQL[slot]
-	if nRows != tw.batchSize {
-		sqlStr = tw.buildFullBatchSQLFor(nRows, tw.memTables[slot])
-	}
-
 	argsPtr := tw.argsPool.Get().(*[]interface{})
 	args := (*argsPtr)[:0]
 	for _, row := range rows {
 		args = append(args, row...)
 	}
 
-	_, err := tw.db.Exec(sqlStr, args...)
+	var err error
+	if nRows == tw.batchSize && tw.fullBatchStmt[slot] != nil {
+		_, err = tw.fullBatchStmt[slot].Exec(args...)
+	} else {
+		stmt := tw.getOrPreparePartial(nRows, slot)
+		if stmt != nil {
+			_, err = stmt.Exec(args...)
+		} else {
+			sqlStr := tw.buildFullBatchSQLFor(nRows, tw.memTables[slot])
+			_, err = tw.db.Exec(sqlStr, args...)
+		}
+	}
 
 	*argsPtr = args[:0]
 	tw.argsPool.Put(argsPtr)
@@ -609,6 +635,35 @@ func (tw *TableWriter) flushBatch() error {
 	return nil
 }
 
+// getOrPreparePartial returns a cached prepared statement for a partial-batch INSERT.
+func (tw *TableWriter) getOrPreparePartial(nRows, slot int) *sql.Stmt {
+	key := nRows*2 + slot
+	tw.partialStmtMu.Lock()
+	if stmt, ok := tw.partialStmts[key]; ok {
+		tw.partialStmtMu.Unlock()
+		return stmt
+	}
+	tw.partialStmtMu.Unlock()
+
+	sqlStr := tw.buildFullBatchSQLFor(nRows, tw.memTables[slot])
+	stmt, err := tw.db.Prepare(sqlStr)
+	if err != nil {
+		return nil
+	}
+
+	tw.partialStmtMu.Lock()
+	if len(tw.partialStmts) > 32 {
+		for k, s := range tw.partialStmts {
+			s.Close()
+			delete(tw.partialStmts, k)
+			break
+		}
+	}
+	tw.partialStmts[key] = stmt
+	tw.partialStmtMu.Unlock()
+	return stmt
+}
+
 // Close flushes remaining records and stops the flush goroutine.
 func (tw *TableWriter) Close() error {
 	if err := tw.flushBatch(); err != nil {
@@ -616,6 +671,19 @@ func (tw *TableWriter) Close() error {
 	}
 	close(tw.flushCh)
 	tw.flushWg.Wait()
+
+	for i := 0; i < 2; i++ {
+		if tw.fullBatchStmt[i] != nil {
+			tw.fullBatchStmt[i].Close()
+		}
+	}
+	tw.partialStmtMu.Lock()
+	for _, s := range tw.partialStmts {
+		s.Close()
+	}
+	tw.partialStmts = nil
+	tw.partialStmtMu.Unlock()
+
 	return nil
 }
 
@@ -732,13 +800,9 @@ func (tw *TableWriter) flushSlotToDuckLake(slot int) {
 	}
 	metrics.RecordDucklakeTableFlushedRows(tw.tableFQN, rowsFlushed)
 
-	// Async truncate: fire and forget — the slot won't be written to until
-	// the next swap, and the next flush will see it empty.
-	go func(truncSQL, name string) {
-		if _, err := tw.db.Exec(truncSQL); err != nil {
-			logger.Warn(fmt.Sprintf("Failed to clear memory table %s: %v", name, err))
-		}
-	}(tw.flushTruncateSQL[slot], memName)
+	if _, err := tw.db.Exec(tw.flushTruncateSQL[slot]); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to clear memory table %s: %v", memName, err))
+	}
 
 	logger.Info("💾 Flushed rows", "count", rowsFlushed, "from", memName, "to", tw.tableFQN,
 		"elapsed", elapsed.Round(time.Millisecond), "rec_per_sec", fmt.Sprintf("%.0f", float64(rowsFlushed)/elapsedSec))
@@ -790,11 +854,9 @@ func (tw *TableWriter) flushSlotDirect(slot int, catalogMu *sync.Mutex) {
 	}
 	metrics.RecordDucklakeTableFlushedRows(tw.tableFQN, rowsFlushed)
 
-	go func(truncSQL, name string) {
-		if _, err := tw.db.Exec(truncSQL); err != nil {
-			logger.Warn(fmt.Sprintf("Failed to clear memory table %s: %v", name, err))
-		}
-	}(tw.flushTruncateSQL[slot], memName)
+	if _, err := tw.db.Exec(tw.flushTruncateSQL[slot]); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to clear memory table %s: %v", memName, err))
+	}
 
 	logger.Info("💾 Flushed rows", "count", rowsFlushed, "from", memName, "to", tw.tableFQN,
 		"elapsed", elapsed.Round(time.Millisecond), "rec_per_sec", fmt.Sprintf("%.0f", float64(rowsFlushed)/elapsedSec))
