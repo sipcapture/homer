@@ -12,7 +12,6 @@ package writer
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -360,9 +359,12 @@ func (w *Writer) Start() error {
 	// Start workers
 	numWorkers := w.ingestConfig.WorkerCount
 	if numWorkers <= 0 {
-		numWorkers = runtime.NumCPU()
-		if numWorkers > 8 {
-			numWorkers = 8
+		numWorkers = runtime.NumCPU() / 2
+		if numWorkers < 2 {
+			numWorkers = 2
+		}
+		if numWorkers > 4 {
+			numWorkers = 4
 		}
 	}
 
@@ -798,28 +800,38 @@ func (w *Writer) logStats() {
 			processed := atomic.LoadUint64(&w.stats.HEPCount)
 			dropped := dropCount + errCount + dupCount
 
-			var memKB int
-			var diskRows int64
+			var bufferRows int
+			var tableCount int
 			if w.ducklakeManager != nil {
-				if st, err := w.ducklakeManager.GetStats(); err == nil {
-					if bs, ok := st["total_buffer_size"].(int); ok {
-						memKB = bs / 1024
-					}
-					if rc, ok := st["total_row_count"].(int64); ok {
-						diskRows = rc
-					}
-				}
+				bufferRows, tableCount = w.ducklakeManager.GetBufferStats()
 			}
 
 			conns := atomic.LoadInt64(&w.connCount)
 
+			// Go runtime memory breakdown
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			goHeapMB := ms.HeapInuse / (1024 * 1024)
+			goStackMB := ms.StackInuse / (1024 * 1024)
+			goSysMB := ms.Sys / (1024 * 1024)
+			numGoroutines := runtime.NumGoroutine()
+
 			logger.Info("Writer stats (5min)",
 				"received", received,
 				"dropped", dropped,
+				"drop_queue", dropCount,
+				"drop_err", errCount,
+				"drop_dup", dupCount,
 				"processed", processed,
 				"connections", conns,
-				"mem_kb", memKB,
-				"disk_rows", diskRows,
+				"ducklake_buf_rows", bufferRows,
+				"ducklake_tables", tableCount,
+				"go_heap_mb", goHeapMB,
+				"go_stack_mb", goStackMB,
+				"go_sys_mb", goSysMB,
+				"goroutines", numGoroutines,
+				"queue_len", len(w.inputCh),
+				"queue_cap", cap(w.inputCh),
 			)
 
 			atomic.StoreUint64(&w.stats.PktCount, 0)
@@ -850,8 +862,16 @@ func (w *Writer) logStats() {
 				adpPct = float64(adpNs) * 100.0 / float64(totNs)
 			}
 
-			fmt.Fprintf(os.Stderr, "PIPELINE PROFILE (samples=%d): hep_decode=%.1fµs (%.1f%%), sip_parse=%.1fµs (%.1f%%), adapter_write=%.1fµs (%.1f%%), total=%.1fµs\n",
-				cnt, avgHep, hepPct, avgSip, sipPct, avgAdp, adpPct, avgTot)
+			logger.Info("Pipeline profile",
+				"samples", cnt,
+				"hep_decode_us", fmt.Sprintf("%.1f", avgHep),
+				"hep_pct", fmt.Sprintf("%.1f", hepPct),
+				"sip_parse_us", fmt.Sprintf("%.1f", avgSip),
+				"sip_pct", fmt.Sprintf("%.1f", sipPct),
+				"adapter_us", fmt.Sprintf("%.1f", avgAdp),
+				"adapter_pct", fmt.Sprintf("%.1f", adpPct),
+				"total_us", fmt.Sprintf("%.1f", avgTot),
+			)
 
 		case <-w.quit:
 			return

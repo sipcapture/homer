@@ -8,6 +8,7 @@
 package writer
 
 import (
+	"bufio"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
@@ -17,27 +18,47 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/sipcapture/homer-core/src/config"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
+const (
+	defaultTLSReadTimeout = 5 * time.Minute
+	defaultTLSMaxConns    = 1024
+)
+
 // TLSServer handles TLS HEP packet reception
 type TLSServer struct {
-	writer   *Writer
-	config   *config.TLSServerConfig
-	listener net.Listener
-	wg       sync.WaitGroup
-	quit     chan struct{}
-	stopOnce sync.Once
+	writer      *Writer
+	config      *config.TLSServerConfig
+	listener    net.Listener
+	wg          sync.WaitGroup
+	quit        chan struct{}
+	stopOnce    sync.Once
+	connSem     chan struct{}
+	readTimeout time.Duration
 }
 
 // NewTLSServer creates a new TLS server
 func NewTLSServer(w *Writer, cfg *config.TLSServerConfig) *TLSServer {
+	readTimeout := defaultTLSReadTimeout
+	if cfg.ReadTimeoutSec > 0 {
+		readTimeout = time.Duration(cfg.ReadTimeoutSec) * time.Second
+	}
+
+	maxConns := defaultTLSMaxConns
+	if cfg.MaxConnections > 0 {
+		maxConns = cfg.MaxConnections
+	}
+
 	return &TLSServer{
-		writer: w,
-		config: cfg,
-		quit:   make(chan struct{}),
+		writer:      w,
+		config:      cfg,
+		quit:        make(chan struct{}),
+		connSem:     make(chan struct{}, maxConns),
+		readTimeout: readTimeout,
 	}
 }
 
@@ -78,7 +99,9 @@ func (s *TLSServer) Start() error {
 	}
 	s.listener = listener
 
-	logger.Info("Writer: Starting TLS server", "addr", addr)
+	logger.Info("Writer: Starting TLS server", "addr", addr,
+		"read_timeout", s.readTimeout.String(),
+		"max_connections", cap(s.connSem))
 
 	for {
 		conn, err := listener.Accept()
@@ -90,6 +113,14 @@ func (s *TLSServer) Start() error {
 				logger.Error(fmt.Sprintf("Writer: TLS accept error: %v", err))
 				continue
 			}
+		}
+
+		select {
+		case s.connSem <- struct{}{}:
+		default:
+			conn.Close()
+			logger.Warn("Writer: TLS max connections reached, rejecting")
+			continue
 		}
 
 		atomic.AddInt64(&s.writer.connCount, 1)
@@ -109,11 +140,18 @@ func (s *TLSServer) Stop() {
 	})
 }
 
-// handleConnection handles a single TLS connection
+// handleConnection handles a single TLS connection.
+// Uses bufio.Reader for efficient reads and a pre-allocated buffer
+// to avoid per-packet heap allocations (same pattern as TCP).
 func (s *TLSServer) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
 	defer conn.Close()
 	defer atomic.AddInt64(&s.writer.connCount, -1)
+	defer func() { <-s.connSem }()
+
+	br := bufio.NewReaderSize(conn, 128*1024)
+	var header [6]byte
+	buf := make([]byte, maxPktLen)
 
 	for {
 		select {
@@ -122,11 +160,15 @@ func (s *TLSServer) handleConnection(conn net.Conn) {
 		default:
 		}
 
-		// Read HEP packet (same as TCP)
-		header := make([]byte, 6)
-		if _, err := io.ReadFull(conn, header); err != nil {
+		conn.SetReadDeadline(time.Now().Add(s.readTimeout))
+
+		if _, err := io.ReadFull(br, header[:]); err != nil {
 			if err != io.EOF {
-				logger.Debug(fmt.Sprintf("Writer: TLS read header error: %v", err))
+				if ne, ok := err.(net.Error); ok && ne.Timeout() {
+					logger.Debug("Writer: TLS connection idle timeout, closing")
+				} else {
+					logger.Debug(fmt.Sprintf("Writer: TLS read header error: %v", err))
+				}
 			}
 			return
 		}
@@ -144,15 +186,13 @@ func (s *TLSServer) handleConnection(conn net.Conn) {
 			return
 		}
 
-		// Read payload
-		payload := make([]byte, length)
-		copy(payload, header)
-		if _, err := io.ReadFull(conn, payload[6:]); err != nil {
+		copy(buf[:6], header[:])
+		if _, err := io.ReadFull(br, buf[6:length]); err != nil {
 			logger.Debug(fmt.Sprintf("Writer: TLS read payload error: %v", err))
 			return
 		}
 
-		s.writer.EnqueuePacket(payload, "tls")
+		s.writer.EnqueuePacket(buf[:length], "tls")
 	}
 }
 

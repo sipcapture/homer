@@ -842,6 +842,19 @@ func (tw *TableWriter) GetStats() (map[string]interface{}, error) {
 	return stats, nil
 }
 
+// GetBufferStats returns only the in-memory buffer row count (cheap, no lake scan).
+func (tw *TableWriter) GetBufferStats() int64 {
+	var bufSize int64
+	for _, mem := range tw.memTables {
+		var cnt int64
+		row := tw.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", mem))
+		if err := row.Scan(&cnt); err == nil {
+			bufSize += cnt
+		}
+	}
+	return bufSize
+}
+
 // TableFQN returns the fully qualified DuckLake table name
 func (tw *TableWriter) TableFQN() string {
 	return tw.tableFQN

@@ -96,7 +96,7 @@ type LineProtoLogConfig struct {
 type IngestConfig struct {
 	Enable bool `json:"enable" mapstructure:"enable" default:"true"`
 
-	// Ingest load control (0 = auto-detect NumCPU, capped at 32)
+	// Ingest load control (0 = auto-detect NumCPU/2, capped at 4)
 	WorkerCount int `json:"worker_count" mapstructure:"worker_count" default:"0"`
 	QueueSize   int `json:"queue_size" mapstructure:"queue_size" default:"200000"`
 
@@ -486,10 +486,12 @@ type UDPServerConfig struct {
 
 // TCPServerConfig configures the TCP HEP receiver
 type TCPServerConfig struct {
-	Enable    bool   `json:"enable" mapstructure:"enable" default:"false"`
-	Host      string `json:"host" mapstructure:"host" default:"0.0.0.0"`
-	Port      int    `json:"port" mapstructure:"port" default:"9060"`
-	Multicore bool   `json:"multicore" mapstructure:"multicore" default:"true"`
+	Enable         bool   `json:"enable" mapstructure:"enable" default:"false"`
+	Host           string `json:"host" mapstructure:"host" default:"0.0.0.0"`
+	Port           int    `json:"port" mapstructure:"port" default:"9060"`
+	Multicore      bool   `json:"multicore" mapstructure:"multicore" default:"true"`
+	MaxConnections int    `json:"max_connections" mapstructure:"max_connections" default:"0"`
+	ReadTimeoutSec int    `json:"read_timeout_sec" mapstructure:"read_timeout_sec" default:"300"`
 }
 
 // TLSServerConfig configures the TLS HEP receiver
@@ -504,6 +506,8 @@ type TLSServerConfig struct {
 	MaxTLSVersion      string `json:"max_tls_version" mapstructure:"max_tls_version" default:"TLS1.3"`
 	MutualTLS          bool   `json:"mutual_tls" mapstructure:"mutual_tls" default:"false"`
 	InsecureSkipVerify bool   `json:"insecure_skip_verify" mapstructure:"insecure_skip_verify" default:"false"`
+	MaxConnections     int    `json:"max_connections" mapstructure:"max_connections" default:"0"`
+	ReadTimeoutSec     int    `json:"read_timeout_sec" mapstructure:"read_timeout_sec" default:"300"`
 }
 
 // HTTPServerConfig configures the HTTP HEP receiver
@@ -558,20 +562,19 @@ type FlightSQLServerConfig struct {
 //
 // All three knobs map directly to DuckDB SET statements
 // (`SET memory_limit = ...`, `SET threads = ...`, `SET temp_directory = ...`).
-// Empty / zero values mean "leave DuckDB's own default" — operators do
-// not have to touch this section unless they want hard caps.
+// When threads is 0 or memory_limit is empty, the writer and node apply
+// sensible defaults (threads = min(NumCPU/2, 4), memory_limit = "2GB")
+// to prevent DuckDB from oversubscribing the host. Set explicit values
+// to override these defaults.
 type DuckDBTuning struct {
-	// Threads sets the size of the DuckDB worker pool. 0 = auto (all
-	// physical cores). Practical values for ingest/query nodes:
-	// `min(NumCPU, 8)` keeps context-switch noise low without
-	// starving the catalog flush loop.
+	// Threads sets the size of the DuckDB worker pool. 0 = auto
+	// (writer/node default to min(NumCPU/2, 4) to leave headroom
+	// for Go goroutines). Set explicitly to override.
 	Threads int `json:"threads" mapstructure:"threads" default:"0"`
 	// MemoryLimit caps the DuckDB buffer pool. Accepts the strings
 	// DuckDB itself accepts ("8GB", "1.5 GiB", "8589934592 bytes"),
-	// empty = DuckDB default (80% of host RAM). Setting this on
-	// resource-shared nodes (containers, multi-tenant boxes) prevents
-	// DuckDB from claiming all available memory and OOM-killing the
-	// process under load.
+	// empty = writer/node default to "2GB". Without a limit DuckDB
+	// claims ~80% of host RAM which causes swapping on shared nodes.
 	MemoryLimit string `json:"memory_limit" mapstructure:"memory_limit" default:""`
 	// TempDirectory is where DuckDB spills tuples that no longer fit
 	// in the buffer pool. Empty = DuckDB default (`<cwd>/.tmp`).

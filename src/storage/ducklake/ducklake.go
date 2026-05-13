@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -306,9 +307,28 @@ func (mtw *MultiTableWriter) connect() error {
 
 	// Apply DuckDB engine tuning (memory_limit, threads, temp_directory)
 	// before LOAD / ATTACH so the limits are in effect for the catalog
-	// bring-up too. Empty / zero values are no-ops, so this is safe to
-	// call unconditionally.
-	ApplyDuckDBTuning(db, mtw.config.TuningThreads, mtw.config.TuningMemoryLimit, mtw.config.TuningTempDirectory, "writer")
+	// bring-up too. When the operator hasn't set threads or memory_limit,
+	// apply sensible defaults so DuckDB doesn't oversubscribe the host
+	// (by default DuckDB claims all cores and ~80% of RAM).
+	threads := mtw.config.TuningThreads
+	memLimit := mtw.config.TuningMemoryLimit
+	if threads == 0 {
+		threads = runtime.NumCPU() / 2
+		if threads < 1 {
+			threads = 1
+		}
+		if threads > 4 {
+			threads = 4
+		}
+		logger.Info("DuckDB writer: auto-limiting threads (operator did not set tuning.threads)",
+			"threads", threads, "host_cpus", runtime.NumCPU())
+	}
+	if strings.TrimSpace(memLimit) == "" {
+		memLimit = "2GB"
+		logger.Info("DuckDB writer: auto-limiting memory (operator did not set tuning.memory_limit)",
+			"memory_limit", memLimit)
+	}
+	ApplyDuckDBTuning(db, threads, memLimit, mtw.config.TuningTempDirectory, "writer")
 
 	// Load DuckLake extension (must be pre-installed via --install-extensions)
 	if _, err := db.Exec("LOAD ducklake;"); err != nil {
@@ -584,6 +604,19 @@ func (mtw *MultiTableWriter) GetStats() (map[string]interface{}, error) {
 	}
 
 	return stats, nil
+}
+
+// GetBufferStats returns only the total in-memory buffer size across all tables.
+// Unlike GetStats, this does NOT run expensive lake-wide COUNT/MIN/MAX queries,
+// making it safe to call frequently without blocking the single DuckDB connection.
+func (mtw *MultiTableWriter) GetBufferStats() (bufferRows int, tableCount int) {
+	mtw.mu.RLock()
+	defer mtw.mu.RUnlock()
+
+	for _, tw := range mtw.tables {
+		bufferRows += int(tw.GetBufferStats())
+	}
+	return bufferRows, len(mtw.tables)
 }
 
 // CatalogLock acquires the catalog mutex to serialize catalog-modifying operations.

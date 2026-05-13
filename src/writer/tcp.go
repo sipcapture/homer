@@ -15,27 +15,47 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/sipcapture/homer-core/src/config"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
+const (
+	defaultTCPReadTimeout = 5 * time.Minute
+	defaultTCPMaxConns    = 1024
+)
+
 // TCPServer handles TCP HEP packet reception
 type TCPServer struct {
-	writer   *Writer
-	config   *config.TCPServerConfig
-	listener net.Listener
-	wg       sync.WaitGroup
-	quit     chan struct{}
-	stopOnce sync.Once
+	writer      *Writer
+	config      *config.TCPServerConfig
+	listener    net.Listener
+	wg          sync.WaitGroup
+	quit        chan struct{}
+	stopOnce    sync.Once
+	connSem     chan struct{} // semaphore for max connections
+	readTimeout time.Duration
 }
 
 // NewTCPServer creates a new TCP server
 func NewTCPServer(w *Writer, cfg *config.TCPServerConfig) *TCPServer {
+	readTimeout := defaultTCPReadTimeout
+	if cfg.ReadTimeoutSec > 0 {
+		readTimeout = time.Duration(cfg.ReadTimeoutSec) * time.Second
+	}
+
+	maxConns := defaultTCPMaxConns
+	if cfg.MaxConnections > 0 {
+		maxConns = cfg.MaxConnections
+	}
+
 	return &TCPServer{
-		writer: w,
-		config: cfg,
-		quit:   make(chan struct{}),
+		writer:      w,
+		config:      cfg,
+		quit:        make(chan struct{}),
+		connSem:     make(chan struct{}, maxConns),
+		readTimeout: readTimeout,
 	}
 }
 
@@ -49,7 +69,9 @@ func (s *TCPServer) Start() error {
 	}
 	s.listener = listener
 
-	logger.Info("Writer: Starting TCP server", "addr", addr)
+	logger.Info("Writer: Starting TCP server", "addr", addr,
+		"read_timeout", s.readTimeout.String(),
+		"max_connections", cap(s.connSem))
 
 	for {
 		conn, err := listener.Accept()
@@ -61,6 +83,14 @@ func (s *TCPServer) Start() error {
 				logger.Error(fmt.Sprintf("Writer: TCP accept error: %v", err))
 				continue
 			}
+		}
+
+		select {
+		case s.connSem <- struct{}{}:
+		default:
+			conn.Close()
+			logger.Warn("Writer: TCP max connections reached, rejecting")
+			continue
 		}
 
 		atomic.AddInt64(&s.writer.connCount, 1)
@@ -87,6 +117,7 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
 	defer conn.Close()
 	defer atomic.AddInt64(&s.writer.connCount, -1)
+	defer func() { <-s.connSem }()
 
 	br := bufio.NewReaderSize(conn, 128*1024)
 	var header [6]byte
@@ -99,9 +130,15 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 		default:
 		}
 
+		conn.SetReadDeadline(time.Now().Add(s.readTimeout))
+
 		if _, err := io.ReadFull(br, header[:]); err != nil {
 			if err != io.EOF {
-				logger.Debug(fmt.Sprintf("Writer: TCP read header error: %v", err))
+				if ne, ok := err.(net.Error); ok && ne.Timeout() {
+					logger.Debug("Writer: TCP connection idle timeout, closing")
+				} else {
+					logger.Debug(fmt.Sprintf("Writer: TCP read header error: %v", err))
+				}
 			}
 			return
 		}

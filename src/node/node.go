@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1090,10 +1091,26 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 	// Apply DuckDB engine tuning before loading extensions so the
 	// reader-side process honours the operator-configured memory cap
 	// even during DuckLake bring-up. Same knobs as the writer side.
+	// When the operator hasn't set tuning, apply sensible defaults
+	// so DuckDB doesn't oversubscribe the host.
+	nodeThreads := cfg.DuckLake.Tuning.Threads
+	nodeMemLimit := cfg.DuckLake.Tuning.MemoryLimit
+	if nodeThreads == 0 {
+		nodeThreads = runtime.NumCPU() / 2
+		if nodeThreads < 1 {
+			nodeThreads = 1
+		}
+		if nodeThreads > 4 {
+			nodeThreads = 4
+		}
+	}
+	if strings.TrimSpace(nodeMemLimit) == "" {
+		nodeMemLimit = "2GB"
+	}
 	ducklake.ApplyDuckDBTuning(
 		db,
-		cfg.DuckLake.Tuning.Threads,
-		cfg.DuckLake.Tuning.MemoryLimit,
+		nodeThreads,
+		nodeMemLimit,
 		cfg.DuckLake.Tuning.TempDirectory,
 		"node",
 	)
