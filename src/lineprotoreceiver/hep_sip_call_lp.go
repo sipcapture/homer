@@ -22,13 +22,7 @@ func lineProtoPointToSIPCallRow(p *LineProtoPoint) ([]interface{}, error) {
 	if p == nil {
 		return nil, fmt.Errorf("nil point")
 	}
-	m := make(map[string]interface{}, len(p.Tags)+len(p.Fields))
-	for k, v := range p.Tags {
-		m[SanitizeIdent(k)] = v
-	}
-	for k, v := range p.Fields {
-		m[SanitizeIdent(k)] = v
-	}
+	m := lpPointFieldMap(p)
 
 	ts, err := resolveSIPCallTimestamp(p, m)
 	if err != nil {

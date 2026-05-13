@@ -141,8 +141,10 @@ type IngestConfig struct {
 // The receiver speaks the InfluxDB v1 (/write) and v2 (/api/v2/write)
 // HTTP write endpoints, plus a gigapi-compatible alias
 // (/api/v3/write_lp). Each measurement maps to a dynamically-created
-// DuckLake table prefixed with `lp_`; an optional ?db= query parameter
-// routes points into a per-database DuckDB schema.
+// DuckLake table named `<table_prefix><measurement>` (default prefix is
+// empty so the table matches the measurement; set `table_prefix` e.g. to
+// `lp_` to namespace LP tables). An optional ?db= query parameter routes
+// points into a per-database DuckDB schema.
 type LineProtoConfig struct {
 	// Enable toggles the receiver and its HTTP listener.
 	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
@@ -165,13 +167,15 @@ type LineProtoConfig struct {
 	DefaultDB string `json:"default_db" mapstructure:"default_db" default:""`
 
 	// TablePrefix is prepended to every measurement before it becomes
-	// a DuckLake table name. Default `lp_` keeps line-protocol data
-	// separate from HEP / OTLP tables.
-	TablePrefix string `json:"table_prefix" mapstructure:"table_prefix" default:"lp_"`
+	// a DuckLake table name. Default is empty (measurement = table name);
+	// set e.g. `lp_` to keep line-protocol tables separate from HEP.
+	TablePrefix string `json:"table_prefix" mapstructure:"table_prefix" default:""`
 
-	// AllowHepSipCall enables ?hep_table=call on LP write endpoints so
-	// points can be inserted into hep_proto_1_call (SIP call table).
-	// When false, ?hep_table= is rejected with HTTP 400.
+	// AllowHepSipCall enables structured Line Protocol ingest into real HEP
+	// DuckLake tables (measurement must equal the table name, e.g.
+	// hep_proto_1_call, hep_proto_1_registration, hep_proto_5_default, …).
+	// When false, measurements starting with hep_proto_ are rejected if
+	// table_prefix is empty (see docs/LINE_PROTOCOL.md).
 	AllowHepSipCall bool `json:"allow_hep_sip_call" mapstructure:"allow_hep_sip_call" default:"false"`
 
 	// ReadTimeoutSec / WriteTimeoutSec apply to the HTTP server.
@@ -370,6 +374,11 @@ type CoordinatorConfig struct {
 	// FlightSQLServer exposes Arrow FlightSQL on the coordinator and proxies SQL
 	// to node flightsql_port endpoints (Grafana single entrypoint).
 	FlightSQLServer FlightSQLServerConfig `json:"flightsql_server" mapstructure:"flightsql_server"`
+
+	// LineProtoTablePrefix mirrors ingest.line_protocol.table_prefix for
+	// GET /api/v4/line_protocol/tables default ?prefix=; set at load from Ingest
+	// (not read from JSON).
+	LineProtoTablePrefix string `json:"-" mapstructure:"-"`
 
 	// MCP runtime settings propagated from top-level config in modular startup.
 	MCP MCPConfig `json:"-" mapstructure:"-"`
@@ -1240,13 +1249,13 @@ func setDefaults(v *viper.Viper) {
 	// InfluxDB Line Protocol receiver defaults. Off by default; when
 	// enabled, the receiver listens on :8086 (the canonical InfluxDB
 	// v1 port) and lazily creates one DuckLake table per measurement
-	// with `lp_` prefix.
+	// with configurable `table_prefix` (default empty = measurement name).
 	v.SetDefault("ingest.line_protocol.enable", false)
 	v.SetDefault("ingest.line_protocol.listen", ":8086")
 	v.SetDefault("ingest.line_protocol.max_body_bytes", 8388608)
 	v.SetDefault("ingest.line_protocol.default_precision", "ns")
 	v.SetDefault("ingest.line_protocol.default_db", "")
-	v.SetDefault("ingest.line_protocol.table_prefix", "lp_")
+	v.SetDefault("ingest.line_protocol.table_prefix", "")
 	v.SetDefault("ingest.line_protocol.allow_hep_sip_call", false)
 	v.SetDefault("ingest.line_protocol.read_timeout_sec", 30)
 	v.SetDefault("ingest.line_protocol.write_timeout_sec", 30)
@@ -1443,15 +1452,13 @@ func applyDefaults(cfg *Config) {
 	if cfg.Ingest.LineProto.DefaultPrecision == "" {
 		cfg.Ingest.LineProto.DefaultPrecision = "ns"
 	}
-	if cfg.Ingest.LineProto.TablePrefix == "" {
-		cfg.Ingest.LineProto.TablePrefix = "lp_"
-	}
 	if cfg.Ingest.LineProto.ReadTimeoutSec <= 0 {
 		cfg.Ingest.LineProto.ReadTimeoutSec = 30
 	}
 	if cfg.Ingest.LineProto.WriteTimeoutSec <= 0 {
 		cfg.Ingest.LineProto.WriteTimeoutSec = 30
 	}
+	cfg.Coordinator.LineProtoTablePrefix = cfg.Ingest.LineProto.TablePrefix
 
 	// MCP defaults
 	if cfg.MCP.Mode == "" {

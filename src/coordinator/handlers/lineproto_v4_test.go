@@ -34,7 +34,7 @@ func TestIsSafePrefix(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{"", false},
+		{"", true}, // empty: exclude hep_proto_/otlp_/mem_hep_ (matches default table_prefix)
 		{"lp_", true},
 		{"123_", true}, // prefixes may start with digits
 		{"a-b", false},
@@ -100,16 +100,15 @@ func TestIntField(t *testing.T) {
 	}
 }
 
-// TestNewLineProtoHandlerDefaultsPrefix ensures the constructor falls
-// back to "lp_" when the caller passes an empty string — which is what
-// coordinator.go does when it does not have access to IngestConfig.
-func TestNewLineProtoHandlerDefaultsPrefix(t *testing.T) {
+// TestNewLineProtoHandlerPrefixPassthrough ensures the constructor keeps
+// the default prefix string (including empty) for ?prefix= resolution.
+func TestNewLineProtoHandlerPrefixPassthrough(t *testing.T) {
 	h := NewLineProtoHandler(nil, "")
 	if h == nil {
 		t.Fatal("constructor returned nil")
 	}
-	if h.defaultPrefix != "lp_" {
-		t.Errorf("defaultPrefix = %q, want %q", h.defaultPrefix, "lp_")
+	if h.defaultPrefix != "" {
+		t.Errorf("defaultPrefix = %q, want empty", h.defaultPrefix)
 	}
 
 	h2 := NewLineProtoHandler(nil, "metric_")

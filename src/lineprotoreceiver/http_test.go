@@ -26,7 +26,6 @@ func newTestServer(t *testing.T) (*httptest.Server, string) {
 		Listen:           ":0",
 		MaxBodyBytes:     8 * 1024 * 1024,
 		DefaultPrecision: "ns",
-		TablePrefix:      "lp_",
 		ReadTimeoutSec:   10,
 		WriteTimeoutSec:  10,
 	}
@@ -223,7 +222,6 @@ func TestHTTP_WriteHepCall(t *testing.T) {
 		Listen:           ":0",
 		MaxBodyBytes:     8 * 1024 * 1024,
 		DefaultPrecision: "ns",
-		TablePrefix:      "lp_",
 		ReadTimeoutSec:   10,
 		WriteTimeoutSec:  10,
 		AllowHepSipCall:  true,
@@ -236,8 +234,8 @@ func TestHTTP_WriteHepCall(t *testing.T) {
 	srv := httptest.NewServer(hs.server.Handler)
 	defer srv.Close()
 
-	lp := `sip,method=BYE,session_id=s1 caller="alice",callee="bob",src_ip="10.0.0.1",dst_ip="10.0.0.2",src_port=5060i,dst_port=5060i,protocol=17i,payload="BYE sip:x SIP/2.0" 1700000000000000000`
-	resp, err := http.Post(srv.URL+"/write?hep_table=call&precision=ns", "text/plain", strings.NewReader(lp))
+	lp := `hep_proto_1_call,method=BYE,session_id=s1 caller="alice",callee="bob",src_ip="10.0.0.1",dst_ip="10.0.0.2",src_port=5060i,dst_port=5060i,protocol=17i,payload="BYE sip:x SIP/2.0" 1700000000000000000`
+	resp, err := http.Post(srv.URL+"/write?precision=ns", "text/plain", strings.NewReader(lp))
 	if err != nil {
 		t.Fatalf("post: %v", err)
 	}
@@ -255,17 +253,16 @@ func TestHTTP_WriteHepCall(t *testing.T) {
 	}
 }
 
-func TestHTTP_WriteHepTableDisabled(t *testing.T) {
+func TestHTTP_HepTableQueryRejected(t *testing.T) {
 	db, lake := newLPDB(t)
 	cfg := &config.LineProtoConfig{
 		Enable:           true,
 		Listen:           ":0",
 		MaxBodyBytes:     8 * 1024 * 1024,
 		DefaultPrecision: "ns",
-		TablePrefix:      "lp_",
 		ReadTimeoutSec:   10,
 		WriteTimeoutSec:  10,
-		AllowHepSipCall:  false,
+		AllowHepSipCall:  true,
 	}
 	ing := NewIngester(db, lake, cfg)
 	hs, err := newHTTPServer(cfg, ing)

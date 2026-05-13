@@ -16,16 +16,16 @@ import (
 // LineProtoHandler exposes read-only discovery for the dynamic
 // DuckLake tables created by the InfluxDB Line Protocol receiver
 // (see src/lineprotoreceiver). Each measurement materialises into a
-// table whose name is derived from the measurement plus a configurable
-// prefix (default "lp_"); since the schema is not known up front,
+// table whose name is `<table_prefix><measurement>` (default: empty
+// prefix, so the table name is the measurement); since the schema is not known up front,
 // downstream consumers (the Proto Search widget, Smart Input, Grafana,
 // etc.) discover it through these endpoints rather than via static
 // mapping_schema rows.
 //
 // Routes (all under /api/v4):
 //
-//   GET /line_protocol/tables                  — list all matching tables
-//   GET /line_protocol/tables/:schema/:table   — list one table's columns
+//	GET /line_protocol/tables                  — list all matching tables
+//	GET /line_protocol/tables/:schema/:table   — list one table's columns
 //
 // Responses follow the v4 envelope (Meta / Data / Pagination) used by
 // the rest of the coordinator API.
@@ -38,11 +38,9 @@ type LineProtoHandler struct {
 }
 
 // NewLineProtoHandler constructs the handler. flightService must not be
-// nil; defaultPrefix may be empty in which case "lp_" is used.
+// nil; defaultPrefix is used when the client omits ?prefix= (mirrors
+// ingest.line_protocol.table_prefix, including empty string).
 func NewLineProtoHandler(fs *services.FlightService, defaultPrefix string) *LineProtoHandler {
-	if defaultPrefix == "" {
-		defaultPrefix = "lp_"
-	}
 	return &LineProtoHandler{flightService: fs, defaultPrefix: defaultPrefix}
 }
 
@@ -85,9 +83,9 @@ type LineProtoTableResponseV4 struct {
 //
 // Optional query parameters:
 //
-//   ?prefix=<str>   — override the default "lp_" filter (e.g. "metric_")
-//   ?schema=<str>   — restrict to a single DuckDB schema (the per-?db= one)
-//   ?with_columns=false — skip column enumeration to keep the response small
+//	?prefix=<str>   — override the default filter (e.g. "lp_" or "metric_"); empty uses the same rules as ingest (exclude hep_proto_/otlp_/mem_hep_)
+//	?schema=<str>   — restrict to a single DuckDB schema (the per-?db= one)
+//	?with_columns=false — skip column enumeration to keep the response small
 func (h *LineProtoHandler) V4LineProtoTables(c echo.Context) error {
 	limit, err := parseLimit(c)
 	if err != nil {
@@ -166,9 +164,14 @@ func (h *LineProtoHandler) V4LineProtoTable(c echo.Context) error {
 // returned per-row so callers can build the fully-qualified identifier.
 func (h *LineProtoHandler) listTables(c echo.Context, prefix, schemaFilter string) ([]LineProtoTable, error) {
 	var sb strings.Builder
-	sb.WriteString("SELECT table_catalog, table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '")
-	sb.WriteString(escapeLiteral(prefix))
-	sb.WriteString("%'")
+	sb.WriteString("SELECT table_catalog, table_schema, table_name FROM information_schema.tables WHERE ")
+	if prefix == "" {
+		sb.WriteString("table_name NOT LIKE 'hep_proto_%' AND table_name NOT LIKE 'otlp_%' AND table_name NOT LIKE 'mem_hep_%'")
+	} else {
+		sb.WriteString("table_name LIKE '")
+		sb.WriteString(escapeLiteral(prefix))
+		sb.WriteString("%'")
+	}
 	if schemaFilter != "" {
 		sb.WriteString(" AND table_schema = '")
 		sb.WriteString(escapeLiteral(schemaFilter))
@@ -300,9 +303,10 @@ func isSafeIdent(s string) bool {
 
 // isSafePrefix is the prefix-form of isSafeIdent (allows leading digits
 // because nothing forces an LP measurement to start with a letter).
+// Empty string is allowed and matches all table names in discovery (LIKE '%').
 func isSafePrefix(s string) bool {
 	if s == "" {
-		return false
+		return true
 	}
 	for _, r := range s {
 		ok := r == '_' ||

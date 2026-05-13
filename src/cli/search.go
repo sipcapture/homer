@@ -323,7 +323,7 @@ func buildSearchRequest(f SearchFlags) (SearchRequest, error) {
 
 	// Default event_type to "call" for SIP proto (1).
 	// OTLP (otlp_traces / 200–202): all map to profile "default" — no event_type injection needed.
-	// LP (lp / 300): event_type must be supplied by the caller as "schema__table" (e.g. "main__lp_cpu").
+	// LP (lp / 300): event_type must be supplied by the caller as "schema__table" (e.g. "main__cpu").
 	eventType := f.EventType
 	if eventType == "" && proto == 1 {
 		eventType = "call"

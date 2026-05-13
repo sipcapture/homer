@@ -105,7 +105,7 @@ Protocol types (`--proto` accepts the **Name** or the **Proto** integer; hyphens
 | `otlp_traces` | `200` | OTLP Traces | `default` |
 | `otlp_metrics` | `201` | OTLP Metrics | `default` |
 | `otlp_logs` | `202` | OTLP Logs | `default` |
-| `lp` | `300` | Line Protocol | `schema__table` (e.g. `main__lp_cpu`) |
+| `lp` | `300` | Line Protocol | `schema__table` (e.g. `main__cpu`) |
 
 ### Output
 
@@ -475,17 +475,17 @@ For full column reference see [`OTLP.md`](./OTLP.md#storage-layout).
 Line Protocol data uses `--proto lp`. The `--event-type` flag selects the target table using the `schema__table` convention (double underscore separates DuckDB schema from table name).
 
 ```bash
-# Query a specific LP measurement (schema=main, table=lp_cpu)
-homer search --host coordinator:8081 --proto lp --event-type "main__lp_cpu" --from 15m
+# Query a specific LP measurement (schema=main, table=cpu)
+homer search --host coordinator:8081 --proto lp --event-type "main__cpu" --from 15m
 
 # Free-text search within any LP table
-homer search --host coordinator:8081 --proto lp --event-type "main__lp_mem" --payload "host=web01"
+homer search --host coordinator:8081 --proto lp --event-type "main__mem" --payload "host=web01"
 
 # Interactive TUI for LP
-homer search --host coordinator:8081 --proto lp --event-type "main__lp_cpu" --interactive
+homer search --host coordinator:8081 --proto lp --event-type "main__cpu" --interactive
 ```
 
-For available LP tables run `homer cli --host coordinator:8081` and execute `SHOW TABLES` or `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE table_name LIKE 'lp_%'`.
+For available LP tables use `/api/v4/line_protocol/tables` or statistics endpoints; with the default (empty) `table_prefix`, table names match measurements (not necessarily `lp_%`).
 
 ### Raw SQL Search
 
@@ -507,7 +507,7 @@ homer search --host coordinator:8081 --sql "
 # Aggregation over LP data
 homer search --host coordinator:8081 --sql "
   SELECT date_trunc('minute', time) AS minute, AVG(cpu_usage_user) AS avg_cpu
-  FROM default.main.lp_cpu
+  FROM default.main.cpu
   WHERE time >= now() - INTERVAL 1 HOUR
   GROUP BY 1 ORDER BY 1
 " --format chart
@@ -652,4 +652,4 @@ Column names depend on the specific measurement schema. Common fields:
 | `<tag_name>` | LP tag columns (indexed strings) |
 | `<field_name>` | LP field columns (numeric or string values) |
 
-Use `--sql` for direct column introspection: `DESCRIBE main.lp_cpu`.
+Use `--sql` for direct column introspection: `DESCRIBE main.cpu`.

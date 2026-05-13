@@ -24,7 +24,7 @@ import (
 // types we ship (1=SIP, 5=RTCP, 53=DNS, 100=LOG) or with the OTLP
 // virtual hepids (200/201/202).
 //
-// Every dynamic lp_<measurement> table gets one mapping_schema row with
+// Every dynamic Line Protocol table gets one mapping_schema row with
 // this hepid; the table's actual identity (schema + name) is encoded
 // into the `profile` column. See LPProfileFor / SplitLPProfile below
 // for the encoding.
@@ -32,11 +32,11 @@ const LPVirtualHepID = 300
 
 // LPProfileSeparator is the marker that splits "<schema>__<table>" in
 // the encoded profile. Using "__" means a schema or table containing a
-// single underscore (e.g. "lp_cpu") still round-trips cleanly.
+// single underscore (e.g. "main__cpu") still round-trips cleanly.
 const LPProfileSeparator = "__"
 
 // LPMappingSyncService keeps the mapping_schema settings table in sync
-// with the live set of lp_<measurement> tables in DuckLake.
+// with the live set of Line Protocol tables in DuckLake.
 //
 // Why a sync loop and not on-demand seeding:
 //
@@ -62,11 +62,10 @@ type LPMappingSyncService struct {
 // NewLPMappingSyncService constructs the sync service. db is the
 // coordinator's settings DuckDB (where mapping_schema lives), flight
 // queries the data-plane nodes via the existing /query API. prefix
-// defaults to "lp_" when empty; interval defaults to 60s.
+// may be empty (same default as ingest.line_protocol.table_prefix);
+// discovery then excludes built-in hep_proto_* / otlp_* / mem_hep_* tables.
+// interval defaults to 60s.
 func NewLPMappingSyncService(db *sql.DB, flight *FlightService, prefix string, interval time.Duration) *LPMappingSyncService {
-	if prefix == "" {
-		prefix = "lp_"
-	}
 	if interval <= 0 {
 		interval = 60 * time.Second
 	}
@@ -182,8 +181,15 @@ type discoveredLPTable struct {
 }
 
 func (s *LPMappingSyncService) discoverTables(ctx context.Context) ([]discoveredLPTable, error) {
-	sql := "SELECT table_catalog, table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '" +
-		escapeSQL(s.prefix) + "%' ORDER BY table_catalog, table_schema, table_name"
+	var sql string
+	if s.prefix != "" {
+		sql = "SELECT table_catalog, table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '" +
+			escapeSQL(s.prefix) + "%' ORDER BY table_catalog, table_schema, table_name"
+	} else {
+		sql = "SELECT table_catalog, table_schema, table_name FROM information_schema.tables WHERE " +
+			"table_name NOT LIKE 'hep_proto_%' AND table_name NOT LIKE 'otlp_%' AND table_name NOT LIKE 'mem_hep_%' " +
+			"ORDER BY table_catalog, table_schema, table_name"
+	}
 	rows, err := s.flight.Query(ctx, sql)
 	if err != nil {
 		return nil, err

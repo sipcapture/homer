@@ -21,10 +21,10 @@ import (
 	"github.com/sipcapture/homer-core/src/utils/metrics"
 )
 
-// defaultTablePrefix is prepended to every measurement name before it
-// becomes a DuckLake table. Keeps line-protocol data cleanly separated
-// from HEP / OTLP tables.
-const defaultTablePrefix = "lp_"
+// defaultTablePrefix is used when NewIngester is called with cfg == nil
+// (tests). Matches the config default: empty string = measurement name
+// is the DuckLake table name.
+const defaultTablePrefix = ""
 
 // Ingester writes parsed Line Protocol points into DuckLake. It is safe
 // for concurrent use; per-table DDL is serialised internally.
@@ -47,14 +47,14 @@ type Ingester struct {
 
 // NewIngester returns a ready-to-use Ingester. lakeName is the DuckLake
 // catalog identifier ("homer_lake" by default) used to qualify table
-// names. cfg may be nil (defaults: lp_ prefix, hep sip call ingest off).
+// names. cfg may be nil (uses defaultTablePrefix); if cfg is non-nil,
+// cfg.TablePrefix is used verbatim (including empty string for
+// measurement-as-table-name).
 func NewIngester(db *sql.DB, lakeName string, cfg *config.LineProtoConfig) *Ingester {
 	tp := defaultTablePrefix
 	allow := false
 	if cfg != nil {
-		if cfg.TablePrefix != "" {
-			tp = cfg.TablePrefix
-		}
+		tp = cfg.TablePrefix
 		allow = cfg.AllowHepSipCall
 	}
 	return &Ingester{
@@ -73,17 +73,20 @@ func NewIngester(db *sql.DB, lakeName string, cfg *config.LineProtoConfig) *Inge
 // (mirrors the InfluxDB v1 / gigapi `?db=…` semantics).
 //
 // Returns (rowsWritten, error). On a parse error, no rows are written.
-// hepTable must be empty for standard LP tables, or "call" when writing
-// into hep_proto_1_call (requires allowHepSipCall on the ingester).
-func (i *Ingester) Ingest(ctx context.Context, dbName string, body []byte, precision LineProtoPrecision, hepTable string) (int, error) {
+//
+// When allowHepSipCall is true and every parsed point uses the same
+// supported HEP measurement name (hep_proto_* tables from the lake schema,
+// e.g. hep_proto_1_call, hep_proto_1_registration), rows are written with
+// the fixed HEP column mapping into {lake}.main.<measurement>.
+// A mix of those lines with other measurements in one request is rejected.
+// You cannot mix two different hep_proto_* table names in one request.
+//
+// With allowHepSipCall false and an empty table_prefix, any measurement
+// starting with hep_proto_ is rejected so generic LP cannot corrupt HEP
+// tables.
+func (i *Ingester) Ingest(ctx context.Context, dbName string, body []byte, precision LineProtoPrecision) (int, error) {
 	if i == nil || i.db == nil {
 		return 0, fmt.Errorf("line-proto ingester: not initialised")
-	}
-	if hepTable == "call" {
-		if !i.allowHepSipCall {
-			return 0, fmt.Errorf("hep_table sip call ingest is disabled")
-		}
-		return i.ingestHepSIPCallLP(ctx, body, precision)
 	}
 
 	pts, badIdx, err := ParseLineProtocol(body, precision)
@@ -93,6 +96,36 @@ func (i *Ingester) Ingest(ctx context.Context, dbName string, body []byte, preci
 	}
 	if len(pts) == 0 {
 		return 0, nil
+	}
+
+	var hepN, otherN int
+	var hepMeas string
+	var hepKey ducklake.TableKey
+	for li, p := range pts {
+		if k, ok := hepLPTableKeyForMeasurement(p.Measurement); ok && i.allowHepSipCall {
+			if hepN == 0 {
+				hepMeas = p.Measurement
+				hepKey = k
+			} else if p.Measurement != hepMeas {
+				return 0, fmt.Errorf("line protocol: point %d: cannot mix different HEP tables (%q vs %q) in one request", li+1, hepMeas, p.Measurement)
+			}
+			hepN++
+			continue
+		}
+		if strings.HasPrefix(p.Measurement, "hep_proto_") && i.tablePrefix == "" {
+			if !i.allowHepSipCall {
+				return 0, fmt.Errorf("line protocol: point %d: measurement %q is in the HEP table namespace; enable allow_hep_sip_call for structured hep_proto_* ingest or set table_prefix to namespace LP tables", li+1, p.Measurement)
+			}
+			return 0, fmt.Errorf("line protocol: point %d: unknown HEP table measurement %q", li+1, p.Measurement)
+		}
+		otherN++
+	}
+
+	if hepN > 0 && otherN > 0 {
+		return 0, fmt.Errorf("line protocol: cannot mix structured hep_proto_* ingest (%q) with other measurements in one request", hepMeas)
+	}
+	if hepN > 0 {
+		return i.ingestHepLPFromPoints(ctx, hepKey, pts)
 	}
 
 	schema := ""
@@ -116,21 +149,17 @@ func (i *Ingester) Ingest(ctx context.Context, dbName string, body []byte, preci
 	return total, nil
 }
 
-func (i *Ingester) ingestHepSIPCallLP(ctx context.Context, body []byte, precision LineProtoPrecision) (int, error) {
-	pts, badIdx, err := ParseLineProtocol(body, precision)
-	if err != nil {
-		metrics.RecordLineProtoWriteError("parse")
-		return 0, fmt.Errorf("parse error at line %d: %w", badIdx+1, err)
+func (i *Ingester) ingestHepLPFromPoints(ctx context.Context, key ducklake.TableKey, pts []LineProtoPoint) (int, error) {
+	sc := ducklake.GetTableSchemas()[key]
+	tblLabel := "hep_proto"
+	if sc != nil {
+		tblLabel = "hep_proto_" + sc.TableSuffix
 	}
-	if len(pts) == 0 {
-		return 0, nil
-	}
-	key := ducklake.TableKey{ProtoType: ducklake.ProtoTypeSIP, SubType: ducklake.SIPTypeCall}
 	rows := make([][]interface{}, 0, len(pts))
 	for li := range pts {
-		row, err := lineProtoPointToSIPCallRow(&pts[li])
+		row, err := lineProtoPointToHEPRow(&pts[li], key)
 		if err != nil {
-			metrics.RecordLineProtoWriteError("hep_sip_call_map")
+			metrics.RecordLineProtoWriteError("hep_lp_map")
 			return 0, fmt.Errorf("point %d: %w", li+1, err)
 		}
 		rows = append(rows, row)
@@ -140,8 +169,8 @@ func (i *Ingester) ingestHepSIPCallLP(ctx context.Context, body []byte, precisio
 		return 0, err
 	}
 	if _, err := i.db.ExecContext(ctx, sql); err != nil {
-		metrics.RecordLineProtoWriteError("hep_sip_call_write")
-		return 0, fmt.Errorf("write hep_proto_1_call: %w", err)
+		metrics.RecordLineProtoWriteError("hep_lp_write")
+		return 0, fmt.Errorf("write %s: %w", tblLabel, err)
 	}
 	return len(rows), nil
 }

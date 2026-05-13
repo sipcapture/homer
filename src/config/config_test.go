@@ -521,7 +521,7 @@ func TestLoad_OTLPPartialEnableKeepsTagDefaults(t *testing.T) {
 // defaults for the InfluxDB Line Protocol ingest receiver
 // (`ingest.line_protocol.*`, distinct from the remote_logging.lineproto
 // outbound forwarder): feature off, listener on :8086, 8 MiB body cap,
-// ns precision, lp_ table prefix.
+// ns precision, empty table prefix (measurement = table name).
 func TestLoad_LineProtoIngestDefaultsHonoured(t *testing.T) {
 	path := writeTmpConfig(t, `{}`)
 
@@ -542,8 +542,8 @@ func TestLoad_LineProtoIngestDefaultsHonoured(t *testing.T) {
 	if lp.DefaultPrecision != "ns" {
 		t.Errorf("ingest.line_protocol.default_precision: want ns, got %q", lp.DefaultPrecision)
 	}
-	if lp.TablePrefix != "lp_" {
-		t.Errorf("ingest.line_protocol.table_prefix: want lp_, got %q", lp.TablePrefix)
+	if lp.TablePrefix != "" {
+		t.Errorf("ingest.line_protocol.table_prefix: want empty default, got %q", lp.TablePrefix)
 	}
 	if lp.ReadTimeoutSec != 30 || lp.WriteTimeoutSec != 30 {
 		t.Errorf("ingest.line_protocol timeouts: want 30/30, got %d/%d",
@@ -568,6 +568,45 @@ func TestLoad_LineProtoIngestAllowHepSipCallOverride(t *testing.T) {
 	}
 	if !cfg.Ingest.LineProto.AllowHepSipCall {
 		t.Fatalf("allow_hep_sip_call: want true, got false")
+	}
+}
+
+// TestLoad_LineProtoIngestExplicitEmptyTablePrefix honours an explicit
+// empty table_prefix (measurement name = DuckLake table name).
+func TestLoad_LineProtoIngestExplicitEmptyTablePrefix(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "ingest": {
+    "line_protocol": { "enable": true, "table_prefix": "" }
+  }
+}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.Ingest.LineProto.TablePrefix != "" {
+		t.Fatalf("ingest.line_protocol.table_prefix: want empty, got %q", cfg.Ingest.LineProto.TablePrefix)
+	}
+	if cfg.Coordinator.LineProtoTablePrefix != "" {
+		t.Fatalf("coordinator LineProtoTablePrefix: want empty, got %q", cfg.Coordinator.LineProtoTablePrefix)
+	}
+}
+
+// TestLoad_LineProtoIngestExplicitLegacyPrefix checks optional namespacing.
+func TestLoad_LineProtoIngestExplicitLegacyPrefix(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "ingest": {
+    "line_protocol": { "enable": true, "table_prefix": "lp_" }
+  }
+}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if cfg.Ingest.LineProto.TablePrefix != "lp_" {
+		t.Fatalf("ingest.line_protocol.table_prefix: want lp_, got %q", cfg.Ingest.LineProto.TablePrefix)
+	}
+	if cfg.Coordinator.LineProtoTablePrefix != "lp_" {
+		t.Fatalf("coordinator LineProtoTablePrefix: want lp_, got %q", cfg.Coordinator.LineProtoTablePrefix)
 	}
 }
 
@@ -600,8 +639,8 @@ func TestLoad_LineProtoIngestPartialEnableKeepsTagDefaults(t *testing.T) {
 	if lp.DefaultPrecision != "ns" {
 		t.Errorf("ingest.line_protocol.default_precision: want ns (default), got %q", lp.DefaultPrecision)
 	}
-	if lp.TablePrefix != "lp_" {
-		t.Errorf("ingest.line_protocol.table_prefix: want lp_ (default), got %q", lp.TablePrefix)
+	if lp.TablePrefix != "" {
+		t.Errorf("ingest.line_protocol.table_prefix: want empty (default), got %q", lp.TablePrefix)
 	}
 }
 

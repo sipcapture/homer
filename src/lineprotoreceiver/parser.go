@@ -20,8 +20,9 @@
 //   - GET  /health             — InfluxDB v2 health probe
 //
 // Recognised query parameters: ?precision=ns|us|ms|s, ?db=<name>,
-// ?bucket=<name> (synonym for db), ?hep_table=call (optional; see
-// docs/LINE_PROTOCOL.md — requires ingest.line_protocol.allow_hep_sip_call).
+// ?bucket=<name> (synonym for db). Structured HEP ingest uses measurement
+// names equal to real DuckLake tables (hep_proto_1_call, hep_proto_1_registration, …)
+// when ingest.line_protocol.allow_hep_sip_call is true (see docs/LINE_PROTOCOL.md).
 package lineprotoreceiver
 
 import (

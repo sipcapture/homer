@@ -235,12 +235,10 @@ func (c *Coordinator) setupRoutes() {
 	statisticsHandler := handlers.NewStatisticsHandler(c.flightService)
 	// LineProtoHandler exposes read-only discovery for the dynamic LP
 	// tables created by the line-protocol receiver. The receiver and
-	// the coordinator can run on different processes, so we cannot
-	// reach into IngestConfig from here — the handler falls back to
-	// the receiver's documented default of "lp_" and clients can
-	// always override via ?prefix= when the receiver is configured
-	// with a non-default TablePrefix.
-	lineProtoHandler := handlers.NewLineProtoHandler(c.flightService, "")
+	// the coordinator can run on different processes; the handler uses
+	// CoordinatorConfig.LineProtoTablePrefix (copied from ingest at load)
+	// as the default ?prefix= filter, or "" to list all table names.
+	lineProtoHandler := handlers.NewLineProtoHandler(c.flightService, c.config.LineProtoTablePrefix)
 	logsHandler := handlers.NewLogsHandler()
 	integrationsHandler := handlers.NewIntegrationsHandler()
 	streamHandler := handlers.NewStreamHandler()
@@ -433,7 +431,7 @@ func (c *Coordinator) setupRoutes() {
 		protectedV4.GET("/statistics/databases", statisticsHandler.V4StatisticsDatabases)
 		protectedV4.GET("/statistics/measurements", statisticsHandler.V4StatisticsMeasurements)
 		protectedV4.GET("/statistics/metrics", statisticsHandler.V4StatisticsMetrics)
-		// Line Protocol receiver discovery — list dynamic lp_* tables
+		// Line Protocol receiver discovery — list dynamic LP tables
 		// and inspect their (lazily-created) column schemas.
 		protectedV4.GET("/line_protocol/tables", lineProtoHandler.V4LineProtoTables)
 		protectedV4.GET("/line_protocol/tables/:schema/:table", lineProtoHandler.V4LineProtoTable)
@@ -670,13 +668,13 @@ func (c *Coordinator) Start() error {
 	}
 
 	// Background sync of mapping_schema rows for dynamic Line Protocol
-	// tables (lp_<measurement>). Without this the Proto Search picker
+	// tables (<table_prefix><measurement>). Without this the Proto Search picker
 	// and Settings → Mappings UI would never show measurements created
 	// after the receiver started ingesting them. Tick interval is
 	// fixed at 60s — cheap (one INFORMATION_SCHEMA query plus N
 	// per-table column reads) and well below the latency users notice
 	// when adding a new widget.
-	c.lpMappingSync = services.NewLPMappingSyncService(c.settingsDB, c.flightService, "lp_", 60*time.Second)
+	c.lpMappingSync = services.NewLPMappingSyncService(c.settingsDB, c.flightService, c.config.LineProtoTablePrefix, 60*time.Second)
 	c.lpMappingSync.Start(context.Background())
 
 	go func() {

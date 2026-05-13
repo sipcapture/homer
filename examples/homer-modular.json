@@ -60,7 +60,6 @@
       "max_body_bytes": 8388608,
       "default_precision": "ns",
       "default_db": "",
-      "table_prefix": "lp_",
       "read_timeout_sec": 30,
       "write_timeout_sec": 30
     }

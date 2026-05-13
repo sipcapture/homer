@@ -116,9 +116,9 @@ func TestGetTableName_LPVirtualMapping(t *testing.T) {
 		profile  string
 		expected string
 	}{
-		{"main schema", "main__lp_cpu", "homer_lake.main.lp_cpu"},
-		{"app schema", "apps__lp_http_requests", "homer_lake.apps.lp_http_requests"},
-		{"missing separator falls back to main", "lp_legacy", "homer_lake.main.lp_legacy"},
+		{"main schema", "main__cpu", "homer_lake.main.cpu"},
+		{"app schema", "apps__http_requests", "homer_lake.apps.http_requests"},
+		{"missing separator falls back to main", "legacy", "homer_lake.main.legacy"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -136,7 +136,7 @@ func TestGetTableName_LPVirtualMapping(t *testing.T) {
 func TestBuildSearchSQLV4_LPRoutesToTimeColumn(t *testing.T) {
 	req := SearchObjectV4{}
 	req.Filter.ProtoType = lpHepID
-	req.Filter.EventType = "main__lp_cpu"
+	req.Filter.EventType = "main__cpu"
 	req.Timestamp.From = 1714400000000
 	req.Timestamp.To = 1714403600000
 	req.Param.Limit = 100
@@ -147,7 +147,7 @@ func TestBuildSearchSQLV4_LPRoutesToTimeColumn(t *testing.T) {
 	}
 	// LP tables expose `time`, not `timestamp` — make sure the
 	// builder emits clauses against the right column.
-	if !strings.Contains(sql, "FROM homer_lake.main.lp_cpu") {
+	if !strings.Contains(sql, "FROM homer_lake.main.cpu") {
 		t.Fatalf("LP search SQL missing fully-qualified table:\n%s", sql)
 	}
 	if !strings.Contains(sql, "time >= (to_timestamp(") || !strings.Contains(sql, "time <= (to_timestamp(") {

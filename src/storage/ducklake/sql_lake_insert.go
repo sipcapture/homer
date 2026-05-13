@@ -67,16 +67,21 @@ func insertColumnNames(schema *TableSchema) []string {
 	return parts
 }
 
-// SIPCallInsertColumnNames returns the INSERT column order for
-// hep_proto_1_call, derived from the canonical TableSchema (must stay
-// aligned with InsertSQL in tables.go).
-func SIPCallInsertColumnNames() []string {
-	key := TableKey{ProtoType: ProtoTypeSIP, SubType: SIPTypeCall}
-	s := GetTableSchemas()[key]
+// InsertColumnNamesForKey returns the INSERT column order for a table
+// key, derived from the canonical TableSchema InsertSQL in tables.go.
+func InsertColumnNamesForKey(key TableKey) []string {
+	s := schemaForKey(key)
 	if s == nil {
 		return nil
 	}
 	return insertColumnNames(s)
+}
+
+// SIPCallInsertColumnNames returns the INSERT column order for
+// hep_proto_1_call, derived from the canonical TableSchema (must stay
+// aligned with InsertSQL in tables.go).
+func SIPCallInsertColumnNames() []string {
+	return InsertColumnNamesForKey(TableKey{ProtoType: ProtoTypeSIP, SubType: SIPTypeCall})
 }
 
 func formatSQLLiteral(v interface{}) (string, error) {

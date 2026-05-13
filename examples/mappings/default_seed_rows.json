@@ -78,6 +78,6 @@
     }
   ],
   "not_seeded_here": [
-    "Line Protocol (virtual hepid 300) rows are created/updated at runtime by lp_mapping_sync when lp_* tables appear — see src/coordinator/services/lp_mapping_sync.go"
+    "Line Protocol (virtual hepid 300) rows are created/updated at runtime by lp_mapping_sync when new LP tables appear — see src/coordinator/services/lp_mapping_sync.go"
   ]
 }
