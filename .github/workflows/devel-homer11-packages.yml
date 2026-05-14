@@ -172,7 +172,7 @@ jobs:
       - name: Create devel DEB/RPM ${{ matrix.goarch }}
         env:
           VERSION: ${{ env.VERSION }}
-          PACKAGE: homer-core
+          PACKAGE: homer-core-devel
           RELEASE: ${{ env.VERSION }}
           ARCH: ${{ matrix.goarch }}
           OS: ${{ matrix.goos }}
@@ -182,6 +182,7 @@ jobs:
           if [ "${{ matrix.goarch }}" = "amd64" ]; then export EXT_PLATFORM=linux_amd64; else export EXT_PLATFORM=linux_arm64; fi
           export DUCKDB_VERSION=v1.5.2
           ./scripts/download_duckdb_extensions.sh "$EXT_PLATFORM"
+          sed -i 's/^name: "homer-core"/name: "homer-core-devel"/' homer-core_workflow.yaml
           sed -i 's/^arch: ".*"/arch: "${{ matrix.goarch }}"/' homer-core_workflow.yaml
           DUCKDB_VERSION="$DUCKDB_VERSION" EXT_PLATFORM="$EXT_PLATFORM" VERSION="$VERSION" \
             ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.deb"
@@ -194,14 +195,15 @@ jobs:
           name: homer-core-devel-${{ matrix.goarch }}
           path: |
             homer-core_${{ matrix.goarch }}
-            homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.deb
-            homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.rpm
+            homer-core-devel_${{ env.VERSION }}_${{ matrix.goarch }}.deb
+            homer-core-devel_${{ env.VERSION }}_${{ matrix.goarch }}.rpm
           if-no-files-found: error
           retention-days: 21
 
       - name: Summary
         run: |
           echo "## Devel packages (${{ matrix.goarch }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Package**: \`homer-core-devel\` (install paths match stable \`homer-core\`; do not install both on one host)" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Version**: \`${{ steps.ver.outputs.pkg_version }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Branch/ref**: built from \`${{ github.event_name == 'workflow_dispatch' && github.event.inputs.git_ref || github.ref }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Not published** to Packagecloud or GitHub Releases — download from workflow **Artifacts**." >> "$GITHUB_STEP_SUMMARY"
