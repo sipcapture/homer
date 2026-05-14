@@ -46,13 +46,21 @@ func RowInt(row map[string]interface{}, key string) int {
 // RowTime parses a timestamp field from a map row.
 // Accepts time.Time, string (RFC3339/RFC3339Nano), or numeric (unix seconds/ms/µs/ns).
 func RowTime(row map[string]interface{}, key string) time.Time {
+	if t, ok := RowTimeOptional(row, key); ok {
+		return t
+	}
+	return time.Now().UTC()
+}
+
+// RowTimeOptional parses row[key] into UTC time. Missing or unparseable values return (_, false).
+func RowTimeOptional(row map[string]interface{}, key string) (time.Time, bool) {
 	v, ok := row[key]
 	if !ok || v == nil {
-		return time.Now().UTC()
+		return time.Time{}, false
 	}
 	switch val := v.(type) {
 	case time.Time:
-		return val.UTC()
+		return val.UTC(), true
 	case string:
 		val = strings.TrimSpace(val)
 		for _, layout := range []string{
@@ -62,16 +70,16 @@ func RowTime(row map[string]interface{}, key string) time.Time {
 			"2006-01-02 15:04:05",
 		} {
 			if t, err := time.Parse(layout, val); err == nil {
-				return t.UTC()
+				return t.UTC(), true
 			}
 		}
-		return time.Now().UTC()
+		return time.Time{}, false
 	case float64:
-		return unixToTime(int64(val))
+		return unixToTime(int64(val)), true
 	case int64:
-		return unixToTime(val)
+		return unixToTime(val), true
 	}
-	return time.Now().UTC()
+	return time.Time{}, false
 }
 
 func unixToTime(n int64) time.Time {

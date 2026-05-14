@@ -23,6 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
 import { cn } from '@/lib/utils'
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { getMethodColor } from './flow-utils'
 import { resolveTimeRange } from './utils/resolveTimeRange'
 
@@ -47,6 +48,22 @@ function messageEventLabel(row) {
   return ''
 }
 
+/** Compare displayed event labels: numeric SIP codes as integers, else case-insensitive string. */
+function compareDisplayedEventLabels(a, b) {
+  const sa = String(a ?? '').trim().toLowerCase()
+  const sb = String(b ?? '').trim().toLowerCase()
+  if (sa === sb) return 0
+  const na = /^\d+$/.test(sa) ? parseInt(sa, 10) : NaN
+  const nb = /^\d+$/.test(sb) ? parseInt(sb, 10) : NaN
+  if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb
+  if (sa < sb) return -1
+  if (sa > sb) return 1
+  return 0
+}
+
+/** Synthetic key: original row index from the API (for “#” column sort / restore order). */
+const MESSAGE_SORT_ORIG = '__orig__'
+
 const MESSAGE_TABLE_COLUMNS = [
   { key: 'timestamp', header: 'Timestamp', format: 'datetime' },
   { key: 'call_id', header: 'Call-ID', accessor: messageCallId },
@@ -58,6 +75,74 @@ const MESSAGE_TABLE_COLUMNS = [
   { key: 'caller', header: 'caller' },
   { key: 'callee', header: 'callee' },
 ]
+
+function messageSortScalar(colKey, row, origIndex) {
+  if (colKey === MESSAGE_SORT_ORIG) return origIndex
+  const col = MESSAGE_TABLE_COLUMNS.find((c) => c.key === colKey)
+  if (!col) return ''
+  if (col.accessor) return col.accessor(row)
+  let value = row[col.key]
+  if (col.key === 'src_ip') value = displaySrcIp(row)
+  else if (col.key === 'dst_ip') value = displayDstIp(row)
+  if (col.format === 'datetime') {
+    const d = parseTimestampValue(value)
+    return d && !Number.isNaN(d.getTime()) ? d.getTime() : null
+  }
+  if (col.key === 'src_port' || col.key === 'dst_port') {
+    if (value == null || value === '') return null
+    const n = typeof value === 'number' ? value : parseInt(String(value).trim(), 10)
+    return Number.isFinite(n) ? n : null
+  }
+  if (value === undefined || value === null) return ''
+  return String(value)
+}
+
+/**
+ * Compare two message rows for table sorting. Null / empty numeric or missing time sort last in ASC
+ * (same idea as SQL NULLS LAST).
+ */
+function compareMessageRowsForSort(colKey, dir, rowA, origA, rowB, origB) {
+  const va = messageSortScalar(colKey, rowA, origA)
+  const vb = messageSortScalar(colKey, rowB, origB)
+
+  const nullsLastBody = (cmpNums) => {
+    const aNull = va == null || va === ''
+    const bNull = vb == null || vb === ''
+    if (aNull && bNull) return 0
+    if (aNull) return 1
+    if (bNull) return -1
+    if (cmpNums) {
+      const c = va - vb
+      if (c !== 0) return c
+    }
+    const sa = String(va).toLowerCase()
+    const sb = String(vb).toLowerCase()
+    if (sa < sb) return -1
+    if (sa > sb) return 1
+    return origA - origB
+  }
+
+  let cmp
+  if (colKey === MESSAGE_SORT_ORIG) {
+    cmp = va - vb
+  } else if (colKey === 'timestamp' || colKey === 'src_port' || colKey === 'dst_port') {
+    cmp = nullsLastBody(true)
+  } else if (colKey === 'event') {
+    const aNull = va == null || va === ''
+    const bNull = vb == null || vb === ''
+    if (aNull && bNull) cmp = 0
+    else if (aNull) cmp = 1
+    else if (bNull) cmp = -1
+    else {
+      cmp = compareDisplayedEventLabels(va, vb)
+      if (cmp === 0) cmp = origA - origB
+    }
+  } else {
+    cmp = nullsLastBody(false)
+  }
+  if (cmp !== 0) return dir === 'asc' ? cmp : -cmp
+  return origA - origB
+}
 
 function formatMessageTableCell(col, row, timeZone) {
   let text
@@ -490,6 +575,8 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
   const [otlpLogSearched, setOtlpLogSearched] = React.useState(false)
   const [exportOpen, setExportOpen] = React.useState(false)
   const [messageModals, setMessageModals] = React.useState([])
+  const [msgSortCol, setMsgSortCol] = React.useState(null)
+  const [msgSortDir, setMsgSortDir] = React.useState('asc')
 
   // reset per-tab state whenever a new transaction is opened
   React.useEffect(() => {
@@ -500,6 +587,8 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     setOtlpLogData(null); setOtlpLogErr(''); setOtlpLogLoading(false); setOtlpLogSearched(false)
     setExportOpen(false)
     setMessageModals([])
+    setMsgSortCol(null)
+    setMsgSortDir('asc')
   }, [modal?.modalKey])
 
   React.useEffect(() => {
@@ -515,6 +604,31 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
   const sessionIdsForApi = (Array.isArray(sessionIds) && sessionIds.length)
     ? sessionIds.map((s) => String(s).trim()).filter(Boolean)
     : (primaryId ? [String(primaryId).trim()] : [])
+
+  const messageRowsIndexed = React.useMemo(
+    () => (items || []).map((row, orig) => ({ row, orig })),
+    [items],
+  )
+
+  const messageRowsSorted = React.useMemo(() => {
+    if (!msgSortCol) return messageRowsIndexed
+    const copy = [...messageRowsIndexed]
+    copy.sort((a, b) =>
+      compareMessageRowsForSort(msgSortCol, msgSortDir, a.row, a.orig, b.row, b.orig),
+    )
+    return copy
+  }, [messageRowsIndexed, msgSortCol, msgSortDir])
+
+  const handleMessageSort = (colKey) => {
+    setMsgSortCol((prev) => {
+      if (prev === colKey) {
+        setMsgSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+        return colKey
+      }
+      setMsgSortDir('asc')
+      return colKey
+    })
+  }
 
   const loadQos = async () => {
     if (qosData || qosLoading) return
@@ -684,20 +798,54 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-card">
                       <TableRow>
-                        <TableHead className="w-10 text-[10px] uppercase tracking-wider">#</TableHead>
+                        <TableHead className="w-10 text-[10px] uppercase tracking-wider">
+                          <button
+                            type="button"
+                            className="inline-flex cursor-pointer select-none items-center gap-1 border-0 bg-transparent p-0 font-inherit text-inherit hover:text-foreground"
+                            title="Sort by row # (API order)"
+                            onClick={() => handleMessageSort(MESSAGE_SORT_ORIG)}
+                          >
+                            #
+                            {msgSortCol === MESSAGE_SORT_ORIG ? (
+                              msgSortDir === 'asc' ? (
+                                <ArrowUp className="h-3 w-3 shrink-0" />
+                              ) : (
+                                <ArrowDown className="h-3 w-3 shrink-0" />
+                              )
+                            ) : (
+                              <ArrowUpDown className="h-3 w-3 shrink-0 opacity-45 dark:opacity-50" />
+                            )}
+                          </button>
+                        </TableHead>
                         {MESSAGE_TABLE_COLUMNS.map((col) => (
                           <TableHead key={col.key} className="text-[10px] uppercase tracking-wider">
-                            {col.header}
+                            <button
+                              type="button"
+                              className="inline-flex cursor-pointer select-none items-center gap-1 border-0 bg-transparent p-0 font-inherit text-inherit hover:text-foreground"
+                              title={`Sort by ${col.header}`}
+                              onClick={() => handleMessageSort(col.key)}
+                            >
+                              {col.header}
+                              {msgSortCol === col.key ? (
+                                msgSortDir === 'asc' ? (
+                                  <ArrowUp className="h-3 w-3 shrink-0" />
+                                ) : (
+                                  <ArrowDown className="h-3 w-3 shrink-0" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="h-3 w-3 shrink-0 opacity-45 dark:opacity-50" />
+                              )}
+                            </button>
                           </TableHead>
                         ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(items || []).map((row, idx) => (
+                      {messageRowsSorted.map(({ row, orig }, idx) => (
                         <TableRow
-                          key={row.uuid || idx}
+                          key={row.uuid != null && String(row.uuid) !== '' ? String(row.uuid) : `tx-msg-${orig}`}
                           className={`cursor-pointer hover:brightness-95 ${idx % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-sky-50 dark:bg-sky-900/60'}`}
-                          onClick={() => handleFlowMessageClick({ raw: row, id: row.uuid || idx })}
+                          onClick={() => handleFlowMessageClick({ raw: row, id: row.uuid ?? orig })}
                         >
                           <TableCell className="font-mono text-[11px] text-muted-foreground">
                             {idx + 1}

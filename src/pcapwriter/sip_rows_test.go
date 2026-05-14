@@ -92,3 +92,28 @@ func TestNewPCAPWriter_WritePacket_RoundTripHeader(t *testing.T) {
 		t.Fatalf("bad LE magic prefix")
 	}
 }
+
+func TestRowTimeOptional(t *testing.T) {
+	t.Run("RFC3339", func(t *testing.T) {
+		row := map[string]interface{}{"timestamp": "2020-05-01T12:00:00Z"}
+		got, ok := pcapwriter.RowTimeOptional(row, "timestamp")
+		if !ok {
+			t.Fatal("expected ok")
+		}
+		if got.Year() != 2020 || got.Month() != 5 || got.Day() != 1 {
+			t.Fatalf("time = %v", got)
+		}
+	})
+	t.Run("missing", func(t *testing.T) {
+		_, ok := pcapwriter.RowTimeOptional(map[string]interface{}{}, "timestamp")
+		if ok {
+			t.Fatal("expected !ok")
+		}
+	})
+	t.Run("garbage", func(t *testing.T) {
+		_, ok := pcapwriter.RowTimeOptional(map[string]interface{}{"timestamp": "not-a-date"}, "timestamp")
+		if ok {
+			t.Fatal("expected !ok")
+		}
+	})
+}
