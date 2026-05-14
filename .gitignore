@@ -42,6 +42,8 @@ bin/
 nfpm
 # Only ignore wizard/local output at repo root (tracked example lives under examples/).
 /homer.json
+# Local ingest / load-test config (operator-specific).
+/homer-check.json
 
 # Benchmark run data
 bechmarks/runs/

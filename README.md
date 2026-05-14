@@ -234,6 +234,7 @@ See the `examples/` directory:
 
 - [Search CLI](docs/SEARCH.md) - Search from the command line (examples, formats, call flow)
 - [Config Wizard](docs/WIZARD.md) - Interactive config generator (TUI + presets)
+- [Ingest performance tuning](docs/INGEST_PERFORMANCE.md) - multicore, DuckLake batch size, Prometheus flush interval; **`scripts/profile_ingest_load.sh`** / **`make profile-ingest`** for repeatable CPU profiles
 - [Coordinator Module](docs/COORDINATOR.md) - REST API gateway
 - [MCP UI Guide](docs/MCP_UI_GUIDE.md) - Natural-language query assistant (configuration + UI usage)
 - [Node Module](docs/NODE.md) - FlightSQL data server

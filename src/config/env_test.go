@@ -28,6 +28,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		// === ingest — load control ===
 		"HOMER_INGEST_WORKER_COUNT": "8",
 		"HOMER_INGEST_QUEUE_SIZE":   "80000",
+		"HOMER_INGEST_WORKER_METRICS_FLUSH_PACKETS": "512",
 
 		// === ingest — receivers ===
 		"HOMER_INGEST_UDP_ENABLE":                 "true",
@@ -130,6 +131,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		// ingest load control
 		{"Ingest.WorkerCount", cfg.Ingest.WorkerCount, 8},
 		{"Ingest.QueueSize", cfg.Ingest.QueueSize, 80000},
+		{"Ingest.WorkerMetricsFlushPackets", cfg.Ingest.WorkerMetricsFlushPackets, 512},
 
 		// receivers
 		{"Ingest.UDP.Port", cfg.Ingest.UDP.Port, 9060},
@@ -530,6 +532,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 		// Ingest: load + receivers
 		"HOMER_INGEST_WORKER_COUNT":               "8",
 		"HOMER_INGEST_QUEUE_SIZE":                 "80000",
+		"HOMER_INGEST_WORKER_METRICS_FLUSH_PACKETS": "512",
 		"HOMER_INGEST_UDP_ENABLE":                 "true",
 		"HOMER_INGEST_UDP_HOST":                   "0.0.0.0",
 		"HOMER_INGEST_UDP_PORT":                   "9060",
@@ -676,6 +679,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 		// ingest load + udp/tcp/http
 		{"Ingest.WorkerCount", cfg.Ingest.WorkerCount, 8},
 		{"Ingest.QueueSize", cfg.Ingest.QueueSize, 80000},
+		{"Ingest.WorkerMetricsFlushPackets", cfg.Ingest.WorkerMetricsFlushPackets, 512},
 		{"Ingest.UDP.Enable", cfg.Ingest.UDP.Enable, true},
 		{"Ingest.UDP.Host", cfg.Ingest.UDP.Host, "0.0.0.0"},
 		{"Ingest.UDP.Port", cfg.Ingest.UDP.Port, 9060},

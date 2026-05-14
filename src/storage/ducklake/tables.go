@@ -8,13 +8,16 @@
 package ducklake
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"github.com/sipcapture/homer-core/src/utils/metrics"
 )
@@ -373,13 +376,44 @@ func GetDefaultSchema(key TableKey) *TableSchema {
 	}
 }
 
+// rowValuesPool recycles []interface{} row slices used in convertHEPToValues.
+// The pool stores pointers to slices with capacity up to maxRowCols (18 columns).
+// Lifecycle: alloc in build*Values → stored in tw.batch → flushBatch copies to
+// DuckDB Appender → flushBatch returns slice to pool after clearing references.
+const maxRowCols = 20
+
+var rowValuesPool = sync.Pool{New: func() interface{} {
+	s := make([]interface{}, 0, maxRowCols)
+	return &s
+}}
+
+// getRowSlice returns a recycled or fresh []interface{} with len=n.
+func getRowSlice(n int) []interface{} {
+	p := rowValuesPool.Get().(*[]interface{})
+	if cap(*p) >= n {
+		*p = (*p)[:n]
+		return *p
+	}
+	rowValuesPool.Put(p) // wrong size, discard
+	return make([]interface{}, n)
+}
+
+// putRowSlice returns a row slice to the pool, clearing all references.
+func putRowSlice(row []interface{}) {
+	for i := range row {
+		row[i] = nil
+	}
+	p := row[:0]
+	rowValuesPool.Put(&p)
+}
+
 // TableWriter handles writes to a specific table using Go-side batch buffering,
 // double-buffered DuckDB in-memory tables, and a dedicated flush goroutine.
 //
 // Architecture:
 //   - Incoming records accumulate in a Go slice (batch). When the batch reaches
-//     batchSize it is flushed to the *active* in-memory DuckDB table via a single
-//     multi-row INSERT.
+//     batchSize it is flushed to the *active* in-memory DuckDB table via the
+//     DuckDB Appender API (bypasses SQL parsing entirely).
 //   - Periodically the active and standby memory tables are swapped atomically.
 //     The now-standby table (full of data) is sent to the flush goroutine which
 //     copies rows to DuckLake and truncates the standby table — all without
@@ -398,14 +432,6 @@ type TableWriter struct {
 	batchMu   sync.Mutex
 	batch     [][]interface{}
 	batchSize int
-	numCols   int    // number of columns per row
-	colNames  string // pre-built "(col1, col2, ...)" for INSERT
-	oneRowPH  string // pre-built "(?, ?, ...)" placeholder for one row
-
-	// Pre-built full SQL for the common case (exactly batchSize rows).
-	// One per buffer slot so the INSERT targets the correct memory table.
-	fullBatchSQL [2]string
-	argsPool     sync.Pool // recycled []interface{} slices for batch INSERT
 
 	// Pre-built flush/truncate SQL per buffer slot.
 	flushInsertSQL   [2]string // "INSERT INTO <lakeFQN> SELECT * FROM <memTable_N>"
@@ -442,20 +468,10 @@ func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize 
 		catalogMu: catalogMu,
 	}
 
-	tw.numCols = tw.countInsertCols(schema.InsertSQL)
-	tw.colNames = tw.extractColNames(schema.InsertSQL)
-	tw.oneRowPH = tw.buildOneRowPlaceholder(schema.InsertSQL)
-
 	for i := 0; i < 2; i++ {
-		tw.fullBatchSQL[i] = tw.buildFullBatchSQLFor(batchSize, tw.memTables[i])
 		tw.flushInsertSQL[i] = "INSERT INTO " + tableFQN + " SELECT * FROM " + tw.memTables[i]
 		tw.flushTruncateSQL[i] = "TRUNCATE TABLE " + tw.memTables[i]
 	}
-
-	tw.argsPool = sync.Pool{New: func() interface{} {
-		s := make([]interface{}, 0, batchSize*tw.numCols)
-		return &s
-	}}
 
 	// Create DuckLake persistent table
 	createSQL := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", tableFQN, schema.CreateSQL)
@@ -470,9 +486,6 @@ func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize 
 	}
 
 	// Sort rows by timestamp within each file (DuckLake v1.0).
-	// Enables row-group and file-level pruning for time-range queries,
-	// so DuckLake skips Parquet files whose min/max timestamp range
-	// does not overlap the query window.
 	sortSQL := fmt.Sprintf("ALTER TABLE %s SET SORTED BY (timestamp ASC);", tableFQN)
 	if _, err := db.Exec(sortSQL); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to set sort order for %s: %v", tableFQN, err))
@@ -490,61 +503,9 @@ func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize 
 	tw.flushWg.Add(1)
 	go tw.flushWorker()
 
-	logger.Info("DuckLake table ready (double-buffer)", "table", tableFQN,
+	logger.Info("DuckLake table ready (double-buffer, appender)", "table", tableFQN,
 		"buf_a", memA, "buf_b", memB, "batch_size", batchSize)
 	return tw, nil
-}
-
-// extractColNames extracts the column-name list from InsertSQL, e.g. "(uuid, date, ...)"
-func (tw *TableWriter) extractColNames(insertSQL string) string {
-	idx := strings.Index(insertSQL, "VALUES")
-	if idx < 0 {
-		idx = strings.Index(insertSQL, "values")
-	}
-	if idx < 0 {
-		return ""
-	}
-	return strings.TrimSpace(insertSQL[:idx])
-}
-
-// buildOneRowPlaceholder extracts the VALUES placeholder from InsertSQL, e.g. "(?, ?, ?)"
-// Type casts like ?::JSON are stripped because the memory table columns already
-// have the correct type and DuckDB performs implicit casting.
-func (tw *TableWriter) buildOneRowPlaceholder(insertSQL string) string {
-	idx := strings.Index(insertSQL, "VALUES")
-	if idx < 0 {
-		idx = strings.Index(insertSQL, "values")
-	}
-	if idx < 0 {
-		return ""
-	}
-	ph := strings.TrimSpace(insertSQL[idx+len("VALUES"):])
-	ph = strings.ReplaceAll(ph, "?::JSON", "?")
-	return ph
-}
-
-// countInsertCols counts the number of ? placeholders in InsertSQL
-func (tw *TableWriter) countInsertCols(insertSQL string) int {
-	return strings.Count(insertSQL, "?")
-}
-
-// buildFullBatchSQLFor pre-builds the complete INSERT statement for exactly n rows
-// targeting the given memory table.
-func (tw *TableWriter) buildFullBatchSQLFor(n int, memTable string) string {
-	var sb strings.Builder
-	sb.Grow(len("INSERT INTO ") + len(memTable) + 1 + len(tw.colNames) + len(" VALUES ") + n*(len(tw.oneRowPH)+2))
-	sb.WriteString("INSERT INTO ")
-	sb.WriteString(memTable)
-	sb.WriteString(" ")
-	sb.WriteString(tw.colNames)
-	sb.WriteString(" VALUES ")
-	for i := 0; i < n; i++ {
-		if i > 0 {
-			sb.WriteString(", ")
-		}
-		sb.WriteString(tw.oneRowPH)
-	}
-	return sb.String()
 }
 
 // activeMemTable returns the name of the currently active memory table.
@@ -566,46 +527,114 @@ func (tw *TableWriter) Write(values []interface{}) error {
 	return nil
 }
 
+// driverValPool recycles []driver.Value slices to avoid per-row allocation in flushBatch.
+var driverValPool sync.Pool // elements: *[]driver.Value
+
+// batchSlicePool recycles the outer [][]interface{} slices swapped out in flushBatch.
+var batchSlicePool sync.Pool // elements: *[][]interface{}
+
 // flushBatch drains the Go-side batch into the currently active in-memory
-// DuckDB table using a single multi-row INSERT statement. The active slot
-// is read atomically so this never conflicts with the flush goroutine that
-// operates on the standby slot.
+// DuckDB table using the Appender API. This bypasses SQL parsing entirely —
+// rows are written directly via DuckDB's columnar DataChunk interface.
+// The active slot is read atomically so this never conflicts with the flush
+// goroutine that operates on the standby slot.
 func (tw *TableWriter) flushBatch() error {
 	tw.batchMu.Lock()
 	if len(tw.batch) == 0 {
 		tw.batchMu.Unlock()
 		return nil
 	}
+	// Swap batch with a recycled slice to avoid allocation on the hot path.
+	// We get a recycled slice from the pool, assign it to tw.batch, and later
+	// return the flushed rows (after clearing) to the pool. This keeps the pool
+	// size stable without leaking the pooled pointer.
 	rows := tw.batch
 	tw.batch = make([][]interface{}, 0, tw.batchSize)
+	if p := batchSlicePool.Get(); p != nil {
+		recycled := p.(*[][]interface{})
+		if cap(*recycled) >= tw.batchSize {
+			tw.batch = (*recycled)[:0]
+		}
+	}
 	slot := int(tw.activeIdx.Load())
 	tw.batchMu.Unlock()
 
 	start := time.Now()
 	nRows := len(rows)
+	memTable := tw.memTables[slot]
 
-	sqlStr := tw.fullBatchSQL[slot]
-	if nRows != tw.batchSize {
-		sqlStr = tw.buildFullBatchSQLFor(nRows, tw.memTables[slot])
+	// Grab a reusable vals slice sized for this table's column count.
+	nCols := len(rows[0])
+	var vals []driver.Value
+	if p := driverValPool.Get(); p != nil {
+		v := p.(*[]driver.Value)
+		if cap(*v) >= nCols {
+			vals = (*v)[:nCols]
+		} else {
+			vals = make([]driver.Value, nCols)
+		}
+	} else {
+		vals = make([]driver.Value, nCols)
 	}
 
-	argsPtr := tw.argsPool.Get().(*[]interface{})
-	args := (*argsPtr)[:0]
+	ctx := context.Background()
+	sqlConn, err := tw.db.Conn(ctx)
+	if err != nil {
+		driverValPool.Put(&vals)
+		// Clear per-row references and return row slices to pool before returning
+		// the outer slice, so packet payload strings are not retained in pooled memory.
+		for _, row := range rows {
+			putRowSlice(row)
+		}
+		for i := range rows {
+			rows[i] = nil
+		}
+		batchSlicePool.Put(&rows)
+		metrics.RecordPipelineStageError("ducklake", "batch_insert", "conn_error")
+		return fmt.Errorf("appender conn for %s: %w", memTable, err)
+	}
+	defer sqlConn.Close()
+
+	err = sqlConn.Raw(func(driverConn interface{}) error {
+		dc, ok := driverConn.(driver.Conn)
+		if !ok {
+			return fmt.Errorf("raw conn does not implement driver.Conn (got %T)", driverConn)
+		}
+		appender, appErr := duckdb.NewAppenderFromConn(dc, "", memTable)
+		if appErr != nil {
+			return appErr
+		}
+		for _, row := range rows {
+			for i, v := range row {
+				vals[i] = v
+			}
+			if appErr = appender.AppendRow(vals...); appErr != nil {
+				appender.Close()
+				return appErr
+			}
+		}
+		return appender.Close()
+	})
+
+	// Return pooled slices regardless of error outcome.
+	driverValPool.Put(&vals)
+	// Return row slices to pool: Appender has already copied the data.
 	for _, row := range rows {
-		args = append(args, row...)
+		putRowSlice(row)
 	}
-
-	_, err := tw.db.Exec(sqlStr, args...)
-
-	*argsPtr = args[:0]
-	tw.argsPool.Put(argsPtr)
+	// Clear row references before returning outer slice to pool.
+	for i := range rows {
+		rows[i] = nil
+	}
+	batchSlicePool.Put(&rows)
 
 	if err != nil {
 		metrics.RecordPipelineStageError("ducklake", "batch_insert", "insert_error")
-		return fmt.Errorf("batch INSERT into %s (%d rows): %w", tw.memTables[slot], nRows, err)
+		return fmt.Errorf("appender INSERT into %s (%d rows): %w", memTable, nRows, err)
 	}
 
 	metrics.RecordPipelineStageDuration("ducklake", "batch_insert", time.Since(start).Seconds())
+
 	return nil
 }
 
@@ -732,13 +761,9 @@ func (tw *TableWriter) flushSlotToDuckLake(slot int) {
 	}
 	metrics.RecordDucklakeTableFlushedRows(tw.tableFQN, rowsFlushed)
 
-	// Async truncate: fire and forget — the slot won't be written to until
-	// the next swap, and the next flush will see it empty.
-	go func(truncSQL, name string) {
-		if _, err := tw.db.Exec(truncSQL); err != nil {
-			logger.Warn(fmt.Sprintf("Failed to clear memory table %s: %v", name, err))
-		}
-	}(tw.flushTruncateSQL[slot], memName)
+	if _, err := tw.db.Exec(tw.flushTruncateSQL[slot]); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to clear memory table %s: %v", memName, err))
+	}
 
 	logger.Info("💾 Flushed rows", "count", rowsFlushed, "from", memName, "to", tw.tableFQN,
 		"elapsed", elapsed.Round(time.Millisecond), "rec_per_sec", fmt.Sprintf("%.0f", float64(rowsFlushed)/elapsedSec))
@@ -790,11 +815,9 @@ func (tw *TableWriter) flushSlotDirect(slot int, catalogMu *sync.Mutex) {
 	}
 	metrics.RecordDucklakeTableFlushedRows(tw.tableFQN, rowsFlushed)
 
-	go func(truncSQL, name string) {
-		if _, err := tw.db.Exec(truncSQL); err != nil {
-			logger.Warn(fmt.Sprintf("Failed to clear memory table %s: %v", name, err))
-		}
-	}(tw.flushTruncateSQL[slot], memName)
+	if _, err := tw.db.Exec(tw.flushTruncateSQL[slot]); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to clear memory table %s: %v", memName, err))
+	}
 
 	logger.Info("💾 Flushed rows", "count", rowsFlushed, "from", memName, "to", tw.tableFQN,
 		"elapsed", elapsed.Round(time.Millisecond), "rec_per_sec", fmt.Sprintf("%.0f", float64(rowsFlushed)/elapsedSec))
@@ -840,6 +863,19 @@ func (tw *TableWriter) GetStats() (map[string]interface{}, error) {
 	stats["buffer_size"] = bufSize
 
 	return stats, nil
+}
+
+// GetBufferStats returns only the in-memory buffer row count (cheap, no lake scan).
+func (tw *TableWriter) GetBufferStats() int64 {
+	var bufSize int64
+	for _, mem := range tw.memTables {
+		var cnt int64
+		row := tw.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", mem))
+		if err := row.Scan(&cnt); err == nil {
+			bufSize += cnt
+		}
+	}
+	return bufSize
 }
 
 // TableFQN returns the fully qualified DuckLake table name

@@ -176,6 +176,19 @@ func (m *Manager) GetStats() (map[string]interface{}, error) {
 	return allStats, nil
 }
 
+// GetBufferStats returns only the in-memory buffer totals across all shards.
+// This is much cheaper than GetStats because it skips expensive lake-wide
+// COUNT(*)/MIN/MAX queries that scan Parquet files and block the single
+// DuckDB connection. Use for periodic logging instead of GetStats.
+func (m *Manager) GetBufferStats() (bufferRows int, tableCount int) {
+	for _, shard := range m.sharded.Shards() {
+		br, tc := shard.GetBufferStats()
+		bufferRows += br
+		tableCount += tc
+	}
+	return
+}
+
 // GetTimeRange returns the time range of stored data across all shards
 func (m *Manager) GetTimeRange() (minTs, maxTs int64, err error) {
 	return m.adapter.GetReader().GetTimeRange()

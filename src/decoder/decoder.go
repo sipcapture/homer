@@ -24,6 +24,7 @@ import (
 	reflect "reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -273,7 +274,6 @@ func (h *HEP) parse(packet []byte) error {
 		h.NodeName = strconv.FormatUint(uint64(h.NodeID), 10)
 	}
 
-	logger.Debug(fmt.Sprintf("hep packet: %+v", h))
 	return nil
 }
 
@@ -427,39 +427,43 @@ func stb(s string) []byte {
 	return res
 }
 
+// toUTF8Pool recycles []byte buffers used in the slow path of toUTF8.
+var toUTF8Pool = sync.Pool{New: func() interface{} {
+	b := make([]byte, 0, 2048)
+	return &b
+}}
+
+// toUTF8 returns s with invalid UTF-8 sequences replaced by replacement and
+// null bytes stripped. Optimised for the common case (valid ASCII/UTF-8 SIP
+// payload with no null bytes) which is detected via a single word-sized scan
+// and returned without any allocation.
 func toUTF8(s, replacement string) string {
-	var b strings.Builder
-
-	for i, c := range s {
-		if c != utf8.RuneError && c != '\x00' {
-			continue
-		}
-
-		_, wid := utf8.DecodeRuneInString(s[i:])
-		if wid == 1 {
-			b.Grow(len(s) + len(replacement))
-			b.WriteString(s[:i])
-			s = s[i:]
-			break
-		}
-	}
-
-	// Fast path for unchanged input
-	if b.Cap() == 0 { // didn't call b.Grow above
+	// Fast path: utf8.ValidString and strings.IndexByte both use word-sized
+	// SIMD-friendly loops — much faster than the rune-decoding range scan.
+	if utf8.ValidString(s) && strings.IndexByte(s, '\x00') < 0 {
 		return s
 	}
 
-	invalid := false // previous byte was from an invalid UTF-8 sequence
+	// Slow path: rebuild the string stripping null bytes and replacing invalid
+	// UTF-8 sequences. Reuse a pooled []byte to avoid Builder heap allocation.
+	bp := toUTF8Pool.Get().(*[]byte)
+	b := (*bp)[:0]
+	if cap(b) < len(s) {
+		b = make([]byte, 0, len(s)+len(replacement))
+	}
+
+	invalid := false
 	for i := 0; i < len(s); {
 		c := s[i]
 		if c == '\x00' {
 			i++
 			invalid = false
 			continue
-		} else if c < utf8.RuneSelf {
+		}
+		if c < utf8.RuneSelf {
 			i++
 			invalid = false
-			b.WriteByte(c)
+			b = append(b, c)
 			continue
 		}
 		_, wid := utf8.DecodeRuneInString(s[i:])
@@ -467,14 +471,17 @@ func toUTF8(s, replacement string) string {
 			i++
 			if !invalid {
 				invalid = true
-				b.WriteString(replacement)
+				b = append(b, replacement...)
 			}
 			continue
 		}
 		invalid = false
-		b.WriteString(s[i : i+wid])
+		b = append(b, s[i:i+wid]...)
 		i += wid
 	}
 
-	return b.String()
+	result := string(b)
+	*bp = b
+	toUTF8Pool.Put(bp)
+	return result
 }

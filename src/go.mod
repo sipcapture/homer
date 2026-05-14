@@ -137,3 +137,7 @@ require (
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
+
+// adubovikov fork: eliminates per-string CGO malloc/free in Appender hot path
+// (VectorAssignStringElementLen + duckdb_free per-column visible in perf)
+replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.2

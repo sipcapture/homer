@@ -12,7 +12,6 @@ package writer
 import (
 	"database/sql"
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -57,6 +56,9 @@ type Writer struct {
 
 	// Pipeline profiling (atomic counters, always active)
 	profile pipelineProfile
+
+	// Batched Prometheus flush interval (packets per worker); set from ingest config.
+	metricsFlushPackets int
 
 	// Active connection count (TCP, TLS - connection-oriented protocols)
 	connCount int64
@@ -109,6 +111,9 @@ type Stats struct {
 
 const maxPktLen = 65507
 
+// defaultWorkerMetricsFlushPackets is used when ingest.worker_metrics_flush_packets is 0.
+const defaultWorkerMetricsFlushPackets = 128
+
 // New creates a new Writer module
 func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promCfg *config.PrometheusConfig, remoteLogCfg *config.RemoteLogConfig) (*Writer, error) {
 	queueSize := ingestCfg.QueueSize
@@ -127,6 +132,14 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 		quit:             make(chan struct{}),
 		exitWorker:       make(chan struct{}),
 	}
+
+	mfp := ingestCfg.WorkerMetricsFlushPackets
+	if mfp <= 0 {
+		mfp = defaultWorkerMetricsFlushPackets
+	} else if mfp > 1<<20 {
+		mfp = 1 << 20
+	}
+	w.metricsFlushPackets = mfp
 
 	// Initialize decoder with ingest config
 	w.decoder = decoder.NewDecoder(&decoder.DecoderConfig{
@@ -358,11 +371,15 @@ func (w *Writer) Start() error {
 	}
 
 	// Start workers
+	// Auto-detect: NumCPU/2, minimum 2 (even on single-core hosts/containers), maximum 4.
 	numWorkers := w.ingestConfig.WorkerCount
 	if numWorkers <= 0 {
-		numWorkers = runtime.NumCPU()
-		if numWorkers > 8 {
-			numWorkers = 8
+		numWorkers = runtime.NumCPU() / 2
+		if numWorkers < 2 {
+			numWorkers = 2
+		}
+		if numWorkers > 4 {
+			numWorkers = 4
 		}
 	}
 
@@ -573,8 +590,6 @@ type workerMetrics struct {
 	count     int
 }
 
-const metricsFlushInterval = 128
-
 func (wm *workerMetrics) flush(protocol string) {
 	if wm.count == 0 {
 		return
@@ -642,7 +657,7 @@ func (w *Writer) worker() {
 				atomic.AddUint64(&w.stats.ErrCount, 1)
 				metrics.RecordHEPPacketFailed(protocol, "decode_error")
 				w.buffer.Put(msg.data[:cap(msg.data)])
-				if wm.count >= metricsFlushInterval {
+				if wm.count >= w.metricsFlushPackets {
 					wm.flush(protocol)
 				}
 				continue
@@ -652,7 +667,7 @@ func (w *Writer) worker() {
 				atomic.AddUint64(&w.stats.DupCount, 1)
 				metrics.RecordHEPPacketFailed(protocol, "invalid_proto")
 				w.buffer.Put(msg.data[:cap(msg.data)])
-				if wm.count >= metricsFlushInterval {
+				if wm.count >= w.metricsFlushPackets {
 					wm.flush(protocol)
 				}
 				continue
@@ -667,7 +682,7 @@ func (w *Writer) worker() {
 					atomic.AddUint64(&w.stats.DupCount, 1)
 					metrics.RecordHEPPacketFailed(protocol, "script_discard")
 					w.buffer.Put(msg.data[:cap(msg.data)])
-					if wm.count >= metricsFlushInterval {
+					if wm.count >= w.metricsFlushPackets {
 						wm.flush(protocol)
 					}
 					continue
@@ -730,7 +745,7 @@ func (w *Writer) worker() {
 
 			w.buffer.Put(msg.data[:cap(msg.data)])
 
-			if wm.count >= metricsFlushInterval {
+			if wm.count >= w.metricsFlushPackets {
 				wm.flush(protocol)
 			}
 		}
@@ -798,28 +813,38 @@ func (w *Writer) logStats() {
 			processed := atomic.LoadUint64(&w.stats.HEPCount)
 			dropped := dropCount + errCount + dupCount
 
-			var memKB int
-			var diskRows int64
+			var bufferRows int
+			var tableCount int
 			if w.ducklakeManager != nil {
-				if st, err := w.ducklakeManager.GetStats(); err == nil {
-					if bs, ok := st["total_buffer_size"].(int); ok {
-						memKB = bs / 1024
-					}
-					if rc, ok := st["total_row_count"].(int64); ok {
-						diskRows = rc
-					}
-				}
+				bufferRows, tableCount = w.ducklakeManager.GetBufferStats()
 			}
 
 			conns := atomic.LoadInt64(&w.connCount)
 
+			// Go runtime memory breakdown
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			goHeapMB := ms.HeapInuse / (1024 * 1024)
+			goStackMB := ms.StackInuse / (1024 * 1024)
+			goSysMB := ms.Sys / (1024 * 1024)
+			numGoroutines := runtime.NumGoroutine()
+
 			logger.Info("Writer stats (5min)",
 				"received", received,
 				"dropped", dropped,
+				"drop_queue", dropCount,
+				"drop_err", errCount,
+				"drop_dup", dupCount,
 				"processed", processed,
 				"connections", conns,
-				"mem_kb", memKB,
-				"disk_rows", diskRows,
+				"ducklake_buf_rows", bufferRows,
+				"ducklake_tables", tableCount,
+				"go_heap_mb", goHeapMB,
+				"go_stack_mb", goStackMB,
+				"go_sys_mb", goSysMB,
+				"goroutines", numGoroutines,
+				"queue_len", len(w.inputCh),
+				"queue_cap", cap(w.inputCh),
 			)
 
 			atomic.StoreUint64(&w.stats.PktCount, 0)
@@ -850,8 +875,16 @@ func (w *Writer) logStats() {
 				adpPct = float64(adpNs) * 100.0 / float64(totNs)
 			}
 
-			fmt.Fprintf(os.Stderr, "PIPELINE PROFILE (samples=%d): hep_decode=%.1fµs (%.1f%%), sip_parse=%.1fµs (%.1f%%), adapter_write=%.1fµs (%.1f%%), total=%.1fµs\n",
-				cnt, avgHep, hepPct, avgSip, sipPct, avgAdp, adpPct, avgTot)
+			logger.Info("Pipeline profile",
+				"samples", cnt,
+				"hep_decode_us", fmt.Sprintf("%.1f", avgHep),
+				"hep_pct", fmt.Sprintf("%.1f", hepPct),
+				"sip_parse_us", fmt.Sprintf("%.1f", avgSip),
+				"sip_pct", fmt.Sprintf("%.1f", sipPct),
+				"adapter_us", fmt.Sprintf("%.1f", avgAdp),
+				"adapter_pct", fmt.Sprintf("%.1f", adpPct),
+				"total_us", fmt.Sprintf("%.1f", avgTot),
+			)
 
 		case <-w.quit:
 			return
