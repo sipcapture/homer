@@ -31,7 +31,7 @@ jobs:
         goos: [linux]
         goarch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # push: branch ref (same as the push); manual: requested ref (default devel-homer11)
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.git_ref || github.ref }}
@@ -42,13 +42,13 @@ jobs:
           sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: src/go.mod
           cache-dependency-path: src/go.sum
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -90,8 +90,14 @@ jobs:
           set -euo pipefail
           STAMP=$(date -u +%Y%m%d%H%M%S)
           SHORT=$(git rev-parse --short HEAD)
-          LASTTAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          BASE=${LASTTAG#v}
+          # Prefer latest reachable tag (release lineage). devel-homer11 often has no such tag.
+          LASTTAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -n "$LASTTAG" ]; then
+            BASE="${LASTTAG#v}"
+          else
+            BASE=$(grep -E '^[[:space:]]*VERSION_APPLICATION[[:space:]]*=' src/version.go | head -1 | sed -n 's/.*"\([^"]*\)".*/\1/p')
+            [ -n "$BASE" ] || BASE="0.0.0"
+          fi
           # ~devel… sorts below same BASE release in Debian; safe for RPM via nfpm.
           VERSION="${BASE}~devel.${STAMP}.g${SHORT}"
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
@@ -190,7 +196,7 @@ jobs:
             ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.rpm"
 
       - name: Upload devel package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: homer-core-devel-${{ matrix.goarch }}
           path: |

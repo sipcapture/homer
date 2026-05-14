@@ -13,7 +13,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Get latest stable Go version
         id: latest
@@ -48,7 +48,7 @@ jobs:
 
       - name: Set up Go
         if: steps.check.outputs.needed == 'true'
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ steps.latest.outputs.version }}
 

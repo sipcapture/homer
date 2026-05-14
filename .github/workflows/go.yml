@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       go_version:
-        description: Go version override (e.g. 1.26.2)
+        description: Go version override (e.g. 1.26.3)
         required: false
-        default: "1.26.2"
+        default: "1.26.3"
 
 permissions:
   contents: read
@@ -17,7 +17,7 @@ jobs:
   compile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
 
@@ -26,12 +26,12 @@ jobs:
           sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
-          go-version: ${{ github.event_name == 'workflow_dispatch' && inputs.go_version || '1.26.2' }}
+          go-version: ${{ github.event_name == 'workflow_dispatch' && inputs.go_version || '1.26.3' }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
 
