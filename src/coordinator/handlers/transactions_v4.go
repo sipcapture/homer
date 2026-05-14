@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"regexp"
 	"sort"
@@ -549,6 +550,7 @@ func (h *SearchHandler) queryTransactionMessages(ctx context.Context, req *Trans
 	if err != nil {
 		return nil, err
 	}
+	sortTransactionMessageRowsByTimestampAsc(baseRows)
 
 	if h.correlation == nil || !h.correlation.Has(protoType, eventType) {
 		return baseRows, nil
@@ -581,6 +583,7 @@ func (h *SearchHandler) queryTransactionMessages(ctx context.Context, req *Trans
 			"err", err.Error(), "proto", protoType, "event", eventType)
 		return baseRows, nil
 	}
+	sortTransactionMessageRowsByTimestampAsc(expandedRows)
 	return expandedRows, nil
 }
 
@@ -609,7 +612,7 @@ func transactionMessagesSelectSQL(table string, sessionIDs []string, from, to in
 	case isOTLPMetricsDuckLakeTable(table):
 		limit = fmt.Sprintf(" LIMIT %d", maxOTLPMetricsPerQuery)
 	}
-	return fmt.Sprintf("SELECT * FROM %s WHERE %s ORDER BY timestamp ASC%s", table, where, limit)
+	return fmt.Sprintf("SELECT * FROM %s WHERE %s ORDER BY timestamp ASC NULLS LAST%s", table, where, limit)
 }
 
 // executeTransactionMessagesSQL builds and runs the B2B-aware SELECT for a
@@ -655,6 +658,43 @@ func mergeSessionIDs(base, extras []string) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// sortTransactionMessageRowsByTimestampAsc orders messages for transaction view / API:
+// oldest capture time first (ASC), null or unparseable timestamps last, stable tie-break on ids.
+func sortTransactionMessageRowsByTimestampAsc(rows []map[string]interface{}) {
+	if len(rows) < 2 {
+		return
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		ni := transactionRowSortNanos(rows[i])
+		nj := transactionRowSortNanos(rows[j])
+		if ni != nj {
+			return ni < nj
+		}
+		return transactionRowSortTie(rows[i]) < transactionRowSortTie(rows[j])
+	})
+}
+
+func transactionRowSortNanos(row map[string]interface{}) int64 {
+	for _, key := range []string{"timestamp", "time"} {
+		if t, ok := pcapwriter.RowTimeOptional(row, key); ok {
+			return t.UnixNano()
+		}
+	}
+	return math.MaxInt64
+}
+
+func transactionRowSortTie(row map[string]interface{}) string {
+	for _, k := range []string{"uuid", "span_id", "trace_id", "name"} {
+		if v, ok := row[k]; ok && v != nil {
+			s := strings.TrimSpace(fmt.Sprint(v))
+			if s != "" {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 func (h *SearchHandler) V4TransactionMessages(c echo.Context) error {
