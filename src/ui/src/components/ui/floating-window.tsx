@@ -8,7 +8,7 @@ import { useWindowRegistry } from '@/dashboard/stores/window-registry'
 let topZ = 200
 let cascadeCounter = 0
 
-/** Applied while dragging/resizing so this window stays above siblings (e.g. OTLP detail over Transaction). */
+/** Large z while dragging/resizing (above sibling FloatingWindows); portaled selects use `@/lib/stacking` above this. */
 const FLOAT_INTERACTION_Z_BOOST = 60_000
 
 interface FloatingWindowProps {
