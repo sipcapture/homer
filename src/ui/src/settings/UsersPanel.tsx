@@ -112,6 +112,8 @@ export default function UsersPanel({
           onChange={(e) => onUserFormChange('username', e.target.value)}
           disabled={isEdit}
           placeholder="username"
+          autoComplete="username"
+          name={isEdit ? 'edit-user-username' : 'create-user-username'}
         />
       </Field>
       <Field label="Name">
@@ -119,6 +121,8 @@ export default function UsersPanel({
           value={userForm.name}
           onChange={(e) => onUserFormChange('name', e.target.value)}
           placeholder="Display name"
+          autoComplete="off"
+          name={isEdit ? 'edit-user-name' : 'create-user-name'}
         />
       </Field>
       <Field label="Email">
@@ -126,6 +130,8 @@ export default function UsersPanel({
           value={userForm.email}
           onChange={(e) => onUserFormChange('email', e.target.value)}
           placeholder="user@example.com"
+          autoComplete="email"
+          name={isEdit ? 'edit-user-email' : 'create-user-email'}
         />
       </Field>
       <Field label={isEdit ? 'New password (optional)' : 'Password'}>
@@ -134,6 +140,8 @@ export default function UsersPanel({
           value={userForm.password}
           onChange={(e) => onUserFormChange('password', e.target.value)}
           placeholder={isEdit ? 'Leave blank to keep current' : ''}
+          autoComplete="new-password"
+          name={isEdit ? 'edit-user-password' : 'create-user-password'}
         />
       </Field>
       <Field label="Group">
@@ -195,58 +203,74 @@ export default function UsersPanel({
 
       <Card className="mb-6">
         <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Input
-            placeholder="Search"
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          />
-          <Input
-            placeholder="Username"
-            value={filters.username}
-            onChange={(e) => setFilters({ ...filters, username: e.target.value })}
-          />
-          <Input
-            placeholder="Email"
-            value={filters.email}
-            onChange={(e) => setFilters({ ...filters, email: e.target.value })}
-          />
-          <Select
-            value={filters.is_admin || 'all'}
-            onValueChange={(v) =>
-              setFilters({ ...filters, is_admin: v === 'all' ? '' : v })
-            }
+          {/*
+            Non-submitting form + autocomplete off: password managers otherwise inject the
+            saved login (e.g. "admin") into the username filter when a password field opens in a modal.
+          */}
+          <form
+            autoComplete="off"
+            className="contents"
+            onSubmit={(e) => e.preventDefault()}
           >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Admin?" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Admin?</SelectItem>
-              <SelectItem value="true">true</SelectItem>
-              <SelectItem value="false">false</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={filters.enabled || 'all'}
-            onValueChange={(v) =>
-              setFilters({ ...filters, enabled: v === 'all' ? '' : v })
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Enabled?" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Enabled?</SelectItem>
-              <SelectItem value="true">true</SelectItem>
-              <SelectItem value="false">false</SelectItem>
-            </SelectContent>
-          </Select>
-          <DigitsInput
-            min={1}
-            max={1000}
-            className="w-full"
-            value={filters.limit != null ? String(filters.limit) : ''}
-            onValueChange={(limit) => setFilters({ ...filters, limit })}
-          />
+            <Input
+              placeholder="Search"
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              autoComplete="off"
+              name="users-filter-search"
+            />
+            <Input
+              placeholder="Filter by username"
+              value={filters.username}
+              onChange={(e) => setFilters({ ...filters, username: e.target.value })}
+              autoComplete="off"
+              name="users-filter-username"
+            />
+            <Input
+              placeholder="Filter by email"
+              value={filters.email}
+              onChange={(e) => setFilters({ ...filters, email: e.target.value })}
+              autoComplete="off"
+              name="users-filter-email"
+            />
+            <Select
+              value={filters.is_admin || 'all'}
+              onValueChange={(v) =>
+                setFilters({ ...filters, is_admin: v === 'all' ? '' : v })
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Admin?" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Admin?</SelectItem>
+                <SelectItem value="true">true</SelectItem>
+                <SelectItem value="false">false</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={filters.enabled || 'all'}
+              onValueChange={(v) =>
+                setFilters({ ...filters, enabled: v === 'all' ? '' : v })
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Enabled?" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Enabled?</SelectItem>
+                <SelectItem value="true">true</SelectItem>
+                <SelectItem value="false">false</SelectItem>
+              </SelectContent>
+            </Select>
+            <DigitsInput
+              min={1}
+              max={1000}
+              className="w-full"
+              value={filters.limit != null ? String(filters.limit) : ''}
+              onValueChange={(limit) => setFilters({ ...filters, limit })}
+            />
+          </form>
         </CardContent>
       </Card>
 
@@ -267,7 +291,13 @@ export default function UsersPanel({
           saving={savingUser}
           saveLabel="Save changes"
         >
-          {formFields(true)}
+          <form
+            autoComplete="on"
+            className="contents"
+            onSubmit={(e) => e.preventDefault()}
+          >
+            {formFields(true)}
+          </form>
         </CrudEditDialog>
       )}
 
@@ -325,7 +355,13 @@ export default function UsersPanel({
               <DialogTitle>Create user</DialogTitle>
             </DialogHeader>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {formFields(false)}
+              <form
+                autoComplete="on"
+                className="contents"
+                onSubmit={(e) => e.preventDefault()}
+              >
+                {formFields(false)}
+              </form>
             </div>
             <div className="flex justify-end">
               <Button onClick={onCreate} disabled={savingUser}>
