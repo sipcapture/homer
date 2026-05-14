@@ -25,7 +25,7 @@ jobs:
         goos: [linux]
         goarch: [amd64, arm64]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         submodules: true
     - name: Get current date
@@ -44,12 +44,12 @@ jobs:
         sudo apt update && sudo apt install -y openssl ca-certificates libluajit-5.1-dev
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v6
       with:
-        go-version: '1.26.0'
+        go-version-file: src/go.mod
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         node-version: 22
 
@@ -205,7 +205,7 @@ jobs:
 
     - name: Upload package artifacts (Packagecloud job)
       if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release) }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: homer-core-pkg-${{ matrix.goarch }}
         path: |
@@ -221,7 +221,7 @@ jobs:
     env:
       PACKAGECLOUD_TOKEN: ${{ secrets.PACKAGECLOUD_TOKEN }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           path: pkgs
           pattern: homer-core-pkg-*
