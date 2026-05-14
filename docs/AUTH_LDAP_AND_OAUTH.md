@@ -8,11 +8,15 @@ For JWT lifecycle and logout, see the notes at the end.
 
 ## Internal DuckDB authentication
 
-> **Implementation:** homer-core accepts **`coordinator.auth`** as a JSON **string** (`"internal"`, backward compatible), as **`{"type":"internal"}`** (recommended), or as a legacy **object** with only `admin_user` / `admin_password_hash`. **`--reset-admin-password`** is documented below.
+> **Implementation:** homer-core accepts **`coordinator.auth`** as a JSON **string** (`"internal"`, backward compatible), as **`{"type":"internal"}`** (recommended), or as an **object** without `type` (normalized to **`internal`**) with optional **`admin_user`** / **`admin_password_hash`**. **`--reset-admin-password`** is documented below.
 
 Password login with **`type`** omitted or **`internal`** on `POST /api/v4/auth/sessions` checks credentials **only** against rows in the coordinator **settings DuckDB** table **`users`** (`coordinator.settings_db_path`). There is **no** separate “login from JSON only” path: a user must exist in `users` with a matching **SHA-256** `password_hash` (hex) of the presented password.
 
 If **`coordinator.auth` is omitted** entirely (no `auth` key), the loader behaves like **`{"type":"internal"}`**: default admin `admin`, default bootstrap hash for **`sipcapture`**, and the same startup insert into **`users`** when missing.
+
+### Password login fallback (`fallback_auth_type`)
+
+Optional **`coordinator.auth.fallback_auth_type`**: **`internal`** or **`ldap`**. On **`POST /api/v4/auth/sessions`** (and legacy v3 login), if authentication with the JSON **`type`** field fails, the coordinator tries **`fallback_auth_type`** once when it differs from the first attempt. Example: UI uses LDAP first; set **`"fallback_auth_type": "internal"`** so local **`users`** can still sign in when LDAP rejects the password or LDAP is temporarily unavailable.
 
 ### Recommended: `coordinator.auth` object with `type`
 

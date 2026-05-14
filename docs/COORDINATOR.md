@@ -211,8 +211,8 @@ The Coordinator module provides REST API for frontend applications and orchestra
 | **`{"type":"internal"}`** (recommended) | Same bootstrap and defaults as the string `"internal"` (admin `admin`, default hash for **`sipcapture`**). On startup, if no `users` row exists for that admin username, the coordinator inserts it once. Login checks **`users`** only. |
 | **String** `"internal"` | Backward compatible; same semantics as `{"type":"internal"}`. |
 | **`{"type":"ldap"}`** / **`{"type":"oauth"}`** | Declares preferred password-auth mode metadata; does **not** enable LDAP/OAuth by itself (`coordinator.ldap`, `oauth2_provider` still apply). No internal bootstrap. |
-| **Omitted** (`coordinator` without `auth`) | Same as **`{"type":"internal"}`** (default admin + sipcapture bootstrap), unless legacy credentials below apply. |
-| **Object** without `type` | If `admin_user` is unset or `admin` and `admin_password_hash` is empty or the default sipcapture hash → **`internal`**. Otherwise legacy `admin_user` / `admin_password_hash` only — see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md). |
+| **Omitted** (`coordinator` without `auth`) | Same as **`{"type":"internal"}`** (default admin + sipcapture bootstrap). |
+| **Object** without `type` (or empty `type`) | Same as **`{"type":"internal"}`**: internal bootstrap applies; unset `admin_user` / `admin_password_hash` get defaults, or your explicit values are used. |
 
 **First login (`type` internal or string `"internal"`):** username `admin`, password `sipcapture` until changed in Settings → Users or in DuckDB.
 
@@ -236,9 +236,10 @@ echo -n "your-password" | sha256sum | cut -d' ' -f1
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `type` | string | *(see table above)* | `internal`, `ldap`, or `oauth`. If the whole `auth` section is omitted, the effective type is **`internal`**. |
-| `admin_user` | string | "admin" | Admin username (`type` internal or legacy object). |
+| `type` | string | *(see table above)* | `internal`, `ldap`, or `oauth`. If the whole `auth` section is omitted, or `type` is omitted / empty on the object, the effective type is **`internal`**. |
+| `admin_user` | string | "admin" | Admin username when **`type`** is **`internal`** (including when `type` is omitted and normalized to internal). |
 | `admin_password_hash` | string | "" | SHA256 hex. For **`type` internal** (or omitted auth normalized to internal), empty means the default **`sipcapture`** hash after load. **`--reset-admin-password`** reads this field; it must be non-empty in the loaded config (default internal configs satisfy this after normalization). |
+| `fallback_auth_type` | string | "" | If set to **`internal`** or **`ldap`**, password login tries this backend **after** the client-selected `type` fails (wrong password or backend unavailable). Must not be **`oauth`**. Empty disables the second attempt. |
 
 ### oauth2_provider
 

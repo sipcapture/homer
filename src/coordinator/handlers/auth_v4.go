@@ -16,7 +16,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
-	"github.com/sipcapture/homer-core/src/coordinator/services"
 )
 
 type LoginResponseV4 struct {
@@ -97,20 +96,8 @@ func (h *AuthHandler) V4CreateSession(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid authentication type")
 	}
 
-	var user *services.User
-	var err error
-	if authType == "ldap" {
-		if h.ldapAuth == nil || !h.ldapAuth.Enabled() {
-			return writeError(c, http.StatusBadRequest, "Bad Request", "LDAP authentication is not enabled on this server")
-		}
-		user, err = h.ldapAuth.Authenticate(c.Request().Context(), req.Username, req.Password)
-	} else {
-		if h.userService == nil {
-			return writeError(c, http.StatusUnauthorized, "Unauthorized", "Authentication service not configured")
-		}
-		user, err = h.userService.Authenticate(c.Request().Context(), req.Username, req.Password)
-	}
-	if err != nil {
+	user, authErr := h.authenticatePasswordWithFallback(c.Request().Context(), req.Username, req.Password, authType)
+	if authErr != nil || user == nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Invalid credentials")
 	}
 
