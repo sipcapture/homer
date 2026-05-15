@@ -791,7 +791,7 @@ func TestLoad_CoordinatorAuthObjectTypeInvalid(t *testing.T) {
 	}
 }
 
-func TestLoad_CoordinatorAuthObjectKeepsFlagFalse(t *testing.T) {
+func TestLoad_CoordinatorAuthObjectWithoutTypeDefaultsToInternal(t *testing.T) {
 	path := writeTmpConfig(t, `{
   "coordinator": {
     "enable": true,
@@ -807,11 +807,11 @@ func TestLoad_CoordinatorAuthObjectKeepsFlagFalse(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	a := cfg.Coordinator.Auth
-	if a.AuthFromInternalString {
-		t.Fatal("AuthFromInternalString: want false for object auth")
+	if !a.AuthFromInternalString {
+		t.Fatal("AuthFromInternalString: want true when type omitted (internal)")
 	}
-	if a.Type != "" {
-		t.Fatalf("Type: want empty for legacy object, got %q", a.Type)
+	if a.Type != "internal" {
+		t.Fatalf("Type: want internal, got %q", a.Type)
 	}
 	if a.AdminUser != "root" || a.AdminPasswordHash != "deadbeef" {
 		t.Fatalf("auth fields: %+v", a)
@@ -824,6 +824,34 @@ func TestLoad_CoordinatorAuthInvalidString(t *testing.T) {
 }`)
 	if _, err := Load(path); err == nil {
 		t.Fatal("expected error for invalid coordinator.auth string")
+	}
+}
+
+func TestLoad_CoordinatorAuthFallbackTypeInvalid(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": {
+    "enable": true,
+    "auth": { "type": "internal", "fallback_auth_type": "oauth" }
+  }
+}`)
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for invalid coordinator.auth.fallback_auth_type")
+	}
+}
+
+func TestLoad_CoordinatorAuthFallbackTypeOK(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": {
+    "enable": true,
+    "auth": { "type": "internal", "fallback_auth_type": "ldap" }
+  }
+}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Coordinator.Auth.FallbackAuthType != "ldap" {
+		t.Fatalf("FallbackAuthType: got %q", cfg.Coordinator.Auth.FallbackAuthType)
 	}
 }
 
@@ -853,6 +881,22 @@ func TestAuthConfigMarshalJSON_InternalCustomAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(b) != `{"type":"internal","admin_user":"root"}` {
+		t.Fatalf("marshal: got %s", b)
+	}
+}
+
+func TestAuthConfigMarshalJSON_InternalWithFallback(t *testing.T) {
+	b, err := json.Marshal(AuthConfig{
+		AuthFromInternalString: true,
+		Type:                   "internal",
+		AdminUser:              "admin",
+		AdminPasswordHash:      DefaultInternalAuthPasswordHash,
+		FallbackAuthType:       "ldap",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != `{"type":"internal","fallback_auth_type":"ldap"}` {
 		t.Fatalf("marshal: got %s", b)
 	}
 }

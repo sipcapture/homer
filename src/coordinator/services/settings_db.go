@@ -10,12 +10,26 @@ package services
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 )
 
 // OpenSettingsDB opens the DuckDB file for users/settings.
+//
+// On a fresh installation the parent directory (e.g. /var/lib/homer)
+// usually does not exist yet — DuckDB itself will not create it and
+// fails with "IO Error: Cannot open file ... No such file or directory".
+// Mirror what storage/ducklake does for its catalog/data paths and
+// ensure the parent directory exists before opening the database.
 func OpenSettingsDB(path string) (*sql.DB, error) {
 	if path == "" {
 		return nil, fmt.Errorf("settings_db_path is empty")
+	}
+	dir := filepath.Dir(path)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("failed to create settings db directory %s: %w", dir, err)
+		}
 	}
 	db, err := sql.Open("duckdb", path)
 	if err != nil {

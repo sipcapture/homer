@@ -726,11 +726,14 @@ const DefaultInternalAuthPasswordHash = "883ffc1f37fd0fe542b0fb9740035c4383e7d97
 // AuthConfig configures authentication
 type AuthConfig struct {
 	// Type selects the primary password-auth mode: "internal" (DuckDB users +
-	// optional bootstrap), "ldap", or "oauth". Empty with only admin_user /
-	// admin_password_hash is legacy object form (no internal bootstrap).
+	// optional bootstrap), "ldap", or "oauth". If empty or omitted on the
+	// object, Load normalizes to "internal".
 	Type              string `json:"type,omitempty" mapstructure:"type"`
 	AdminUser         string `json:"admin_user,omitempty" mapstructure:"admin_user" default:"admin"`
 	AdminPasswordHash string `json:"admin_password_hash,omitempty" mapstructure:"admin_password_hash" default:""`
+	// FallbackAuthType, if set to "internal" or "ldap", is tried when password login
+	// with the client-selected type fails (wrong credentials or backend unavailable).
+	FallbackAuthType string `json:"fallback_auth_type,omitempty" mapstructure:"fallback_auth_type"`
 	// AuthFromInternalString is true when coordinator.auth was the JSON string "internal",
 	// or after normalization when type is "internal" (DuckDB bootstrap path).
 	AuthFromInternalString bool `json:"-" mapstructure:"-"`
@@ -741,9 +744,10 @@ type AuthConfig struct {
 func (a AuthConfig) MarshalJSON() ([]byte, error) {
 	if a.AuthFromInternalString || strings.EqualFold(strings.TrimSpace(a.Type), "internal") {
 		type out struct {
-			Type              string `json:"type"`
-			AdminUser         string `json:"admin_user,omitempty"`
-			AdminPasswordHash string `json:"admin_password_hash,omitempty"`
+			Type               string `json:"type"`
+			AdminUser          string `json:"admin_user,omitempty"`
+			AdminPasswordHash  string `json:"admin_password_hash,omitempty"`
+			FallbackAuthType   string `json:"fallback_auth_type,omitempty"`
 		}
 		o := out{Type: "internal"}
 		if u := strings.TrimSpace(a.AdminUser); u != "" && u != "admin" {
@@ -752,17 +756,22 @@ func (a AuthConfig) MarshalJSON() ([]byte, error) {
 		if h := strings.TrimSpace(a.AdminPasswordHash); h != "" && h != DefaultInternalAuthPasswordHash {
 			o.AdminPasswordHash = a.AdminPasswordHash
 		}
+		if fb := strings.TrimSpace(a.FallbackAuthType); fb != "" {
+			o.FallbackAuthType = fb
+		}
 		return json.Marshal(o)
 	}
 	type out struct {
-		Type              string `json:"type,omitempty"`
-		AdminUser         string `json:"admin_user,omitempty"`
-		AdminPasswordHash string `json:"admin_password_hash,omitempty"`
+		Type               string `json:"type,omitempty"`
+		AdminUser          string `json:"admin_user,omitempty"`
+		AdminPasswordHash  string `json:"admin_password_hash,omitempty"`
+		FallbackAuthType   string `json:"fallback_auth_type,omitempty"`
 	}
 	return json.Marshal(out{
-		Type:              strings.TrimSpace(a.Type),
-		AdminUser:         a.AdminUser,
-		AdminPasswordHash: a.AdminPasswordHash,
+		Type:               strings.TrimSpace(a.Type),
+		AdminUser:          a.AdminUser,
+		AdminPasswordHash:  a.AdminPasswordHash,
+		FallbackAuthType:  strings.TrimSpace(a.FallbackAuthType),
 	})
 }
 
@@ -795,15 +804,13 @@ func decodeCoordinatorAuthHook(from reflect.Type, to reflect.Type, data any) (an
 }
 
 // normalizeCoordinatorAuth applies coordinator.auth.type after Unmarshal (object
-// {"type":"internal"} vs legacy string "internal" from decodeCoordinatorAuthHook).
+// {"type":"internal"} vs JSON string "internal" from decodeCoordinatorAuthHook).
+// An empty type always becomes "internal".
 func normalizeCoordinatorAuth(cfg *CoordinatorConfig) error {
 	auth := &cfg.Auth
-	t := strings.TrimSpace(strings.ToLower(auth.Type))
-	auth.Type = t
-
-	if auth.AuthFromInternalString && auth.Type == "" {
+	auth.Type = strings.TrimSpace(strings.ToLower(auth.Type))
+	if auth.Type == "" {
 		auth.Type = "internal"
-		t = "internal"
 	}
 
 	switch auth.Type {
@@ -817,28 +824,16 @@ func normalizeCoordinatorAuth(cfg *CoordinatorConfig) error {
 		}
 	case "ldap", "oauth":
 		auth.AuthFromInternalString = false
-	case "":
-		// Omitted coordinator.auth, or legacy object without type.
-		// Default to internal when there is no explicit non-default credential pair:
-		// only admin (or unset) and empty or default sipcapture hash.
-		u := strings.TrimSpace(auth.AdminUser)
-		if u == "" {
-			u = "admin"
-		}
-		hash := strings.TrimSpace(auth.AdminPasswordHash)
-		if !strings.EqualFold(u, "admin") {
-			break
-		}
-		if hash != "" && !strings.EqualFold(hash, DefaultInternalAuthPasswordHash) {
-			break
-		}
-		auth.AuthFromInternalString = true
-		auth.Type = "internal"
-		auth.AdminUser = "admin"
-		auth.AdminPasswordHash = DefaultInternalAuthPasswordHash
 	default:
 		return fmt.Errorf("coordinator.auth.type: unsupported %q (allowed: internal, ldap, oauth, or omit)", auth.Type)
 	}
+	fb := strings.TrimSpace(strings.ToLower(auth.FallbackAuthType))
+	if fb != "" {
+		if fb != "internal" && fb != "ldap" {
+			return fmt.Errorf("coordinator.auth.fallback_auth_type: unsupported %q (allowed: internal, ldap, or omit)", auth.FallbackAuthType)
+		}
+	}
+	auth.FallbackAuthType = fb
 	return nil
 }
 

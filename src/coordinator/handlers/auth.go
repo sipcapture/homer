@@ -8,9 +8,11 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -33,6 +35,8 @@ type AuthHandler struct {
 
 	authTokenSvc *services.AuthTokenService
 	apiSettings  config.APISettingsConfig
+	// fallbackAuthType is coordinator.auth.fallback_auth_type (internal|ldap); empty disables.
+	fallbackAuthType string
 }
 
 // OAuthProvider represents a configured OAuth2 provider
@@ -59,18 +63,63 @@ func NewAuthHandlerWithUserService(
 	authTokenSvc *services.AuthTokenService,
 	apiSettings config.APISettingsConfig,
 	ldapAuth *services.LDAPAuthService,
+	fallbackAuthType string,
 ) *AuthHandler {
 	return &AuthHandler{
-		jwtSecret:    secret,
-		expireHours:  expireHours,
-		userService:  userService,
-		ldapAuth:     ldapAuth,
-		sessionStore: NewSessionStore(),
-		oneTimeStore: NewOneTimeTokenStore(),
-		providers:    providers,
-		authTokenSvc: authTokenSvc,
-		apiSettings:  apiSettings,
+		jwtSecret:          secret,
+		expireHours:        expireHours,
+		userService:        userService,
+		ldapAuth:           ldapAuth,
+		sessionStore:       NewSessionStore(),
+		oneTimeStore:       NewOneTimeTokenStore(),
+		providers:          providers,
+		authTokenSvc:       authTokenSvc,
+		apiSettings:        apiSettings,
+		fallbackAuthType: fallbackAuthType,
 	}
+}
+
+// tryPasswordBackend authenticates with a single backend ("internal" or "ldap").
+func (h *AuthHandler) tryPasswordBackend(ctx context.Context, username, password, authType string) (*services.User, error) {
+	switch strings.ToLower(strings.TrimSpace(authType)) {
+	case "ldap":
+		if h.ldapAuth == nil || !h.ldapAuth.Enabled() {
+			return nil, fmt.Errorf("ldap not available")
+		}
+		return h.ldapAuth.Authenticate(ctx, username, password)
+	case "internal":
+		if h.userService == nil {
+			return nil, fmt.Errorf("internal authentication not configured")
+		}
+		return h.userService.Authenticate(ctx, username, password)
+	default:
+		return nil, fmt.Errorf("invalid authentication type")
+	}
+}
+
+// authenticatePasswordWithFallback tries the client-selected backend, then coordinator.auth.fallback_auth_type if set and different.
+func (h *AuthHandler) authenticatePasswordWithFallback(ctx context.Context, username, password, primaryType string) (*services.User, error) {
+	pt := strings.ToLower(strings.TrimSpace(primaryType))
+	if pt == "" {
+		pt = "internal"
+	}
+	chain := []string{pt}
+	fb := strings.TrimSpace(strings.ToLower(h.fallbackAuthType))
+	if fb != "" && fb != pt {
+		chain = append(chain, fb)
+	}
+	var lastErr error
+	for _, t := range chain {
+		u, err := h.tryPasswordBackend(ctx, username, password, t)
+		if err == nil && u != nil {
+			return u, nil
+		}
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("invalid credentials")
+	}
+	return nil, lastErr
 }
 
 // LoginRequest represents the login request body
@@ -78,6 +127,7 @@ type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	// Type selects the password backend: "internal" (default) or "ldap" when LDAP is enabled.
+	// If login fails, coordinator.auth.fallback_auth_type may be tried server-side.
 	Type string `json:"type"`
 }
 
@@ -107,35 +157,19 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		})
 	}
 
-	// Authenticate user
-	var user *services.User
-	var err error
-
+	// Authenticate user (optional second backend from coordinator.auth.fallback_auth_type).
 	authType := strings.ToLower(strings.TrimSpace(req.Type))
 	if authType == "" {
 		authType = "internal"
 	}
-
-	if authType == "ldap" {
-		if h.ldapAuth == nil || !h.ldapAuth.Enabled() {
-			return c.JSON(http.StatusBadRequest, map[string]interface{}{
-				"error": "LDAP authentication is not enabled on this server",
-			})
-		}
-		user, err = h.ldapAuth.Authenticate(c.Request().Context(), req.Username, req.Password)
-	} else if authType == "internal" {
-		if h.userService == nil {
-			return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-				"error": "Authentication service not configured",
-			})
-		}
-		user, err = h.userService.Authenticate(c.Request().Context(), req.Username, req.Password)
-	} else {
+	if authType != "internal" && authType != "ldap" {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{
 			"error": "Invalid authentication type",
 		})
 	}
-	if err != nil {
+
+	user, authErr := h.authenticatePasswordWithFallback(c.Request().Context(), req.Username, req.Password, authType)
+	if authErr != nil || user == nil {
 		return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 			"error": "Invalid credentials",
 		})
