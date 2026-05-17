@@ -47,8 +47,11 @@ import {
 const NETCHESS_GAME_ID = 'netchess'
 
 const BOARD_CHROME_PX = 10
-const CELL_MIN_PX = 22
-const CELL_MAX_PX = 64
+// See ChessPanel.tsx for the rationale: an 8x8 board hits the
+// auto-fit ceiling quickly, so the clamps that gate ZOOM_MIN/ZOOM_MAX
+// need to be wider than the defaults used by the Tetris-shaped games.
+const CELL_MIN_PX = 16
+const CELL_MAX_PX = 160
 const SIDEBAR_PX = 220
 
 type ConnState =

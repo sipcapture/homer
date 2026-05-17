@@ -60,8 +60,14 @@ const CHESS_GAME_ID = 'chess'
 const PERSIST_KEY = 'homer_chess_state_v1'
 
 const BOARD_CHROME_PX = 10
-const CELL_MIN_PX = 22
-const CELL_MAX_PX = 64
+// 8x8 boards reach the auto-fit ceiling far earlier than the 10x20
+// Tetris-style arenas this hook was designed for. Keep the floor low
+// enough to honour ZOOM_MIN=0.5 even on tiny widgets, and the ceiling
+// high enough that ZOOM_MAX=2.0 on a typical widget produces a
+// visibly larger board (the wrapper scrolls when the result exceeds
+// the container).
+const CELL_MIN_PX = 16
+const CELL_MAX_PX = 160
 const SIDEBAR_PX = 220
 
 type TimeControlId = 'untimed' | 'bullet' | 'blitz' | 'rapid'
