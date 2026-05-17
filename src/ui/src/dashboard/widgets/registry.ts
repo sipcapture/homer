@@ -275,10 +275,14 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
     label: 'Netris',
     icon: 'game',
     category: 'Games',
-    minW: 8,
+    // The 10x20 arena + 200 px opponent sidebar fits comfortably in
+    // ~8 grid columns. The previous 12-col default left a lot of
+    // empty horizontal space inside the flex-1 wrapper because the
+    // arena is `flex-shrink-0` and the cell clamp tops out at 48 px.
+    minW: 5,
     minH: 8,
-    defaultW: 12,
-    defaultH: 14,
+    defaultW: 8,
+    defaultH: 12,
   },
   chess: {
     component: ChessPanel,
