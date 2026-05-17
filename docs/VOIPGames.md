@@ -2,6 +2,17 @@
 
 The dashboard includes seven mini-games under the **Games** category. Widgets are added from the dashboard palette (`registry.ts`: `packet_defender`, `sip_dialog_master`, `jitter_buffer_hero`, `sipetris`, `netris`, `chess`, `netchess`). Five are educational (SIP/RTP-themed) and two are general-purpose chess games. The chess pair shares one rules engine (`chess.js` on the UI, `notnil/chess` on the server) and one presentational board component (`ChessBoard.tsx`).
 
+### Default dashboards
+
+On first login (or after a `Reset` from `DashboardSettingsDialog`) the coordinator seeds four dashboards (`DashboardService.ResetDashboards`):
+
+1. **Home** — SIP Call Search + Results + Clock.
+2. **Smart Search** — Protocol Search + Results + Time Chart.
+3. **Games** — Packet Defender, SIP Dialog Master, Jitter Buffer Hero, SIPetris, Chess. Single-player only — no coordinator hubs required.
+4. **NetGames** — Netris, NetChess. Multiplayer over WebSocket; both widgets show a connection error until the corresponding hub is reachable, so we keep them on a separate tab.
+
+Users can rename, reorder, or delete any of these dashboards at runtime; the seed only runs when `ListDashboards` returns an empty set.
+
 ---
 
 ## Shared controls
