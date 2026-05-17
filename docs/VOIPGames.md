@@ -1,6 +1,6 @@
-# VoIP Games (Homer Next-Gen dashboard)
+# Games (Homer Next-Gen dashboard)
 
-The dashboard includes five educational mini-games under the **Games** category. Widgets are added from the dashboard palette (`registry.ts`: `packet_defender`, `sip_dialog_master`, `jitter_buffer_hero`, `sipetris`, `netris`). They reinforce SIP/RTP terminology and typical traffic-handling patterns in a lightweight, interactive way.
+The dashboard includes seven mini-games under the **Games** category. Widgets are added from the dashboard palette (`registry.ts`: `packet_defender`, `sip_dialog_master`, `jitter_buffer_hero`, `sipetris`, `netris`, `chess`, `netchess`). Five are educational (SIP/RTP-themed) and two are general-purpose chess games. The chess pair shares one rules engine (`chess.js` on the UI, `notnil/chess` on the server) and one presentational board component (`ChessBoard.tsx`).
 
 ---
 
@@ -220,6 +220,87 @@ The relay is intentionally thin: server enforces matchmaking, garbage translatio
 
 ---
 
+## 6. Chess (`chess`)
+
+**Concept:** single-player chess against a built-in bot or — when the operator enables the MCP LLM bridge — against an LLM opponent. The minimax bot runs in a Web Worker so the UI never blocks. The widget is general-purpose entertainment; it does not consume captured traffic.
+
+### Controls
+
+| Control | Behavior |
+|---------|----------|
+| **Time control** | `Untimed` / `Bullet 1+0` / `Blitz 3+2` / `Rapid 10+5` (Fischer increment). Changes only apply on the next `New game`. |
+| **Side** | `White` / `Black` / `Random` — applied on the next new game. |
+| **Level** | 1–4 search depth slider for the bot (also passed as a hint to the LLM). |
+| **Bot / LLM** | Toggle between the local minimax and the MCP LLM. Only shown if `GET /api/v4/games/chess/llm-status` reports `{ enabled: true }`. |
+| **New game** | Resets the position, applies the current side/time-control. |
+| **Takeback** | Pops two plies (your move + bot's reply) so it's your move again. |
+| **Resign** | Ends the game in your loss. |
+| **Export PGN** | Copies the full PGN of the played game to the clipboard. |
+
+### LLM mode
+
+When LLM mode is active, every bot move is requested from the coordinator endpoint `POST /api/v4/games/chess/llm-move`. The coordinator:
+
+1. Calls the configured `mcp.llm` provider via the shared `src/mcp/llm.go` client with a fixed chess system prompt.
+2. Validates the model's reply via `github.com/notnil/chess` (`ValidateUCI`).
+3. If the model returns an illegal or unparseable move, falls back to a server-side greedy picker so the widget always receives a legal UCI for non-terminal positions. The response carries `source: "llm" | "fallback"` and the widget shows an **`fallback`** pill when the fallback path was used.
+
+The LLM client is shared with MCP search, so there's no separate configuration. To enable: set `mcp.llm.enable = true` plus the usual `base_url` / `model` / `api_key` in your homer config.
+
+### Persistence
+
+A game in progress is saved to `localStorage` (`homer_chess_state_v1`) including PGN, side, time control, clocks, mode, and level. It restores across page reloads. Local play state is per-browser; not synced.
+
+---
+
+## 7. NetChess (`netchess`)
+
+**Concept:** two-player chess over the coordinator. Lobby + WebSocket relay, but unlike Netris **the server is the authoritative game state**: it holds the `*notnil/chess.Game`, validates every move, manages clocks, and emits game-over frames. Clients render whatever FEN the server hands them.
+
+### Controls
+
+| Control | Behavior |
+|---------|----------|
+| **Quick / Room / Spectate** | `Quick` auto-pairs you with the next waiting player. `Room` joins/creates a named room (or click `Random` for a 6-letter code). `Spectate` joins an existing room read-only (up to 8 spectators). |
+| **Time control** | `Bullet`, `Blitz`, `Rapid`, `Classical` — first joiner of a room sets the time control, second joiner inherits it. |
+| **Colour** | `White` / `Black` / `Random` — applied at the join handshake. |
+| **Ready** | Sent by both players to start the game (mirrors Netris). |
+| **Offer draw / Takeback / Resign** | Standard chess game-management buttons. Each generates a server-validated transition. |
+
+### Authoritative state
+
+Per room the server tracks: white/black slot, spectator list (cap 8), `*chess.Game`, white/black clocks in ms, a `time.AfterFunc` flag timer, and pending draw / takeback offers. Every client `move` frame is checked against `game.ValidMoves()` and the side-to-move; illegal frames receive an `error` envelope and the game state is unchanged. Clocks tick on the server (`time.AfterFunc` for the flag, recomputed at each move from wall-clock deltas) so a backgrounded / throttled tab cannot gain time.
+
+### Wire protocol
+
+JSON envelope shared with the client; constants live in `src/coordinator/games/netchess/protocol.go`:
+
+| Frame | Direction | Notes |
+|-------|-----------|-------|
+| `hello`, `ready`, `move{uci}`, `resign`, `draw_{offer,accept,decline}`, `takeback_{request,accept,decline}`, `chat{text}` | client → server | one-way commands |
+| `matched{you, opponent, color, room, initial_ms, increment_ms, spectator?}` | server → client | issued on join + on opponent arrival |
+| `start{fen, white_ms, black_ms}` | server → client | both players have sent `ready` |
+| `opponent_move{uci, san, fen, white_ms, black_ms}` | server → both players + spectators | post-validation broadcast |
+| `clock_sync{fen, white_ms, black_ms}` | server → all | after takeback or periodic re-sync |
+| `game_over{result, reason, white_ms, black_ms}` | server → all | `result ∈ {1-0, 0-1, 1/2-1/2}`, `reason ∈ {checkmate, stalemate, resignation, agreement, flag, insufficient_material, fifty_move, threefold_repetition, opponent_disconnect}` |
+| `draw_offered{from}`, `takeback_offered{from}`, `opponent_left`, `waiting_timeout`, `error{message}` | server → recipient | one-shot notifications |
+
+### Source
+
+| Component | File |
+|-----------|------|
+| UI widget | `src/ui/src/dashboard/widgets/NetChessPanel.tsx` |
+| Reusable board | `src/ui/src/dashboard/widgets/ChessBoard.tsx` |
+| Shared chess core | `src/ui/src/dashboard/widgets/chessCore.ts` (wraps `chess.js`) |
+| Client engine (worker) | `src/ui/src/dashboard/widgets/chessEngine.ts`, `chessEngine.worker.ts` (used by `chess` only) |
+| WS client | `src/ui/src/api.ts` (`openNetChessSocket`) |
+| LLM endpoints | `src/ui/src/api.ts` (`fetchChessLLMStatus`, `postChessLLMMove`) |
+| Server-side rules + LLM bridge | `src/coordinator/games/chess/engine.go`, `llm.go` |
+| Server hub | `src/coordinator/games/netchess/hub.go`, `protocol.go` |
+| HTTP / WS handlers | `src/coordinator/handlers/games_v4.go` (`V4NetChess`, `V4ChessLLMMove`, `V4ChessLLMStatus`) |
+
+---
+
 ## Source locations
 
 | Game | File |
@@ -229,6 +310,8 @@ The relay is intentionally thin: server enforces matchmaking, garbage translatio
 | Jitter Buffer Hero | `src/ui/src/dashboard/widgets/JitterBufferHeroPanel.tsx` |
 | SIPetris | `src/ui/src/dashboard/widgets/SIPetrisPanel.tsx` |
 | Netris | `src/ui/src/dashboard/widgets/NetrisPanel.tsx` |
+| Chess | `src/ui/src/dashboard/widgets/ChessPanel.tsx` |
+| NetChess | `src/ui/src/dashboard/widgets/NetChessPanel.tsx` |
 | Widget registration | `src/ui/src/dashboard/widgets/registry.ts` |
 
-The single-player games (Packet Defender, SIP Dialog Master, Jitter Buffer Hero, SIPetris) are **not** wired to live Homer capture; they are **local dashboard UI** only. **Netris** is the one exception — it talks to homer-core's coordinator over a JWT-protected WebSocket (`/api/v4/games/netris`) but only for two-player relay; it does not consume captured traffic.
+The single-player widgets (Packet Defender, SIP Dialog Master, Jitter Buffer Hero, SIPetris, Chess in bot mode) are **not** wired to live Homer capture; they are **local dashboard UI** only. **Netris** and **NetChess** talk to homer-core's coordinator over JWT-protected WebSockets (`/api/v4/games/netris`, `/api/v4/games/netchess`); the **Chess LLM mode** also relies on the coordinator (`/api/v4/games/chess/llm-{status,move}`). None of these endpoints consume captured traffic.

@@ -18,6 +18,8 @@ const SIPDialogMasterPanel = lazy(() => import('./SIPDialogMasterPanel.jsx'))
 const JitterBufferHeroPanel = lazy(() => import('./JitterBufferHeroPanel.jsx'))
 const SIPetrisPanel = lazy(() => import('./SIPetrisPanel'))
 const NetrisPanel = lazy(() => import('./NetrisPanel'))
+const ChessPanel = lazy(() => import('./ChessPanel'))
+const NetChessPanel = lazy(() => import('./NetChessPanel'))
 
 /**
  * Preset variant of a base widget type. Lets the AddWidgetDialog show a
@@ -271,6 +273,26 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
   netris: {
     component: NetrisPanel,
     label: 'Netris',
+    icon: 'game',
+    category: 'Games',
+    minW: 8,
+    minH: 8,
+    defaultW: 12,
+    defaultH: 14,
+  },
+  chess: {
+    component: ChessPanel,
+    label: 'Chess',
+    icon: 'game',
+    category: 'Games',
+    minW: 6,
+    minH: 8,
+    defaultW: 8,
+    defaultH: 12,
+  },
+  netchess: {
+    component: NetChessPanel,
+    label: 'NetChess',
     icon: 'game',
     category: 'Games',
     minW: 8,
