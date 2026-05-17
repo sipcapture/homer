@@ -295,10 +295,13 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
     label: 'NetChess',
     icon: 'game',
     category: 'Games',
-    minW: 8,
+    // Mirror the `chess` widget — the 220 px sidebar is identical and
+    // the board itself is 8x8, so there is no good reason for the
+    // NetChess board to render wider than the single-player one.
+    minW: 6,
     minH: 8,
-    defaultW: 12,
-    defaultH: 14,
+    defaultW: 8,
+    defaultH: 12,
   },
 }
 

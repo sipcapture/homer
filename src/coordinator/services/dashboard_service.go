@@ -239,13 +239,15 @@ func (s *DashboardService) ResetDashboards(ctx context.Context, username string)
 
 	// Default "NetGames" dashboard with the multiplayer game widgets. They
 	// require coordinator hubs (netris, netchess), so we surface them in a
-	// dedicated tab to avoid surprising single-user installs.
+	// dedicated tab to avoid surprising single-user installs. NetChess
+	// matches the single-player Chess widget footprint (8x12) rather than
+	// the full 12-wide arena Netris needs.
 	netGamesData, _ := json.Marshal(map[string]interface{}{
 		"name": "NetGames", "param": "netgames", "shared": false, "type": 3, "weight": 40,
 		"config": map[string]interface{}{"columns": 12, "grid_type": "fit", "locked": false},
 		"widgets": []map[string]interface{}{
 			{"id": "netris-1", "type": "netris", "x": 0, "y": 0, "w": 12, "h": 14, "title": "Netris"},
-			{"id": "netchess-1", "type": "netchess", "x": 0, "y": 14, "w": 12, "h": 14, "title": "NetChess"},
+			{"id": "netchess-1", "type": "netchess", "x": 0, "y": 14, "w": 8, "h": 12, "title": "NetChess"},
 		},
 	})
 	if _, err := s.CreateDashboard(ctx, username, "netgames", netGamesData); err != nil {
