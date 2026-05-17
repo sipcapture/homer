@@ -9,11 +9,14 @@ describe('ChessBoard', () => {
     expect(screen.getAllByRole('button')).toHaveLength(64)
   })
 
-  it('renders pieces using Unicode glyphs in the starting position', () => {
+  it('renders pieces using filled Unicode glyphs in the starting position', () => {
     const { container } = render(<ChessBoard fen={STARTING_FEN} cellPx={32} />)
-    expect(container.textContent).toContain('♔') // white king
-    expect(container.textContent).toContain('♚') // black king
-    expect(container.textContent).toContain('♟') // a black pawn
+    // Both colours share the filled silhouettes — colour is carried by
+    // the text-white / text-black class, not by a different glyph.
+    expect(container.textContent).toContain('♚')
+    expect(container.textContent).toContain('♟')
+    expect(container.querySelectorAll('span.text-white').length).toBeGreaterThan(0)
+    expect(container.querySelectorAll('span.text-black').length).toBeGreaterThan(0)
   })
 
   it('click-select-then-click-move emits onMove with from/to', () => {

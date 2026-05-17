@@ -39,9 +39,24 @@ import {
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] as const
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'] as const
 
+// Both colours render the same filled Unicode silhouettes
+// (U+265A–U+265F). The outlined "white" glyphs (♔♕♖♗♘♙) render as
+// hollow shapes that read as thin/spindly at widget cell sizes, so
+// we use the solid versions for both and let `text-white` /
+// `text-black` + a contrast halo carry the colour. End result: white
+// and black pieces have the same shape, only the fill differs — what
+// chess.com / Lichess do.
+const FILLED_GLYPH: Record<ChessPieceType, string> = {
+  k: '♚',
+  q: '♛',
+  r: '♜',
+  b: '♝',
+  n: '♞',
+  p: '♟',
+}
 const PIECE_GLYPH: Record<ChessColor, Record<ChessPieceType, string>> = {
-  w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
-  b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' },
+  w: FILLED_GLYPH,
+  b: FILLED_GLYPH,
 }
 
 /** Square is "light" if (file + rank) is even, "dark" otherwise. */
@@ -213,7 +228,12 @@ export function ChessBoard(props: ChessBoardProps) {
                       'pointer-events-none drop-shadow-sm',
                       piece.color === 'w' ? 'text-white' : 'text-black',
                     )}
-                    style={{ textShadow: piece.color === 'w' ? '0 0 2px rgba(0,0,0,0.7)' : '0 0 2px rgba(255,255,255,0.5)' }}
+                    style={{
+                      textShadow:
+                        piece.color === 'w'
+                          ? '0 0 1px #000, 0 0 1px #000, 0 0 2px rgba(0,0,0,0.9)'
+                          : '0 0 1px rgba(255,255,255,0.6), 0 0 2px rgba(255,255,255,0.4)',
+                    }}
                   >
                     {PIECE_GLYPH[piece.color][piece.type]}
                   </span>
