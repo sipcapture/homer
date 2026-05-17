@@ -24,10 +24,12 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/coordinator/games/netchess"
 	"github.com/sipcapture/homer-core/src/coordinator/games/netris"
 	"github.com/sipcapture/homer-core/src/coordinator/handlers"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
 	"github.com/sipcapture/homer-core/src/homerconfig"
+	mcppkg "github.com/sipcapture/homer-core/src/mcp"
 	"github.com/sipcapture/homer-core/src/scripting/correlation"
 	"github.com/sipcapture/homer-core/src/stream/hepstream"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
@@ -249,6 +251,11 @@ func (c *Coordinator) setupRoutes() {
 	// because it costs nothing when nobody is playing.
 	gamesHandler := handlers.NewGamesHandler()
 	gamesHandler.SetNetrisHub(netris.NewHub(netris.Config{}))
+	gamesHandler.SetNetChessHub(netchess.NewHub(netchess.Config{}))
+	// Reuse the same LLM client that powers MCP. NewLLMClient returns
+	// nil when llm.enable=false, in which case the Chess widget will
+	// hide the LLM toggle (V4ChessLLMStatus reports enabled=false).
+	gamesHandler.SetChessLLM(mcppkg.NewLLMClient(&c.config.MCP.LLM))
 	// Wire the live HEP stream service only when the coordinator-side
 	// switch is on; otherwise the handler stays a 503 stub and the UI
 	// hides its "Use live traffic" toggle. The local broker is
@@ -445,6 +452,9 @@ func (c *Coordinator) setupRoutes() {
 		protectedV4.GET("/integrations/grafana/dashboards/:uid", integrationsHandler.V4GrafanaDashboard)
 		protectedV4.GET("/stream/hep", streamHandler.V4HepStream)
 		protectedV4.GET("/games/netris", gamesHandler.V4Netris)
+		protectedV4.GET("/games/netchess", gamesHandler.V4NetChess)
+		protectedV4.GET("/games/chess/llm-status", gamesHandler.V4ChessLLMStatus)
+		protectedV4.POST("/games/chess/llm-move", gamesHandler.V4ChessLLMMove)
 		protectedV4.POST("/query", searchHandler.V4RawQuery)
 		protectedV4.POST("/mcp/query", searchHandler.V4MCPQuery)
 		protectedV4.GET("/mcp/llm/status", searchHandler.V4MCPLLMStatus)

@@ -218,6 +218,41 @@ func (s *DashboardService) ResetDashboards(ctx context.Context, username string)
 	if _, err := s.CreateDashboard(ctx, username, "smartsearch", searchData); err != nil {
 		return err
 	}
+
+	// Default "Games" dashboard with all single-player game widgets pre-laid out
+	// on the 12-col grid. Players land here and try every game without having
+	// to use the Add Widget dialog.
+	gamesData, _ := json.Marshal(map[string]interface{}{
+		"name": "Games", "param": "games", "shared": false, "type": 2, "weight": 30,
+		"config": map[string]interface{}{"columns": 12, "grid_type": "fit", "locked": false},
+		"widgets": []map[string]interface{}{
+			{"id": "packet-defender-1", "type": "packet_defender", "x": 0, "y": 0, "w": 6, "h": 10, "title": "Packet Defender"},
+			{"id": "sip-dialog-master-1", "type": "sip_dialog_master", "x": 6, "y": 0, "w": 6, "h": 10, "title": "SIP Dialog Master"},
+			{"id": "jitter-buffer-hero-1", "type": "jitter_buffer_hero", "x": 0, "y": 10, "w": 6, "h": 10, "title": "Jitter Buffer Hero"},
+			{"id": "sipetris-1", "type": "sipetris", "x": 6, "y": 10, "w": 6, "h": 12, "title": "SIPetris"},
+			{"id": "chess-1", "type": "chess", "x": 0, "y": 22, "w": 8, "h": 12, "title": "Chess"},
+		},
+	})
+	if _, err := s.CreateDashboard(ctx, username, "games", gamesData); err != nil {
+		return err
+	}
+
+	// Default "NetGames" dashboard with the multiplayer game widgets. They
+	// require coordinator hubs (netris, netchess), so we surface them in a
+	// dedicated tab to avoid surprising single-user installs. NetChess
+	// matches the single-player Chess widget footprint (8x12) rather than
+	// the full 12-wide arena Netris needs.
+	netGamesData, _ := json.Marshal(map[string]interface{}{
+		"name": "NetGames", "param": "netgames", "shared": false, "type": 3, "weight": 40,
+		"config": map[string]interface{}{"columns": 12, "grid_type": "fit", "locked": false},
+		"widgets": []map[string]interface{}{
+			{"id": "netris-1", "type": "netris", "x": 0, "y": 0, "w": 12, "h": 14, "title": "Netris"},
+			{"id": "netchess-1", "type": "netchess", "x": 0, "y": 14, "w": 8, "h": 12, "title": "NetChess"},
+		},
+	})
+	if _, err := s.CreateDashboard(ctx, username, "netgames", netGamesData); err != nil {
+		return err
+	}
 	return nil
 }
 

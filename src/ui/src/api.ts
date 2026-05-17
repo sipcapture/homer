@@ -466,4 +466,218 @@ export function openNetrisSocket(
   }
 }
 
+// ---------------------------------------------------------------------------
+// NetChess (PvP) — WebSocket envelope + thin client
+// ---------------------------------------------------------------------------
+
+/**
+ * Single envelope for the NetChess (PvP Chess) WebSocket. The server
+ * mirror lives in `src/coordinator/games/netchess/protocol.go` — keep
+ * field names in sync. Unknown fields are tolerated on both sides.
+ */
+export interface NetChessMessage {
+  type: string
+  display_name?: string
+  room?: string
+  you?: string
+  opponent?: string
+  /** Your colour (only set on `matched`). */
+  color?: 'white' | 'black'
+  spectator?: boolean
+
+  /** Time control (set on `matched`). */
+  initial_ms?: number
+  increment_ms?: number
+
+  /** Move / opponent_move / clock_sync */
+  uci?: string
+  san?: string
+  fen?: string
+  clock_ms?: number
+  white_ms?: number
+  black_ms?: number
+
+  /** game_over */
+  result?: '1-0' | '0-1' | '1/2-1/2'
+  reason?: string
+
+  /** chat */
+  from?: string
+  text?: string
+
+  /** error */
+  message?: string
+}
+
+export type NetChessSocketState = 'connecting' | 'open' | 'closed'
+
+export interface NetChessSocketOptions {
+  /** Named room code. Mutually exclusive with `quick`. */
+  room?: string
+  /** Auto-pair with the next unmatched player. */
+  quick?: boolean
+  /** Join `room` read-only as a spectator. */
+  spectate?: boolean
+  /** Colour preference for new rooms. Default random. */
+  color?: 'white' | 'black' | 'random'
+  /** Time control overrides (milliseconds). */
+  initialMs?: number
+  incrementMs?: number
+  /** Optional display label override. */
+  display?: string
+}
+
+export interface NetChessSocket {
+  send: (msg: NetChessMessage) => void
+  close: () => void
+  readonly state: () => NetChessSocketState
+}
+
+/**
+ * Thin WebSocket client for `/api/v4/games/netchess`. Same reconnect
+ * / backoff strategy as `openNetrisSocket`; after reconnects the
+ * caller should re-emit `hello` / `ready` since the server keeps no
+ * cross-socket session state beyond an in-flight room.
+ */
+export function openNetChessSocket(
+  opts: NetChessSocketOptions,
+  handlers: {
+    onMessage: (msg: NetChessMessage) => void
+    onOpen?: () => void
+    onClose?: (ev: CloseEvent) => void
+    onError?: (err: unknown) => void
+  },
+): NetChessSocket {
+  let ws: WebSocket | null = null
+  let closedByUser = false
+  let attempt = 0
+  let reconnectTimer: number | null = null
+  let currentState: NetChessSocketState = 'closed'
+
+  const params: QueryParams = {}
+  if (opts.room) params.room = opts.room
+  if (opts.quick) params.mode = 'quick'
+  if (opts.spectate) params.spectate = 'true'
+  if (opts.color) params.color = opts.color
+  if (opts.initialMs !== undefined) params.initial_ms = String(opts.initialMs)
+  if (opts.incrementMs !== undefined) params.increment_ms = String(opts.incrementMs)
+  if (opts.display) params.display = opts.display
+
+  const connect = () => {
+    if (closedByUser) return
+    currentState = 'connecting'
+    const url = buildWsURL('/games/netchess', params)
+    let sock: WebSocket
+    try {
+      sock = new WebSocket(url)
+    } catch (err) {
+      handlers.onError?.(err)
+      scheduleReconnect()
+      return
+    }
+    ws = sock
+    sock.onopen = () => {
+      attempt = 0
+      currentState = 'open'
+      handlers.onOpen?.()
+    }
+    sock.onmessage = (ev) => {
+      try {
+        const parsed = JSON.parse(String(ev.data)) as NetChessMessage
+        handlers.onMessage(parsed)
+      } catch (err) {
+        handlers.onError?.(err)
+      }
+    }
+    sock.onerror = (err) => {
+      handlers.onError?.(err)
+    }
+    sock.onclose = (ev) => {
+      currentState = 'closed'
+      handlers.onClose?.(ev)
+      if (!closedByUser) scheduleReconnect()
+    }
+  }
+
+  const scheduleReconnect = () => {
+    if (closedByUser) return
+    attempt = Math.min(attempt + 1, 8)
+    const backoffMs = Math.min(30000, 500 * 2 ** (attempt - 1))
+    const jitter = Math.random() * 250
+    reconnectTimer = window.setTimeout(connect, backoffMs + jitter)
+  }
+
+  connect()
+
+  return {
+    send: (msg) => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return
+      try {
+        ws.send(JSON.stringify(msg))
+      } catch (err) {
+        handlers.onError?.(err)
+      }
+    },
+    close: () => {
+      closedByUser = true
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+      if (ws) {
+        try { ws.close(1000, 'client closed') } catch { /* ignore */ }
+        ws = null
+      }
+      currentState = 'closed'
+    },
+    state: () => currentState,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chess widget — LLM opponent endpoints
+// ---------------------------------------------------------------------------
+
+/** Status of the optional LLM-opponent mode for the single-player Chess
+ *  widget. Mirrors the server-side `chessLLMStatusResponse`. The Chess
+ *  widget polls this on mount to decide whether to render the LLM
+ *  toggle. `enabled=false` keeps the widget in bot-only mode. */
+export interface ChessLLMStatus {
+  enabled: boolean
+  model?: string
+}
+
+export async function fetchChessLLMStatus(): Promise<ChessLLMStatus> {
+  try {
+    return await apiGet<ChessLLMStatus>('/api/v4/games/chess/llm-status')
+  } catch {
+    // Endpoint absent or unauthorized — treat as disabled so the
+    // widget gracefully falls back to bot-only mode.
+    return { enabled: false }
+  }
+}
+
+/** Request body for `/api/v4/games/chess/llm-move`. */
+export interface ChessLLMMoveRequest {
+  fen: string
+  history_pgn?: string
+  level?: number
+}
+
+/** Response shape for `/api/v4/games/chess/llm-move`. `uci` is empty
+ *  for terminal positions; otherwise it is always a legal move. */
+export interface ChessLLMMoveResponse {
+  uci: string
+  source: 'llm' | 'fallback'
+  model?: string
+  latency_ms: number
+  reason?: string
+}
+
+export async function postChessLLMMove(req: ChessLLMMoveRequest): Promise<ChessLLMMoveResponse> {
+  const res = await apiPost<ChessLLMMoveResponse>('/api/v4/games/chess/llm-move', req)
+  if (!res) throw new Error('chess llm-move returned no body')
+  return res
+}
+
 export { apiBase, tokenKey, getToken, authHeaders, parseError }
