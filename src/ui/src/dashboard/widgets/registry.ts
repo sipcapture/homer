@@ -265,7 +265,10 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
     label: 'SIPetris',
     icon: 'game',
     category: 'Games',
-    minW: 5,
+    // The 10x20 arena uses useArenaCellSize with CELL_MIN_PX=14 so it
+    // still renders at narrow widths — the floor is now in line with
+    // the rest of the Games widgets.
+    minW: 4,
     minH: 8,
     defaultW: 7,
     defaultH: 12,
@@ -275,17 +278,25 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
     label: 'Netris',
     icon: 'game',
     category: 'Games',
-    minW: 8,
+    // The 10x20 arena + 200 px opponent sidebar fits comfortably in
+    // ~8 grid columns. The previous 12-col default left a lot of
+    // empty horizontal space inside the flex-1 wrapper because the
+    // arena is `flex-shrink-0` and the cell clamp tops out at 48 px.
+    // minW is permissive (4) — useArenaCellSize will scale the cells
+    // down to CELL_MIN_PX=12 when the widget is squeezed.
+    minW: 4,
     minH: 8,
-    defaultW: 12,
-    defaultH: 14,
+    defaultW: 8,
+    defaultH: 12,
   },
   chess: {
     component: ChessPanel,
     label: 'Chess',
     icon: 'game',
     category: 'Games',
-    minW: 6,
+    // 8x8 board + 220 px sidebar. CELL_MIN_PX=16 keeps the board
+    // legible down to ~4 grid columns where the sidebar dominates.
+    minW: 4,
     minH: 8,
     defaultW: 8,
     defaultH: 12,
@@ -298,7 +309,7 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
     // Mirror the `chess` widget — the 220 px sidebar is identical and
     // the board itself is 8x8, so there is no good reason for the
     // NetChess board to render wider than the single-player one.
-    minW: 6,
+    minW: 4,
     minH: 8,
     defaultW: 8,
     defaultH: 12,
