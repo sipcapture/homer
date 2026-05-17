@@ -176,6 +176,104 @@ func TestLPMappingSync_UpsertLifecycle(t *testing.T) {
 	}
 }
 
+// TestLPMappingSync_PurgeInternalMappings drives purgeInternalLPMappings
+// against a real DuckDB-backed settings DB. It pre-seeds the
+// mapping_schema with a mix of legitimate LP rows (lp_cpu) and
+// catalog-internal rows that earlier versions of this service would
+// have published (DuckLake metadata tables, information_schema), then
+// verifies the purge:
+//
+//   - deletes every catalog-internal row,
+//   - leaves the genuine lp_* row intact,
+//   - is idempotent (a second call leaves the table unchanged).
+func TestLPMappingSync_PurgeInternalMappings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.duckdb")
+	db, err := OpenSettingsDB(path)
+	if err != nil {
+		t.Fatalf("OpenSettingsDB: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := EnsureSettingsSchema(db); err != nil {
+		t.Fatalf("EnsureSettingsSchema: %v", err)
+	}
+	ctx := context.Background()
+
+	svc := NewLPMappingSyncService(db, &FlightService{}, "", 0)
+
+	// Seed: one legitimate measurement plus a sampling of the
+	// internal-catalog rows we want gone.
+	seedRows := []struct {
+		schema, table string
+	}{
+		{"main", "lp_cpu"}, // keep
+		{"main", "ducklake_table"},
+		{"main", "ducklake_column"},
+		{"main", "ducklake_column_tag"},
+		{"main", "ducklake_snapshot"},
+		{"main", "ducklake_data_file"},
+		{"main", "ducklake_file_column_stats"},
+		{"main", "ducklake_partition_column"},
+		{"main", "ducklake_partition_info"},
+		{"information_schema", "tables"},
+		{"pg_catalog", "pg_class"},
+	}
+	cols := []LPColumn{
+		{Name: "time", DataType: "TIMESTAMP", Position: 1},
+		{Name: "value", DataType: "DOUBLE", Position: 2},
+	}
+	for _, sr := range seedRows {
+		row := discoveredLPTable{Schema: sr.schema, Name: sr.table, Columns: cols}
+		if _, err := svc.upsertMapping(ctx, row); err != nil {
+			t.Fatalf("seed %s.%s: %v", sr.schema, sr.table, err)
+		}
+	}
+
+	var before int64
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM mapping_schema WHERE hepid = `+itoa(LPVirtualHepID)).Scan(&before); err != nil {
+		t.Fatalf("count before: %v", err)
+	}
+	if before != int64(len(seedRows)) {
+		t.Fatalf("seeded %d rows, COUNT(*) = %d", len(seedRows), before)
+	}
+
+	if err := svc.purgeInternalLPMappings(ctx); err != nil {
+		t.Fatalf("purgeInternalLPMappings: %v", err)
+	}
+
+	var after int64
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM mapping_schema WHERE hepid = `+itoa(LPVirtualHepID)).Scan(&after); err != nil {
+		t.Fatalf("count after: %v", err)
+	}
+	if after != 1 {
+		t.Fatalf("expected 1 row left after purge (lp_cpu), got %d", after)
+	}
+
+	// And what's left must be the legitimate measurement.
+	var profile string
+	if err := db.QueryRowContext(ctx,
+		`SELECT profile FROM mapping_schema WHERE hepid = `+itoa(LPVirtualHepID)).Scan(&profile); err != nil {
+		t.Fatalf("inspect remaining: %v", err)
+	}
+	if profile != "main__lp_cpu" {
+		t.Fatalf("unexpected surviving profile %q", profile)
+	}
+
+	// Idempotency: second purge is a no-op.
+	if err := svc.purgeInternalLPMappings(ctx); err != nil {
+		t.Fatalf("idempotent purge: %v", err)
+	}
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM mapping_schema WHERE hepid = `+itoa(LPVirtualHepID)).Scan(&after); err != nil {
+		t.Fatalf("count after idempotent: %v", err)
+	}
+	if after != 1 {
+		t.Fatalf("idempotent purge changed row count: %d", after)
+	}
+}
+
 // itoa keeps the test SQL legible without pulling strconv into the
 // scope of every assertion.
 func itoa(i int) string {

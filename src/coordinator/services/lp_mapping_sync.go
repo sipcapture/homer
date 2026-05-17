@@ -136,6 +136,15 @@ func (s *LPMappingSyncService) loop(ctx context.Context) {
 // SyncOnce performs a single discovery + upsert pass. Exposed so tests
 // can drive the loop deterministically without waiting for a tick.
 func (s *LPMappingSyncService) SyncOnce(ctx context.Context) error {
+	// Idempotent self-heal: scrub any mapping_schema rows older
+	// versions of this service published for internal catalog tables
+	// (DuckLake metadata, system schemas). New rows are no longer
+	// emitted for those — see discoverTables exclusions — but a
+	// freshly-upgraded coordinator must clean its history without an
+	// operator migration step.
+	if err := s.purgeInternalLPMappings(ctx); err != nil {
+		logger.Warn("LPMappingSync: purge internal mappings failed", "err", err.Error())
+	}
 	tables, err := s.discoverTables(ctx)
 	if err != nil {
 		return fmt.Errorf("discover lp tables: %w", err)
@@ -180,15 +189,36 @@ type discoveredLPTable struct {
 	Columns []LPColumn
 }
 
+// discoveryExclusions are predicates that drop catalog-internal tables
+// (DuckLake metadata, system schemas) from the LP discovery set. They
+// must apply on every branch — with or without an operator-configured
+// `prefix` — because nothing in `prefix` defends against the catalog
+// tables also matching `ducklake_*` literally.
+//
+// In particular DuckLake stores its metadata in regular base tables
+// like `ducklake_table`, `ducklake_column`, `ducklake_column_tag`,
+// `ducklake_snapshot`, `ducklake_data_file`, `ducklake_file_column_stats`,
+// `ducklake_partition_column`, and `ducklake_partition_info`. Treating
+// any of those as a line-protocol measurement produces a bogus
+// `main__ducklake_*` mapping_schema row that operators see (and ask
+// about) in Settings → Mappings.
+const discoveryExclusions = "table_type = 'BASE TABLE'" +
+	" AND table_schema NOT IN ('information_schema', 'pg_catalog')" +
+	" AND table_name NOT LIKE 'ducklake_%'"
+
 func (s *LPMappingSyncService) discoverTables(ctx context.Context) ([]discoveredLPTable, error) {
 	var sql string
 	if s.prefix != "" {
-		sql = "SELECT table_catalog, table_schema, table_name FROM information_schema.tables WHERE table_name LIKE '" +
-			escapeSQL(s.prefix) + "%' ORDER BY table_catalog, table_schema, table_name"
+		sql = "SELECT table_catalog, table_schema, table_name FROM information_schema.tables WHERE " +
+			discoveryExclusions + " AND table_name LIKE '" + escapeSQL(s.prefix) + "%'" +
+			" ORDER BY table_catalog, table_schema, table_name"
 	} else {
 		sql = "SELECT table_catalog, table_schema, table_name FROM information_schema.tables WHERE " +
-			"table_name NOT LIKE 'hep_proto_%' AND table_name NOT LIKE 'otlp_%' AND table_name NOT LIKE 'mem_hep_%' " +
-			"ORDER BY table_catalog, table_schema, table_name"
+			discoveryExclusions +
+			" AND table_name NOT LIKE 'hep_proto_%'" +
+			" AND table_name NOT LIKE 'otlp_%'" +
+			" AND table_name NOT LIKE 'mem_hep_%'" +
+			" ORDER BY table_catalog, table_schema, table_name"
 	}
 	rows, err := s.flight.Query(ctx, sql)
 	if err != nil {
@@ -343,6 +373,43 @@ func (s *LPMappingSyncService) upsertMapping(ctx context.Context, t discoveredLP
 		return false, fmt.Errorf("insert lp mapping schema=%s table=%s: %w", t.Schema, t.Name, err)
 	}
 	return true, nil
+}
+
+// purgeInternalLPMappings removes mapping_schema rows that were
+// published by earlier versions of this service for catalog-internal
+// tables that should never have been treated as Line Protocol
+// measurements. Today that means:
+//
+//   - DuckLake catalog tables (ducklake_table, ducklake_column,
+//     ducklake_column_tag, ducklake_snapshot, ducklake_data_file,
+//     ducklake_file_column_stats, ducklake_partition_column,
+//     ducklake_partition_info).
+//   - System schemas (information_schema.*, pg_catalog.*).
+//
+// The DELETE is scoped to `hepid = LPVirtualHepID` so we never touch
+// hand-curated rows operators may have added under a real HEP type.
+// Idempotent — safe to run on every tick. RowsAffected is logged only
+// when something actually went away to keep happy-path tick logs
+// quiet.
+func (s *LPMappingSyncService) purgeInternalLPMappings(ctx context.Context) error {
+	if s.db == nil {
+		return nil
+	}
+	q := fmt.Sprintf(
+		`DELETE FROM mapping_schema WHERE hepid = %d AND (`+
+			` profile LIKE '%%__ducklake\_%%' ESCAPE '\'`+
+			` OR profile LIKE 'ducklake\_%%' ESCAPE '\'`+
+			` OR profile LIKE 'information\_schema\_\_%%' ESCAPE '\'`+
+			` OR profile LIKE 'pg\_catalog\_\_%%' ESCAPE '\'`+
+			`)`, LPVirtualHepID)
+	res, err := s.db.ExecContext(ctx, q)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n > 0 {
+		logger.Info("LPMappingSync: purged catalog-internal mappings", "deleted", n)
+	}
+	return nil
 }
 
 // LPMappingGUID returns a deterministic UUIDv5-like identifier for a
