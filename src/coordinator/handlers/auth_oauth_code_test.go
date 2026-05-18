@@ -21,4 +21,20 @@ func TestOauthMatchAdminGroup(t *testing.T) {
 	if oauthMatchAdminGroup([]string{"a"}, []string{"b"}) {
 		t.Fatal("unexpected match")
 	}
+	if !oauthMatchAdminGroup([]string{"VoIP Admin"}, []string{"VoIP Admin"}) {
+		t.Fatal("expected match with space in group name")
+	}
+}
+
+func TestOauthCollectGroups(t *testing.T) {
+	prof := map[string]interface{}{
+		"groups": []interface{}{
+			"plain",
+			map[string]interface{}{"name": "VoIP Admin", "pk": "x"},
+		},
+	}
+	got := oauthCollectGroups(prof, "groups")
+	if len(got) != 2 || got[0] != "plain" || got[1] != "VoIP Admin" {
+		t.Fatalf("groups: got %#v", got)
+	}
 }

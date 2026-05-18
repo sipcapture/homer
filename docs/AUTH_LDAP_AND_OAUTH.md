@@ -313,6 +313,7 @@ Register **`redirect_url`** exactly at the IdP. The **`auth_url`** / **`token_ur
 - **Username** for JWT: `preferred_username` if present; else email with `@` replaced by `_`; else `oidc-<sub>`.
 - Existing users are matched by **username** first, then by **email**.
 - If no user exists and **`skip_auto_provision`** is `false` (default), a new DuckDB user is created with a random password hash (OAuth-only; password login is not intended for that row).
+- **`admin_groups`** matching uses the **`group_claim`** list from userinfo. Values may be plain strings or objects with a **`name`** (or **`group_name`**) field; configure Authentik scope mappings so the claim you read actually contains the same strings as in **`admin_groups`** (including spaces). If login works but admin does not, inspect the raw userinfo JSON first. With **`log.level`** set to **`debug`**, the coordinator logs one line **`oauth2 admin group check`** (claim key, whether the claim exists, parsed groups, configured `admin_groups`, and `admin_match`) after each successful profile fetch when `admin_groups` is non-empty.
 
 ---
 

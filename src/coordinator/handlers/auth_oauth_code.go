@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -139,6 +140,21 @@ func (h *AuthHandler) V4OAuth2Callback(c echo.Context) error {
 
 	groups := oauthCollectGroups(profile, provider.GroupClaim)
 	staffAdmin := oauthMatchAdminGroup(groups, provider.AdminGroups)
+	if len(provider.AdminGroups) > 0 {
+		claimKey := strings.TrimSpace(provider.GroupClaim)
+		if claimKey == "" {
+			claimKey = "groups"
+		}
+		_, claimPresent := profile[claimKey]
+		slog.Debug("oauth2 admin group check",
+			"provider", provider.Name,
+			"group_claim", claimKey,
+			"claim_present", claimPresent,
+			"parsed_groups", groups,
+			"admin_groups", provider.AdminGroups,
+			"admin_match", staffAdmin,
+		)
+	}
 
 	u, err := h.resolveOrProvisionOAuthUser(ctx, provider, username, email, display, staffAdmin)
 	if err != nil {
@@ -283,8 +299,19 @@ func oauthCollectGroups(profile map[string]interface{}, claim string) []string {
 	case []interface{}:
 		out := make([]string, 0, len(t))
 		for _, x := range t {
-			if s, ok := x.(string); ok && strings.TrimSpace(s) != "" {
-				out = append(out, s)
+			switch e := x.(type) {
+			case string:
+				if strings.TrimSpace(e) != "" {
+					out = append(out, strings.TrimSpace(e))
+				}
+			case map[string]interface{}:
+				// Some IdPs (including Authentik-style payloads) return group objects
+				// with a display name under "name" or "group_name".
+				if n := oauthStringClaim(e, "name"); n != "" {
+					out = append(out, n)
+				} else if n := oauthStringClaim(e, "group_name"); n != "" {
+					out = append(out, n)
+				}
 			}
 		}
 		return out
