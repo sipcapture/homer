@@ -16,6 +16,23 @@ Default in Viper: `10000`. Tune down for low-latency visibility; tune up (within
 
 Environment override: `HOMER_STORAGE_DUCKLAKE_BATCH_SIZE`.
 
+### Production / lab stand
+
+For sustained high PPS on an all-in-one host with 2GB+ DuckDB memory limit,
+**25000–50000** is a reasonable starting range (default example config uses
+**25000**). Fewer flushes reduce DuckLake append overhead; visibility latency
+grows until the batch fills or `flush_interval_sec` fires.
+
+Apply on a `homer-core` systemd install:
+
+```bash
+sudo ./scripts/apply-stand-ducklake-batch.sh 25000
+# or: sudo ./scripts/apply-stand-ducklake-batch.sh 50000
+```
+
+Rebuild and reinstall the package after pulling ingest perf commits so the
+binary matches the repo (`homer --version` should show the current commit).
+
 ## `ingest.worker_metrics_flush_packets`
 
 Writer workers batch updates to Prometheus counters (`homer_hep_packets_received_total`, `homer_hep_packets_processed_total`, `homer_bytes_received_total`, …) so the hot path does not hit atomics on every packet.

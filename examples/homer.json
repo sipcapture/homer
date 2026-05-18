@@ -54,7 +54,7 @@
       "catalog_path": "/data/homer/homer_catalog.sqlite",
       "data_path": "/data/homer/parquet",
       "lake_name": "homer_lake",
-      "batch_size": 10000,
+      "batch_size": 25000,
       "flush_interval_sec": 30,
       "search_buffer": true,
       "tuning": {
