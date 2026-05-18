@@ -33,6 +33,7 @@ import (
 	"github.com/sipcapture/homer-core/src/scripting/correlation"
 	"github.com/sipcapture/homer-core/src/stream/hepstream"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
+	"golang.org/x/oauth2"
 )
 
 // WebAssets can be set to embedded UI files from main package
@@ -492,23 +493,56 @@ func mapOAuthProvider(p *config.OAuthProviderConfig) []handlers.OAuthProvider {
 	if p == nil || !p.Enable {
 		return nil
 	}
-	if strings.TrimSpace(p.Name) == "" || strings.TrimSpace(p.URL) == "" {
+	if !config.OAuthAuthorizationCodeConfigured(p) {
+		logger.Warn("coordinator.oauth2_provider is enabled but authorization code flow is incomplete; "+
+			"set client_id, auth_url, token_url, redirect_url, profile_url, and scopes (or rely on defaults); "+
+			"when use_pkce is false, client_secret is required. Legacy url-only OAuth is no longer supported.",
+			"name", strings.TrimSpace(p.Name))
 		return nil
 	}
 	typ := p.Type
 	if strings.TrimSpace(typ) == "" {
 		typ = "oauth2"
 	}
+	scopes := p.Scopes
+	if len(scopes) == 0 {
+		scopes = []string{"openid", "email"}
+	}
+	groupClaim := strings.TrimSpace(p.GroupClaim)
+	if groupClaim == "" {
+		groupClaim = "groups"
+	}
+	displayName := strings.TrimSpace(p.ProviderName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(p.Name)
+	}
+	oauthCfg := &oauth2.Config{
+		ClientID:     strings.TrimSpace(p.ClientID),
+		ClientSecret: strings.TrimSpace(p.ClientSecret),
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  strings.TrimSpace(p.AuthURL),
+			TokenURL: strings.TrimSpace(p.TokenURL),
+		},
+		RedirectURL: strings.TrimSpace(p.RedirectURL),
+		Scopes:      scopes,
+	}
+	adminGroups := append([]string(nil), p.AdminGroups...)
 	return []handlers.OAuthProvider{{
-		Enable:        true,
-		Name:          p.Name,
-		Position:      p.Position,
-		Type:          typ,
-		ProviderImage: p.ProviderImage,
-		ProviderName:  p.ProviderName,
-		URL:           p.URL,
-		AutoRedirect:  p.AutoRedirect,
-		CallbackURL:   p.CallbackURL,
+		Enable:              true,
+		Name:                strings.TrimSpace(p.Name),
+		Position:            p.Position,
+		Type:                typ,
+		ProviderImage:       p.ProviderImage,
+		ProviderName:        displayName,
+		URL:                 "",
+		AutoRedirect:        p.AutoRedirect,
+		CallbackURL:         p.CallbackURL,
+		OAuth2Config:        oauthCfg,
+		ProfileURL:          strings.TrimSpace(p.ProfileURL),
+		UsePKCE:             p.UsePKCE,
+		SkipAutoProvision:   p.SkipAutoProvision,
+		AdminGroups:         adminGroups,
+		GroupClaim:          groupClaim,
 	}}
 }
 

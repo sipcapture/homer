@@ -135,6 +135,8 @@ The Coordinator module provides REST API for frontend applications and orchestra
 
 ### With OAuth2 Providers
 
+Authorization **code** flow (server exchanges `code`, loads userinfo, provisions DuckDB user). See [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#oauth2).
+
 ```json
 {
   "coordinator": {
@@ -163,7 +165,14 @@ The Coordinator module provides REST API for frontend applications and orchestra
       "provider_name": "Google",
       "provider_image": "/assets/google.svg",
       "position": 1,
-      "url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=YOUR_CLIENT_ID&response_type=code&scope=openid%20email&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Fv4%2Fauth%2Foauth2%2Fgoogle%2Fcallback",
+      "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+      "client_secret": "YOUR_CLIENT_SECRET",
+      "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+      "token_url": "https://oauth2.googleapis.com/token",
+      "redirect_url": "http://localhost:8080/api/v4/auth/oauth2/google/callback",
+      "profile_url": "https://openidconnect.googleapis.com/v1/userinfo",
+      "scopes": ["openid", "email", "profile"],
+      "use_pkce": false,
       "callback_url": "http://localhost:8080/",
       "auto_redirect": false
     }
@@ -243,7 +252,7 @@ echo -n "your-password" | sha256sum | cut -d' ' -f1
 
 ### oauth2_provider
 
-Single optional OAuth2 IdP object (`OAuthProviderConfig` in `src/config/config.go`).
+Single optional OAuth2 IdP object (`OAuthProviderConfig` in `src/config/config.go`). Uses the **OAuth 2.0 authorization code** flow on the coordinator (`redirect` → IdP → `callback` with `code` → token + userinfo → one-time browser token → `POST /auth/oauth2/token` for JWT).
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -253,8 +262,18 @@ Single optional OAuth2 IdP object (`OAuthProviderConfig` in `src/config/config.g
 | `provider_name` | string | Display name |
 | `provider_image` | string | Provider logo path |
 | `position` | int | Display order in discovery |
-| `url` | string | Full IdP authorization URL (includes client id and redirect_uri query params as required by the IdP) |
-| `callback_url` | string | Browser redirect after coordinator callback (SPA reads `token` and exchanges via `POST /auth/oauth2/token`) |
+| `client_id` | string | OAuth2 client id |
+| `client_secret` | string | Client secret (required when `use_pkce` is false) |
+| `auth_url` | string | IdP authorization endpoint |
+| `token_url` | string | IdP token endpoint |
+| `redirect_url` | string | Registered redirect URI (must equal `https://<host>/api/v4/auth/oauth2/<name>/callback`) |
+| `profile_url` | string | UserInfo / profile GET URL |
+| `scopes` | string[] | Optional; default `openid`, `email` |
+| `use_pkce` | bool | Public clients: set true; `client_secret` may be empty |
+| `callback_url` | string | Browser redirect after callback with `?token=` or `?oauth_error=` |
+| `skip_auto_provision` | bool | If true, user must pre-exist in DuckDB |
+| `admin_groups` | string[] | Profile group claim values that grant admin JWT |
+| `group_claim` | string | JSON claim for groups (default `groups`) |
 | `auto_redirect` | bool | If true, UI may redirect immediately to this provider |
 
 The deprecated **`oauth2_providers`** array is still accepted at startup and migrated with a log warning; prefer **`oauth2_provider`**.

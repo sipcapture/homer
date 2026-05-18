@@ -49,20 +49,22 @@ The UI (`src/ui/src/loginProviders.ts`, `LoginPage.tsx`):
 
 - **Local only:** set **`"coordinator.auth": {"type":"internal"}`** (recommended), omit `auth` (defaults to internal), or legacy string **`"internal"`**; leave LDAP disabled or omit host; remove or disable `oauth2_provider`.
 - **Local + LDAP:** set `coordinator.ldap` with `enable: true` and a non-empty `host` (see canonical doc).
-- **Add OAuth2:** set `coordinator.oauth2_provider` with `enable: true`, stable `name`, `url`, `callback_url`, etc.; restart coordinator.
+- **Add OAuth2:** set `coordinator.oauth2_provider` with authorization code fields (`client_id`, `auth_url`, `token_url`, `redirect_url`, `profile_url`, …); restart coordinator.
 - **Force OAuth-first UX:** set `auto_redirect: true` on the single OAuth provider (users still need internal/LDAP if you keep password methods for break-glass accounts).
 
 ---
 
 ## OAuth2 flow and JWT
 
-1. **`GET /api/v4/auth/oauth2/{provider}/redirect`** — HTTP 302 to the IdP authorization URL configured in `oauth2_provider.url`.
-2. **`GET /api/v4/auth/oauth2/{provider}/callback`** — Coordinator issues a **short-lived one-time token**, stores it server-side, and redirects the browser to **`callback_url`** (or `redirect_uri` query param) with **`?token=<one-time>`**.
+1. **`GET /api/v4/auth/oauth2/{provider}/redirect`** — Coordinator builds the IdP **authorize** URL (OAuth2 `state` + optional **PKCE**), then HTTP 302 to the IdP.
+2. **`GET /api/v4/auth/oauth2/{provider}/callback`** — IdP returns **`code`**; coordinator validates **`state`**, exchanges **`code`** for tokens at **`token_url`**, loads the user from **`profile_url`**, maps or creates a DuckDB **`users`** row, then issues a **short-lived one-time token** and redirects the browser to **`callback_url`** with **`?token=<one-time>`** (or **`?oauth_error=`** on failure).
 3. **`POST /api/v4/auth/oauth2/token`** with body `{"token":"<one-time>"}` — Consumes the one-time token once and returns **`data.token`** as the **JWT** session (same shape as password login).
 
-API clients and SPAs should **exchange** the query `token` for the JWT and then send **`Authorization: Bearer <jwt>`** on subsequent calls. One-time tokens are **not** JWTs and will not validate as Bearer credentials.
+The **bundled UI** (`src/ui/src/App.tsx`) reads **`oauth_error`** from the query (toast) and performs the one-time → JWT **POST** when `token` is present (no `Authorization` header on that POST). Custom SPAs must do the same.
 
-**Multi-instance warning:** one-time OAuth tokens are stored in-process; multiple coordinator replicas need a shared store for this flow to be reliable (see canonical doc).
+API clients and SPAs should **exchange** the query `token` for the JWT and then send **`Authorization: Bearer <jwt>`** on subsequent calls. One-time tokens are **not** JWTs and will not validate as Bearer credentials (sending them as Bearer causes `401` on `/me` and other protected routes).
+
+**Multi-instance warning:** OAuth **`state`**, PKCE verifiers, and one-time tokens are stored in-process; multiple coordinator replicas need a shared store for this flow to be reliable (see canonical doc).
 
 ---
 

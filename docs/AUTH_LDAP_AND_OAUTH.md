@@ -234,22 +234,35 @@ Content-Type: application/json
 
 **Only one OAuth2 provider is supported.** Set it as a single object under **`coordinator.oauth2_provider`**. The deprecated array key **`coordinator.oauth2_providers`** is still read at startup for backward compatibility: the first usable enabled row (lowest `position`, then `name`) is migrated into memory and a **warning** is logged.
 
+The coordinator implements the **OAuth 2.0 authorization code** flow on the server: **`GET .../redirect`** builds the IdP authorize URL (with **CSRF `state`** and optional **PKCE**), the IdP returns **`code`** to **`GET .../callback`**, the coordinator exchanges **`code`** for tokens, calls **`profile_url`**, maps the user to DuckDB **`users`**, then redirects the browser to **`callback_url`** with a **one-time `token`** (same as before). The SPA exchanges that token for a JWT via **`POST /api/v4/auth/oauth2/token`**.
+
+Legacy **`url`**-only configuration (browser redirected to a static IdP URL without server-side code exchange) is **no longer supported**.
+
 ### Enable in configuration
 
-Under **`coordinator.oauth2_provider`**, set one object shaped like `OAuthProviderConfig`:
+Under **`coordinator.oauth2_provider`**, set one object. Required for the code flow (all non-empty unless noted):
 
 | Field | Description |
 |--------|-------------|
-| `enable` | If `true`, provider appears in `/auth/providers` and redirect works. |
-| `name` | **Stable id** used in URLs: `/api/v4/auth/oauth2/{name}/redirect`. Must match what the UI sends. |
-| `position` | Display ordering in discovery responses (single provider). |
+| `enable` | If `true`, provider appears in `/auth/providers` and redirect works when the row is complete. |
+| `name` | **Stable id** used in URLs: `/api/v4/auth/oauth2/{name}/redirect` and `/callback`. |
+| `position` | Display ordering in discovery responses. |
 | `type` | Usually `oauth2`. |
 | `provider_name` / `provider_image` | Optional display hints for clients. |
-| `url` | Full **authorization** URL of the IdP (user is redirected here). |
-| `callback_url` | Where the coordinator redirects after **`/auth/oauth2/{name}/callback`** with `?token=...`. For the bundled SPA, this is typically the Homer URL with path/hash so the app can read `token` and call **`POST /auth/oauth2/token`**. |
-| `auto_redirect` | If `true`, the UI may redirect immediately to this provider (same idea as homer-app). |
+| `client_id` | OAuth2 client id registered at the IdP. |
+| `client_secret` | Client secret. **Required** when `use_pkce` is `false` (confidential client). |
+| `auth_url` | IdP authorization endpoint (e.g. OIDC `/authorize`). |
+| `token_url` | IdP token endpoint (e.g. OIDC `/token`). |
+| `redirect_url` | **Must** match the registered redirect URI at the IdP — typically `https://<homer-host>/api/v4/auth/oauth2/<name>/callback`. |
+| `profile_url` | UserInfo endpoint (GET with access token), e.g. OIDC `.../userinfo`. |
+| `scopes` | Optional; default if omitted: `["openid", "email"]`. |
+| `use_pkce` | If `true`, use PKCE (public clients may omit `client_secret`). |
+| `callback_url` | Where the coordinator redirects after success with `?token=<one-time>` (bundled UI: Homer origin + optional `?oauth=1`). On failure, `?oauth_error=...` is set instead. |
+| `skip_auto_provision` | If `true`, the IdP user must already exist in DuckDB (matched by `username` or `email`); otherwise login fails. |
+| `admin_groups` | If non-empty, membership in any of these group **names** (see `group_claim`) grants **admin** for the JWT session. |
+| `group_claim` | JSON claim on the profile response listing groups (default `groups`). |
 
-### Example (generic IdP)
+### Example (Keycloak / generic OIDC)
 
 ```json
 {
@@ -260,19 +273,22 @@ Under **`coordinator.oauth2_provider`**, set one object shaped like `OAuthProvid
       "position": 10,
       "type": "oauth2",
       "provider_name": "Keycloak",
-      "url": "https://idp.example.org/realms/homer/protocol/openid-connect/auth?client_id=homer-ui&response_type=code&scope=openid&redirect_uri=https%3A%2F%2Fhomer.example.org%2Fapi%2Fv4%2Fauth%2Foauth2%2Fkeycloak%2Fcallback",
-      "auto_redirect": false,
-      "callback_url": "https://homer.example.org/?oauth=1"
+      "client_id": "homer-ui",
+      "client_secret": "REPLACE_ME",
+      "auth_url": "https://idp.example.org/realms/homer/protocol/openid-connect/auth",
+      "token_url": "https://idp.example.org/realms/homer/protocol/openid-connect/token",
+      "redirect_url": "https://homer.example.org/api/v4/auth/oauth2/keycloak/callback",
+      "profile_url": "https://idp.example.org/realms/homer/protocol/openid-connect/userinfo",
+      "scopes": ["openid", "email", "profile"],
+      "use_pkce": false,
+      "callback_url": "https://homer.example.org/",
+      "auto_redirect": false
     }
   }
 }
 ```
 
-Adjust **`redirect_uri`** inside `url` to point at the coordinator callback route:
-
-`/api/v4/auth/oauth2/{name}/callback`
-
-The IdP must accept that callback URL.
+Register **`redirect_url`** exactly at the IdP. The **`auth_url`** / **`token_url`** / **`profile_url`** must match your issuer.
 
 ### OAuth endpoints (v4)
 
@@ -280,15 +296,21 @@ The IdP must accept that callback URL.
 |--------|------|------|
 | `GET` | `/api/v4/auth/providers` | Lists `internal`, `ldap`, and **at most one** object in `oauth2`. |
 | `POST` | `/api/v4/auth/sessions` | Username/password (`type`: `internal` or `ldap`). |
-| `GET` | `/api/v4/auth/oauth2/{provider}/redirect` | HTTP redirect to provider `url`. |
-| `GET` | `/api/v4/auth/oauth2/{provider}/callback` | Validates provider flow, issues **one-time** token, redirects to `callback_url` or `redirect_uri` with `token=`. |
+| `GET` | `/api/v4/auth/oauth2/{provider}/redirect` | Builds authorize URL (state + optional PKCE), redirects browser to IdP. |
+| `GET` | `/api/v4/auth/oauth2/{provider}/callback` | Validates `state`, exchanges **`code`**, loads profile, provisions user, issues **one-time** token, redirects to `callback_url`. |
 | `POST` | `/api/v4/auth/oauth2/token` | Body `{"token":"<one-time>"}` → JWT. |
 
-### One-time tokens
+### One-time tokens and OAuth state
 
-- The callback stores a **short-lived** one-time token in memory and redirects the browser with `?token=...`.
+- **OAuth `state`** and optional **PKCE verifiers** are stored **in-process** (short TTL). Multiple coordinator replicas behind a load balancer require a shared store for reliable logins (same limitation as one-time session tokens).
+- The callback stores a **short-lived** one-time token and redirects the browser with `?token=...`.
 - The UI exchanges it once via **`POST /api/v4/auth/oauth2/token`**.
-- Multi-instance deployments need a **shared** store for one-time tokens (current implementation is in-process).
+
+### User mapping and provisioning
+
+- **Username** for JWT: `preferred_username` if present; else email with `@` replaced by `_`; else `oidc-<sub>`.
+- Existing users are matched by **username** first, then by **email**.
+- If no user exists and **`skip_auto_provision`** is `false` (default), a new DuckDB user is created with a random password hash (OAuth-only; password login is not intended for that row).
 
 ---
 
