@@ -213,6 +213,14 @@ function App() {
     }
   }
 
+  const openResetSettings = () => {
+    setActiveSection('reset')
+    setSettingsOpen(true)
+    if (window.location.hash !== '#settings') {
+      window.location.hash = '#settings'
+    }
+  }
+
   const openDashboard = () => {
     setSettingsOpen(false)
     if (window.location.hash !== '#dashboard') {
@@ -568,6 +576,7 @@ function App() {
                   onOpenSettings={openSettings}
                   onOpenDashboard={openDashboard}
                   onLogout={logout}
+                  onOpenResetSettings={canViewSection(role, 'reset') ? openResetSettings : undefined}
                 />
               ) : (
                 <div className="flex min-h-screen flex-col bg-background">
@@ -587,6 +596,7 @@ function App() {
                     showSettings
                     showLogout
                     onBack={openDashboard}
+                    onOpenResetSettings={canViewSection(role, 'reset') ? openResetSettings : undefined}
                   />
                   <div className="flex min-h-0 flex-1 overflow-hidden">
                     <SettingsSidebar

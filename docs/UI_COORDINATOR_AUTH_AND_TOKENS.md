@@ -21,7 +21,7 @@ There is no separate “auth mode” flag in the UI alone: available methods are
 |------|----------------|-----------------|---------------------------------------------|
 | **Local (internal)** | Always advertised as enabled | Users in the coordinator **settings DuckDB** (`users` table). Credentials are checked **only** against `users` (no config-only login). Recommended: **`"coordinator.auth": {"type":"internal"}`** (or omit `auth` / string **`"internal"`**) — first startup inserts **`admin`** once (default password **`sipcapture`**, SHA-256 `883ffc1f…`) if no row exists for that username; change the password after login. Explicit **`admin_user`** / **`admin_password_hash`** in JSON or env supports **`--reset-admin-password`** (see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password)). | `{"username":"…","password":"…"}` or `"type":"internal"` (default). |
 | **LDAP** | Advertised only if **`coordinator.ldap.enable`** is true **and** **`coordinator.ldap.host`** is non-empty | Directory bind + optional group rules for admin vs user. | `{"username":"…","password":"…","type":"ldap"}`. |
-| **OAuth2** | Optional; **at most one** provider from **`coordinator.oauth2_provider`** | Browser redirect to IdP `url`, callback to coordinator, then token exchange (see below). | No password session; use OAuth routes. |
+| **OAuth2** | Optional; **at most one** provider from **`coordinator.oauth2_provider`** | **Authorization code** on the coordinator: `GET …/redirect` builds the IdP authorize URL, IdP returns `code` to `…/callback`, coordinator exchanges code + loads profile, then SPA exchanges the one-time query `token` for a JWT (see below). | No password session; use OAuth routes. |
 
 Notes:
 

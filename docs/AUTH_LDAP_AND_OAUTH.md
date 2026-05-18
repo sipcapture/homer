@@ -290,6 +290,8 @@ Under **`coordinator.oauth2_provider`**, set one object. Required for the code f
 
 Register **`redirect_url`** exactly at the IdP. The **`auth_url`** / **`token_url`** / **`profile_url`** must match your issuer.
 
+**Docker / environment variables:** Scalar fields under `coordinator.oauth2_provider` map to `HOMER_COORDINATOR_OAUTH2_PROVIDER_<FIELD>` with the field name uppercased (Viper + `HOMER_` prefix), for example `HOMER_COORDINATOR_OAUTH2_PROVIDER_CLIENT_ID`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_AUTH_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_TOKEN_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_REDIRECT_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_PROFILE_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_CALLBACK_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_CLIENT_SECRET`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_USE_PKCE`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_ENABLE`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_NAME`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_PROVIDER_NAME`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_AUTO_REDIRECT`. Slice fields such as **`scopes`** and **`admin_groups`** are easier to set in JSON than as flat env vars; see `src/config/env.go` and `src/config/env_test.go` for how `HOMER_*` overrides are merged.
+
 ### OAuth endpoints (v4)
 
 | Method | Path | Role |

@@ -7,6 +7,15 @@ export default function DashboardPanel({
   onOpenSettings,
   onOpenDashboard,
   onLogout,
+  onOpenResetSettings,
+}: {
+  apiBase: string
+  token: string
+  me: { username?: string } | null
+  onOpenSettings: () => void
+  onOpenDashboard: () => void
+  onLogout: () => void
+  onOpenResetSettings?: () => void
 }) {
   return (
     <DashboardLayout
@@ -16,6 +25,7 @@ export default function DashboardPanel({
       onOpenSettings={onOpenSettings}
       onOpenDashboard={onOpenDashboard}
       onLogout={onLogout}
+      onOpenResetSettings={onOpenResetSettings}
     />
   )
 }
