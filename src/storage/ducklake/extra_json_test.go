@@ -5,6 +5,7 @@
 package ducklake
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/sipcapture/homer-core/src/decoder"
@@ -27,6 +28,19 @@ func TestBuildExtraJSONCell_PooledBuffer(t *testing.T) {
 		t.Fatalf("unexpected json: %q", *bp)
 	}
 	releaseExtraJSONCell(cell)
+}
+
+func TestCellToDriverValue_pooledJSONIsRawMessage(t *testing.T) {
+	b := []byte(`{"version":3}`)
+	cell := any(&b)
+	dv := cellToDriverValue(cell)
+	rm, ok := dv.(json.RawMessage)
+	if !ok {
+		t.Fatalf("expected json.RawMessage, got %T", dv)
+	}
+	if string(rm) != string(b) {
+		t.Fatalf("got %q", rm)
+	}
 }
 
 func TestCachedSIPVersionOnlyJSON(t *testing.T) {

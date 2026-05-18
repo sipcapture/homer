@@ -106,13 +106,13 @@ By default **`src/go.mod` contains a `replace` directive** pointing to a fork th
 The current `replace` in `src/go.mod`:
 
 ```go
-replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.2
+replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.3
 ```
 
 To revert to upstream bindings, remove this `replace` line and run `go mod tidy`. For experiments (e.g. additional optimisations), you can update the fork reference:
 
 ```go
-replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.2
+replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.3
 ```
 
 Then `go mod tidy`, rebuild, and compare with **`./scripts/profile_ingest_load.sh`** using the same `PROFILE_SEC`, `PPS`, and `OUT_DIR` naming. Use a **warm-up** (send traffic for several seconds before `profile?seconds=`) and **≥20–30 s** profiles so `runtime.cgocall` / Appender rows dominate over one-off init noise.
