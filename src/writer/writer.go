@@ -666,6 +666,7 @@ func (w *Writer) worker() {
 			if hepPkt.ProtoType == 0 {
 				atomic.AddUint64(&w.stats.DupCount, 1)
 				metrics.RecordHEPPacketFailed(protocol, "invalid_proto")
+				decoder.ReleaseHEP(hepPkt)
 				w.buffer.Put(msg.data[:cap(msg.data)])
 				if wm.count >= w.metricsFlushPackets {
 					wm.flush(protocol)
@@ -681,6 +682,7 @@ func (w *Writer) worker() {
 				if hepPkt.ProtoType == 0 {
 					atomic.AddUint64(&w.stats.DupCount, 1)
 					metrics.RecordHEPPacketFailed(protocol, "script_discard")
+					decoder.ReleaseHEP(hepPkt)
 					w.buffer.Put(msg.data[:cap(msg.data)])
 					if wm.count >= w.metricsFlushPackets {
 						wm.flush(protocol)
@@ -743,6 +745,7 @@ func (w *Writer) worker() {
 				atomic.AddUint64(&w.profile.sampleCnt, 1)
 			}
 
+			decoder.ReleaseHEP(hepPkt)
 			w.buffer.Put(msg.data[:cap(msg.data)])
 
 			if wm.count >= w.metricsFlushPackets {

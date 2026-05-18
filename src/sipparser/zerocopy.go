@@ -52,7 +52,9 @@ var (
 // XCallID and CustomHeader respectively.
 func ParseMsgZeroCopy(data []byte, opts *ZeroCopyOpts) *SipMsg {
 	if len(data) < 16 {
-		return &SipMsg{Error: errTooShort}
+		s := acquireSipMsg(opts)
+		s.Error = errTooShort
+		return s
 	}
 
 	headersEnd := findCRLFCRLF(data)
@@ -60,14 +62,14 @@ func ParseMsgZeroCopy(data []byte, opts *ZeroCopyOpts) *SipMsg {
 		headersEnd = zcFindLastCRLF(data)
 	}
 	if headersEnd == -1 {
-		return &SipMsg{Error: errNoEOF}
+		s := acquireSipMsg(opts)
+		s.Error = errNoEOF
+		return s
 	}
 
-	s := &SipMsg{
-		Msg:       btos(data),
-		eof:       headersEnd,
-		zcHdrOpts: opts,
-	}
+	s := acquireSipMsg(opts)
+	s.Msg = btos(data)
+	s.eof = headersEnd
 
 	if bodyStart := headersEnd + 4; bodyStart < len(data) {
 		s.Body = btos(data[bodyStart:])

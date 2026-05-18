@@ -19,7 +19,6 @@ package decoder
 import (
 	"encoding/binary"
 	"fmt"
-	"net"
 	"strconv"
 )
 
@@ -68,13 +67,13 @@ func (h *HEP) parseHEP(packet []byte) error {
 		case Protocol:
 			h.Protocol = uint32(chunkBody[0])
 		case IP4SrcIP:
-			h.SrcIP = net.IP(chunkBody).To4().String()
+			h.SrcIP = ipv4BytesToString(chunkBody)
 		case IP4DstIP:
-			h.DstIP = net.IP(chunkBody).To4().String()
+			h.DstIP = ipv4BytesToString(chunkBody)
 		case IP6SrcIP:
-			h.SrcIP = net.IP(chunkBody).To16().String()
+			h.SrcIP = ipv6BytesToString(chunkBody)
 		case IP6DstIP:
-			h.DstIP = net.IP(chunkBody).To16().String()
+			h.DstIP = ipv6BytesToString(chunkBody)
 		case SrcPort:
 			h.SrcPort = uint32(binary.BigEndian.Uint16(chunkBody))
 		case DstPort:
@@ -138,12 +137,12 @@ func (h *HEP) parseHEP2(packet []byte) error {
 	totalLen := 8
 
 	if family == 10 {
-		h.SrcIP = net.IP(packet[8:24]).To16().String()
-		h.DstIP = net.IP(packet[24:40]).To16().String()
+		h.SrcIP = ipv6BytesToString(packet[8:24])
+		h.DstIP = ipv6BytesToString(packet[24:40])
 		totalLen += 32
 	} else {
-		h.SrcIP = net.IP(packet[8:12]).To4().String()
-		h.DstIP = net.IP(packet[12:16]).To4().String()
+		h.SrcIP = ipv4BytesToString(packet[8:12])
+		h.DstIP = ipv4BytesToString(packet[12:16])
 		totalLen += 8
 	}
 

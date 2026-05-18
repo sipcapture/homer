@@ -38,11 +38,11 @@ const (
 // tcpServer implements gnet.EventHandler for high-performance TCP server
 type tcpServer struct {
 	gnet.BuiltinEventEngine
-	hepInput   *HEPInput
-	eng        gnet.Engine
-	multicore  bool
-	serverAddr string
-	packetPool *sync.Pool
+	hepInput    *HEPInput
+	eng         gnet.Engine
+	multicore   bool
+	serverAddr  string
+	recvMetrics ingestReceiveMetrics
 	// Per-connection batch buffer for efficient packet batching
 	batchBuffers sync.Pool
 }
@@ -113,11 +113,10 @@ func (ts *tcpServer) OnTraffic(c gnet.Conn) gnet.Action {
 			break // Wait for more data - this is critical to prevent busy loop
 		}
 
-		// Get buffer from pool
-		buf := ts.packetPool.Get().([]byte)
+		// Get buffer from shared ingest pool
+		buf := ts.hepInput.getPacketBuf()
 		if cap(buf) < int(pktSize) {
-			// Buffer too small, allocate new one
-			ts.packetPool.Put(buf)
+			ts.hepInput.putPacketBuf(buf)
 			buf = make([]byte, pktSize)
 		} else {
 			buf = buf[:pktSize]
@@ -129,7 +128,7 @@ func (ts *tcpServer) OnTraffic(c gnet.Conn) gnet.Action {
 			if err == nil {
 				logger.Error("read size mismatch", "expected", pktSize, "got", n)
 			}
-			ts.packetPool.Put(buf)
+			ts.hepInput.putPacketBuf(buf)
 			atomic.AddUint64(&ts.hepInput.stats.ErrCount, 1)
 			if err != nil {
 				return gnet.Close
@@ -143,14 +142,10 @@ func (ts *tcpServer) OnTraffic(c gnet.Conn) gnet.Action {
 			logger.GetLogger().Debug("received complete HEP packet via TCP", "size", pktSize, "remote", c.RemoteAddr())
 		}
 
-		// Record Prometheus metrics
-		metrics.RecordHEPPacketReceived("tcp")
-		metrics.RecordHEPPacketSize("tcp", int(pktSize))
-		metrics.RecordBytesReceived("tcp", int64(pktSize))
-
 		// Add to batch
 		packets = append(packets, buf)
 		atomic.AddUint64(&ts.hepInput.stats.PktCount, 1)
+		ts.recvMetrics.record(int(pktSize))
 	}
 
 	// Send packets to input channel efficiently
@@ -185,10 +180,8 @@ func (ts *tcpServer) sendBatchOptimized(packets [][]byte) {
 			// Channel full - this should be rare with 40k buffer capacity
 			// Use blocking send but check if server is stopped
 			if atomic.LoadUint32(&ts.hepInput.stopped) == 1 {
-				// Server stopped, return buffer to pool and skip
-				if cap(pkt) >= maxPktLen {
-					ts.packetPool.Put(pkt[:maxPktLen])
-				}
+				ts.hepInput.putPacketBuf(pkt)
+				ts.recvMetrics.flush()
 				return
 			}
 			// Blocking send - this will wait until channel has space
@@ -208,18 +201,11 @@ func (h *HEPInput) serveTCP(addr string, port int, multicore bool) {
 
 	serverAddr := fmt.Sprintf("tcp://%s:%d", addr, port)
 
-	// Create packet pool for zero-allocation packet handling
-	packetPool := &sync.Pool{
-		New: func() interface{} {
-			return make([]byte, maxPktLen)
-		},
-	}
-
 	ts := &tcpServer{
-		hepInput:   h,
-		multicore:  multicore,
-		serverAddr: serverAddr,
-		packetPool: packetPool,
+		hepInput:    h,
+		multicore:   multicore,
+		serverAddr:  serverAddr,
+		recvMetrics: newIngestReceiveMetrics("tcp"),
 	}
 
 	// Initialize batch buffer pool

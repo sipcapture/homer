@@ -97,6 +97,19 @@ type HEPStats struct {
 
 const maxPktLen = 65507
 
+// getPacketBuf returns a pooled packet buffer (maxPktLen capacity).
+// Always pair with putPacketBuf after the worker or receiver is done.
+func (h *HEPInput) getPacketBuf() []byte {
+	return h.buffer.Get().([]byte)
+}
+
+// putPacketBuf returns a buffer to the shared ingest pool.
+func (h *HEPInput) putPacketBuf(buf []byte) {
+	if cap(buf) >= maxPktLen {
+		h.buffer.Put(buf[:maxPktLen])
+	}
+}
+
 func NewHEPInput() *HEPInput {
 	queueSize := 200000
 	if homerconfig.MainConfig != nil {
@@ -324,9 +337,7 @@ func (h *HEPInput) worker() {
 			if err != nil {
 				atomic.AddUint64(&h.stats.ErrCount, 1)
 				metrics.RecordHEPPacketFailed(protocol, "decode_error")
-				if cap(msg.data) >= maxPktLen {
-					h.buffer.Put(msg.data[:maxPktLen])
-				}
+				h.putPacketBuf(msg.data)
 				if wm.count >= serverMetricsFlushInterval {
 					wm.flush(protocol)
 				}
@@ -335,9 +346,8 @@ func (h *HEPInput) worker() {
 			if hepPkt.ProtoType == 0 {
 				atomic.AddUint64(&h.stats.DupCount, 1)
 				metrics.RecordHEPPacketFailed(protocol, "duplicate")
-				if cap(msg.data) >= maxPktLen {
-					h.buffer.Put(msg.data[:maxPktLen])
-				}
+				decoder.ReleaseHEP(hepPkt)
+				h.putPacketBuf(msg.data)
 				if wm.count >= serverMetricsFlushInterval {
 					wm.flush(protocol)
 				}
@@ -362,9 +372,9 @@ func (h *HEPInput) worker() {
 				}
 			}
 
-			if cap(msg.data) >= maxPktLen {
-				h.buffer.Put(msg.data[:maxPktLen])
-			}
+			h.putPacketBuf(msg.data)
+
+			decoder.ReleaseHEP(hepPkt)
 
 			if wm.count >= serverMetricsFlushInterval {
 				wm.flush(protocol)

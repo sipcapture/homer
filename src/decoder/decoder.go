@@ -171,9 +171,10 @@ func (h *HEP) ShouldForcePayload() bool {
 
 // Decode parses a HEP packet using this decoder's configuration
 func (d *Decoder) Decode(packet []byte) (*HEP, error) {
-	hep := &HEP{decoder: d}
+	hep := acquireHEP(d)
 	err := hep.parse(packet)
 	if err != nil {
+		ReleaseHEP(hep)
 		return nil, err
 	}
 	return hep, nil

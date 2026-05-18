@@ -39,15 +39,19 @@ var upgrader = websocket.FastHTTPUpgrader{
 
 // HTTPServer handles HTTP requests for HEP packet reception using fasthttp
 type HTTPServer struct {
-	hepInput *HEPInput
-	server   *fasthttp.Server
-	stopped  uint32
+	hepInput    *HEPInput
+	server      *fasthttp.Server
+	stopped     uint32
+	recvHTTP    ingestReceiveMetrics
+	recvWS      ingestReceiveMetrics
 }
 
 // NewHTTPServer creates a new HTTP server for HEP packet reception
 func NewHTTPServer(hepInput *HEPInput) *HTTPServer {
 	hs := &HTTPServer{
 		hepInput: hepInput,
+		recvHTTP: newIngestReceiveMetrics("http"),
+		recvWS:   newIngestReceiveMetrics("websocket"),
 	}
 
 	cfg := homerconfig.MainConfig.Setting.HTTP_SETTINGS
@@ -128,51 +132,14 @@ func (hs *HTTPServer) handleHEPPacket(ctx *fasthttp.RequestCtx) {
 		ctx.Error("Empty request body", fasthttp.StatusBadRequest)
 		return
 	}
-
-	// Copy body to avoid referencing fasthttp's internal buffer
-	packet := make([]byte, len(body))
-	copy(packet, body)
-
-	// Auto-detect format: HEP3 starts with "HEP3", HEP2 starts with 0x01/0x02, otherwise protobuf
-	if len(packet) >= 4 && string(packet[0:4]) == "HEP3" {
-		logger.Debug("HTTP: received HEP3 binary packet", "size", len(packet))
-	} else if len(packet) >= 1 && (packet[0] == 0x01 || packet[0] == 0x02) {
-		logger.Debug("HTTP: received HEP2 binary packet", "size", len(packet))
+	if len(body) >= 4 && string(body[0:4]) == "HEP3" {
+		logger.Debug("HTTP: received HEP3 binary packet", "size", len(body))
+	} else if len(body) >= 1 && (body[0] == 0x01 || body[0] == 0x02) {
+		logger.Debug("HTTP: received HEP2 binary packet", "size", len(body))
 	} else {
-		logger.Debug("HTTP: received protobuf packet", "size", len(packet))
+		logger.Debug("HTTP: received protobuf packet", "size", len(body))
 	}
-
-	// Record metrics
-	metrics.RecordHEPPacketReceived("http")
-	metrics.RecordHEPPacketSize("http", len(packet))
-	metrics.RecordBytesReceived("http", int64(len(packet)))
-
-	// Send to input channel (non-blocking)
-	select {
-	case hs.hepInput.inputCh <- incomingPacket{
-		data:       packet,
-		protocol:   "http",
-		receivedAt: time.Now(),
-	}:
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	default:
-		// Channel full
-		if atomic.LoadUint32(&hs.stopped) == 1 {
-			ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
-			return
-		}
-		// Fallback to blocking send
-		hs.hepInput.inputCh <- incomingPacket{
-			data:       packet,
-			protocol:   "http",
-			receivedAt: time.Now(),
-		}
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	}
+	handleIngestPOST(hs.hepInput, ctx, "http", &hs.recvHTTP)
 }
 
 // handleHEPBinary handles HEP packets in binary format
@@ -182,43 +149,7 @@ func (hs *HTTPServer) handleHEPBinary(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	body := ctx.PostBody()
-	if len(body) == 0 {
-		ctx.Error("Empty request body", fasthttp.StatusBadRequest)
-		return
-	}
-
-	// Copy body to avoid referencing fasthttp's internal buffer
-	packet := make([]byte, len(body))
-	copy(packet, body)
-
-	metrics.RecordHEPPacketReceived("http")
-	metrics.RecordHEPPacketSize("http", len(packet))
-	metrics.RecordBytesReceived("http", int64(len(packet)))
-
-	select {
-	case hs.hepInput.inputCh <- incomingPacket{
-		data:       packet,
-		protocol:   "http",
-		receivedAt: time.Now(),
-	}:
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	default:
-		if atomic.LoadUint32(&hs.stopped) == 1 {
-			ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
-			return
-		}
-		hs.hepInput.inputCh <- incomingPacket{
-			data:       packet,
-			protocol:   "http",
-			receivedAt: time.Now(),
-		}
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	}
+	handleIngestPOST(hs.hepInput, ctx, "http", &hs.recvHTTP)
 }
 
 // handleHEPProtobuf handles HEP packets in protobuf format
@@ -228,43 +159,7 @@ func (hs *HTTPServer) handleHEPProtobuf(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	body := ctx.PostBody()
-	if len(body) == 0 {
-		ctx.Error("Empty request body", fasthttp.StatusBadRequest)
-		return
-	}
-
-	// Copy body to avoid referencing fasthttp's internal buffer
-	packet := make([]byte, len(body))
-	copy(packet, body)
-
-	metrics.RecordHEPPacketReceived("http")
-	metrics.RecordHEPPacketSize("http", len(packet))
-	metrics.RecordBytesReceived("http", int64(len(packet)))
-
-	select {
-	case hs.hepInput.inputCh <- incomingPacket{
-		data:       packet,
-		protocol:   "http",
-		receivedAt: time.Now(),
-	}:
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	default:
-		if atomic.LoadUint32(&hs.stopped) == 1 {
-			ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
-			return
-		}
-		hs.hepInput.inputCh <- incomingPacket{
-			data:       packet,
-			protocol:   "http",
-			receivedAt: time.Now(),
-		}
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	}
+	handleIngestPOST(hs.hepInput, ctx, "http", &hs.recvHTTP)
 }
 
 // handleWebSocket handles WebSocket connections for HEP packet reception
@@ -321,30 +216,9 @@ func (hs *HTTPServer) handleWebSocket(ctx *fasthttp.RequestCtx) {
 					continue
 				}
 
-				// Record metrics
-				metrics.RecordHEPPacketReceived("websocket")
-				metrics.RecordHEPPacketSize("websocket", len(message))
-				metrics.RecordBytesReceived("websocket", int64(len(message)))
-
-				// Send to input channel (non-blocking)
-				select {
-				case hs.hepInput.inputCh <- incomingPacket{
-					data:       message,
-					protocol:   "websocket",
-					receivedAt: time.Now(),
-				}:
-					atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-				default:
-					if atomic.LoadUint32(&hs.stopped) == 1 {
-						break
-					}
-					// Fallback to blocking send
-					hs.hepInput.inputCh <- incomingPacket{
-						data:       message,
-						protocol:   "websocket",
-						receivedAt: time.Now(),
-					}
-					atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
+				packet := copyPacketToPool(hs.hepInput, message)
+				if !enqueueHTTPPacket(hs.hepInput, "websocket", packet, &hs.recvWS) {
+					break
 				}
 			}
 		}

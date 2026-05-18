@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,10 +34,10 @@ import (
 // udpServer implements gnet.EventHandler for high-performance UDP server
 type udpServer struct {
 	gnet.BuiltinEventEngine
-	hepInput   *HEPInput
-	eng        gnet.Engine
-	serverAddr string
-	packetPool *sync.Pool
+	hepInput    *HEPInput
+	eng         gnet.Engine
+	serverAddr  string
+	recvMetrics ingestReceiveMetrics
 }
 
 // OnBoot is called when the engine is ready
@@ -84,29 +83,28 @@ func (us *udpServer) OnTraffic(c gnet.Conn) gnet.Action {
 	}
 
 	// Copy packet data into pooled buffer (Next buffer is reused by gnet)
-	buf := us.packetPool.Get().([]byte)
+	buf := us.hepInput.getPacketBuf()
 	buf = buf[:len(packet)]
 	copy(buf, packet)
 
 	// Single time.Now() call for the entire hot path
 	now := time.Now()
 
-	metrics.RecordHEPPacketReceived("udp")
-	metrics.RecordHEPPacketSize("udp", int(pktSize))
-	metrics.RecordBytesReceived("udp", int64(pktSize))
-
 	pkt := incomingPacket{data: buf, protocol: "udp", receivedAt: now}
 
 	select {
 	case us.hepInput.inputCh <- pkt:
 		atomic.AddUint64(&us.hepInput.stats.PktCount, 1)
+		us.recvMetrics.record(int(pktSize))
 	default:
 		if atomic.LoadUint32(&us.hepInput.stopped) == 1 {
-			us.packetPool.Put(buf[:maxPktLen])
+			us.hepInput.putPacketBuf(buf)
+			us.recvMetrics.flush()
 			return gnet.Shutdown
 		}
 		us.hepInput.inputCh <- pkt
 		atomic.AddUint64(&us.hepInput.stats.PktCount, 1)
+		us.recvMetrics.record(int(pktSize))
 	}
 
 	return gnet.None
@@ -134,7 +132,7 @@ func (us *udpServer) React(packet []byte, c gnet.Conn) (out []byte, action gnet.
 		return nil, gnet.None
 	}
 
-	buf := us.packetPool.Get().([]byte)
+	buf := us.hepInput.getPacketBuf()
 	buf = buf[:len(packet)]
 	copy(buf, packet)
 
@@ -144,13 +142,16 @@ func (us *udpServer) React(packet []byte, c gnet.Conn) (out []byte, action gnet.
 	select {
 	case us.hepInput.inputCh <- pkt:
 		atomic.AddUint64(&us.hepInput.stats.PktCount, 1)
+		us.recvMetrics.record(int(pktSize))
 	default:
 		if atomic.LoadUint32(&us.hepInput.stopped) == 1 {
-			us.packetPool.Put(buf[:maxPktLen])
+			us.hepInput.putPacketBuf(buf)
+			us.recvMetrics.flush()
 			return nil, gnet.Shutdown
 		}
 		us.hepInput.inputCh <- pkt
 		atomic.AddUint64(&us.hepInput.stats.PktCount, 1)
+		us.recvMetrics.record(int(pktSize))
 	}
 
 	return nil, gnet.None
@@ -190,17 +191,10 @@ func (h *HEPInput) serveUDP(addr string) {
 
 	warnUDPSysctlLimits(socketRecvBuf)
 
-	// Create packet pool for zero-allocation packet handling
-	packetPool := &sync.Pool{
-		New: func() interface{} {
-			return make([]byte, maxPktLen)
-		},
-	}
-
 	us := &udpServer{
-		hepInput:   h,
-		serverAddr: serverAddr,
-		packetPool: packetPool,
+		hepInput:    h,
+		serverAddr:  serverAddr,
+		recvMetrics: newIngestReceiveMetrics("udp"),
 	}
 
 	logger.Info("Starting UDP server",

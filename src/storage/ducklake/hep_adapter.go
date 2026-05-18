@@ -229,7 +229,7 @@ func (a *MultiTableAdapter) buildSIPCallValues(hep *decoder.HEP, uid string, dat
 		cseqMethod = hep.SIP.CseqMethod
 	}
 
-	extraJSON := buildExtraJSON(hep)
+	extraJSON := buildExtraJSONCell(hep)
 
 	// Columns: uuid, date, timestamp, session_id, caller, callee, src_ip, dst_ip,
 	//          src_port, dst_port, method, response_code, cseq_method,
@@ -270,7 +270,7 @@ func (a *MultiTableAdapter) buildSIPRegistrationValues(hep *decoder.HEP, uid str
 		responseCode = hep.SIP.FirstResp
 	}
 
-	extraJSON := buildExtraJSON(hep)
+	extraJSON := buildExtraJSONCell(hep)
 
 	// Columns: uuid, date, timestamp, session_id, aor, contact, expires, user_agent,
 	//          src_ip, dst_ip, src_port, dst_port, method, response_code,
@@ -307,7 +307,7 @@ func (a *MultiTableAdapter) buildSIPDefaultValues(hep *decoder.HEP, uid string, 
 		responseCode = hep.SIP.FirstResp
 	}
 
-	extraJSON := buildExtraJSON(hep)
+	extraJSON := buildExtraJSONCell(hep)
 
 	// Columns: uuid, date, timestamp, session_id, src_ip, dst_ip,
 	//          src_port, dst_port, method, response_code,
@@ -500,72 +500,147 @@ func appendJSONField(b *[]byte, first *bool, key, value string) {
 }
 
 var sbPool = sync.Pool{New: func() interface{} {
-	b := make([]byte, 0, 256)
+	b := make([]byte, 0, 384)
 	return &b
 }}
 
-// buildExtraJSON builds the data_extra JSON string directly without
-// map allocation or reflection-based encoding/json.Marshal.
-// Uses a pooled []byte buffer; the result is a copy (string(b)) so
-// the caller may hold the string indefinitely — the pool slot is returned
-// before this function returns.
-func buildExtraJSON(hep *decoder.HEP) string {
+// sipExtraFields drives data_extra JSON for SIP without repeating appendJSONField calls.
+var sipExtraFields = []struct {
+	key string
+	get func(*decoder.HEP) string
+}{
+	{"from_host", func(h *decoder.HEP) string { return h.SIP.FromHost }},
+	{"to_host", func(h *decoder.HEP) string { return h.SIP.ToHost }},
+	{"user_agent", func(h *decoder.HEP) string { return h.SIP.UserAgent }},
+	{"server", func(h *decoder.HEP) string { return h.SIP.Server }},
+	{"via", func(h *decoder.HEP) string { return h.SIP.ViaOne }},
+	{"contact", func(h *decoder.HEP) string { return h.SIP.ContactVal }},
+	{"authorization", func(h *decoder.HEP) string { return h.SIP.AuthVal }},
+	{"content_type", func(h *decoder.HEP) string { return h.SIP.ContentType }},
+	{"content_length", func(h *decoder.HEP) string { return h.SIP.ContentLength }},
+	{"cseq", func(h *decoder.HEP) string { return h.SIP.CseqVal }},
+	{"expires", func(h *decoder.HEP) string { return h.SIP.Expires }},
+	{"max_forwards", func(h *decoder.HEP) string { return h.SIP.MaxForwards }},
+	{"response_code", func(h *decoder.HEP) string { return h.SIP.FirstResp }},
+	{"response_reason", func(h *decoder.HEP) string { return h.SIP.FirstRespText }},
+	{"request_uri", func(h *decoder.HEP) string { return h.SIP.URIRaw }},
+	{"from_tag", func(h *decoder.HEP) string { return h.SIP.FromTag }},
+	{"to_tag", func(h *decoder.HEP) string { return h.SIP.ToTag }},
+	{"branch", func(h *decoder.HEP) string { return h.SIP.ViaOneBranch }},
+	{"x_call_id", func(h *decoder.HEP) string { return h.SIP.XCallID }},
+}
+
+func appendSIPExtraFields(b *[]byte, first *bool, hep *decoder.HEP) {
+	if hep.SIP == nil {
+		return
+	}
+	for _, f := range sipExtraFields {
+		appendJSONField(b, first, f.key, f.get(hep))
+	}
+	if len(hep.SIP.CustomHeader) > 0 {
+		if !*first {
+			*b = append(*b, ',')
+		}
+		*b = append(*b, `"custom_headers":{`...)
+		cfirst := true
+		for k, v := range hep.SIP.CustomHeader {
+			if !cfirst {
+				*b = append(*b, ',')
+			}
+			cfirst = false
+			*b = append(*b, '"')
+			writeJSONStringEscaped(b, k)
+			*b = append(*b, '"', ':', '"')
+			writeJSONStringEscaped(b, v)
+			*b = append(*b, '"')
+		}
+		*b = append(*b, '}')
+	}
+}
+
+// sipVersionOnlyCache caches {"version":N} for SIP when no optional fields are set.
+var sipVersionOnlyCache sync.Map // uint32 version -> string
+
+func cachedSIPVersionOnlyJSON(version uint32) string {
+	if v, ok := sipVersionOnlyCache.Load(version); ok {
+		return v.(string)
+	}
 	bp := sbPool.Get().(*[]byte)
 	b := (*bp)[:0]
+	b = append(b, `{"version":`...)
+	b = strconv.AppendUint(b, uint64(version), 10)
+	b = append(b, '}')
+	s := string(b)
+	*bp = b
+	sbPool.Put(bp)
+	sipVersionOnlyCache.Store(version, s)
+	return s
+}
 
+func buildSIPExtraJSONInto(b []byte, hep *decoder.HEP) []byte {
 	b = append(b, '{')
 	b = append(b, `"version":`...)
 	b = strconv.AppendUint(b, uint64(hep.Version), 10)
 	first := false
+	appendSIPExtraFields(&b, &first, hep)
+	b = append(b, '}')
+	return b
+}
 
-	if hep.SIP != nil {
-		appendJSONField(&b, &first, "from_host", hep.SIP.FromHost)
-		appendJSONField(&b, &first, "to_host", hep.SIP.ToHost)
-		appendJSONField(&b, &first, "user_agent", hep.SIP.UserAgent)
-		appendJSONField(&b, &first, "server", hep.SIP.Server)
-		appendJSONField(&b, &first, "via", hep.SIP.ViaOne)
-		appendJSONField(&b, &first, "contact", hep.SIP.ContactVal)
-		appendJSONField(&b, &first, "authorization", hep.SIP.AuthVal)
-		appendJSONField(&b, &first, "content_type", hep.SIP.ContentType)
-		appendJSONField(&b, &first, "content_length", hep.SIP.ContentLength)
-		appendJSONField(&b, &first, "cseq", hep.SIP.CseqVal)
-		appendJSONField(&b, &first, "expires", hep.SIP.Expires)
-		appendJSONField(&b, &first, "max_forwards", hep.SIP.MaxForwards)
-		appendJSONField(&b, &first, "response_code", hep.SIP.FirstResp)
-		appendJSONField(&b, &first, "response_reason", hep.SIP.FirstRespText)
-		appendJSONField(&b, &first, "request_uri", hep.SIP.URIRaw)
-		appendJSONField(&b, &first, "from_tag", hep.SIP.FromTag)
-		appendJSONField(&b, &first, "to_tag", hep.SIP.ToTag)
-		appendJSONField(&b, &first, "branch", hep.SIP.ViaOneBranch)
-		appendJSONField(&b, &first, "x_call_id", hep.SIP.XCallID)
+// buildExtraJSONCell returns a value suitable for row data_extra column.
+// Either a cached string or *([]byte) (pooled; released in putRowSlice).
+func buildExtraJSONCell(hep *decoder.HEP) interface{} {
+	if hep.SIP == nil {
+		return buildSimpleExtraJSON(hep)
+	}
+	bp := sbPool.Get().(*[]byte)
+	b := buildSIPExtraJSONInto((*bp)[:0], hep)
+	// Version-only SIP extras hit the string cache (no batch retention).
+	if len(b) <= 16 && !bytesContainsComma(b) {
+		sbPool.Put(bp)
+		return cachedSIPVersionOnlyJSON(hep.Version)
+	}
+	*bp = b
+	return bp
+}
 
-		if len(hep.SIP.CustomHeader) > 0 {
-			if !first {
-				b = append(b, ',')
-			}
-			b = append(b, `"custom_headers":{`...)
-			cfirst := true
-			for k, v := range hep.SIP.CustomHeader {
-				if !cfirst {
-					b = append(b, ',')
-				}
-				cfirst = false
-				b = append(b, '"')
-				writeJSONStringEscaped(&b, k)
-				b = append(b, '"', ':', '"')
-				writeJSONStringEscaped(&b, v)
-				b = append(b, '"')
-			}
-			b = append(b, '}')
+func bytesContainsComma(b []byte) bool {
+	for _, c := range b {
+		if c == ',' {
+			return true
 		}
 	}
+	return false
+}
 
-	b = append(b, '}')
-	// string(b) copies the bytes — necessary because the pool slot is returned
-	// immediately below and could be reused by another goroutine before
-	// the Appender consumes this row from tw.batch.
-	s := string(b)
-	*bp = b
+// releaseExtraJSONCell returns pooled data_extra buffers to sbPool.
+func releaseExtraJSONCell(v interface{}) {
+	if bp, ok := v.(*[]byte); ok && bp != nil {
+		sbPool.Put(bp)
+	}
+}
+
+// cellToDriverValue converts a batch cell to a driver value. Pooled JSON
+// buffers become strings here (one alloc per row) at flush time, not on
+// the WriteHEP hot path.
+func cellToDriverValue(v interface{}) interface{} {
+	if bp, ok := v.(*[]byte); ok {
+		if bp == nil || len(*bp) == 0 {
+			return "{}"
+		}
+		return string(*bp)
+	}
+	return v
+}
+
+// buildExtraJSON builds the data_extra JSON string (legacy single-table path).
+func buildExtraJSON(hep *decoder.HEP) string {
+	cell := buildExtraJSONCell(hep)
+	if s, ok := cell.(string); ok {
+		return s
+	}
+	bp := cell.(*[]byte)
+	s := string(*bp)
 	sbPool.Put(bp)
 	return s
 }

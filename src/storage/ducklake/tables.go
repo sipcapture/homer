@@ -401,6 +401,7 @@ func getRowSlice(n int) []interface{} {
 // putRowSlice returns a row slice to the pool, clearing all references.
 func putRowSlice(row []interface{}) {
 	for i := range row {
+		releaseExtraJSONCell(row[i])
 		row[i] = nil
 	}
 	p := row[:0]
@@ -606,7 +607,7 @@ func (tw *TableWriter) flushBatch() error {
 		}
 		for _, row := range rows {
 			for i, v := range row {
-				vals[i] = v
+				vals[i] = cellToDriverValue(v)
 			}
 			if appErr = appender.AppendRow(vals...); appErr != nil {
 				appender.Close()

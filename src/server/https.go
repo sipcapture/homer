@@ -44,16 +44,20 @@ var httpsUpgrader = websocket.FastHTTPUpgrader{
 
 // HTTPSServer handles HTTPS requests for HEP packet reception using fasthttp
 type HTTPSServer struct {
-	hepInput *HEPInput
-	server   *fasthttp.Server
-	tlsConfig *tls.Config
-	stopped  uint32
+	hepInput    *HEPInput
+	server      *fasthttp.Server
+	tlsConfig   *tls.Config
+	stopped     uint32
+	recvHTTPS ingestReceiveMetrics
+	recvWSS   ingestReceiveMetrics
 }
 
 // NewHTTPSServer creates a new HTTPS server for HEP packet reception
 func NewHTTPSServer(hepInput *HEPInput) *HTTPSServer {
 	hs := &HTTPSServer{
-		hepInput: hepInput,
+		hepInput:  hepInput,
+		recvHTTPS: newIngestReceiveMetrics("https"),
+		recvWSS:   newIngestReceiveMetrics("wss"),
 	}
 
 	// Use new location (SERVER_SETTINGS.HTTPS_SERVER)
@@ -364,49 +368,14 @@ func (hs *HTTPSServer) handleHEPPacket(ctx *fasthttp.RequestCtx) {
 		ctx.Error("Empty request body", fasthttp.StatusBadRequest)
 		return
 	}
-
-	// Copy body to avoid referencing fasthttp's internal buffer
-	packet := make([]byte, len(body))
-	copy(packet, body)
-
-	// Auto-detect format
-	if len(packet) >= 4 && string(packet[0:4]) == "HEP3" {
-		logger.Debug("HTTPS: received HEP3 binary packet", "size", len(packet))
-	} else if len(packet) >= 1 && (packet[0] == 0x01 || packet[0] == 0x02) {
-		logger.Debug("HTTPS: received HEP2 binary packet", "size", len(packet))
+	if len(body) >= 4 && string(body[0:4]) == "HEP3" {
+		logger.Debug("HTTPS: received HEP3 binary packet", "size", len(body))
+	} else if len(body) >= 1 && (body[0] == 0x01 || body[0] == 0x02) {
+		logger.Debug("HTTPS: received HEP2 binary packet", "size", len(body))
 	} else {
-		logger.Debug("HTTPS: received protobuf packet", "size", len(packet))
+		logger.Debug("HTTPS: received protobuf packet", "size", len(body))
 	}
-
-	// Record metrics
-	metrics.RecordHEPPacketReceived("https")
-	metrics.RecordHEPPacketSize("https", len(packet))
-	metrics.RecordBytesReceived("https", int64(len(packet)))
-
-	// Send to input channel (non-blocking)
-	select {
-	case hs.hepInput.inputCh <- incomingPacket{
-		data:       packet,
-		protocol:   "https",
-		receivedAt: time.Now(),
-	}:
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	default:
-		if atomic.LoadUint32(&hs.stopped) == 1 {
-			ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
-			return
-		}
-		hs.hepInput.inputCh <- incomingPacket{
-			data:       packet,
-			protocol:   "https",
-			receivedAt: time.Now(),
-		}
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	}
+	handleIngestPOST(hs.hepInput, ctx, "https", &hs.recvHTTPS)
 }
 
 // handleHEPBinary handles HEP packets in binary format
@@ -415,43 +384,7 @@ func (hs *HTTPSServer) handleHEPBinary(ctx *fasthttp.RequestCtx) {
 		ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
 		return
 	}
-
-	body := ctx.PostBody()
-	if len(body) == 0 {
-		ctx.Error("Empty request body", fasthttp.StatusBadRequest)
-		return
-	}
-
-	packet := make([]byte, len(body))
-	copy(packet, body)
-
-	metrics.RecordHEPPacketReceived("https")
-	metrics.RecordHEPPacketSize("https", len(packet))
-	metrics.RecordBytesReceived("https", int64(len(packet)))
-
-	select {
-	case hs.hepInput.inputCh <- incomingPacket{
-		data:       packet,
-		protocol:   "https",
-		receivedAt: time.Now(),
-	}:
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	default:
-		if atomic.LoadUint32(&hs.stopped) == 1 {
-			ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
-			return
-		}
-		hs.hepInput.inputCh <- incomingPacket{
-			data:       packet,
-			protocol:   "https",
-			receivedAt: time.Now(),
-		}
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	}
+	handleIngestPOST(hs.hepInput, ctx, "https", &hs.recvHTTPS)
 }
 
 // handleHEPProtobuf handles HEP packets in protobuf format
@@ -460,43 +393,7 @@ func (hs *HTTPSServer) handleHEPProtobuf(ctx *fasthttp.RequestCtx) {
 		ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
 		return
 	}
-
-	body := ctx.PostBody()
-	if len(body) == 0 {
-		ctx.Error("Empty request body", fasthttp.StatusBadRequest)
-		return
-	}
-
-	packet := make([]byte, len(body))
-	copy(packet, body)
-
-	metrics.RecordHEPPacketReceived("https")
-	metrics.RecordHEPPacketSize("https", len(packet))
-	metrics.RecordBytesReceived("https", int64(len(packet)))
-
-	select {
-	case hs.hepInput.inputCh <- incomingPacket{
-		data:       packet,
-		protocol:   "https",
-		receivedAt: time.Now(),
-	}:
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	default:
-		if atomic.LoadUint32(&hs.stopped) == 1 {
-			ctx.Error("Service Unavailable", fasthttp.StatusServiceUnavailable)
-			return
-		}
-		hs.hepInput.inputCh <- incomingPacket{
-			data:       packet,
-			protocol:   "https",
-			receivedAt: time.Now(),
-		}
-		atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-		ctx.SetStatusCode(fasthttp.StatusOK)
-		ctx.SetBodyString("OK")
-	}
+	handleIngestPOST(hs.hepInput, ctx, "https", &hs.recvHTTPS)
 }
 
 // handleWebSocket handles WebSocket connections for HEP packet reception
@@ -550,27 +447,9 @@ func (hs *HTTPSServer) handleWebSocket(ctx *fasthttp.RequestCtx) {
 					continue
 				}
 
-				metrics.RecordHEPPacketReceived("websocket")
-				metrics.RecordHEPPacketSize("websocket", len(message))
-				metrics.RecordBytesReceived("websocket", int64(len(message)))
-
-				select {
-				case hs.hepInput.inputCh <- incomingPacket{
-					data:       message,
-					protocol:   "wss",
-					receivedAt: time.Now(),
-				}:
-					atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
-				default:
-					if atomic.LoadUint32(&hs.stopped) == 1 {
-						break
-					}
-					hs.hepInput.inputCh <- incomingPacket{
-						data:       message,
-						protocol:   "wss",
-						receivedAt: time.Now(),
-					}
-					atomic.AddUint64(&hs.hepInput.stats.PktCount, 1)
+				packet := copyPacketToPool(hs.hepInput, message)
+				if !enqueueHTTPPacket(hs.hepInput, "wss", packet, &hs.recvWSS) {
+					break
 				}
 			}
 		}

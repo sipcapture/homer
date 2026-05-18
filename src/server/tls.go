@@ -46,8 +46,8 @@ type tlsServer struct {
 	eng        gnet.Engine
 	multicore  bool
 	serverAddr string
-	tlsConfig  *gtls.Config
-	packetPool *sync.Pool
+	tlsConfig   *gtls.Config
+	recvMetrics ingestReceiveMetrics
 	// Per-connection batch buffer for efficient packet batching
 	batchBuffers sync.Pool
 	// TLS connections map: gnet.Conn -> gtls.Conn
@@ -197,10 +197,10 @@ func (ts *tlsServer) OnTraffic(c gnet.Conn) gnet.Action {
 				break
 			}
 
-			// Get buffer from pool and copy packet
-			pktBuf := ts.packetPool.Get().([]byte)
+			// Get buffer from shared ingest pool and copy packet
+			pktBuf := ts.hepInput.getPacketBuf()
 			if cap(pktBuf) < int(pktSize) {
-				ts.packetPool.Put(pktBuf)
+				ts.hepInput.putPacketBuf(pktBuf)
 				pktBuf = make([]byte, pktSize)
 			} else {
 				pktBuf = pktBuf[:pktSize]
@@ -214,6 +214,7 @@ func (ts *tlsServer) OnTraffic(c gnet.Conn) gnet.Action {
 
 			packets = append(packets, pktBuf)
 			atomic.AddUint64(&ts.hepInput.stats.PktCount, 1)
+			ts.recvMetrics.record(int(pktSize))
 			processed += int(pktSize)
 
 			// Send batch when full
@@ -267,10 +268,8 @@ func (ts *tlsServer) sendBatchOptimized(packets [][]byte) {
 		default:
 			// Channel full - check if server stopped before blocking
 			if atomic.LoadUint32(&ts.hepInput.stopped) == 1 {
-				// Server stopped, return buffer to pool and skip
-				if cap(pkt) >= maxPktLen {
-					ts.packetPool.Put(pkt[:maxPktLen])
-				}
+				ts.hepInput.putPacketBuf(pkt)
+				ts.recvMetrics.flush()
 				return
 			}
 			// Fallback to blocking send
@@ -487,19 +486,12 @@ func (h *HEPInput) serveTLS(addr string, port int, tlsSettings *TLSSettings) {
 
 	serverAddr := fmt.Sprintf("tcp://%s:%d", addr, port)
 
-	// Create packet pool for zero-allocation packet handling
-	packetPool := &sync.Pool{
-		New: func() interface{} {
-			return make([]byte, maxPktLen)
-		},
-	}
-
 	ts := &tlsServer{
 		hepInput:    h,
 		multicore:   true, // TLS benefits from multicore
 		serverAddr:  serverAddr,
 		tlsConfig:   tlsConfig,
-		packetPool:  packetPool,
+		recvMetrics: newIngestReceiveMetrics("tls"),
 		engineReady: make(chan gnet.Engine, 1),
 	}
 
