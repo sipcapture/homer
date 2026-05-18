@@ -4,8 +4,10 @@ github.com/Jeffail/gabs/v2 v2.7.0 h1:Y2edYaTcE8ZpRsR2AtmPu5xQdFDIthFG0jYhu5PY8kg
 github.com/Jeffail/gabs/v2 v2.7.0/go.mod h1:dp5ocw1FvBBQYssgHsG7I1WYsiLRtkUaB1FEtSwvNUw=
 github.com/VictoriaMetrics/fastcache v1.13.2 h1:2XTB49aLSuCex7e9P5rqrfQcMkzGjh5Vq3GMFa8YpCA=
 github.com/VictoriaMetrics/fastcache v1.13.2/go.mod h1:hHXhl4DA2fTL2HTZDJFXWgW0LNjo6B+4aj2Wmng3TjU=
-github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.3 h1:E0CxVWeEwtOnyP/ODp4qiTdWRnBRCfVsDrbekk12tGs=
-github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.3/go.mod h1:8KF3oEKrmYdSbZnQ1BPTdxAZDHRaM1LEv+oBvL2nSLk=
+github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.4 h1:POEhov9f6zTTe8ycVCAhw2oVb7vQRhnrh0ademlxfnc=
+github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.4/go.mod h1:8KF3oEKrmYdSbZnQ1BPTdxAZDHRaM1LEv+oBvL2nSLk=
+github.com/adubovikov/duckdb-go/v2 v2.10502.0-homer.1 h1:r1h5DeqIKCUDVuL+2+dl9b69bP7hhpISJ6aD7hNQ7/g=
+github.com/adubovikov/duckdb-go/v2 v2.10502.0-homer.1/go.mod h1:hyw+B4IYFx9L5Aqc2qfHQdG4K01vivbguYcrZwQ5gF8=
 github.com/ajstarks/svgo v0.0.0-20200320125537-f189e35d30ca/go.mod h1:K08gAheRH3/J6wwsYMMT4xOr94bZjxIelGM0+d/wbFw=
 github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa h1:LHTHcTQiSGT7VVbI0o4wBRNQIgn917usHWOd6VAffYI=
 github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa/go.mod h1:cEWa1LVoE5KvSD9ONXsZrj0z6KqySlCCNKHlLzbqAt4=
@@ -69,8 +71,6 @@ github.com/duckdb/duckdb-go-bindings/lib/linux-arm64 v0.10502.0 h1:pUwDWLQZIkm/v
 github.com/duckdb/duckdb-go-bindings/lib/linux-arm64 v0.10502.0/go.mod h1:81SGOYoEUs8qaAfSk1wRfM5oobrIJ5KI7AzYhK6/bvQ=
 github.com/duckdb/duckdb-go-bindings/lib/windows-amd64 v0.10502.0 h1:CDPf2ow6pP/9zYXfBdyT8a1GZ69eBWdMt5AhAsVgvyU=
 github.com/duckdb/duckdb-go-bindings/lib/windows-amd64 v0.10502.0/go.mod h1:K25pJL26ARblGDeuAkrdblFvUen92+CwksLtPEHRqqQ=
-github.com/duckdb/duckdb-go/v2 v2.10502.0 h1:YfdiBlXnlRdxIKu1AtBQSRI0/tGhOkIGshKq52+uA7A=
-github.com/duckdb/duckdb-go/v2 v2.10502.0/go.mod h1:a/31wL2vx7dJ0isrO+E6o28DBQVaVOMbKxp2BsHTGp0=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f h1:Y/CXytFA4m6baUTXGLOoWe4PQhGxaX0KpnayAqC48p4=

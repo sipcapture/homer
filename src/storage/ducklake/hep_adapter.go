@@ -10,7 +10,6 @@ package ducklake
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -18,6 +17,7 @@ import (
 	"time"
 	"unsafe"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/sipcapture/homer-core/src/decoder"
 )
 
@@ -622,14 +622,13 @@ func releaseExtraJSONCell(v interface{}) {
 }
 
 // cellToDriverValue converts a batch cell to a driver value. Pooled JSON
-// buffers are passed as json.RawMessage so duckdb-go setJSON does not
-// re-marshal and bindings VectorAssignStringElementLen avoids C.CBytes.
+// buffers use duckdb.AppendBytesUnsafe (zero-copy) instead of string/json.RawMessage.
 func cellToDriverValue(v interface{}) interface{} {
 	if bp, ok := v.(*[]byte); ok {
 		if bp == nil || len(*bp) == 0 {
-			return json.RawMessage("{}")
+			return duckdb.AppendBytesUnsafe([]byte("{}"))
 		}
-		return json.RawMessage(*bp)
+		return duckdb.AppendBytesUnsafe(*bp)
 	}
 	return v
 }
