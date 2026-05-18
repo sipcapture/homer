@@ -144,6 +144,25 @@ func (h *MappingsHandler) V4MappingsCreate(c echo.Context) error {
 	return c.JSON(http.StatusCreated, resp)
 }
 
+func (h *MappingsHandler) V4MappingsReset(c echo.Context) error {
+	if _, err := getUsernameFromContext(c); err != nil {
+		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
+	}
+	if !isAdmin(c) {
+		return writeError(c, http.StatusForbidden, "Forbidden", "Admin privileges required")
+	}
+	if err := h.service.ResetMappings(c.Request().Context()); err != nil {
+		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to reset mappings")
+	}
+	resp := MessageResponseV4{
+		Data: map[string]interface{}{
+			"message": "reset",
+		},
+		Meta: buildMeta(c, ""),
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
 func (h *MappingsHandler) V4MappingsGet(c echo.Context) error {
 	if _, err := getUsernameFromContext(c); err != nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")

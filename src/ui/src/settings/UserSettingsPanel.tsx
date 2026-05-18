@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Plus, RefreshCw } from 'lucide-react'
 import { EditIconButton, DeleteIconButton } from '@/components/ui/table-action-buttons'
@@ -24,6 +24,8 @@ import {
 import { cn } from '@/lib/utils'
 import { CrudEditDialog, Field, JsonEditorField, settingsEditTitle } from './CrudTable'
 import { SettingsPageHeader } from './SettingsPageHeader'
+import { SortableTableHead } from './SortableTableHead'
+import { useTableSort } from './useTableSort'
 
 export default function UserSettingsPanel() {
   const confirm = useConfirm()
@@ -83,6 +85,20 @@ export default function UserSettingsPanel() {
     }
     return list
   }, [items, filters])
+
+  const getSortValue = useCallback((item: any, columnKey: string) => {
+    if (columnKey === 'data') {
+      const v = item.data
+      if (v == null) return ''
+      return typeof v === 'object' ? JSON.stringify(v) : String(v)
+    }
+    return item[columnKey]
+  }, [])
+
+  const { sortCol, sortDir, toggleSort, sortedItems: tableRows } = useTableSort(
+    filteredItems,
+    getSortValue,
+  )
 
   const startEdit = (item) => {
     setEditingItem(item)
@@ -286,14 +302,32 @@ export default function UserSettingsPanel() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Param</TableHead>
-                  <TableHead>Data</TableHead>
+                  <SortableTableHead
+                    columnKey="category"
+                    label="Category"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="param"
+                    label="Param"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="data"
+                    label="Data"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredItems.map((item, idx) => (
+                {tableRows.map((item, idx) => (
                   <TableRow key={item.guid || idx}>
                     <TableCell className="font-medium">{item.category || '—'}</TableCell>
                     <TableCell>{item.param || '—'}</TableCell>

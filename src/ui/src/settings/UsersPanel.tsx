@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { Plus, RefreshCw } from 'lucide-react'
 import { EditIconButton, DeleteIconButton } from '@/components/ui/table-action-buttons'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,8 @@ import {
 import { cn } from '@/lib/utils'
 import { CrudEditDialog, Field, settingsEditTitle } from './CrudTable'
 import { SettingsPageHeader } from './SettingsPageHeader'
+import { SortableTableHead } from './SortableTableHead'
+import { useTableSort } from './useTableSort'
 
 interface UserFilters {
   search: string
@@ -104,6 +107,28 @@ export default function UsersPanel({
   canEdit = true,
   canDelete = true,
 }: UsersPanelProps) {
+  const getSortValue = useCallback((user: UserRow, columnKey: string) => {
+    switch (columnKey) {
+      case 'username':
+        return user.username
+      case 'name':
+        return user.name
+      case 'email':
+        return user.email
+      case 'user_group':
+        return user.user_group
+      case 'enabled':
+        return user.enabled
+      default:
+        return (user as Record<string, unknown>)[columnKey]
+    }
+  }, [])
+
+  const { sortCol, sortDir, toggleSort, sortedItems: sortedUsers } = useTableSort(
+    users,
+    getSortValue,
+  )
+
   const formFields = (isEdit: boolean) => (
     <>
       <Field label="Username">
@@ -309,16 +334,46 @@ export default function UsersPanel({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Group</TableHead>
-                  <TableHead>Enabled</TableHead>
+                  <SortableTableHead
+                    columnKey="username"
+                    label="Username"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="name"
+                    label="Name"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="email"
+                    label="Email"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="user_group"
+                    label="Group"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="enabled"
+                    label="Enabled"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
+                {sortedUsers.map((user) => (
                   <TableRow key={user.guid || user.username}>
                     <TableCell className="font-medium">{user.username || '—'}</TableCell>
                     <TableCell>{user.name || '—'}</TableCell>

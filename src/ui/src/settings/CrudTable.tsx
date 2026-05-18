@@ -1,4 +1,4 @@
-import { type ChangeEvent, type ReactNode, useId, useState } from 'react'
+import { type ChangeEvent, type ReactNode, useCallback, useId, useState } from 'react'
 import { BoolIndicator } from '@/components/ui/bool-indicator'
 import { Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -26,12 +26,16 @@ import {
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 import { SettingsPageHeader } from './SettingsPageHeader'
+import { SortableTableHead } from './SortableTableHead'
+import { useTableSort } from './useTableSort'
 
 export interface CrudColumn {
   key: string
   label: string
   width?: string
   type?: 'bool' | 'json'
+  /** When false, column header is not sortable (default true). */
+  sortable?: boolean
   /** When set, replaces default text/bool/json formatting for this column */
   render?: (value: unknown, row: Record<string, unknown>) => ReactNode
 }
@@ -69,6 +73,20 @@ export default function CrudTable({
   children,
   error,
 }: CrudTableProps) {
+  const getSortValue = useCallback(
+    (item: any, columnKey: string) => {
+      const col = columns.find((c) => c.key === columnKey)
+      const v = item[columnKey]
+      if (col?.type === 'json' && v !== null && typeof v === 'object') {
+        return JSON.stringify(v)
+      }
+      return v
+    },
+    [columns],
+  )
+
+  const { sortCol, sortDir, toggleSort, sortedItems } = useTableSort(items, getSortValue)
+
   return (
     <div className="space-y-6">
       <SettingsPageHeader
@@ -119,21 +137,33 @@ export default function CrudTable({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {columns.map((col) => (
-                      <TableHead
-                        key={col.key}
-                        style={col.width ? { width: col.width } : undefined}
-                      >
-                        {col.label}
-                      </TableHead>
-                    ))}
+                    {columns.map((col) =>
+                      col.sortable === false ? (
+                        <TableHead
+                          key={col.key}
+                          style={col.width ? { width: col.width } : undefined}
+                        >
+                          {col.label}
+                        </TableHead>
+                      ) : (
+                        <SortableTableHead
+                          key={col.key}
+                          columnKey={col.key}
+                          label={col.label}
+                          sortCol={sortCol}
+                          sortDir={sortDir}
+                          onSort={toggleSort}
+                          style={col.width ? { width: col.width } : undefined}
+                        />
+                      ),
+                    )}
                     {showActions && (
                       <TableHead className="w-[140px] text-right">Actions</TableHead>
                     )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((item) => (
+                  {sortedItems.map((item) => (
                     <TableRow key={item[idField] || JSON.stringify(item)}>
                       {columns.map((col) => (
                         <TableCell

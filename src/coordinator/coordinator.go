@@ -381,6 +381,7 @@ func (c *Coordinator) setupRoutes() {
 		protectedV4.DELETE("/dashboards/:dashboardId", dashboardsHandler.V4DashboardsDelete)
 		protectedV4.GET("/mappings", mappingsHandler.V4MappingsList)
 		protectedV4.POST("/mappings", mappingsHandler.V4MappingsCreate)
+		protectedV4.GET("/mappings/reset", mappingsHandler.V4MappingsReset)
 		protectedV4.GET("/mappings/fields", mappingsHandler.V4MappingsFields)
 		protectedV4.GET("/mappings/widget-fields", mappingsHandler.V4MappingsWidgetFields)
 		protectedV4.GET("/mappings/merged", mappingsHandler.V4MappingsMerged)

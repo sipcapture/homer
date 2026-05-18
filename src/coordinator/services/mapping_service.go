@@ -226,6 +226,20 @@ func (s *MappingService) UpdateMapping(ctx context.Context, guid string, mapping
 	return guid, nil
 }
 
+// ResetMappings removes all mapping_schema rows and re-seeds built-in defaults.
+func (s *MappingService) ResetMappings(ctx context.Context) error {
+	if s.db == nil {
+		return fmt.Errorf("settings db not available")
+	}
+	if err := settingsDBExec(ctx, s.db, `DELETE FROM mapping_schema`); err != nil {
+		return fmt.Errorf("delete mappings: %w", err)
+	}
+	if err := SeedDefaultMappingSchema(ctx, s.db); err != nil {
+		return fmt.Errorf("seed default mappings: %w", err)
+	}
+	return nil
+}
+
 func (s *MappingService) DeleteMapping(ctx context.Context, guid string) (bool, error) {
 	if s.db == nil {
 		return false, fmt.Errorf("settings db not available")

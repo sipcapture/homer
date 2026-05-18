@@ -19,7 +19,7 @@ const ACCESS = {
     dashboards: { view: true, add: true, edit: true, delete: true },
     scripts: { view: true, add: true, edit: true, delete: true },
     system: { view: true },
-    reset: { view: true, reset: true },
+    reset: { view: true, serverReset: true },
     'api-docs': { view: true },
   },
   [ROLE.COMMON]: {
@@ -62,5 +62,10 @@ export function canViewSection(role, sectionKey) {
 export function canWriteSection(role, sectionKey) {
   const p = getSectionPerms(role, sectionKey)
   return !!(p.add || p.edit || p.delete || p.reset)
+}
+
+/** Server-side reset (dashboards, global mappings) — admin only. */
+export function canServerReset(role) {
+  return !!getSectionPerms(role, 'reset').serverReset
 }
 

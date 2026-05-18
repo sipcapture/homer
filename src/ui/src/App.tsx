@@ -17,7 +17,13 @@ import UserSettingsPanel from './settings/UserSettingsPanel'
 import ScriptsPanel from './settings/ScriptsPanel'
 import ResetPanel from './settings/ResetPanel'
 import ApiDocsPanel from './settings/ApiDocsPanel'
-import { detectRole, getSectionPerms, canViewSection, canWriteSection } from './settings/permissions'
+import {
+  detectRole,
+  getSectionPerms,
+  canViewSection,
+  canWriteSection,
+  canServerReset,
+} from './settings/permissions'
 import DashboardHeader from './dashboard/DashboardHeader'
 import { handleUnauthorized } from './api'
 import { ThemeProvider } from "@/components/theme/theme-provider"
@@ -545,7 +551,7 @@ function App() {
       case 'scripts':
         return <ScriptsPanel readOnly={readOnly} />
       case 'reset':
-        return <ResetPanel readOnly={readOnly} />
+        return <ResetPanel readOnly={readOnly} canServerReset={canServerReset(role)} />
       case 'api-docs':
         return <ApiDocsPanel />
       default:

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Plus, RefreshCw, RotateCcw } from 'lucide-react'
 import { EditIconButton, DeleteIconButton } from '@/components/ui/table-action-buttons'
@@ -27,6 +27,8 @@ import {
 import { cn } from '@/lib/utils'
 import { CrudEditDialog, CrudModal, Field, settingsEditTitle } from './CrudTable'
 import { SettingsPageHeader } from './SettingsPageHeader'
+import { SortableTableHead } from './SortableTableHead'
+import { useTableSort } from './useTableSort'
 import { sortDashboardsByWeight } from '../dashboard/utils/dashboard-sort'
 
 const dashboardTypeLabel = (type: number) => {
@@ -106,6 +108,29 @@ export default function DashboardsPanel({ readOnly = false }: { readOnly?: boole
     }
     return list
   }, [dashboards, filters])
+
+  const getSortValue = useCallback((d: any, columnKey: string) => {
+    switch (columnKey) {
+      case 'name':
+        return d.name
+      case 'id':
+        return d.id ?? d.param
+      case 'type':
+        return d.type
+      case 'shared':
+        return d.shared
+      case 'weight':
+        return d.weight ?? 10
+      default:
+        return d[columnKey]
+    }
+  }, [])
+
+  const { sortCol, sortDir, toggleSort, sortedItems: tableRows } = useTableSort(
+    filteredDashboards,
+    getSortValue,
+    { defaultColumn: 'weight', defaultDirection: 'asc' },
+  )
 
   const resetForm = () => {
     setEditingDashboard(null)
@@ -351,16 +376,46 @@ export default function DashboardsPanel({ readOnly = false }: { readOnly?: boole
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Shared</TableHead>
-                  <TableHead>Weight</TableHead>
+                  <SortableTableHead
+                    columnKey="name"
+                    label="Name"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="id"
+                    label="ID"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="type"
+                    label="Type"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="shared"
+                    label="Shared"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="weight"
+                    label="Weight"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDashboards.map((d) => (
+                {tableRows.map((d) => (
                   <TableRow key={d.id}>
                     <TableCell className="font-medium">{d.name || '—'}</TableCell>
                     <TableCell className="text-muted-foreground">

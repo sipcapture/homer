@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { apiGet } from '../api'
 import { APP_BUILD_VERSION } from '@/lib/appVersion'
@@ -16,6 +16,8 @@ import {
 import { BoolIndicator } from '@/components/ui/bool-indicator'
 import { cn } from '@/lib/utils'
 import { SettingsPageHeader } from './SettingsPageHeader'
+import { SortableTableHead } from './SortableTableHead'
+import { useTableSort } from './useTableSort'
 
 export default function SystemPanel() {
   const [nodes, setNodes] = useState<any[]>([])
@@ -47,6 +49,22 @@ export default function SystemPanel() {
   useEffect(() => {
     load()
   }, [])
+
+  const getSortValue = useCallback((node: any, columnKey: string) => {
+    switch (columnKey) {
+      case 'primary':
+        return !!node.primary
+      case 'online':
+        return !!node.online
+      default:
+        return node[columnKey]
+    }
+  }, [])
+
+  const { sortCol, sortDir, toggleSort, sortedItems: sortedNodes } = useTableSort(
+    nodes,
+    getSortValue,
+  )
 
   return (
     <div className="space-y-6">
@@ -109,16 +127,52 @@ export default function SystemPanel() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Host</TableHead>
-                  <TableHead>Node</TableHead>
-                  <TableHead>Primary</TableHead>
-                  <TableHead>Online</TableHead>
-                  <TableHead>DB Name</TableHead>
+                  <SortableTableHead
+                    columnKey="name"
+                    label="Name"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="host"
+                    label="Host"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="node"
+                    label="Node"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="primary"
+                    label="Primary"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="online"
+                    label="Online"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
+                  <SortableTableHead
+                    columnKey="db_name"
+                    label="DB Name"
+                    sortCol={sortCol}
+                    sortDir={sortDir}
+                    onSort={toggleSort}
+                  />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {nodes.map((node, idx) => (
+                {sortedNodes.map((node, idx) => (
                   <TableRow key={node.name || idx}>
                     <TableCell className="font-medium">{node.name || '—'}</TableCell>
                     <TableCell>{node.host || '—'}</TableCell>

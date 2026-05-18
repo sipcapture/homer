@@ -8,7 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { SettingsPageHeader } from './SettingsPageHeader'
 import { runClientResetWithConfirm, type ClientResetAction } from './clientResetActions'
 
-export default function ResetPanel({ readOnly = false }: { readOnly?: boolean }) {
+export default function ResetPanel({
+  readOnly = false,
+  canServerReset = false,
+}: {
+  readOnly?: boolean
+  /** Reset dashboards / mappings on the server (admin only). */
+  canServerReset?: boolean
+}) {
   const confirm = useConfirm()
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
@@ -48,7 +55,7 @@ export default function ResetPanel({ readOnly = false }: { readOnly?: boolean })
     <div className="space-y-6">
       <SettingsPageHeader
         title="Reset"
-        description="Browser: UI Cache Storage, dashboard-related localStorage, full local storage, and script-visible cookies. Server: dashboards and mappings. The same browser actions are available from the dashboard header (Reset menu)."
+        description="Browser: UI Cache Storage, dashboard-related localStorage, full local storage, and script-visible cookies. Server-side reset (dashboards and mappings) is available to administrators only. The same browser actions are available from the dashboard header (Reset menu)."
       />
 
       {error && (
@@ -125,34 +132,37 @@ export default function ResetPanel({ readOnly = false }: { readOnly?: boolean })
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Server-side reset</CardTitle>
-          <CardDescription>
-            These operations affect server-side configuration and cannot be undone.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button
-            variant="destructive"
-            onClick={() =>
-              runReset('Dashboards', () => apiPost('/me/dashboards/reset', {}))
-            }
-            disabled={loading === 'Dashboards' || readOnly}
-          >
-            <RotateCcw className="mr-1.5 size-4" />
-            {loading === 'Dashboards' ? 'Running...' : 'Reset dashboards (server)'}
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => runReset('Mappings', () => apiGet('/mappings/reset'))}
-            disabled={loading === 'Mappings' || readOnly}
-          >
-            <RotateCcw className="mr-1.5 size-4" />
-            {loading === 'Mappings' ? 'Running...' : 'Reset mappings'}
-          </Button>
-        </CardContent>
-      </Card>
+      {canServerReset ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Server-side reset</CardTitle>
+            <CardDescription>
+              These operations affect server-side configuration and cannot be undone. Administrator
+              privileges are required.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Button
+              variant="destructive"
+              onClick={() =>
+                runReset('Dashboards', () => apiPost('/me/dashboards/reset', {}))
+              }
+              disabled={loading === 'Dashboards' || readOnly}
+            >
+              <RotateCcw className="mr-1.5 size-4" />
+              {loading === 'Dashboards' ? 'Running...' : 'Reset dashboards (server)'}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => runReset('Mappings', () => apiGet('/mappings/reset'))}
+              disabled={loading === 'Mappings' || readOnly}
+            >
+              <RotateCcw className="mr-1.5 size-4" />
+              {loading === 'Mappings' ? 'Running...' : 'Reset mappings'}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
 }

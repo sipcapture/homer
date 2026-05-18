@@ -278,6 +278,9 @@ func (h *DashboardsHandler) V4DashboardsReset(c echo.Context) error {
 	if err != nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
 	}
+	if !isAdmin(c) {
+		return writeError(c, http.StatusForbidden, "Forbidden", "Admin privileges required")
+	}
 
 	if err := h.service.ResetDashboards(c.Request().Context(), username); err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to reset dashboards")
