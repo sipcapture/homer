@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ModeToggle } from '@/components/theme/mode-toggle'
 import TimeRangePicker from './components/TimeRangePicker'
 import type { CalendarPreset } from './utils/resolveTimeRange'
+import { ClientResetDropdown } from './ClientResetDropdown'
 
 export interface DashboardHeaderProps {
   timeFrom: number | string
@@ -28,6 +29,9 @@ export interface DashboardHeaderProps {
   showSettings?: boolean
   showLogout?: boolean
   onBack?: () => void
+  /** When set, shows the browser Reset menu (cache, dashboard, storage, cookies). */
+  onOpenResetSettings?: () => void
+  showBrowserResetMenu?: boolean
 }
 
 export default function DashboardHeader({
@@ -46,6 +50,8 @@ export default function DashboardHeader({
   showSettings = true,
   showLogout = true,
   onBack,
+  onOpenResetSettings,
+  showBrowserResetMenu = true,
 }: DashboardHeaderProps) {
   return (
     <header className="sticky top-0 z-50 flex h-16 items-center justify-between gap-4 border-b border-border bg-card/80 px-6 backdrop-blur-md">
@@ -109,6 +115,10 @@ export default function DashboardHeader({
             <TooltipContent>Settings</TooltipContent>
           </Tooltip>
         )}
+        {showBrowserResetMenu ? (
+          <ClientResetDropdown onOpenResetSettings={onOpenResetSettings} />
+        ) : null}
+        <Separator orientation="vertical" className="mx-1 h-6" />
         <ModeToggle />
         <Separator orientation="vertical" className="mx-1 h-6" />
         <Badge

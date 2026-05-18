@@ -419,6 +419,8 @@ export interface DashboardLayoutProps {
   onOpenSettings: () => void
   onOpenDashboard: () => void
   onLogout: () => void
+  /** Opens Settings focused on the Reset section (browser + server actions). */
+  onOpenResetSettings?: () => void
 }
 
 export default function DashboardLayout({
@@ -428,6 +430,7 @@ export default function DashboardLayout({
   onOpenSettings,
   onOpenDashboard,
   onLogout,
+  onOpenResetSettings,
 }: DashboardLayoutProps) {
   const [timeFromMs, setTimeFromMs] = useState(() => Date.now() - 60 * 60 * 1000)
   const [timeToMs, setTimeToMs] = useState(() => Date.now())
@@ -494,6 +497,7 @@ export default function DashboardLayout({
         onOpenSettings={onOpenSettings}
         onOpenDashboard={onOpenDashboard}
         onLogout={onLogout}
+        onOpenResetSettings={onOpenResetSettings}
       />
       <main className="flex min-h-0 flex-1 flex-col">
         <DashboardProvider

@@ -31,12 +31,14 @@ require (
 	github.com/lmittmann/tint v1.1.3
 	github.com/mark3labs/mcp-go v0.44.0
 	github.com/mcuadros/go-defaults v1.2.0
+	github.com/notnil/chess v1.10.0
 	github.com/panjf2000/gnet/v2 v2.9.5
 	github.com/prometheus/client_golang v1.23.2
 	github.com/sipcapture/golua v0.0.0-20200610090950-538d24098d76
 	github.com/spf13/viper v1.21.0
 	github.com/valyala/fasthttp v1.68.0
 	go.opentelemetry.io/proto/otlp v1.10.0
+	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.40.0
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
@@ -94,7 +96,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/notnil/chess v1.10.0 // indirect
 	github.com/panjf2000/ants/v2 v2.11.3 // indirect
 	github.com/paulmach/orb v0.12.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect

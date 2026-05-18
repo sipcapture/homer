@@ -21,6 +21,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"golang.org/x/oauth2"
 )
 
 // AuthHandler handles authentication-related API endpoints
@@ -32,6 +33,7 @@ type AuthHandler struct {
 	sessionStore *SessionStore
 	oneTimeStore *OneTimeTokenStore
 	providers    []OAuthProvider
+	oauthState   *OAuthStateStore
 
 	authTokenSvc *services.AuthTokenService
 	apiSettings  config.APISettingsConfig
@@ -47,9 +49,17 @@ type OAuthProvider struct {
 	Type          string
 	ProviderImage string
 	ProviderName  string
-	URL           string
+	URL           string // legacy; empty for authorization code flow
 	AutoRedirect  bool
 	CallbackURL   string
+
+	// Authorization code flow (non-nil OAuth2Config when enabled).
+	OAuth2Config      *oauth2.Config
+	ProfileURL        string
+	UsePKCE           bool
+	SkipAutoProvision bool
+	AdminGroups       []string
+	GroupClaim        string
 }
 
 // NewAuthHandlerWithUserService creates auth handler with user service.
@@ -66,15 +76,16 @@ func NewAuthHandlerWithUserService(
 	fallbackAuthType string,
 ) *AuthHandler {
 	return &AuthHandler{
-		jwtSecret:          secret,
-		expireHours:        expireHours,
-		userService:        userService,
-		ldapAuth:           ldapAuth,
-		sessionStore:       NewSessionStore(),
-		oneTimeStore:       NewOneTimeTokenStore(),
-		providers:          providers,
-		authTokenSvc:       authTokenSvc,
-		apiSettings:        apiSettings,
+		jwtSecret:        secret,
+		expireHours:      expireHours,
+		userService:      userService,
+		ldapAuth:         ldapAuth,
+		sessionStore:     NewSessionStore(),
+		oneTimeStore:     NewOneTimeTokenStore(),
+		oauthState:       NewOAuthStateStore(),
+		providers:        providers,
+		authTokenSvc:     authTokenSvc,
+		apiSettings:      apiSettings,
 		fallbackAuthType: fallbackAuthType,
 	}
 }

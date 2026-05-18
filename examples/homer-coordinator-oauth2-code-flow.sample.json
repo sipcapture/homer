@@ -1,0 +1,24 @@
+{
+  "coordinator": {
+    "oauth2_provider": {
+      "enable": true,
+      "name": "authentik",
+      "position": 10,
+      "type": "oauth2",
+      "provider_name": "Authentik",
+      "client_id": "homer-ui",
+      "client_secret": "REPLACE_WITH_SECRET_OR_OMIT_IF_USE_PKCE",
+      "auth_url": "https://auth.example.com/application/o/authorize/",
+      "token_url": "https://auth.example.com/application/o/token/",
+      "redirect_url": "https://homer.example.com/api/v4/auth/oauth2/authentik/callback",
+      "profile_url": "https://auth.example.com/application/o/userinfo/",
+      "scopes": ["openid", "email", "profile"],
+      "use_pkce": true,
+      "callback_url": "https://homer.example.com/",
+      "auto_redirect": false,
+      "skip_auto_provision": false,
+      "admin_groups": ["homer-admins"],
+      "group_claim": "groups"
+    }
+  }
+}

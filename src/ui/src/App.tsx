@@ -31,6 +31,49 @@ import { toast } from 'sonner'
 const apiBase = import.meta.env.VITE_API_BASE || '/api/v4'
 const tokenKey = 'homer_v4_token'
 
+/** Deduplicate OAuth one-time → JWT exchange when React Strict Mode runs effects twice. */
+const oauthTokenExchangeInflight = new Map<string, Promise<string>>()
+
+async function exchangeOAuthOneTimeForJwt(oneTime: string): Promise<string> {
+  const existing = oauthTokenExchangeInflight.get(oneTime)
+  if (existing) {
+    return existing
+  }
+  const p = (async () => {
+    try {
+      const res = await fetch(`${apiBase}/auth/oauth2/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: oneTime }),
+      })
+      let detail = `Request failed (${res.status})`
+      if (!res.ok) {
+        try {
+          const payload = (await res.json()) as { error?: { detail?: string; title?: string } }
+          if (payload?.error?.detail) {
+            detail = payload.error.detail
+          } else if (payload?.error?.title) {
+            detail = payload.error.title
+          }
+        } catch {
+          // ignore
+        }
+        throw new Error(detail)
+      }
+      const payload = (await res.json()) as { data?: { token?: string } }
+      const jwt = payload?.data?.token
+      if (!jwt || typeof jwt !== 'string') {
+        throw new Error('Invalid OAuth2 response: missing data.token')
+      }
+      return jwt
+    } finally {
+      oauthTokenExchangeInflight.delete(oneTime)
+    }
+  })()
+  oauthTokenExchangeInflight.set(oneTime, p)
+  return p
+}
+
 function App() {
   const confirm = useConfirm()
   const [token, setToken] = useState(() => localStorage.getItem(tokenKey) || '')
@@ -165,6 +208,14 @@ function App() {
   const openSettings = () => {
     setSettingsOpen(true)
     setActiveSection('about')
+    if (window.location.hash !== '#settings') {
+      window.location.hash = '#settings'
+    }
+  }
+
+  const openResetSettings = () => {
+    setActiveSection('reset')
+    setSettingsOpen(true)
     if (window.location.hash !== '#settings') {
       window.location.hash = '#settings'
     }
@@ -403,14 +454,35 @@ function App() {
     return () => window.removeEventListener('auth:unauthorized', onUnauth)
   }, [])
 
-  // Handle OAuth2 callback token
+  // OAuth2 callback: ?oauth_error= from coordinator, or ?token= one-time → exchange for JWT.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const oauthToken = params.get('token')
-    if (oauthToken) {
-      setToken(oauthToken)
-      toast.success('Logged in via OAuth2')
+    const oauthErr = params.get('oauth_error')
+    if (oauthErr) {
+      toast.error(oauthErr)
       window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+      return
+    }
+    const oneTime = params.get('token')
+    if (!oneTime) return
+
+    let cancelled = false
+    void (async () => {
+      try {
+        const jwt = await exchangeOAuthOneTimeForJwt(oneTime)
+        if (cancelled) return
+        setToken(jwt)
+        toast.success('Logged in via OAuth2')
+      } catch (err) {
+        if (cancelled) return
+        toast.error(`OAuth2 login failed: ${(err as Error).message}`)
+      } finally {
+        window.history.replaceState({}, '', window.location.pathname + window.location.hash)
+      }
+    })()
+
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -504,6 +576,7 @@ function App() {
                   onOpenSettings={openSettings}
                   onOpenDashboard={openDashboard}
                   onLogout={logout}
+                  onOpenResetSettings={canViewSection(role, 'reset') ? openResetSettings : undefined}
                 />
               ) : (
                 <div className="flex min-h-screen flex-col bg-background">
@@ -523,6 +596,7 @@ function App() {
                     showSettings
                     showLogout
                     onBack={openDashboard}
+                    onOpenResetSettings={canViewSection(role, 'reset') ? openResetSettings : undefined}
                   />
                   <div className="flex min-h-0 flex-1 overflow-hidden">
                     <SettingsSidebar

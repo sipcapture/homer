@@ -880,9 +880,44 @@ type OAuthProviderConfig struct {
 	Type          string `json:"type" mapstructure:"type" default:"oauth2"`
 	ProviderImage string `json:"provider_image" mapstructure:"provider_image"`
 	ProviderName  string `json:"provider_name" mapstructure:"provider_name"`
-	URL           string `json:"url" mapstructure:"url"`
-	AutoRedirect  bool   `json:"auto_redirect" mapstructure:"auto_redirect" default:"false"`
-	CallbackURL   string `json:"callback_url" mapstructure:"callback_url"`
+	// URL is legacy (pre–authorization-code flow). Ignored when authorization code fields below are set.
+	URL          string `json:"url" mapstructure:"url"`
+	AutoRedirect bool   `json:"auto_redirect" mapstructure:"auto_redirect" default:"false"`
+	CallbackURL  string `json:"callback_url" mapstructure:"callback_url"`
+
+	// Authorization code flow (RFC 6749). When ClientID, AuthURL, TokenURL, RedirectURL, and ProfileURL
+	// are all non-empty, the coordinator runs the full flow (state + optional PKCE, server-side code exchange).
+	ClientID      string   `json:"client_id" mapstructure:"client_id"`
+	ClientSecret  string   `json:"client_secret" mapstructure:"client_secret"`
+	AuthURL       string   `json:"auth_url" mapstructure:"auth_url"`
+	TokenURL      string   `json:"token_url" mapstructure:"token_url"`
+	RedirectURL   string   `json:"redirect_url" mapstructure:"redirect_url"`
+	ProfileURL    string   `json:"profile_url" mapstructure:"profile_url"`
+	Scopes        []string `json:"scopes" mapstructure:"scopes"`
+	UsePKCE       bool     `json:"use_pkce" mapstructure:"use_pkce"`
+	// SkipAutoProvision when true: user must already exist in DuckDB (matched by username or email).
+	SkipAutoProvision bool     `json:"skip_auto_provision" mapstructure:"skip_auto_provision"`
+	AdminGroups       []string `json:"admin_groups" mapstructure:"admin_groups"`
+	GroupClaim        string   `json:"group_claim" mapstructure:"group_claim"`
+}
+
+// OAuthAuthorizationCodeConfigured reports whether oauth2_provider is set up for the authorization code flow.
+func OAuthAuthorizationCodeConfigured(p *OAuthProviderConfig) bool {
+	if p == nil || !p.Enable {
+		return false
+	}
+	if strings.TrimSpace(p.Name) == "" {
+		return false
+	}
+	if strings.TrimSpace(p.ClientID) == "" || strings.TrimSpace(p.AuthURL) == "" ||
+		strings.TrimSpace(p.TokenURL) == "" || strings.TrimSpace(p.RedirectURL) == "" ||
+		strings.TrimSpace(p.ProfileURL) == "" {
+		return false
+	}
+	if !p.UsePKCE && strings.TrimSpace(p.ClientSecret) == "" {
+		return false
+	}
+	return true
 }
 
 // LogConfig configures logging
@@ -1081,10 +1116,10 @@ func coordinatorOAuth2Active(p *OAuthProviderConfig) bool {
 	if p == nil || !p.Enable {
 		return false
 	}
-	if strings.TrimSpace(p.Name) == "" || strings.TrimSpace(p.URL) == "" {
+	if strings.TrimSpace(p.Name) == "" {
 		return false
 	}
-	return true
+	return OAuthAuthorizationCodeConfigured(p)
 }
 
 func pickCoordinatorOAuthFromLegacyList(configs []OAuthProviderConfig) *OAuthProviderConfig {
@@ -1093,7 +1128,10 @@ func pickCoordinatorOAuthFromLegacyList(configs []OAuthProviderConfig) *OAuthPro
 		if !row.Enable {
 			continue
 		}
-		if strings.TrimSpace(row.Name) == "" || strings.TrimSpace(row.URL) == "" {
+		if strings.TrimSpace(row.Name) == "" {
+			continue
+		}
+		if !OAuthAuthorizationCodeConfigured(&row) {
 			continue
 		}
 		enabled = append(enabled, row)

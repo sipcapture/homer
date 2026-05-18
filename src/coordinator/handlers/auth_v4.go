@@ -9,7 +9,6 @@ package handlers
 
 import (
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -199,56 +198,6 @@ func (h *AuthHandler) V4ListProviders(c echo.Context) error {
 
 	resp.Meta = buildMeta(c, "")
 	return c.JSON(http.StatusOK, resp)
-}
-
-// V4OAuth2Redirect handles GET /api/v4/auth/oauth2/{provider}/redirect
-func (h *AuthHandler) V4OAuth2Redirect(c echo.Context) error {
-	name := c.Param("provider")
-	provider := h.findProvider(name)
-	if provider == nil || !provider.Enable {
-		return writeError(c, http.StatusBadRequest, "Bad Request", "Provider not found")
-	}
-	if provider.URL == "" {
-		return writeError(c, http.StatusBadRequest, "Bad Request", "Provider URL not configured")
-	}
-	return c.Redirect(http.StatusFound, provider.URL)
-}
-
-// V4OAuth2Callback handles GET /api/v4/auth/oauth2/{provider}/callback
-func (h *AuthHandler) V4OAuth2Callback(c echo.Context) error {
-	name := c.Param("provider")
-	provider := h.findProvider(name)
-	if provider == nil || !provider.Enable {
-		return writeError(c, http.StatusBadRequest, "Bad Request", "Provider not found")
-	}
-
-	username := c.QueryParam("username")
-	if username == "" {
-		username = "oauth2:" + provider.Name
-	}
-
-	token := newSessionID()
-	if h.oneTimeStore != nil {
-		h.oneTimeStore.Put(token, username, false, 10*time.Minute)
-	}
-
-	redirectURL := provider.CallbackURL
-	if redirectURL == "" {
-		redirectURL = c.QueryParam("redirect_uri")
-	}
-	if redirectURL == "" {
-		redirectURL = "/"
-	}
-
-	target, err := url.Parse(redirectURL)
-	if err != nil {
-		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid redirect URL")
-	}
-	q := target.Query()
-	q.Set("token", token)
-	target.RawQuery = q.Encode()
-
-	return c.Redirect(http.StatusFound, target.String())
 }
 
 // V4OAuth2TokenExchange handles POST /api/v4/auth/oauth2/token

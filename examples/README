@@ -13,12 +13,9 @@ writer, node, edge, modular. Treat them as
 **diagrams that happen to parse**: read the keys before you paste them
 into production; names lie, comments in your runbook should not.
 
-**`homer-coordinator-oauth2-fake-dev.json`** — merge under `coordinator`
-for a **dev-only** OAuth button: `oauth2_provider.url` points straight at
-`/api/v4/auth/oauth2/{name}/callback?username=…` so no real IdP is needed
-(homer-core callback does not validate an authorization `code`). Replace
-`127.0.0.1:8080` with your coordinator base URL and keep `name` in the path
-in sync with `oauth2_provider.name`. **Never use this pattern in production.**
+**`homer-coordinator-oauth2-code-flow.sample.json`** — merge under `coordinator` as a template for **OAuth 2.0 authorization code** login (`client_id`, `auth_url`, `token_url`, `redirect_url`, `profile_url`, optional PKCE). Replace hostnames and secrets; register `redirect_url` at your IdP. See [AUTH_LDAP_AND_OAUTH.md](../docs/AUTH_LDAP_AND_OAUTH.md#oauth2).
+
+**`homer-coordinator-oauth2-fake-dev.json`** — placeholder with OAuth **disabled**. The old “fake IdP” pattern (static `url` pointing at the coordinator callback) is **no longer supported**; use a real provider per the sample above.
 
 **`homer-coordinator-ldap-fake-dev.json`** — merge under `coordinator` for
 **local LDAP dev**: `host`/`port` match a throwaway directory on your machine

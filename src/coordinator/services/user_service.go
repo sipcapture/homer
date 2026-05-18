@@ -87,6 +87,24 @@ func (s *UserService) GetUserByUsername(ctx context.Context, username string) (*
 	return scanUserRow(row)
 }
 
+// GetUserByEmail retrieves a user by email (case-insensitive). Returns nil, error if not found.
+func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("settings db not available")
+	}
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, fmt.Errorf("user not found")
+	}
+	const query = `
+		SELECT id, username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at
+		FROM users
+		WHERE lower(trim(email)) = lower(trim(?))
+		LIMIT 1`
+	row := s.db.QueryRowContext(ctx, query, email)
+	return scanUserRow(row)
+}
+
 // GetUserByID retrieves a user by ID
 func (s *UserService) GetUserByID(ctx context.Context, id int64) (*User, error) {
 	if s.db == nil {

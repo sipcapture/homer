@@ -1,15 +1,7 @@
 {
   "coordinator": {
     "oauth2_provider": {
-      "enable": true,
-      "name": "fake-dev",
-      "position": 20,
-      "type": "oauth2",
-      "provider_name": "Fake OAuth (local dev)",
-      "provider_image": "",
-      "url": "http://127.0.0.1:8080/api/v4/auth/oauth2/fake-dev/callback?username=oauth-tester",
-      "auto_redirect": false,
-      "callback_url": "http://127.0.0.1:8080/"
+      "enable": false
     }
   }
 }
