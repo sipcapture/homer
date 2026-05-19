@@ -491,7 +491,7 @@ func recoverCatalog(db *sql.DB, lakeName, dataPath string) (int, error) {
 			continue
 		}
 
-		globPattern := tableDir + "/**/*.parquet"
+		globPattern := tableDir + "/date=*/**/*.parquet"
 		insertSQL := fmt.Sprintf(
 			`INSERT INTO %s SELECT * FROM read_parquet('%s', union_by_name=true, hive_partitioning=true)`,
 			fqn, globPattern,

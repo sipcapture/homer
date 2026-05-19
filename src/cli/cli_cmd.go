@@ -151,6 +151,20 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 	return db, nil
 }
 
+// parquetDataGlobPattern matches hive-partitioned data files only (date=…/).
+// DuckLake *-delete.parquet tombstones live in the table root and must not be
+// included in read_parquet(..., hive_partitioning=true).
+func parquetDataGlobPattern(dataPath, table string) string {
+	return fmt.Sprintf("%s/main/%s/date=*/**/*.parquet", dataPath, table)
+}
+
+func createParquetViewSQL(lakeName, table, dataPath string) string {
+	pattern := parquetDataGlobPattern(dataPath, table)
+	return fmt.Sprintf(
+		"CREATE OR REPLACE VIEW %s.%s AS SELECT * FROM read_parquet('%s', hive_partitioning=true, union_by_name=true)",
+		lakeName, table, pattern)
+}
+
 func createParquetViews(db *sql.DB, lakeName, dataPath string) (int, error) {
 	schemaSQL := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", lakeName)
 	if _, err := db.Exec(schemaSQL); err != nil {
@@ -182,10 +196,7 @@ func createParquetViews(db *sql.DB, lakeName, dataPath string) (int, error) {
 
 	created := 0
 	for _, tbl := range tables {
-		pattern := fmt.Sprintf("%s/main/%s/**/*.parquet", dataPath, tbl)
-		viewSQL := fmt.Sprintf(
-			"CREATE OR REPLACE VIEW %s.%s AS SELECT * FROM read_parquet('%s', hive_partitioning=true, union_by_name=true)",
-			lakeName, tbl, pattern)
+		viewSQL := createParquetViewSQL(lakeName, tbl, dataPath)
 		if _, err := db.Exec(viewSQL); err != nil {
 			fmt.Printf("Warning: could not create view for %s: %v\n", tbl, err)
 		} else {
@@ -209,16 +220,14 @@ func createCommonViews(db *sql.DB, lakeName, dataPath string) (int, error) {
 
 	created := 0
 	for _, tbl := range commonTables {
-		pattern := fmt.Sprintf("%s/main/%s/**/*.parquet", dataPath, tbl)
+		pattern := parquetDataGlobPattern(dataPath, tbl)
 		checkSQL := fmt.Sprintf("SELECT COUNT(*) FROM glob('%s')", pattern)
 		var count int
 		if err := db.QueryRow(checkSQL).Scan(&count); err != nil || count == 0 {
 			continue
 		}
 
-		viewSQL := fmt.Sprintf(
-			"CREATE OR REPLACE VIEW %s.%s AS SELECT * FROM read_parquet('%s', hive_partitioning=true, union_by_name=true)",
-			lakeName, tbl, pattern)
+		viewSQL := createParquetViewSQL(lakeName, tbl, dataPath)
 		if _, err := db.Exec(viewSQL); err == nil {
 			created++
 		}
