@@ -513,6 +513,21 @@ func HasLimitToken(sql string) bool {
 	return false
 }
 
+// EnsureLimit appends "LIMIT max" when the query is SELECT/WITH and has no
+// real LIMIT clause. Non-limitable statements (SHOW, PRAGMA, …) are unchanged.
+func EnsureLimit(sql string, max int) string {
+	if max <= 0 {
+		return sql
+	}
+	if !IsLimitableQuery(sql) {
+		return sql
+	}
+	if HasLimitToken(sql) {
+		return sql
+	}
+	return fmt.Sprintf("%s LIMIT %d", strings.TrimSpace(sql), max)
+}
+
 // ---- SafeString ------------------------------------------------------------
 
 const maxSafeStringLen = 1000

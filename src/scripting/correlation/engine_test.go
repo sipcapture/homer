@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 )
 
 // fakeExecutor records SQL it receives and returns a scripted response.
@@ -369,8 +370,8 @@ func TestEnsureLimitAppendsOnlyWhenMissing(t *testing.T) {
 		{"SHOW TABLES", 10, "SHOW TABLES"}, // not LIMIT-able
 	}
 	for _, c := range cases {
-		if got := ensureLimit(c.in, c.max); got != c.out {
-			t.Fatalf("ensureLimit(%q, %d) = %q, want %q", c.in, c.max, got, c.out)
+		if got := sqlvalidator.EnsureLimit(c.in, c.max); got != c.out {
+			t.Fatalf("EnsureLimit(%q, %d) = %q, want %q", c.in, c.max, got, c.out)
 		}
 	}
 }

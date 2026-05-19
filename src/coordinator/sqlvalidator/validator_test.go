@@ -708,6 +708,24 @@ func TestIsLimitableQuery(t *testing.T) {
 
 // ---- HasLimitToken tests ---------------------------------------------------
 
+func TestEnsureLimit(t *testing.T) {
+	cases := []struct {
+		in  string
+		max int
+		out string
+	}{
+		{"SELECT * FROM t", 10, "SELECT * FROM t LIMIT 10"},
+		{"SELECT * FROM t LIMIT 5", 10, "SELECT * FROM t LIMIT 5"},
+		{"WITH c AS (SELECT 1) SELECT * FROM c", 7, "WITH c AS (SELECT 1) SELECT * FROM c LIMIT 7"},
+		{"SHOW TABLES", 10, "SHOW TABLES"},
+	}
+	for _, c := range cases {
+		if got := EnsureLimit(c.in, c.max); got != c.out {
+			t.Fatalf("EnsureLimit(%q, %d) = %q, want %q", c.in, c.max, got, c.out)
+		}
+	}
+}
+
 func TestHasLimitToken(t *testing.T) {
 	tests := []struct {
 		name string

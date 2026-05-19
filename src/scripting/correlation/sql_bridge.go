@@ -65,7 +65,7 @@ func (b *sqlBridge) executeSQL(sqlQuery string) []map[string]interface{} {
 		return nil
 	}
 
-	finalSQL := ensureLimit(trimmed, b.engine.cfg.MaxSQLRows)
+	finalSQL := sqlvalidator.EnsureLimit(trimmed, b.engine.cfg.MaxSQLRows)
 
 	cctx, cancel := context.WithTimeout(b.ctx,
 		time.Duration(b.engine.cfg.SQLTimeoutMS)*time.Millisecond)
@@ -137,21 +137,6 @@ func (b *sqlBridge) getDataByField(proto int, event, field string, values []stri
 		)
 	}
 	return b.executeSQL(sqlQuery)
-}
-
-// ensureLimit appends "LIMIT N" when the query supports it and doesn't
-// already define a real LIMIT token.
-func ensureLimit(sql string, max int) string {
-	if max <= 0 {
-		return sql
-	}
-	if !sqlvalidator.IsLimitableQuery(sql) {
-		return sql
-	}
-	if sqlvalidator.HasLimitToken(sql) {
-		return sql
-	}
-	return fmt.Sprintf("%s LIMIT %d", sql, max)
 }
 
 // isSafeIdent is a strict whitelist for column/table fragments we interpolate

@@ -11,18 +11,24 @@ import (
 	"github.com/chzyer/readline"
 	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 )
+
+// cliSelectRowLimit caps interactive SELECT/WITH results when no LIMIT is given.
+const cliSelectRowLimit = 10000
 
 // CLIFlags holds flags for the "homer cli" subcommand.
 type CLIFlags struct {
 	ConfigPath string
 	Query      string
+	NoLimit    bool // skip auto LIMIT 10000 on SELECT/WITH without LIMIT
 }
 
 type cliFlagRefs struct {
 	ConfigPath *string
 	Query      *string
+	NoLimit    *bool
 }
 
 // RegisterCLIFlags creates a FlagSet for "homer cli" subcommand.
@@ -32,6 +38,7 @@ func RegisterCLIFlags() (*flag.FlagSet, *cliFlagRefs) {
 
 	refs.ConfigPath = fs.String("config-path", "", "path to config file or directory")
 	refs.Query = fs.String("query", "", "execute single SQL query and exit")
+	refs.NoLimit = fs.Bool("no-limit", false, "do not auto-append LIMIT 10000 to SELECT/WITH without LIMIT")
 
 	return fs, refs
 }
@@ -41,6 +48,7 @@ func ParseCLIFlags(refs *cliFlagRefs) CLIFlags {
 	return CLIFlags{
 		ConfigPath: *refs.ConfigPath,
 		Query:      *refs.Query,
+		NoLimit:    *refs.NoLimit,
 	}
 }
 
@@ -58,7 +66,7 @@ func RunCLICmd(f CLIFlags) error {
 	}
 	defer db.Close()
 
-	return runCLI(db, duckCfg.LakeName, f.Query)
+	return runCLI(db, duckCfg.LakeName, duckCfg.DataPath, f.Query, f.NoLimit)
 }
 
 // ---- config helper ---------------------------------------------------------
@@ -241,18 +249,24 @@ func createCommonViews(db *sql.DB, lakeName, dataPath string) (int, error) {
 
 // ---- interactive SQL CLI ---------------------------------------------------
 
-func runCLI(db *sql.DB, lakeName string, singleQuery string) error {
+func runCLI(db *sql.DB, lakeName, dataPath, singleQuery string, noLimit bool) error {
 	fmt.Println("Homer DuckLake SQL CLI (read-only)")
 	fmt.Println("===================================")
 	fmt.Printf("Schema: %s\n", lakeName)
+	if !noLimit {
+		fmt.Printf("SELECT/WITH without LIMIT are capped at %d rows (use --no-limit to disable)\n", cliSelectRowLimit)
+	}
 	fmt.Println("Type 'help' for commands, 'exit' or Ctrl+D to quit")
+	fmt.Println("TAB completes SQL keywords, tables, columns, and parquet paths")
 	fmt.Println()
 
 	tables := discoverSchemaViews(db, lakeName)
 
 	if singleQuery != "" {
-		return executeSQLQuery(db, singleQuery)
+		return executeSQLQuery(db, singleQuery, noLimit)
 	}
+
+	completer := newSQLCLICompleter(lakeName, dataPath, func() []string { return tables })
 
 	historyFile := os.ExpandEnv("$HOME/.homer_cli_history")
 	rl, err := readline.NewEx(&readline.Config{
@@ -262,6 +276,7 @@ func runCLI(db *sql.DB, lakeName string, singleQuery string) error {
 		InterruptPrompt:   "^C",
 		EOFPrompt:         "exit",
 		HistorySearchFold: true,
+		AutoComplete:      completer,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to init readline: %w", err)
@@ -286,11 +301,12 @@ func runCLI(db *sql.DB, lakeName string, singleQuery string) error {
 			fmt.Println("Goodbye!")
 			return nil
 		case "help", "\\h", "\\?":
-			printCLIHelp(lakeName, tables)
+			printCLIHelp(lakeName, tables, noLimit)
 			continue
 		case "tables", "\\dt":
 			tables = discoverSchemaViews(db, lakeName)
 			printTables(tables)
+			fmt.Println("Table list refreshed for TAB completion.")
 			continue
 		case "clear", "\\c":
 			fmt.Print("\033[H\033[2J")
@@ -299,13 +315,22 @@ func runCLI(db *sql.DB, lakeName string, singleQuery string) error {
 			line = fmt.Sprintf("SHOW TABLES FROM %s", lakeName)
 		}
 
-		if err := executeSQLQuery(db, line); err != nil {
+		if err := executeSQLQuery(db, line, noLimit); err != nil {
 			fmt.Printf("Error: %v\n", err)
 		}
 	}
 }
 
-func executeSQLQuery(db *sql.DB, query string) error {
+func executeSQLQuery(db *sql.DB, query string, noLimit bool) error {
+	query, vertical := parseCLIQueryLine(query)
+	if query == "" {
+		return nil
+	}
+	if !noLimit {
+		if limited := applyCLISelectLimit(&query); limited {
+			fmt.Printf("Note: results capped at %d rows (add LIMIT or use --no-limit)\n\n", cliSelectRowLimit)
+		}
+	}
 	rows, err := db.Query(query)
 	if err != nil {
 		return err
@@ -354,15 +379,48 @@ func executeSQLQuery(db *sql.DB, query string) error {
 		allRows = append(allRows, row)
 	}
 
-	printSQLTableRow(cols, widths)
-	printSQLTableSeparator(widths)
-
-	for _, row := range allRows {
-		printSQLTableRow(row, widths)
+	if vertical {
+		printSQLVertical(cols, allRows)
+	} else {
+		printSQLTableRow(cols, widths)
+		printSQLTableSeparator(widths)
+		for _, row := range allRows {
+			printSQLTableRow(row, widths)
+		}
 	}
 
 	fmt.Printf("\n(%d rows)\n\n", len(allRows))
 	return rows.Err()
+}
+
+func printSQLVertical(cols []string, rows [][]string) {
+	for i, row := range rows {
+		if len(rows) > 1 {
+			fmt.Printf("*************************** %d. row ***************************\n", i+1)
+		}
+		for j, col := range cols {
+			val := ""
+			if j < len(row) {
+				val = row[j]
+			}
+			fmt.Printf("%-16s: %s\n", col, val)
+		}
+		if i < len(rows)-1 {
+			fmt.Println()
+		}
+	}
+}
+
+// applyCLISelectLimit appends LIMIT cliSelectRowLimit to SELECT/WITH without LIMIT.
+// Returns true when a limit was injected.
+func applyCLISelectLimit(query *string) bool {
+	if query == nil || *query == "" {
+		return false
+	}
+	before := *query
+	after := sqlvalidator.EnsureLimit(before, cliSelectRowLimit)
+	*query = after
+	return after != before
 }
 
 func formatSQLValue(val interface{}) string {
@@ -413,12 +471,18 @@ func printSQLTableSeparator(widths []int) {
 	fmt.Println()
 }
 
-func printCLIHelp(lakeName string, tables []string) {
+func printCLIHelp(lakeName string, tables []string, noLimit bool) {
 	fmt.Println("\nCommands:")
 	fmt.Println("  help, \\h, \\?    Show this help")
 	fmt.Println("  tables, \\dt     List available tables")
 	fmt.Println("  clear, \\c       Clear screen")
 	fmt.Println("  exit, quit, \\q  Exit CLI")
+	fmt.Println()
+	if !noLimit {
+		fmt.Printf("  SELECT/WITH without LIMIT are capped at %d rows (restart with --no-limit to disable)\n", cliSelectRowLimit)
+	}
+	fmt.Println("  TAB: SQL keywords, tables/columns, parquet paths under data_path")
+	fmt.Println("  End query with \\G for vertical output (mysql-style)")
 	fmt.Println()
 	fmt.Println("Example queries:")
 	fmt.Printf("  SELECT * FROM %s.main.hep_proto_1_call LIMIT 10;\n", lakeName)
