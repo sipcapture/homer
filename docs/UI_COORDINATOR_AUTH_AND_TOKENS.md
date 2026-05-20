@@ -19,7 +19,7 @@ There is no separate “auth mode” flag in the UI alone: available methods are
 
 | Mode | Coordinator | Password / flow | Typical `POST /api/v4/auth/sessions` body |
 |------|----------------|-----------------|---------------------------------------------|
-| **Local (internal)** | Always advertised as enabled | Users in the coordinator **settings DuckDB** (`users` table). Credentials are checked **only** against `users` (no config-only login). Recommended: **`"coordinator.auth": {"type":"internal"}`** (or omit `auth` / string **`"internal"`**) — first startup inserts **`admin`** once (default password **`sipcapture`**, SHA-256 `883ffc1f…`) if no row exists for that username; change the password after login. Explicit **`admin_user`** / **`admin_password_hash`** in JSON or env supports **`--reset-admin-password`** (see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password)). | `{"username":"…","password":"…"}` or `"type":"internal"` (default). |
+| **Local (internal)** | Enabled unless **`coordinator.auth.disable_password_login`** is true | Users in the coordinator **settings DuckDB** (`users` table). Credentials are checked **only** against `users` (no config-only login). Recommended: **`"coordinator.auth": {"type":"internal"}`** (or omit `auth` / string **`"internal"`**) — first startup inserts **`admin`** once (default password **`sipcapture`**, SHA-256 `883ffc1f…`) if no row exists for that username; change the password after login. Explicit **`admin_user`** / **`admin_password_hash`** in JSON or env supports **`--reset-admin-password`** (see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password)). | `{"username":"…","password":"…"}` or `"type":"internal"` (default). |
 | **LDAP** | Advertised only if **`coordinator.ldap.enable`** is true **and** **`coordinator.ldap.host`** is non-empty | Directory bind + optional group rules for admin vs user. | `{"username":"…","password":"…","type":"ldap"}`. |
 | **OAuth2** | Optional; **at most one** provider from **`coordinator.oauth2_provider`** | **Authorization code** on the coordinator: `GET …/redirect` builds the IdP authorize URL, IdP returns `code` to `…/callback`, coordinator exchanges code + loads profile, then SPA exchanges the one-time query `token` for a JWT (see below). | No password session; use OAuth routes. |
 
@@ -50,7 +50,8 @@ The UI (`src/ui/src/loginProviders.ts`, `LoginPage.tsx`):
 - **Local only:** set **`"coordinator.auth": {"type":"internal"}`** (recommended), omit `auth` (defaults to internal), or legacy string **`"internal"`**; leave LDAP disabled or omit host; remove or disable `oauth2_provider`.
 - **Local + LDAP:** set `coordinator.ldap` with `enable: true` and a non-empty `host` (see canonical doc).
 - **Add OAuth2:** set `coordinator.oauth2_provider` with authorization code fields (`client_id`, `auth_url`, `token_url`, `redirect_url`, `profile_url`, …); restart coordinator.
-- **Force OAuth-first UX:** set `auto_redirect: true` on the single OAuth provider (users still need internal/LDAP if you keep password methods for break-glass accounts).
+- **OAuth-only (no password form):** set **`coordinator.auth.disable_password_login: true`** and configure **`oauth2_provider`**. Optional **`auto_redirect: true`** sends users to the IdP immediately.
+- **Force OAuth-first UX (password still available):** set `auto_redirect: true` on the single OAuth provider while keeping password backends enabled for break-glass accounts.
 
 ---
 

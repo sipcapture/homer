@@ -78,6 +78,10 @@ type UserProfileResponseV4 struct {
 
 // V4CreateSession handles POST /api/v4/auth/sessions
 func (h *AuthHandler) V4CreateSession(c echo.Context) error {
+	if !h.passwordLoginAllowed() {
+		return writeError(c, http.StatusForbidden, "Forbidden", "Password login is disabled")
+	}
+
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid request body")
@@ -149,7 +153,8 @@ func (h *AuthHandler) V4DeleteSession(c echo.Context) error {
 // V4ListProviders handles GET /api/v4/auth/providers
 func (h *AuthHandler) V4ListProviders(c echo.Context) error {
 	var resp ProvidersResponseV4
-	resp.Data.Internal.Enable = true
+	passwordLogin := h.passwordLoginAllowed()
+	resp.Data.Internal.Enable = passwordLogin
 	resp.Data.Internal.Name = "internal"
 	resp.Data.Internal.Position = 0
 	resp.Data.Internal.Type = "internal"
@@ -157,7 +162,7 @@ func (h *AuthHandler) V4ListProviders(c echo.Context) error {
 	resp.Data.Ldap.Name = "LDAP"
 	resp.Data.Ldap.Type = "ldap"
 	resp.Data.Ldap.Position = 1
-	resp.Data.Ldap.Enable = h.ldapAuth != nil && h.ldapAuth.Enabled()
+	resp.Data.Ldap.Enable = passwordLogin && h.ldapAuth != nil && h.ldapAuth.Enabled()
 
 	resp.Data.Oauth2 = make([]struct {
 		Enable        bool   `json:"enable"`

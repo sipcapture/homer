@@ -39,6 +39,8 @@ type AuthHandler struct {
 	apiSettings  config.APISettingsConfig
 	// fallbackAuthType is coordinator.auth.fallback_auth_type (internal|ldap); empty disables.
 	fallbackAuthType string
+	// disablePasswordLogin is coordinator.auth.disable_password_login (OAuth-only UI/API).
+	disablePasswordLogin bool
 }
 
 // OAuthProvider represents a configured OAuth2 provider
@@ -74,20 +76,26 @@ func NewAuthHandlerWithUserService(
 	apiSettings config.APISettingsConfig,
 	ldapAuth *services.LDAPAuthService,
 	fallbackAuthType string,
+	disablePasswordLogin bool,
 ) *AuthHandler {
 	return &AuthHandler{
-		jwtSecret:        secret,
-		expireHours:      expireHours,
-		userService:      userService,
-		ldapAuth:         ldapAuth,
-		sessionStore:     NewSessionStore(),
-		oneTimeStore:     NewOneTimeTokenStore(),
-		oauthState:       NewOAuthStateStore(),
-		providers:        providers,
-		authTokenSvc:     authTokenSvc,
-		apiSettings:      apiSettings,
-		fallbackAuthType: fallbackAuthType,
+		jwtSecret:            secret,
+		expireHours:          expireHours,
+		userService:          userService,
+		ldapAuth:             ldapAuth,
+		sessionStore:         NewSessionStore(),
+		oneTimeStore:         NewOneTimeTokenStore(),
+		oauthState:           NewOAuthStateStore(),
+		providers:            providers,
+		authTokenSvc:         authTokenSvc,
+		apiSettings:          apiSettings,
+		fallbackAuthType:     fallbackAuthType,
+		disablePasswordLogin: disablePasswordLogin,
 	}
+}
+
+func (h *AuthHandler) passwordLoginAllowed() bool {
+	return h != nil && !h.disablePasswordLogin
 }
 
 // tryPasswordBackend authenticates with a single backend ("internal" or "ldap").
@@ -161,6 +169,12 @@ type JWTClaims struct {
 
 // Login handles POST /api/v3/auth and /api/v3/auth/login
 func (h *AuthHandler) Login(c echo.Context) error {
+	if !h.passwordLoginAllowed() {
+		return c.JSON(http.StatusForbidden, map[string]interface{}{
+			"error": "Password login is disabled",
+		})
+	}
+
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]interface{}{

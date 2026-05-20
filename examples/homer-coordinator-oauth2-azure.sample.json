@@ -1,0 +1,27 @@
+{
+  "coordinator": {
+    "auth": {
+      "disable_password_login": true
+    },
+    "oauth2_provider": {
+      "enable": true,
+      "name": "azure",
+      "position": 10,
+      "type": "oauth2",
+      "provider_name": "Microsoft",
+      "client_id": "REPLACE_WITH_AZURE_APP_CLIENT_ID",
+      "client_secret": "REPLACE_WITH_AZURE_APP_CLIENT_SECRET",
+      "auth_url": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize",
+      "token_url": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
+      "redirect_url": "https://homer.example.com/api/v4/auth/oauth2/azure/callback",
+      "profile_url": "https://graph.microsoft.com/oidc/userinfo",
+      "scopes": ["openid", "email", "profile"],
+      "use_pkce": false,
+      "callback_url": "https://homer.example.com/",
+      "auto_redirect": true,
+      "skip_auto_provision": true,
+      "admin_groups": ["Homer-Admins"],
+      "group_claim": "groups"
+    }
+  }
+}

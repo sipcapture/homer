@@ -158,6 +158,8 @@ export function LoginPage({
   }
 
   const showAuthTypeSelect = enabledPwd.length > 1
+  const showPasswordForm = enabledPwd.length > 0
+  const oauthOnly = !showPasswordForm && oauthProviderNames.length > 0
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4">
@@ -192,7 +194,9 @@ export function LoginPage({
         <Card className="w-full overflow-hidden rounded-lg border-border/40 bg-card/85 shadow-xl shadow-black/10 ring-1 ring-border/30 backdrop-blur-md dark:bg-card/70 dark:shadow-black/30">
           <CardHeader className="space-y-1 border-b border-border/40 pb-4">
             <CardTitle className="font-heading text-lg tracking-tight">Sign in</CardTitle>
-            <p className="text-[11px] text-muted-foreground">Use your deployment credentials</p>
+            <p className="text-[11px] text-muted-foreground">
+              {oauthOnly ? "Continue with your identity provider" : "Use your deployment credentials"}
+            </p>
           </CardHeader>
           <CardContent className="pt-5">
             {error && (
@@ -201,6 +205,7 @@ export function LoginPage({
               </Alert>
             )}
 
+            {showPasswordForm && (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               {showAuthTypeSelect && (
                 <div className="flex flex-col gap-1.5">
@@ -261,15 +266,24 @@ export function LoginPage({
                 )}
               </Button>
             </form>
+            )}
 
             {oauthProviderNames.length > 0 && (
               <>
+                {showPasswordForm && (
                 <div className="relative my-5">
                   <Separator />
                   <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-[10px] uppercase tracking-widest text-muted-foreground">
                     or
                   </span>
                 </div>
+                )}
+
+                {oauthOnly && autoOAuthProvider && (
+                  <p className="mb-3 text-center text-xs text-muted-foreground">
+                    Redirecting to sign in...
+                  </p>
+                )}
 
                 <div className="flex flex-col gap-2">
                   {oauthProviderNames.map((provider) => (

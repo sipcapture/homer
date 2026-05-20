@@ -734,6 +734,9 @@ type AuthConfig struct {
 	// FallbackAuthType, if set to "internal" or "ldap", is tried when password login
 	// with the client-selected type fails (wrong credentials or backend unavailable).
 	FallbackAuthType string `json:"fallback_auth_type,omitempty" mapstructure:"fallback_auth_type"`
+	// DisablePasswordLogin hides internal/LDAP password login from discovery and rejects
+	// POST /api/v4/auth/sessions (OAuth-only deployments).
+	DisablePasswordLogin bool `json:"disable_password_login,omitempty" mapstructure:"disable_password_login" default:"false"`
 	// AuthFromInternalString is true when coordinator.auth was the JSON string "internal",
 	// or after normalization when type is "internal" (DuckDB bootstrap path).
 	AuthFromInternalString bool `json:"-" mapstructure:"-"`
@@ -744,10 +747,11 @@ type AuthConfig struct {
 func (a AuthConfig) MarshalJSON() ([]byte, error) {
 	if a.AuthFromInternalString || strings.EqualFold(strings.TrimSpace(a.Type), "internal") {
 		type out struct {
-			Type               string `json:"type"`
-			AdminUser          string `json:"admin_user,omitempty"`
-			AdminPasswordHash  string `json:"admin_password_hash,omitempty"`
-			FallbackAuthType   string `json:"fallback_auth_type,omitempty"`
+			Type                 string `json:"type"`
+			AdminUser            string `json:"admin_user,omitempty"`
+			AdminPasswordHash    string `json:"admin_password_hash,omitempty"`
+			FallbackAuthType     string `json:"fallback_auth_type,omitempty"`
+			DisablePasswordLogin bool   `json:"disable_password_login,omitempty"`
 		}
 		o := out{Type: "internal"}
 		if u := strings.TrimSpace(a.AdminUser); u != "" && u != "admin" {
@@ -759,19 +763,24 @@ func (a AuthConfig) MarshalJSON() ([]byte, error) {
 		if fb := strings.TrimSpace(a.FallbackAuthType); fb != "" {
 			o.FallbackAuthType = fb
 		}
+		if a.DisablePasswordLogin {
+			o.DisablePasswordLogin = true
+		}
 		return json.Marshal(o)
 	}
 	type out struct {
-		Type               string `json:"type,omitempty"`
-		AdminUser          string `json:"admin_user,omitempty"`
-		AdminPasswordHash  string `json:"admin_password_hash,omitempty"`
-		FallbackAuthType   string `json:"fallback_auth_type,omitempty"`
+		Type                 string `json:"type,omitempty"`
+		AdminUser            string `json:"admin_user,omitempty"`
+		AdminPasswordHash    string `json:"admin_password_hash,omitempty"`
+		FallbackAuthType     string `json:"fallback_auth_type,omitempty"`
+		DisablePasswordLogin bool   `json:"disable_password_login,omitempty"`
 	}
 	return json.Marshal(out{
-		Type:               strings.TrimSpace(a.Type),
-		AdminUser:          a.AdminUser,
-		AdminPasswordHash:  a.AdminPasswordHash,
-		FallbackAuthType:  strings.TrimSpace(a.FallbackAuthType),
+		Type:                 strings.TrimSpace(a.Type),
+		AdminUser:            a.AdminUser,
+		AdminPasswordHash:    a.AdminPasswordHash,
+		FallbackAuthType:     strings.TrimSpace(a.FallbackAuthType),
+		DisablePasswordLogin: a.DisablePasswordLogin,
 	})
 }
 

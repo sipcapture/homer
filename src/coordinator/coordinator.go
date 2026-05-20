@@ -220,6 +220,7 @@ func (c *Coordinator) setupRoutes() {
 		c.config.APISettings,
 		ldapAuth,
 		strings.TrimSpace(c.config.Auth.FallbackAuthType),
+		c.config.Auth.DisablePasswordLogin,
 	)
 	usersHandler := handlers.NewUsersHandler(userService)
 	userSettingsHandler := handlers.NewUserSettingsHandler(userSettingsService, userMappingService)

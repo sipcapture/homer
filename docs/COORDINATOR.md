@@ -249,6 +249,7 @@ echo -n "your-password" | sha256sum | cut -d' ' -f1
 | `admin_user` | string | "admin" | Admin username when **`type`** is **`internal`** (including when `type` is omitted and normalized to internal). |
 | `admin_password_hash` | string | "" | SHA256 hex. For **`type` internal** (or omitted auth normalized to internal), empty means the default **`sipcapture`** hash after load. **`--reset-admin-password`** reads this field; it must be non-empty in the loaded config (default internal configs satisfy this after normalization). |
 | `fallback_auth_type` | string | "" | If set to **`internal`** or **`ldap`**, password login tries this backend **after** the client-selected `type` fails (wrong password or backend unavailable). Must not be **`oauth`**. Empty disables the second attempt. |
+| `disable_password_login` | bool | false | If **`true`**, hide internal/LDAP from **`GET /auth/providers`** and return **403** on **`POST /auth/sessions`**. Use with OAuth2 for IdP-only login. Env: **`HOMER_COORDINATOR_AUTH_DISABLE_PASSWORD_LOGIN`**. |
 
 ### oauth2_provider
 

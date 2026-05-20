@@ -315,6 +315,75 @@ Register **`redirect_url`** exactly at the IdP. The **`auth_url`** / **`token_ur
 - If no user exists and **`skip_auto_provision`** is `false` (default), a new DuckDB user is created with a random password hash (OAuth-only; password login is not intended for that row).
 - **`admin_groups`** matching uses the **`group_claim`** list from userinfo. Values may be plain strings or objects with a **`name`** (or **`group_name`**) field; configure Authentik scope mappings so the claim you read actually contains the same strings as in **`admin_groups`** (including spaces). If login works but admin does not, inspect the raw userinfo JSON first. With **`log.level`** set to **`debug`**, the coordinator logs one line **`oauth2 admin group check`** (claim key, whether the claim exists, parsed groups, configured `admin_groups`, and `admin_match`) after each successful profile fetch when `admin_groups` is non-empty.
 
+### OAuth-only login (hide username/password)
+
+Set **`coordinator.auth.disable_password_login`** to **`true`** to hide internal and LDAP password methods from **`GET /auth/providers`** and reject **`POST /auth/sessions`** with **403**. The bundled UI then shows only OAuth controls.
+
+Typical Azure / Entra ID setup:
+
+```json
+{
+  "coordinator": {
+    "auth": {
+      "disable_password_login": true
+    },
+    "oauth2_provider": {
+      "enable": true,
+      "name": "azure",
+      "auto_redirect": true,
+      "client_id": "YOUR_APP_ID",
+      "client_secret": "YOUR_SECRET",
+      "auth_url": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize",
+      "token_url": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
+      "redirect_url": "https://homer.example.com/api/v4/auth/oauth2/azure/callback",
+      "profile_url": "https://graph.microsoft.com/oidc/userinfo",
+      "callback_url": "https://homer.example.com/"
+    }
+  }
+}
+```
+
+Environment variables:
+
+- `HOMER_COORDINATOR_AUTH_DISABLE_PASSWORD_LOGIN=true`
+- `HOMER_COORDINATOR_OAUTH2_PROVIDER_AUTO_REDIRECT=true`
+
+Full sample: **`examples/homer-coordinator-oauth2-azure.sample.json`**.
+
+**`auto_redirect`** alone only redirects the browser to the IdP on page load; it does not disable password login. Use **`disable_password_login`** when password login must be blocked.
+
+### Pre-provisioned OAuth users (`skip_auto_provision`)
+
+When **`skip_auto_provision`** is **`true`**, OAuth login succeeds only if the IdP user already exists in DuckDB (matched by **username** first, then **email**). No new row is created on login.
+
+1. Sign in once as admin (before enabling OAuth-only, or via break-glass config).
+2. Create users in **Settings → Users**, or via **`POST /api/v4/users`**.
+3. Set **`skip_auto_provision: true`** on **`oauth2_provider`** and restart.
+
+Docker:
+
+```yaml
+HOMER_COORDINATOR_OAUTH2_PROVIDER_SKIP_AUTO_PROVISION: "true"
+```
+
+If the user is missing, the callback redirects with **`?oauth_error=no matching user and skip_auto_provision is true`**.
+
+Combined Azure-only + no auto-provision:
+
+```json
+{
+  "coordinator": {
+    "auth": { "disable_password_login": true },
+    "oauth2_provider": {
+      "enable": true,
+      "name": "azure",
+      "auto_redirect": true,
+      "skip_auto_provision": true
+    }
+  }
+}
+```
+
 ---
 
 ## JWT sessions and logout
