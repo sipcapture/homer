@@ -8,6 +8,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,11 +65,19 @@ type UserProfileV4 struct {
 	GUID            string `json:"guid,omitempty"`
 	Username        string `json:"username,omitempty"`
 	DisplayName     string `json:"display_name,omitempty"`
+	Email           string `json:"email,omitempty"`
 	Avatar          string `json:"avatar,omitempty"`
 	Group           string `json:"group,omitempty"`
 	Admin           bool   `json:"admin,omitempty"`
 	ExternalAuth    bool   `json:"external_auth,omitempty"`
 	ExternalProfile string `json:"external_profile,omitempty"`
+}
+
+// MePatchRequest is the body for PATCH /api/v4/me (Profile panel).
+type MePatchRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
 }
 
 type UserProfileResponseV4 struct {
@@ -241,19 +250,112 @@ func (h *AuthHandler) V4OAuth2TokenExchange(c echo.Context) error {
 
 // V4GetMe handles GET /api/v4/me
 func (h *AuthHandler) V4GetMe(c echo.Context) error {
+	claims, err := h.jwtClaimsFromContext(c)
+	if err != nil {
+		return v4ContextError(c, err)
+	}
+	profile := h.buildUserProfileV4(c, claims)
+	resp := UserProfileResponseV4{
+		Data: profile,
+		Meta: buildMeta(c, ""),
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// V4PatchMe handles PATCH /api/v4/me (update email/password for internal users).
+func (h *AuthHandler) V4PatchMe(c echo.Context) error {
+	if h.userService == nil {
+		return writeError(c, http.StatusServiceUnavailable, "Server Error", "User service not available")
+	}
+
+	claims, err := h.jwtClaimsFromContext(c)
+	if err != nil {
+		return v4ContextError(c, err)
+	}
+
+	var req MePatchRequest
+	if err := c.Bind(&req); err != nil {
+		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid request body")
+	}
+
+	var email, password, name *string
+	if trimmed := strings.TrimSpace(req.Email); trimmed != "" {
+		email = &trimmed
+	}
+	if req.Password != "" {
+		password = &req.Password
+	}
+	if trimmed := strings.TrimSpace(req.Name); trimmed != "" {
+		name = &trimmed
+	}
+	if email == nil && password == nil && name == nil {
+		return writeError(c, http.StatusBadRequest, "Bad Request", "No fields to update")
+	}
+
+	dbUser, err := h.userService.GetUserByUsername(c.Request().Context(), claims.Username)
+	if err != nil {
+		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to load user")
+	}
+	if dbUser == nil {
+		return writeError(c, http.StatusForbidden, "Forbidden", "Profile updates are not available for external authentication accounts")
+	}
+
+	updated, err := h.userService.UpdateUser(c.Request().Context(), dbUser.ID, email, password, name, nil, nil)
+	if err != nil {
+		if err.Error() == "no fields to update" {
+			return writeError(c, http.StatusBadRequest, "Bad Request", "No fields to update")
+		}
+		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to update profile")
+	}
+	if !updated {
+		return writeError(c, http.StatusNotFound, "Not Found", "User not found")
+	}
+
+	profile := h.buildUserProfileV4(c, claims)
+	resp := UserProfileResponseV4{
+		Data: profile,
+		Meta: buildMeta(c, ""),
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *AuthHandler) jwtClaimsFromContext(c echo.Context) (*JWTClaims, error) {
 	user := c.Get("user")
 	if user == nil {
-		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
+		return nil, echo.NewHTTPError(http.StatusUnauthorized, "Not authenticated")
 	}
 	token, ok := user.(*jwt.Token)
 	if !ok {
-		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Invalid token")
+		return nil, echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
 	}
 	claims, ok := token.Claims.(*JWTClaims)
 	if !ok {
-		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Invalid claims")
+		return nil, echo.NewHTTPError(http.StatusUnauthorized, "Invalid claims")
 	}
+	return claims, nil
+}
 
+func v4ContextError(c echo.Context, err error) error {
+	if httpErr, ok := err.(*echo.HTTPError); ok {
+		title := "Error"
+		switch httpErr.Code {
+		case http.StatusUnauthorized:
+			title = "Unauthorized"
+		case http.StatusForbidden:
+			title = "Forbidden"
+		case http.StatusBadRequest:
+			title = "Bad Request"
+		case http.StatusNotFound:
+			title = "Not Found"
+		case http.StatusServiceUnavailable:
+			title = "Server Error"
+		}
+		return writeError(c, httpErr.Code, title, fmt.Sprint(httpErr.Message))
+	}
+	return writeError(c, http.StatusInternalServerError, "Server Error", err.Error())
+}
+
+func (h *AuthHandler) buildUserProfileV4(c echo.Context, claims *JWTClaims) UserProfileV4 {
 	profile := UserProfileV4{
 		Username:    claims.Username,
 		DisplayName: claims.Username,
@@ -272,14 +374,11 @@ func (h *AuthHandler) V4GetMe(c echo.Context) error {
 				profile.DisplayName = dbUser.Name
 			}
 			if dbUser.Email != "" {
+				profile.Email = dbUser.Email
 				profile.ExternalProfile = dbUser.Email
 			}
 		}
 	}
 
-	resp := UserProfileResponseV4{
-		Data: profile,
-		Meta: buildMeta(c, ""),
-	}
-	return c.JSON(http.StatusOK, resp)
+	return profile
 }
