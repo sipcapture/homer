@@ -1,40 +1,105 @@
-/* Homer brand on top of Material default (light) and slate (dark) palettes. */
+/* Homer brand — light: default scheme, dark: slate + explicit readable text. */
 
-/* --- Light mode (scheme: default) — red accents, readable body text --- */
+/* --- Light --- */
 [data-md-color-scheme="default"] {
   --md-primary-fg-color: #cf222e;
   --md-primary-fg-color--light: #e55353;
   --md-primary-fg-color--dark: #a32d2d;
   --md-primary-bg-color: #ffffff;
   --md-primary-bg-color--light: #ffffffb3;
-
   --md-accent-fg-color: #a32d2d;
   --md-accent-fg-color--transparent: #cf222e1a;
   --md-accent-bg-color: #ffffff;
-
   --md-typeset-a-color: #cf222e;
   --md-typeset-mark-color: #fcebeb;
 }
 
-/* --- Dark mode (scheme: slate) — full Material dark palette + Homer red --- */
+/* --- Dark: full text/background tokens (do not rely on partial overrides) --- */
 [data-md-color-scheme="slate"] {
   --md-hue: 225;
+
+  --md-default-fg-color: #f0f6fc;
+  --md-default-fg-color--light: #c9d1d9;
+  --md-default-fg-color--lighter: #8b949e;
+  --md-default-fg-color--lightest: #6e7681;
+  --md-default-bg-color: #161b22;
+  --md-default-bg-color--light: #1c2128;
+  --md-default-bg-color--lighter: #21262d;
+  --md-default-bg-color--lightest: #30363d;
+
+  --md-typeset-color: #f0f6fc;
+  --md-typeset-a-color: #ff7b72;
+
+  --md-code-fg-color: #e6edf3;
+  --md-code-bg-color: #1c2128;
 
   --md-primary-fg-color: #f85149;
   --md-primary-fg-color--light: #ff7b72;
   --md-primary-fg-color--dark: #cf222e;
   --md-primary-bg-color: #21262d;
   --md-primary-bg-color--light: #21262db3;
-
   --md-accent-fg-color: #ff7b72;
   --md-accent-fg-color--transparent: #f8514926;
   --md-accent-bg-color: #161b22;
-
-  --md-typeset-a-color: #ff7b72;
   --md-typeset-mark-color: #3d1518;
 }
 
-/* Header chrome (both modes) */
+/* Hard guarantee: light text on dark surfaces (fixes black-on-dark) */
+[data-md-color-scheme="slate"] body {
+  color: #f0f6fc !important;
+  background-color: #161b22 !important;
+}
+
+[data-md-color-scheme="slate"] .md-main,
+[data-md-color-scheme="slate"] .md-content,
+[data-md-color-scheme="slate"] .md-content__inner,
+[data-md-color-scheme="slate"] .md-sidebar,
+[data-md-color-scheme="slate"] .md-sidebar__scrollwrap {
+  color: #f0f6fc;
+  background-color: #161b22;
+}
+
+[data-md-color-scheme="slate"] .md-typeset,
+[data-md-color-scheme="slate"] .md-typeset p,
+[data-md-color-scheme="slate"] .md-typeset li,
+[data-md-color-scheme="slate"] .md-typeset td,
+[data-md-color-scheme="slate"] .md-typeset th,
+[data-md-color-scheme="slate"] .md-typeset blockquote {
+  color: #f0f6fc;
+}
+
+[data-md-color-scheme="slate"] .md-typeset h1,
+[data-md-color-scheme="slate"] .md-typeset h2,
+[data-md-color-scheme="slate"] .md-typeset h3,
+[data-md-color-scheme="slate"] .md-typeset h4,
+[data-md-color-scheme="slate"] .md-typeset h5,
+[data-md-color-scheme="slate"] .md-typeset h6 {
+  color: #ffffff;
+}
+
+[data-md-color-scheme="slate"] .md-typeset a {
+  color: #ff7b72;
+}
+
+[data-md-color-scheme="slate"] .md-typeset code {
+  color: #e6edf3;
+  background-color: #1c2128;
+}
+
+[data-md-color-scheme="slate"] .md-nav__link {
+  color: #c9d1d9;
+}
+
+[data-md-color-scheme="slate"] .md-nav__link--active,
+[data-md-color-scheme="slate"] .md-nav__link:hover {
+  color: #ffffff;
+}
+
+[data-md-color-scheme="slate"] .md-nav__title {
+  color: #ffffff;
+}
+
+/* Header chrome */
 [data-md-color-scheme="default"] .md-header,
 [data-md-color-scheme="slate"] .md-header {
   background-color: #1a1d24;
@@ -61,11 +126,10 @@
   color: #c9d1d9;
 }
 
-/* Tabs bar */
+/* Tabs */
 [data-md-color-scheme="default"] .md-tabs,
 [data-md-color-scheme="slate"] .md-tabs {
   background-color: #111318;
-  color: #e5e7eb;
 }
 
 [data-md-color-scheme="default"] .md-tabs__link,
@@ -85,49 +149,8 @@
   color: #ff7b72;
 }
 
-/* Sidebar — ensure links stay readable in dark mode */
-[data-md-color-scheme="slate"] .md-nav__link {
-  color: var(--md-default-fg-color--light);
-}
-
-[data-md-color-scheme="slate"] .md-nav__link--active,
-[data-md-color-scheme="slate"] .md-nav__link:hover {
-  color: var(--md-default-fg-color);
-}
-
-[data-md-color-scheme="slate"] .md-nav__title {
-  color: var(--md-default-fg-color);
-}
-
 [data-md-color-scheme="default"] .md-nav__link--active {
   color: var(--md-primary-fg-color);
-}
-
-/* Main content — explicit contrast safety net */
-[data-md-color-scheme="slate"] .md-content__inner,
-[data-md-color-scheme="slate"] .md-typeset {
-  color: var(--md-default-fg-color);
-}
-
-[data-md-color-scheme="slate"] .md-typeset h1,
-[data-md-color-scheme="slate"] .md-typeset h2,
-[data-md-color-scheme="slate"] .md-typeset h3,
-[data-md-color-scheme="slate"] .md-typeset h4 {
-  color: var(--md-default-fg-color);
-}
-
-[data-md-color-scheme="slate"] .md-typeset code {
-  color: var(--md-code-fg-color);
-  background-color: var(--md-code-bg-color);
-}
-
-[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
-  background-color: var(--md-default-bg-color--lighter);
-  color: var(--md-default-fg-color);
-}
-
-[data-md-color-scheme="slate"] .md-typeset table:not([class]) td {
-  color: var(--md-default-fg-color--light);
 }
 
 /* Footer */
@@ -140,6 +163,12 @@
 [data-md-color-scheme="default"] .md-footer-meta,
 [data-md-color-scheme="slate"] .md-footer-meta {
   background-color: #010409;
+  color: #c9d1d9;
+}
+
+[data-md-color-scheme="slate"] .md-footer a,
+[data-md-color-scheme="slate"] .md-footer-meta a {
+  color: #ff7b72;
 }
 
 /* Logo */
@@ -162,7 +191,14 @@
 }
 
 .md-typeset .homer-tagline {
-  color: var(--md-default-fg-color--light);
   font-size: 1.05rem;
   margin-top: 0;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .homer-tagline {
+  color: #c9d1d9;
+}
+
+[data-md-color-scheme="default"] .md-typeset .homer-tagline {
+  color: var(--md-default-fg-color--light);
 }
