@@ -89,10 +89,11 @@
   color: var(--md-primary-fg-color);
 }
 
-/* Logo sizing */
+/* Logo sizing (transparent PNG: red disc + white H) */
 .md-header__button.md-logo img,
 .md-nav__button.md-logo img {
   height: 1.75rem;
+  width: auto;
 }
 
 /* Home hero */
@@ -102,7 +103,7 @@
 }
 
 .md-typeset .homer-hero img {
-  max-width: 220px;
+  max-width: 200px;
   height: auto;
   margin-bottom: 0.5rem;
 }
