@@ -8,18 +8,23 @@ edit_uri: edit/homer11/docs/
 theme:
   name: material
   language: en
+  logo: assets/homer-logo.png
+  favicon: assets/homer-logo.png
+  font:
+    text: Roboto
+    code: JetBrains Mono
   palette:
     - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      accent: indigo
+      scheme: homer
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: indigo
-      accent: indigo
+      scheme: homer-dark
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -49,6 +54,8 @@ validation:
     unrecognized_links: ignore
 
 markdown_extensions:
+  - md_in_html
+  - attr_list
   - admonition
   - pymdownx.details
   - pymdownx.superfences
@@ -105,6 +112,9 @@ nav:
   - Migration (draft):
       - Homer 7 → 11: untested/MIGRATION_HOMER7.md
       - Homer 10 → 11: untested/MIGRATION_HOMER10.md
+
+extra_css:
+  - stylesheets/extra.css
 
 extra:
   social:

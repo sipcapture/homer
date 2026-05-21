@@ -1,0 +1,114 @@
+/* Homer / sipcapture brand — red logo, warm neutrals (aligned with UI destructive palette). */
+
+[data-md-color-scheme="homer"] {
+  --md-default-fg-color: #1a1d24;
+  --md-default-fg-color--light: #4a5568;
+  --md-default-fg-color--lighter: #718096;
+  --md-default-fg-color--lightest: #a0aec0;
+  --md-default-bg-color: #fafbfc;
+  --md-default-bg-color--light: #f3f4f6;
+  --md-default-bg-color--lighter: #eceef1;
+  --md-default-bg-color--lightest: #e5e7eb;
+  --md-code-bg-color: #f6f7f9;
+
+  --md-primary-fg-color: #cf222e;
+  --md-primary-fg-color--light: #e55353;
+  --md-primary-fg-color--dark: #a32d2d;
+  --md-primary-bg-color: #fcebeb;
+
+  --md-accent-fg-color: #a32d2d;
+  --md-accent-fg-color--transparent: #cf222e1a;
+
+  --md-typeset-a-color: #cf222e;
+  --md-typeset-mark-color: #fcebeb;
+
+  --md-footer-bg-color: #1a1d24;
+  --md-footer-bg-color--dark: #111318;
+  --md-footer-fg-color: #f9fafb;
+}
+
+[data-md-color-scheme="homer-dark"] {
+  --md-default-fg-color: #f0f6fc;
+  --md-default-fg-color--light: #c9d1d9;
+  --md-default-fg-color--lighter: #8b949e;
+  --md-default-fg-color--lightest: #6e7681;
+  --md-default-bg-color: #161b22;
+  --md-default-bg-color--light: #1c2128;
+  --md-default-bg-color--lighter: #21262d;
+  --md-default-bg-color--lightest: #30363d;
+  --md-code-bg-color: #1c2128;
+
+  --md-primary-fg-color: #f85149;
+  --md-primary-fg-color--light: #ff7b72;
+  --md-primary-fg-color--dark: #cf222e;
+  --md-primary-bg-color: #3d1518;
+
+  --md-accent-fg-color: #ff7b72;
+  --md-accent-fg-color--transparent: #f8514926;
+
+  --md-typeset-a-color: #ff7b72;
+  --md-typeset-mark-color: #3d1518;
+
+  --md-footer-bg-color: #0d1117;
+  --md-footer-bg-color--dark: #010409;
+  --md-footer-fg-color: #f0f6fc;
+}
+
+/* Header: dark bar + red accents (login/dashboard chrome). */
+[data-md-color-scheme="homer"] .md-header,
+[data-md-color-scheme="homer-dark"] .md-header {
+  background-color: #1a1d24;
+  color: #f9fafb;
+}
+
+[data-md-color-scheme="homer"] .md-header__button,
+[data-md-color-scheme="homer-dark"] .md-header__button {
+  color: #f9fafb;
+}
+
+[data-md-color-scheme="homer"] .md-tabs,
+[data-md-color-scheme="homer-dark"] .md-tabs {
+  background-color: #111318;
+  color: #e5e7eb;
+}
+
+[data-md-color-scheme="homer"] .md-tabs__link--active,
+[data-md-color-scheme="homer-dark"] .md-tabs__link--active {
+  color: #ff7b72;
+  border-bottom-color: #cf222e;
+}
+
+[data-md-color-scheme="homer"] .md-tabs__link:hover,
+[data-md-color-scheme="homer-dark"] .md-tabs__link:hover {
+  color: #ff7b72;
+}
+
+/* Sidebar active item */
+[data-md-color-scheme="homer"] .md-nav__link--active,
+[data-md-color-scheme="homer-dark"] .md-nav__link--active {
+  color: var(--md-primary-fg-color);
+}
+
+/* Logo sizing */
+.md-header__button.md-logo img,
+.md-nav__button.md-logo img {
+  height: 1.75rem;
+}
+
+/* Home hero */
+.md-typeset .homer-hero {
+  text-align: center;
+  padding: 1.5rem 0 2rem;
+}
+
+.md-typeset .homer-hero img {
+  max-width: 220px;
+  height: auto;
+  margin-bottom: 0.5rem;
+}
+
+.md-typeset .homer-tagline {
+  color: var(--md-default-fg-color--light);
+  font-size: 1.05rem;
+  margin-top: 0;
+}

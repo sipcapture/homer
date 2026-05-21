@@ -1,3 +1,11 @@
+<div class="homer-hero" markdown="1">
+
+![Homer logo](assets/homer-logo.png)
+
+<p class="homer-tagline">Homer eleven — telecom observability since 2011</p>
+
+</div>
+
 # Homer 11 Documentation
 
 Homer eleven is the all-in-one HEP capture and API server for the Homer 11.x data lake:
