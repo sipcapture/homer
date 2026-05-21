@@ -232,6 +232,13 @@ See the `examples/` directory:
 
 ## Documentation
 
+**Published docs (GitHub Pages):** [https://sipcapture.github.io/homer/](https://sipcapture.github.io/homer/) — built from `docs/` via MkDocs on push to `homer11`. Enable **Settings → Pages → Build and deployment: GitHub Actions** once after the first workflow run.
+
+```bash
+python3 -m venv .venv-docs && .venv-docs/bin/pip install -r docs-requirements.txt
+.venv-docs/bin/mkdocs serve   # http://127.0.0.1:8000
+```
+
 - [Search CLI](docs/SEARCH.md) - Search from the command line (examples, formats, call flow)
 - [Config Wizard](docs/WIZARD.md) - Interactive config generator (TUI + presets)
 - [Ingest performance tuning](docs/INGEST_PERFORMANCE.md) - multicore, DuckLake batch size, Prometheus flush interval; **`scripts/profile_ingest_load.sh`** / **`make profile-ingest`** for repeatable CPU profiles

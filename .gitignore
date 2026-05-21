@@ -52,6 +52,10 @@ bechmarks/results.legacy.*.csv
 # Agent planning artifacts
 agent_planning/
 
+# MkDocs local build output
+site/
+.venv-docs/
+
 # Temp DuckDB files
 .tmp/.static-cxx-link/
 .static-cxx-link/

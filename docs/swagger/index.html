@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -47,13 +47,12 @@
   <body>
     <div class="topbar">
       <strong>Homer Next-Gen API</strong>
-      <span class="hint" id="status">Loading ./openapi.yaml…</span>
-      <a class="hint" href="./MCP_UI_GUIDE.md" style="color:#93c5fd;">MCP UI Guide</a>
+      <span class="hint" id="status">Loading ../openapi.yaml…</span>
+      <a class="hint" href="../MCP_UI_GUIDE/" style="color:#93c5fd;">MCP UI Guide</a>
       <label class="hint">
         Load file:
         <input id="fileInput" type="file" accept=".yaml,.yml,.json" />
       </label>
-      <span class="hint">If opened via file://, use a local server.</span>
     </div>
     <div class="examples">
       <strong>Examples (v4)</strong>
@@ -73,7 +72,7 @@
     <script>
       const statusEl = document.getElementById("status");
       const fileInput = document.getElementById("fileInput");
-      const defaultUrl = new URL("openapi.yaml", window.location.href).toString();
+      const defaultUrl = new URL("../openapi.yaml", window.location.href).toString();
 
       const ui = SwaggerUIBundle({
         url: defaultUrl,

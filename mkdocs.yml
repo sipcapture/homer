@@ -1,0 +1,112 @@
+site_name: Homer 11 Documentation
+site_description: Homer eleven — HEP capture, DuckLake storage, and observability API
+site_url: https://sipcapture.github.io/homer/
+repo_url: https://github.com/sipcapture/homer
+repo_name: sipcapture/homer
+edit_uri: edit/homer11/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+plugins:
+  - search
+
+# Docs link to repo paths (../src/...) and GitHub; ignore for site build.
+validation:
+  nav:
+    omitted_files: info
+  links:
+    not_found: ignore
+    absolute_links: ignore
+    unrecognized_links: ignore
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Config wizard: WIZARD.md
+      - Environment variables: ENVIRONMENT_VARIABLES.md
+      - Search CLI: SEARCH.md
+      - Certificates: CERTIFICATES_README.md
+  - Architecture:
+      - Overview: STORAGE_ARCHITECTURE.md
+      - Storage layout: STORAGE_LAYOUT.md
+      - Storage policies: STORAGE_POLICIES.md
+      - Node (FlightSQL): NODE.md
+      - Coordinator: COORDINATOR.md
+      - HEP stream: HEP_STREAM.md
+  - Ingest & storage:
+      - Ingest performance: INGEST_PERFORMANCE.md
+      - HEP ingest (MPPS): HEP_INGEST_MPPS.md
+      - DuckDB tuning: DUCKDB_TUNING.md
+      - Compaction: COMPACTION_SETUP.md
+  - Protocols & integrations:
+      - OTLP: OTLP.md
+      - Line protocol: LINE_PROTOCOL.md
+      - FlightSQL (Grafana): FLIGHTSQL.md
+      - Grafana integration: GRAFANA_INTEGRATION.md
+      - Lua correlation: LUA_CORRELATION.md
+  - Authentication:
+      - LDAP & OAuth: AUTH_LDAP_AND_OAUTH.md
+      - OAuth reference: AUTH_OAUTH.md
+      - UI tokens: UI_COORDINATOR_AUTH_AND_TOKENS.md
+  - MCP & agents:
+      - MCP server: MCP.md
+      - MCP UI guide: MCP_UI_GUIDE.md
+      - Agent subscriptions: AGENT.md
+  - API reference:
+      - OpenAPI (Swagger UI): swagger/index.html
+      - OpenAPI spec (YAML): openapi.yaml
+  - Benchmarks:
+      - Benchmarks: BENCHMARKS.md
+      - Benchmark guide: BENCHMARK_README.md
+  - Other:
+      - VoIP games: VOIPGames.md
+  - Migration (draft):
+      - Homer 7 → 11: untested/MIGRATION_HOMER7.md
+      - Homer 10 → 11: untested/MIGRATION_HOMER10.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/sipcapture/homer
