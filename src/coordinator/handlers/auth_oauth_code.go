@@ -161,6 +161,8 @@ func (h *AuthHandler) V4OAuth2Callback(c echo.Context) error {
 		return h.oauthRedirectWithError(c, provider, err.Error())
 	}
 
+	cacheOAuthAvatar(h, u.Username, profile, client, provider)
+
 	isAdmin := u.IsAdmin || staffAdmin
 
 	one := newSessionID()

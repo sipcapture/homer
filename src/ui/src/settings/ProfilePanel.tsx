@@ -15,10 +15,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { SettingsPageHeader } from './SettingsPageHeader'
+import UserAvatar from '@/components/UserAvatar'
 import { apiPatch } from '../api'
 
 interface Me {
   username?: string
+  display_name?: string
   guid?: string
   group?: string
   user_group?: string
@@ -28,6 +30,7 @@ interface Me {
 
 interface ProfilePanelProps {
   me: Me | null
+  avatarUrl?: string | null
   loading?: boolean
   onRefresh?: () => void
   readOnly?: boolean
@@ -35,6 +38,7 @@ interface ProfilePanelProps {
 
 export default function ProfilePanel({
   me,
+  avatarUrl = null,
   loading,
   onRefresh,
   readOnly = false,
@@ -97,11 +101,18 @@ export default function ProfilePanel({
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center gap-4 space-y-0">
+          <UserAvatar
+            label={me?.display_name || me?.username || 'User'}
+            imageUrl={avatarUrl}
+            size="md"
+          />
+          <div className="min-w-0 flex-1">
           <CardTitle>Identity</CardTitle>
           <CardDescription>
             Details inherited from your authentication provider.
           </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">

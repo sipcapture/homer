@@ -350,6 +350,17 @@ Environment variables:
 
 Full sample: **`examples/homer-coordinator-oauth2-azure.sample.json`**.
 
+### SSO profile photos (Microsoft Entra / OIDC)
+
+The UI must not call IdP photo URLs (for example `https://graph.microsoft.com/v1.0/me/photo/$value`) directly — the browser has no access token. Homer 11 instead:
+
+1. On OAuth callback, the coordinator fetches the photo with the IdP **access token** and caches it in memory (24h TTL per username).
+2. **`GET /api/v4/me`** returns **`avatar: "/me/avatar"`** when a cached photo exists.
+3. **`GET /api/v4/me/avatar`** (JWT required) streams the image bytes.
+4. The bundled UI loads the photo via authenticated `fetch` and shows **initials** when no photo is available.
+
+For Azure, include **`User.Read`** in **`scopes`** (see sample JSON) so Graph can return the profile photo.
+
 **`auto_redirect`** alone only redirects the browser to the IdP on page load; it does not disable password login. Use **`disable_password_login`** when password login must be blocked.
 
 ### Pre-provisioned OAuth users (`skip_auto_provision`)

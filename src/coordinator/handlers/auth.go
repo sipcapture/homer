@@ -32,6 +32,7 @@ type AuthHandler struct {
 	ldapAuth     *services.LDAPAuthService
 	sessionStore *SessionStore
 	oneTimeStore *OneTimeTokenStore
+	avatarStore  *AvatarStore
 	providers    []OAuthProvider
 	oauthState   *OAuthStateStore
 
@@ -85,6 +86,7 @@ func NewAuthHandlerWithUserService(
 		ldapAuth:             ldapAuth,
 		sessionStore:         NewSessionStore(),
 		oneTimeStore:         NewOneTimeTokenStore(),
+		avatarStore:          NewAvatarStore(24 * time.Hour),
 		oauthState:           NewOAuthStateStore(),
 		providers:            providers,
 		authTokenSvc:         authTokenSvc,

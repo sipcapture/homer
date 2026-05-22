@@ -15,7 +15,7 @@
       "token_url": "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
       "redirect_url": "https://homer.example.com/api/v4/auth/oauth2/azure/callback",
       "profile_url": "https://graph.microsoft.com/oidc/userinfo",
-      "scopes": ["openid", "email", "profile"],
+      "scopes": ["openid", "email", "profile", "User.Read"],
       "use_pkce": false,
       "callback_url": "https://homer.example.com/",
       "auto_redirect": true,

@@ -10,6 +10,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { SettingsPageHeader } from './SettingsPageHeader'
+import UserAvatar from '@/components/UserAvatar'
 
 interface Me {
   username?: string
@@ -21,11 +22,12 @@ interface Me {
 
 interface AboutPanelProps {
   me: Me | null
+  avatarUrl?: string | null
   loading?: boolean
   onRefresh?: () => void
 }
 
-export default function AboutPanel({ me, loading, onRefresh }: AboutPanelProps) {
+export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }: AboutPanelProps) {
   return (
     <div>
       <SettingsPageHeader
@@ -45,6 +47,18 @@ export default function AboutPanel({ me, loading, onRefresh }: AboutPanelProps) 
         </CardHeader>
         <CardContent>
           {me ? (
+            <>
+            <div className="mb-4 flex items-center gap-3">
+              <UserAvatar
+                label={me.display_name || me.username || 'User'}
+                imageUrl={avatarUrl}
+                size="md"
+              />
+              <div>
+                <p className="text-sm font-medium text-foreground">{me.display_name || me.username}</p>
+                <p className="text-xs text-muted-foreground">{me.username}</p>
+              </div>
+            </div>
             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Username" value={me.username || '—'} />
               <Field label="Name" value={me.display_name || '—'} />
@@ -61,6 +75,7 @@ export default function AboutPanel({ me, loading, onRefresh }: AboutPanelProps) 
                 </dd>
               </div>
             </dl>
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">No profile loaded.</p>
           )}

@@ -367,6 +367,7 @@ func (c *Coordinator) setupRoutes() {
 	{
 		protectedV4.DELETE("/auth/sessions/:sessionId", authHandler.V4DeleteSession)
 		protectedV4.GET("/me", authHandler.V4GetMe)
+		protectedV4.GET("/me/avatar", authHandler.V4GetMeAvatar)
 		protectedV4.PATCH("/me", authHandler.V4PatchMe)
 		protectedV4.GET("/me/settings", userSettingsHandler.V4UserSettingsList)
 		protectedV4.PUT("/me/settings/:category", userSettingsHandler.V4UserSettingsUpsert)

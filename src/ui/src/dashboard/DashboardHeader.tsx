@@ -1,4 +1,5 @@
-import { ArrowLeft, LogOut, Settings, User } from 'lucide-react'
+import { ArrowLeft, LogOut, Settings } from 'lucide-react'
+import UserAvatar from '@/components/UserAvatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -22,6 +23,7 @@ export interface DashboardHeaderProps {
   timeZone: string
   onTimeZoneChange: (tz: string) => void
   userLabel: string
+  userAvatarUrl?: string | null
   onOpenSettings: () => void
   onOpenDashboard: () => void
   onLogout: () => void
@@ -43,6 +45,7 @@ export default function DashboardHeader({
   timeZone,
   onTimeZoneChange,
   userLabel,
+  userAvatarUrl = null,
   onOpenSettings,
   onOpenDashboard,
   onLogout,
@@ -123,9 +126,9 @@ export default function DashboardHeader({
         <Separator orientation="vertical" className="mx-1 h-6" />
         <Badge
           variant="secondary"
-          className="h-8 gap-1.5 px-2.5 text-xs font-medium"
+          className="h-8 gap-2 pl-1 pr-2.5 text-xs font-medium"
         >
-          <User className="size-3.5 text-muted-foreground" />
+          <UserAvatar label={userLabel} imageUrl={userAvatarUrl} />
           <span className="text-foreground">{userLabel}</span>
         </Badge>
         {showLogout && (

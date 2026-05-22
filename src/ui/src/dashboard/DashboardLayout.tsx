@@ -415,7 +415,8 @@ function DashboardGrid() {
 export interface DashboardLayoutProps {
   apiBase: string
   token: string
-  me: { username?: string } | null
+  me: { username?: string; display_name?: string } | null
+  userAvatarUrl?: string | null
   onOpenSettings: () => void
   onOpenDashboard: () => void
   onLogout: () => void
@@ -427,6 +428,7 @@ export default function DashboardLayout({
   apiBase,
   token,
   me,
+  userAvatarUrl = null,
   onOpenSettings,
   onOpenDashboard,
   onLogout,
@@ -493,7 +495,8 @@ export default function DashboardLayout({
           calendarPreset={calendarPreset}
           timeZone={timeZone}
         onTimeZoneChange={setTimeZone}
-        userLabel={me?.username || 'User'}
+        userLabel={me?.display_name || me?.username || 'User'}
+        userAvatarUrl={userAvatarUrl}
         onOpenSettings={onOpenSettings}
         onOpenDashboard={onOpenDashboard}
         onLogout={onLogout}

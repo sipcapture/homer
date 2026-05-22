@@ -4,6 +4,7 @@ export default function DashboardPanel({
   apiBase,
   token,
   me,
+  userAvatarUrl,
   onOpenSettings,
   onOpenDashboard,
   onLogout,
@@ -11,7 +12,8 @@ export default function DashboardPanel({
 }: {
   apiBase: string
   token: string
-  me: { username?: string } | null
+  me: { username?: string; display_name?: string } | null
+  userAvatarUrl?: string | null
   onOpenSettings: () => void
   onOpenDashboard: () => void
   onLogout: () => void
@@ -22,6 +24,7 @@ export default function DashboardPanel({
       apiBase={apiBase}
       token={token}
       me={me}
+      userAvatarUrl={userAvatarUrl}
       onOpenSettings={onOpenSettings}
       onOpenDashboard={onOpenDashboard}
       onLogout={onLogout}

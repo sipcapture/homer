@@ -61,6 +61,26 @@ export async function apiGet<T = any>(path: string, params?: QueryParams): Promi
   return res.json() as Promise<T>
 }
 
+/** Fetch SSO profile photo via coordinator proxy (requires Authorization). */
+export async function fetchMeAvatarObjectUrl(): Promise<string | null> {
+  const res = await fetch(`${apiBase}/me/avatar`, { headers: authHeaders() })
+  if (res.status === 401) {
+    handleUnauthorized()
+    throw new Error('Unauthorized')
+  }
+  if (res.status === 404) {
+    return null
+  }
+  if (!res.ok) {
+    throw new Error(await parseError(res))
+  }
+  const blob = await res.blob()
+  if (!blob.size) {
+    return null
+  }
+  return URL.createObjectURL(blob)
+}
+
 export async function apiPost<T = unknown>(path: string, body?: unknown): Promise<T | null> {
   const res = await fetch(`${apiBase}${path}`, {
     method: 'POST',

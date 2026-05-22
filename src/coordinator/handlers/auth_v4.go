@@ -380,5 +380,10 @@ func (h *AuthHandler) buildUserProfileV4(c echo.Context, claims *JWTClaims) User
 		}
 	}
 
+	if h.avatarStore != nil && h.avatarStore.Has(claims.Username) {
+		profile.Avatar = "/me/avatar"
+		profile.ExternalAuth = true
+	}
+
 	return profile
 }

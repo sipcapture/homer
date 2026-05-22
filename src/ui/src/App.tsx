@@ -25,7 +25,7 @@ import {
   canServerReset,
 } from './settings/permissions'
 import DashboardHeader from './dashboard/DashboardHeader'
-import { handleUnauthorized } from './api'
+import { fetchMeAvatarObjectUrl, handleUnauthorized } from './api'
 import { ThemeProvider } from "@/components/theme/theme-provider"
 import { WindowDock } from "@/components/ui/window-dock"
 import { useConfirm } from "@/components/ui/confirm-dialog"
@@ -86,6 +86,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('about')
   const [me, setMe] = useState<any>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [users, setUsers] = useState<any[]>([])
   const [loadingMe, setLoadingMe] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
@@ -202,7 +203,15 @@ function App() {
     window.location.href = `${apiBase}/auth/oauth2/${encodeURIComponent(provider)}/redirect`
   }
 
+  const revokeAvatarUrl = (url: string | null) => {
+    if (url) {
+      URL.revokeObjectURL(url)
+    }
+  }
+
   const logout = () => {
+    revokeAvatarUrl(avatarUrl)
+    setAvatarUrl(null)
     setToken('')
     setMe(null)
     setUsers([])
@@ -249,7 +258,18 @@ function App() {
         return
       }
       const payload = await res.json()
-      setMe(payload?.data || null)
+      const data = payload?.data || null
+      setMe(data)
+      revokeAvatarUrl(avatarUrl)
+      let nextAvatar: string | null = null
+      if (data?.avatar) {
+        try {
+          nextAvatar = await fetchMeAvatarObjectUrl()
+        } catch {
+          // Avatar is optional; keep initials fallback in the UI.
+        }
+      }
+      setAvatarUrl(nextAvatar)
     } catch (err) {
       toast.error(`Failed to load profile: ${(err as Error).message}`)
     } finally {
@@ -501,9 +521,17 @@ function App() {
 
     switch (activeSection) {
       case 'about':
-        return <AboutPanel me={me} loading={loadingMe} onRefresh={loadMe} />
+        return <AboutPanel me={me} avatarUrl={avatarUrl} loading={loadingMe} onRefresh={loadMe} />
       case 'profile':
-        return <ProfilePanel me={me} loading={loadingMe} onRefresh={loadMe} readOnly={readOnly} />
+        return (
+          <ProfilePanel
+            me={me}
+            avatarUrl={avatarUrl}
+            loading={loadingMe}
+            onRefresh={loadMe}
+            readOnly={readOnly}
+          />
+        )
       case 'users':
         return (
           <UsersPanel
@@ -579,6 +607,7 @@ function App() {
                   apiBase={apiBase}
                   token={token}
                   me={me}
+                  userAvatarUrl={avatarUrl}
                   onOpenSettings={openSettings}
                   onOpenDashboard={openDashboard}
                   onLogout={logout}
@@ -594,7 +623,8 @@ function App() {
                     calendarPreset={null}
                     timeZone=""
                     onTimeZoneChange={() => { }}
-                    userLabel={me?.username || 'User'}
+                    userLabel={me?.display_name || me?.username || 'User'}
+                    userAvatarUrl={avatarUrl}
                     onOpenSettings={openSettings}
                     onOpenDashboard={openDashboard}
                     onLogout={logout}
