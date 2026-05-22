@@ -73,6 +73,7 @@ nav:
       - Config wizard: WIZARD.md
       - Environment variables: ENVIRONMENT_VARIABLES.md
       - Search CLI: SEARCH.md
+      - Dashboard URL search: SEARCH_URL.md
       - Certificates: CERTIFICATES_README.md
   - Architecture:
       - Overview: STORAGE_ARCHITECTURE.md

@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import SearchDeepLinkBootstrap from './SearchDeepLinkBootstrap'
 
 function DashboardGrid() {
   const confirm = useConfirm()
@@ -510,6 +511,7 @@ export default function DashboardLayout({
           timeZone={timeZone}
           requestTimeRange={handleTimeChange}
         >
+          <SearchDeepLinkBootstrap />
           <DashboardGrid />
         </DashboardProvider>
       </main>

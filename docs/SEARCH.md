@@ -38,6 +38,10 @@ Example request body:
 
 For full setup and configuration details, see [MCP UI Guide](MCP_UI_GUIDE.md).
 
+## Dashboard URL search
+
+Bookmarkable dashboard links (`?from_user=…#dashboard`), per-protocol examples, and how to add new protocols: **[SEARCH_URL.md](SEARCH_URL.md)**.
+
 ## Authentication
 
 On first login, the JWT token is cached in `~/.homer_token` for subsequent requests:

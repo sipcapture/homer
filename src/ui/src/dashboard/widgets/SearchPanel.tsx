@@ -1,6 +1,7 @@
 // @ts-nocheck - TODO: rewrite with shadcn/ui + TanStack; typed when refactored
 import { useCallback, useEffect, useState } from 'react'
-import { Search, Eraser, Table, BarChart3, Settings, ChevronDown } from 'lucide-react'
+import { Search, Eraser, Table, BarChart3, Settings, ChevronDown, Link2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { getMergedFields, useMappings } from '@/hooks/useMappings'
+import { buildSearchDeepLinkURL } from '../searchDeepLink'
 
 const METHOD_OPTIONS = [
   ['', 'Any'], ['INVITE', 'INVITE'], ['ACK', 'ACK'], ['BYE', 'BYE'],
@@ -494,6 +496,34 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
 
   const handleClear = () => clearForm(storeKey)
 
+  const handleCopySearchLink = async () => {
+    const ts = resolveTimeRange(timeRange, timeZone) || {}
+    const url = buildSearchDeepLinkURL(
+      { origin: window.location.origin, pathname: window.location.pathname },
+      {
+        from_user: form.from_user,
+        to_user: form.to_user,
+        call_id: form.call_id,
+        method: Array.isArray(form.method) ? form.method[0] : form.method,
+        src_ip: form.src_ip,
+        dst_ip: form.dst_ip,
+        proto_type: form.proto_type,
+        event_type: form.event_type,
+        limit,
+      },
+      {
+        from: ts.from ?? Date.now() - 3600000,
+        to: ts.to ?? Date.now(),
+      },
+    )
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('Search link copied')
+    } catch {
+      toast.error('Could not copy link')
+    }
+  }
+
   const handleSettingsSave = (newConfig) => {
     onConfigChange?.({ ...config, ...newConfig })
   }
@@ -932,6 +962,14 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
         <Button size="sm" variant="outline" onClick={handleClear}>
           <Eraser className="mr-1 h-4 w-4" />
           Clear
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleCopySearchLink}
+          title="Copy URL with current filters (opens dashboard search)"
+        >
+          <Link2 className="h-4 w-4" />
         </Button>
       </div>
 
