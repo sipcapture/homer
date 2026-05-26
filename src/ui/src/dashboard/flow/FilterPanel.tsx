@@ -107,6 +107,7 @@ export function FilterPanel({
               >
                 <RadioRow value="ungrouped" label="Ungrouped (IP + port)" />
                 <RadioRow value="group-by-ip" label="Group by IP" />
+                <RadioRow value="group-by-alias" label="Group by alias" />
               </RadioGroupPrimitive.Root>
             </section>
 

@@ -32,6 +32,8 @@ export interface Host {
   port: number | string
   key: string
   ports?: Array<number | string>
+  /** Distinct IPs merged into this column (group-by-ip / group-by-alias). */
+  ips?: string[]
   /** Friendly name from IP alias enrichment (aliasSrc / aliasDst) */
   displayLabel?: string
   /** Custom image URL from matched alias row (call flow header) */
@@ -72,7 +74,37 @@ export interface CallIdLegend {
   colors: CallIdColors
 }
 
-export type HostGrouping = 'ungrouped' | 'group-by-ip'
+export type HostGrouping = 'ungrouped' | 'group-by-ip' | 'group-by-alias'
+
+const ALIAS_KEY_PREFIX = 'alias:'
+
+function rowOf(msg: RawMessage): Record<string, unknown> {
+  return msg as Record<string, unknown>
+}
+
+/** Resolved alias label for an endpoint, or empty when enrichment has no alias. */
+export function endpointAlias(row: Record<string, unknown>, side: 'src' | 'dst'): string {
+  const ip = String(side === 'src' ? row.src_ip ?? '' : row.dst_ip ?? '')
+  const lbl = side === 'src' ? displaySrcIp(row) : displayDstIp(row)
+  if (lbl && lbl !== ip) return lbl
+  return ''
+}
+
+function mergeHostEndpoint(
+  host: Host,
+  ip: string,
+  port: number | string,
+  grouping: HostGrouping,
+  aliasLabel: string,
+): void {
+  if (grouping === 'group-by-ip' || grouping === 'group-by-alias') {
+    if (!host.ports!.includes(port)) host.ports!.push(port)
+    if (grouping === 'group-by-alias' && ip && !host.ips!.includes(ip)) host.ips!.push(ip)
+  }
+  if (grouping === 'group-by-alias' && aliasLabel && !host.displayLabel) {
+    host.displayLabel = aliasLabel
+  }
+}
 
 /**
  * Build the call-ID legend from a *raw* (un-filtered) message list so
@@ -151,35 +183,77 @@ export function shortcutIPv6(str: string): string {
   return str
 }
 
-function hostKey(ip: string, port: number | string, grouping: HostGrouping): string {
-  return grouping === 'group-by-ip' ? ip : `${ip}:${port}`
+export function hostKey(
+  ip: string,
+  port: number | string,
+  grouping: HostGrouping,
+  row?: Record<string, unknown>,
+  side?: 'src' | 'dst',
+): string {
+  if (grouping === 'group-by-ip') return ip
+  if (grouping === 'group-by-alias' && row && side) {
+    const alias = endpointAlias(row, side)
+    if (alias) return `${ALIAS_KEY_PREFIX}${alias}`
+    return `${ip}:${port}`
+  }
+  return `${ip}:${port}`
+}
+
+export function hostKeyFromMessage(
+  msg: RawMessage,
+  side: 'src' | 'dst',
+  grouping: HostGrouping,
+): string {
+  const row = rowOf(msg)
+  const ip = String(side === 'src' ? row.src_ip ?? 'unknown' : row.dst_ip ?? 'unknown')
+  const port = side === 'src' ? (row.src_port ?? 0) : (row.dst_port ?? 0)
+  return hostKey(ip, port as number | string, grouping, row, side)
 }
 
 export function buildHosts(items: RawMessage[], grouping: HostGrouping): Host[] {
   const order: string[] = []
   const map = new Map<string, Host>()
+  const merges = grouping === 'group-by-ip' || grouping === 'group-by-alias'
+
   items.forEach((msg) => {
+    const row = rowOf(msg)
     const srcIp = msg.src_ip || 'unknown'
     const dstIp = msg.dst_ip || 'unknown'
     const srcPort = msg.src_port ?? 0
     const dstPort = msg.dst_port ?? 0
-    const srcKey = hostKey(srcIp, srcPort, grouping)
-    const dstKey = hostKey(dstIp, dstPort, grouping)
+    const srcAlias = grouping === 'group-by-alias' ? endpointAlias(row, 'src') : ''
+    const dstAlias = grouping === 'group-by-alias' ? endpointAlias(row, 'dst') : ''
+    const srcKey = hostKey(srcIp, srcPort, grouping, row, 'src')
+    const dstKey = hostKey(dstIp, dstPort, grouping, row, 'dst')
 
     if (!map.has(srcKey)) {
-      map.set(srcKey, { ip: srcIp, port: srcPort, key: srcKey, ports: [srcPort] })
+      const h: Host = {
+        ip: srcIp,
+        port: srcPort,
+        key: srcKey,
+        ports: [srcPort],
+        ips: merges ? [srcIp] : undefined,
+      }
+      if (srcAlias) h.displayLabel = srcAlias
+      map.set(srcKey, h)
       order.push(srcKey)
-    } else if (grouping === 'group-by-ip') {
-      const h = map.get(srcKey)!
-      if (!h.ports!.includes(srcPort)) h.ports!.push(srcPort)
+    } else if (merges) {
+      mergeHostEndpoint(map.get(srcKey)!, srcIp, srcPort, grouping, srcAlias)
     }
 
     if (!map.has(dstKey)) {
-      map.set(dstKey, { ip: dstIp, port: dstPort, key: dstKey, ports: [dstPort] })
+      const h: Host = {
+        ip: dstIp,
+        port: dstPort,
+        key: dstKey,
+        ports: [dstPort],
+        ips: merges ? [dstIp] : undefined,
+      }
+      if (dstAlias) h.displayLabel = dstAlias
+      map.set(dstKey, h)
       order.push(dstKey)
-    } else if (grouping === 'group-by-ip') {
-      const h = map.get(dstKey)!
-      if (!h.ports!.includes(dstPort)) h.ports!.push(dstPort)
+    } else if (merges) {
+      mergeHostEndpoint(map.get(dstKey)!, dstIp, dstPort, grouping, dstAlias)
     }
   })
   return order.map((k) => map.get(k) as Host)
@@ -192,15 +266,14 @@ export function resolveHostFlowMeta(
   grouping: HostGrouping,
 ): { displayLabel: string; aliasImage: string; aliasTags: string[] } {
   const empty = { displayLabel: '', aliasImage: '', aliasTags: [] as string[] }
-  const rec = (m: RawMessage) => m as Record<string, unknown>
   for (const msg of items) {
     const srcIp = msg.src_ip || 'unknown'
     const dstIp = msg.dst_ip || 'unknown'
     const sp = msg.src_port ?? 0
     const dp = msg.dst_port ?? 0
+    const row = rowOf(msg)
     if (grouping === 'group-by-ip') {
       if (srcIp === host.ip) {
-        const row = rec(msg)
         const lbl = displaySrcIp(row)
         const en = aliasSrcEnrichment(row)
         const hasAlias = lbl !== '' && lbl !== srcIp
@@ -209,7 +282,6 @@ export function resolveHostFlowMeta(
         }
       }
       if (dstIp === host.ip) {
-        const row = rec(msg)
         const lbl = displayDstIp(row)
         const en = aliasDstEnrichment(row)
         const hasAlias = lbl !== '' && lbl !== dstIp
@@ -218,8 +290,7 @@ export function resolveHostFlowMeta(
         }
       }
     } else {
-      if (hostKey(srcIp, sp, grouping) === host.key) {
-        const row = rec(msg)
+      if (hostKey(srcIp, sp, grouping, row, 'src') === host.key) {
         const lbl = displaySrcIp(row)
         const en = aliasSrcEnrichment(row)
         const hasAlias = lbl !== '' && lbl !== srcIp
@@ -227,8 +298,7 @@ export function resolveHostFlowMeta(
           return { displayLabel: hasAlias ? lbl : '', aliasImage: en.image, aliasTags: en.tags }
         }
       }
-      if (hostKey(dstIp, dp, grouping) === host.key) {
-        const row = rec(msg)
+      if (hostKey(dstIp, dp, grouping, row, 'dst') === host.key) {
         const lbl = displayDstIp(row)
         const en = aliasDstEnrichment(row)
         const hasAlias = lbl !== '' && lbl !== dstIp
@@ -237,6 +307,9 @@ export function resolveHostFlowMeta(
         }
       }
     }
+  }
+  if (grouping === 'group-by-alias' && host.displayLabel) {
+    return { ...empty, displayLabel: host.displayLabel }
   }
   return empty
 }
@@ -252,11 +325,11 @@ export function resolveHostDisplayLabel(
 
 function indexOfHost(
   hosts: Host[],
-  ip: string,
-  port: number | string,
+  msg: RawMessage,
+  side: 'src' | 'dst',
   grouping: HostGrouping,
 ): number {
-  const key = hostKey(ip, port, grouping)
+  const key = hostKeyFromMessage(msg, side, grouping)
   return hosts.findIndex((h) => h.key === key)
 }
 
@@ -331,8 +404,8 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
     let method = msg.sip_method || msg.method || msg.event || ''
     const proto = msg.protocol
 
-    const srcIdx = indexOfHost(hosts, srcIp, srcPort, grouping)
-    const dstIdx = indexOfHost(hosts, dstIp, dstPort, grouping)
+    const srcIdx = indexOfHost(hosts, msg, 'src', grouping)
+    const dstIdx = indexOfHost(hosts, msg, 'dst', grouping)
 
     const isRadial = srcIdx === dstIdx
     const isLastHost = isRadial && hosts.length > 1 && srcIdx === hosts.length - 1
