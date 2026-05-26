@@ -1,5 +1,8 @@
 name: Build-n-Release
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -47,6 +50,7 @@ jobs:
       uses: actions/setup-go@v6
       with:
         go-version-file: src/go.mod
+        cache-dependency-path: src/go.sum
 
     - name: Set up Node.js
       uses: actions/setup-node@v5
@@ -189,19 +193,17 @@ jobs:
 
     - name: Upload release
       if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release) }}
-      uses: boxpositron/upload-multiple-releases@1.0.7
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
-        release_config: |
-            homer-core_${{ matrix.goarch }}
-            homer-core*.deb
-            homer-core*.rpm
         tag_name: ${{ env.VERSION }}
-        release_name: ${{ env.VERSION }}
+        name: ${{ env.VERSION }}
         draft: false
         prerelease: false
-        overwrite: true
+        overwrite_files: true
+        files: |
+          homer-core_${{ matrix.goarch }}
+          homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.deb
+          homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.rpm
 
     - name: Upload package artifacts (Packagecloud job)
       if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release) }}
