@@ -32,9 +32,13 @@ function HostHoverCard({ host }: { host: Host }) {
   const hasMeta =
     !!host.displayLabel || !!host.aliasImage || (host.aliasTags && host.aliasTags.length > 0)
 
+  const ipTooltip =
+    host.ips && host.ips.length > 1 ? `IPs: ${host.ips.join(', ')}` : ''
+
   return (
     <div className="flex max-w-[260px] flex-col gap-2 text-left font-normal">
       <div className="font-mono text-[11px] leading-snug opacity-95">{host.ip}</div>
+      {ipTooltip ? <div className="text-[10px] opacity-80">{ipTooltip}</div> : null}
       {portTooltip ? <div className="text-[10px] opacity-80">{portTooltip}</div> : null}
       {hasMeta ? (
         <div className="space-y-2 border-t border-white/15 pt-2">
