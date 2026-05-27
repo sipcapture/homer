@@ -204,3 +204,40 @@ func TestV4PatchMe_Unauthenticated(t *testing.T) {
 		t.Fatalf("status: got %d want 401", rec.Code)
 	}
 }
+
+func TestJWTTokenFromAuthTokenItem_AdminUserGroupGrantsAdmin(t *testing.T) {
+	h := &AuthHandler{}
+	item := &services.AuthTokenItem{
+		GUID:       "tok-1",
+		UserObject: json.RawMessage(`{"username":"alice","user_group":"admin"}`),
+	}
+
+	tok := h.jwtTokenFromAuthTokenItem(item)
+	claims, ok := tok.Claims.(*JWTClaims)
+	if !ok {
+		t.Fatalf("claims type: got %T", tok.Claims)
+	}
+	if claims.Username != "alice" {
+		t.Fatalf("username: got %q want %q", claims.Username, "alice")
+	}
+	if !claims.Admin {
+		t.Fatal("admin: got false want true (user_group=admin should grant admin scope)")
+	}
+}
+
+func TestJWTTokenFromAuthTokenItem_NonAdminUserGroup(t *testing.T) {
+	h := &AuthHandler{}
+	item := &services.AuthTokenItem{
+		GUID:       "tok-2",
+		UserObject: json.RawMessage(`{"username":"bob","user_group":"user"}`),
+	}
+
+	tok := h.jwtTokenFromAuthTokenItem(item)
+	claims := tok.Claims.(*JWTClaims)
+	if claims.Username != "bob" {
+		t.Fatalf("username: got %q want %q", claims.Username, "bob")
+	}
+	if claims.Admin {
+		t.Fatal("admin: got true want false")
+	}
+}
