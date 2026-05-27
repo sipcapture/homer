@@ -31,6 +31,10 @@ func NewReader(w *Writer) *Reader {
 
 // Query executes a query on current data
 func (r *Reader) Query(whereClause string, limit int) ([]HEPRecord, error) {
+	if err := ValidateWhereClause(whereClause, AllQueryColumns()); err != nil {
+		return nil, err
+	}
+	limit = ClampLimit(limit, DefaultQueryLimit, MaxQueryLimit)
 	query := fmt.Sprintf("SELECT * FROM %s", r.tableFQN)
 	if whereClause != "" {
 		query += " WHERE " + whereClause
@@ -45,6 +49,10 @@ func (r *Reader) Query(whereClause string, limit int) ([]HEPRecord, error) {
 
 // QueryAtSnapshot queries data at a specific snapshot
 func (r *Reader) QueryAtSnapshot(snapshotID int64, whereClause string, limit int) ([]HEPRecord, error) {
+	if err := ValidateWhereClause(whereClause, AllQueryColumns()); err != nil {
+		return nil, err
+	}
+	limit = ClampLimit(limit, DefaultQueryLimit, MaxQueryLimit)
 	// DuckLake syntax: SELECT * FROM table AT SNAPSHOT snapshot_id
 	query := fmt.Sprintf("SELECT * FROM %s AT SNAPSHOT %d", r.tableFQN, snapshotID)
 	if whereClause != "" {
@@ -60,6 +68,10 @@ func (r *Reader) QueryAtSnapshot(snapshotID int64, whereClause string, limit int
 
 // QueryAtTime queries data as it was at a specific timestamp
 func (r *Reader) QueryAtTime(asOf time.Time, whereClause string, limit int) ([]HEPRecord, error) {
+	if err := ValidateWhereClause(whereClause, AllQueryColumns()); err != nil {
+		return nil, err
+	}
+	limit = ClampLimit(limit, DefaultQueryLimit, MaxQueryLimit)
 	// DuckLake syntax: SELECT * FROM table AT TIMESTAMP 'timestamp'
 	timestamp := asOf.Format("2006-01-02 15:04:05")
 	query := fmt.Sprintf("SELECT * FROM %s AT TIMESTAMP '%s'", r.tableFQN, timestamp)
@@ -108,9 +120,7 @@ func (r *Reader) executeQuery(query string) ([]HEPRecord, error) {
 
 // ListSnapshots returns all available snapshots
 func (r *Reader) ListSnapshots(limit int) ([]Snapshot, error) {
-	if limit <= 0 {
-		limit = 100
-	}
+	limit = ClampLimit(limit, DefaultQueryLimit, MaxQueryLimit)
 
 	// DuckLake provides snapshot info via system function
 	query := fmt.Sprintf(`
@@ -259,8 +269,12 @@ func NewMultiTableReader(w *MultiTableWriter) *MultiTableReader {
 
 // allTablesForKey returns the DuckLake table and, when search_buffer is enabled,
 // both in-memory buffer tables for a key.
-func (r *MultiTableReader) allTablesForKey(key TableKey) []string {
-	tables := []string{r.writer.GetTableFQN(key)}
+func (r *MultiTableReader) allTablesForKey(key TableKey) ([]string, error) {
+	fqn, err := ResolveTableFQN(r.writer, key)
+	if err != nil {
+		return nil, err
+	}
+	tables := []string{fqn}
 	if r.searchBuffer {
 		if tw := r.writer.GetTable(key); tw != nil {
 			for _, mem := range tw.MemTableNames() {
@@ -268,7 +282,7 @@ func (r *MultiTableReader) allTablesForKey(key TableKey) []string {
 			}
 		}
 	}
-	return tables
+	return tables, nil
 }
 
 // GetTimeRange returns min/max timestamps across all tables including buffers
@@ -279,7 +293,11 @@ func (r *MultiTableReader) GetTimeRange() (minTs, maxTs int64, err error) {
 	}
 
 	for _, key := range keys {
-		for _, tbl := range r.allTablesForKey(key) {
+		tbls, tblErr := r.allTablesForKey(key)
+		if tblErr != nil {
+			continue
+		}
+		for _, tbl := range tbls {
 			query := fmt.Sprintf("SELECT MIN(timestamp), MAX(timestamp) FROM %s", tbl)
 			var minNull, maxNull sql.NullInt64
 			if err := r.db.QueryRow(query).Scan(&minNull, &maxNull); err != nil {
@@ -299,7 +317,14 @@ func (r *MultiTableReader) GetTimeRange() (minTs, maxTs int64, err error) {
 
 // GetTimeRangeForTableKey returns time range for specific TableKey including buffers
 func (r *MultiTableReader) GetTimeRangeForTableKey(key TableKey) (minTs, maxTs int64, err error) {
-	for _, tbl := range r.allTablesForKey(key) {
+	if err := ValidateTableKey(key); err != nil {
+		return 0, 0, err
+	}
+	tbls, err := r.allTablesForKey(key)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, tbl := range tbls {
 		query := fmt.Sprintf("SELECT MIN(timestamp), MAX(timestamp) FROM %s", tbl)
 		var minNull, maxNull sql.NullInt64
 		if err := r.db.QueryRow(query).Scan(&minNull, &maxNull); err != nil {
@@ -338,7 +363,11 @@ func (r *MultiTableReader) GetRowCount() (int64, error) {
 	var total int64
 
 	for _, key := range keys {
-		for _, tbl := range r.allTablesForKey(key) {
+		tbls, tblErr := r.allTablesForKey(key)
+		if tblErr != nil {
+			continue
+		}
+		for _, tbl := range tbls {
 			var count int64
 			query := fmt.Sprintf("SELECT COUNT(*) FROM %s", tbl)
 			if err := r.db.QueryRow(query).Scan(&count); err != nil {
@@ -353,8 +382,15 @@ func (r *MultiTableReader) GetRowCount() (int64, error) {
 
 // GetRowCountForTableKey returns row count for specific TableKey including buffers
 func (r *MultiTableReader) GetRowCountForTableKey(key TableKey) (int64, error) {
+	if err := ValidateTableKey(key); err != nil {
+		return 0, err
+	}
+	tbls, err := r.allTablesForKey(key)
+	if err != nil {
+		return 0, err
+	}
 	var total int64
-	for _, tbl := range r.allTablesForKey(key) {
+	for _, tbl := range tbls {
 		var count int64
 		query := fmt.Sprintf("SELECT COUNT(*) FROM %s", tbl)
 		if err := r.db.QueryRow(query).Scan(&count); err != nil {
@@ -369,8 +405,12 @@ func (r *MultiTableReader) GetRowCountForTableKey(key TableKey) (int64, error) {
 // is enabled, it builds a UNION ALL across the DuckLake persistent table and
 // both in-memory buffer tables so queries see the freshest data even before
 // flush. When search_buffer is disabled, it queries only the DuckLake table.
-func (r *MultiTableReader) buildUnionQuery(key TableKey, whereClause string, limit int) string {
-	tables := r.allTablesForKey(key)
+func (r *MultiTableReader) buildUnionQuery(key TableKey, whereClause string, limit int) (string, error) {
+	tables, err := r.allTablesForKey(key)
+	if err != nil {
+		return "", err
+	}
+	limit = ClampLimit(limit, DefaultQueryLimit, MaxQueryLimit)
 
 	if len(tables) == 1 {
 		query := fmt.Sprintf("SELECT * FROM %s", tables[0])
@@ -381,7 +421,7 @@ func (r *MultiTableReader) buildUnionQuery(key TableKey, whereClause string, lim
 		if limit > 0 {
 			query += fmt.Sprintf(" LIMIT %d", limit)
 		}
-		return query
+		return query, nil
 	}
 
 	var parts []string
@@ -398,20 +438,37 @@ func (r *MultiTableReader) buildUnionQuery(key TableKey, whereClause string, lim
 	if limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", limit)
 	}
-	return query
+	return query, nil
 }
 
 // Query executes a query on specific table by TableKey.
 // Includes data from both in-memory buffers via UNION ALL so that
 // un-flushed records are visible to search.
 func (r *MultiTableReader) Query(key TableKey, whereClause string, limit int) ([]map[string]interface{}, error) {
-	query := r.buildUnionQuery(key, whereClause, limit)
+	if err := ValidateTableKey(key); err != nil {
+		return nil, err
+	}
+	cols, err := ColumnsForTableKey(key)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateWhereClause(whereClause, cols); err != nil {
+		return nil, err
+	}
+	query, err := r.buildUnionQuery(key, whereClause, limit)
+	if err != nil {
+		return nil, err
+	}
 	return r.executeQueryGeneric(query)
 }
 
 // QueryAll executes a query across all tables.
 // Includes data from both in-memory buffers via UNION ALL.
 func (r *MultiTableReader) QueryAll(whereClause string, limit int) ([]map[string]interface{}, error) {
+	if err := ValidateWhereClause(whereClause, AllQueryColumns()); err != nil {
+		return nil, err
+	}
+	limit = ClampLimit(limit, DefaultQueryLimit, MaxQueryLimit)
 	keys := r.writer.ListTableKeys()
 	if len(keys) == 0 {
 		return nil, nil
@@ -419,7 +476,13 @@ func (r *MultiTableReader) QueryAll(whereClause string, limit int) ([]map[string
 
 	var allResults []map[string]interface{}
 	for _, key := range keys {
-		query := r.buildUnionQuery(key, whereClause, limit)
+		if err := ValidateTableKey(key); err != nil {
+			continue
+		}
+		query, err := r.buildUnionQuery(key, whereClause, limit)
+		if err != nil {
+			continue
+		}
 		results, err := r.executeQueryGeneric(query)
 		if err != nil {
 			continue
@@ -497,11 +560,11 @@ func extractTimestamp(row map[string]interface{}) time.Time {
 
 // ListSnapshots returns snapshots for a specific table by TableKey
 func (r *MultiTableReader) ListSnapshots(key TableKey, limit int) ([]Snapshot, error) {
-	if limit <= 0 {
-		limit = 100
+	limit = ClampLimit(limit, DefaultQueryLimit, MaxQueryLimit)
+	tableFQN, err := ResolveTableFQN(r.writer, key)
+	if err != nil {
+		return nil, err
 	}
-
-	tableFQN := r.writer.GetTableFQN(key)
 
 	query := fmt.Sprintf(`
 		SELECT snapshot_id, snapshot_time, row_count

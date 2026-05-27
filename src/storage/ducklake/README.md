@@ -275,8 +275,20 @@ Response:
 
 ### List Snapshots (per proto_type)
 
+Allowed `proto_type` / `sub_type` pairs match the canonical DuckLake schemas (see `GetTableSchemas()` in `tables.go`):
+
+| proto_type | sub_type | Table |
+|------------|----------|-------|
+| 1 (SIP) | `call` (default), `registration`, `default` | SIP call / registration / other |
+| 5 | _(empty)_ | RTCP JSON |
+| 34, 35 | _(empty)_ | RTCP / RTP |
+| 53 | _(empty)_ | DNS |
+| 100 | _(empty)_ | LOG |
+
+Invalid keys return **HTTP 400**. `limit` is clamped to 1000.
+
 ```bash
-GET /api/v1/ducklake/snapshots?proto_type=1&limit=10
+GET /api/v1/ducklake/snapshots?proto_type=1&sub_type=call&limit=10
 ```
 
 Response:
@@ -300,6 +312,12 @@ Response:
 
 ### Query
 
+The `where` field is **not** arbitrary SQL. It must be a simple expression built from allowed columns for the target table(s):
+
+- Predicates: `column = 'value'`, comparisons with integers, `column IS NULL`, combined with `AND` / `OR`
+- Column names must exist on the schema (e.g. `session_id`, `src_ip`, `timestamp`)
+- Max length 512; blocklisted tokens (`;`, `--`, `UNION`, `SELECT`, etc.) return **HTTP 400**
+
 Query specific proto_type:
 
 ```bash
@@ -308,6 +326,7 @@ Content-Type: application/json
 
 {
   "proto_type": 1,
+  "sub_type": "call",
   "where": "session_id = 'abc123@host'",
   "limit": 100
 }
