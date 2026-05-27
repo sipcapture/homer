@@ -210,6 +210,15 @@ func (d *LuaEngine) SetCustomSIPHeader(m *map[string]string) {
 	}
 }
 
+// parseUint32HEPField parses a decimal string into uint32 (CodeQL: avoid Atoi→uint32 truncation).
+func parseUint32HEPField(value string) (uint32, bool) {
+	u, err := strconv.ParseUint(strings.TrimSpace(value), 10, 32)
+	if err != nil {
+		return 0, false
+	}
+	return uint32(u), true
+}
+
 func (d *LuaEngine) SetHEPField(field string, value string) {
 	if (*d.hepPkt) == nil {
 		logger.Error("Scripting: Cannot set HEP field - HEP struct is nil")
@@ -219,24 +228,24 @@ func (d *LuaEngine) SetHEPField(field string, value string) {
 
 	switch field {
 	case "ProtoType":
-		if i, err := strconv.Atoi(value); err == nil {
-			hepPkt.ProtoType = uint32(i)
+		if u, ok := parseUint32HEPField(value); ok {
+			hepPkt.ProtoType = u
 		}
 	case "SrcIP":
 		hepPkt.SrcIP = value
 	case "SrcPort":
-		if i, err := strconv.Atoi(value); err == nil {
-			hepPkt.SrcPort = uint32(i)
+		if u, ok := parseUint32HEPField(value); ok {
+			hepPkt.SrcPort = u
 		}
 	case "DstIP":
 		hepPkt.DstIP = value
 	case "DstPort":
-		if i, err := strconv.Atoi(value); err == nil {
-			hepPkt.DstPort = uint32(i)
+		if u, ok := parseUint32HEPField(value); ok {
+			hepPkt.DstPort = u
 		}
 	case "NodeID":
-		if i, err := strconv.Atoi(value); err == nil {
-			hepPkt.NodeID = uint32(i)
+		if u, ok := parseUint32HEPField(value); ok {
+			hepPkt.NodeID = u
 		}
 	case "CID":
 		hepPkt.CID = value
