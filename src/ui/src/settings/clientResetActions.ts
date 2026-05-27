@@ -6,6 +6,7 @@ import { handleUnauthorized } from '../api'
 import {
   clearAccessibleCookies,
   clearAllLocalStorage,
+  clearAllSessionStorage,
   clearApplicationCaches,
   clearDashboardLocalStorage,
 } from './clientReset'
@@ -33,7 +34,7 @@ const CONFIRM: Record<
   local_storage: {
     title: 'Local storage reset',
     message:
-      'Clear all local storage for this origin? You will be signed out and the page will reload.',
+      'Clear all local and session storage for this origin? You will be signed out and the page will reload.',
     variant: 'destructive',
   },
   cookies: {
@@ -74,6 +75,7 @@ export async function runClientResetWithConfirm(
       }
       case 'local_storage': {
         clearAllLocalStorage()
+        clearAllSessionStorage()
         handleUnauthorized()
         window.setTimeout(() => window.location.reload(), 200)
         detail = 'page will reload; you will be signed out'

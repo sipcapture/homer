@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { newModalKey } from '@/lib/modalKey'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
@@ -601,7 +602,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
     } catch { return val }
   }
 
-  const genModalKey = () => `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+  const genModalKey = () => newModalKey()
 
   function cloneRowSnapshot(row) {
     try {

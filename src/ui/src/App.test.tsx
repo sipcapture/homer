@@ -17,6 +17,7 @@ function renderApp() {
 describe('App smoke/integration', () => {
   beforeEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
     vi.stubGlobal('fetch', vi.fn(async (url, opts = {}) => {
       const asString = String(url)
       if (asString.endsWith('/auth/providers')) {
@@ -54,7 +55,7 @@ describe('App smoke/integration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => {
-      expect(localStorage.getItem('homer_v4_token')).toBe('test-token')
+      expect(sessionStorage.getItem('homer_v4_token')).toBe('test-token')
     })
     await waitFor(() => {
       expect(screen.getByText('No dashboards available. Create one above or reset to defaults.')).toBeInTheDocument()

@@ -1,5 +1,7 @@
+import { AUTH_TOKEN_KEY, clearAuthToken, getAuthToken } from './lib/authTokenStorage'
+
 const apiBase: string = import.meta.env.VITE_API_BASE || '/api/v4'
-const tokenKey = 'homer_v4_token'
+const tokenKey = AUTH_TOKEN_KEY
 
 export type QueryParams = Record<string, string | number | boolean | null | undefined>
 
@@ -11,7 +13,7 @@ export interface ApiErrorBody {
 }
 
 function getToken(): string {
-  return localStorage.getItem(tokenKey) || ''
+  return getAuthToken()
 }
 
 function authHeaders(): Record<string, string> {
@@ -22,7 +24,7 @@ function authHeaders(): Record<string, string> {
 
 /** Clear token and notify App to show login. Call on 401 from any API. */
 export function handleUnauthorized(): void {
-  localStorage.removeItem(tokenKey)
+  clearAuthToken()
   window.dispatchEvent(new CustomEvent('auth:unauthorized'))
 }
 

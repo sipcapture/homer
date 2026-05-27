@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { resolveTimeRange, type CalendarPreset } from './utils/resolveTimeRange'
 import { useDashboard } from './context/DashboardContext'
+import { getAuthToken } from '@/lib/authTokenStorage'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getToken(): string {
-  return localStorage.getItem('homer_v4_token') || ''
+  return getAuthToken()
 }
 
 function absoluteApiUrl(path: string): string {

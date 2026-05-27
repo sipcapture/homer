@@ -9,7 +9,7 @@ For full LDAP and OAuth2 configuration field tables and examples, see **[AUTH_LD
 ## Architecture
 
 - The **coordinator** is the authority: it serves `GET /api/v4/auth/providers`, creates sessions, validates requests, and issues JWTs.
-- The **bundled UI** (`src/ui`) calls the v4 API under `import.meta.env.VITE_API_BASE` or the default **`/api/v4`**. It loads provider metadata when the user is logged out and stores a session JWT in `localStorage` under the key `homer_v4_token`.
+- The **bundled UI** (`src/ui`) calls the v4 API under `import.meta.env.VITE_API_BASE` or the default **`/api/v4`**. It loads provider metadata when the user is logged out and stores a session JWT in **`sessionStorage`** under the key `homer_v4_token` (tab-scoped; legacy `localStorage` entries are migrated once on read). See `src/ui/src/lib/authTokenStorage.ts`.
 
 There is no separate “auth mode” flag in the UI alone: available methods are **entirely determined by coordinator configuration** after restart.
 

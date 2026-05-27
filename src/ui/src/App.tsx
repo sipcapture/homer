@@ -32,57 +32,18 @@ import { useConfirm } from "@/components/ui/confirm-dialog"
 import { LoginPage } from './LoginPage'
 import { parseLoginProvidersPayload, type PasswordAuthMethodRow } from './loginProviders'
 import { toast } from 'sonner'
-
+import {
+  clearAuthToken,
+  exchangeOAuthOneTimeAndPersist,
+  getAuthToken,
+  setAuthToken,
+} from './lib/authTokenStorage'
 
 const apiBase = import.meta.env.VITE_API_BASE || '/api/v4'
-const tokenKey = 'homer_v4_token'
-
-/** Deduplicate OAuth one-time → JWT exchange when React Strict Mode runs effects twice. */
-const oauthTokenExchangeInflight = new Map<string, Promise<string>>()
-
-async function exchangeOAuthOneTimeForJwt(oneTime: string): Promise<string> {
-  const existing = oauthTokenExchangeInflight.get(oneTime)
-  if (existing) {
-    return existing
-  }
-  const p = (async () => {
-    try {
-      const res = await fetch(`${apiBase}/auth/oauth2/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: oneTime }),
-      })
-      let detail = `Request failed (${res.status})`
-      if (!res.ok) {
-        try {
-          const payload = (await res.json()) as { error?: { detail?: string; title?: string } }
-          if (payload?.error?.detail) {
-            detail = payload.error.detail
-          } else if (payload?.error?.title) {
-            detail = payload.error.title
-          }
-        } catch {
-          // ignore
-        }
-        throw new Error(detail)
-      }
-      const payload = (await res.json()) as { data?: { token?: string } }
-      const jwt = payload?.data?.token
-      if (!jwt || typeof jwt !== 'string') {
-        throw new Error('Invalid OAuth2 response: missing data.token')
-      }
-      return jwt
-    } finally {
-      oauthTokenExchangeInflight.delete(oneTime)
-    }
-  })()
-  oauthTokenExchangeInflight.set(oneTime, p)
-  return p
-}
 
 function App() {
   const confirm = useConfirm()
-  const [token, setToken] = useState(() => localStorage.getItem(tokenKey) || '')
+  const [token, setToken] = useState(() => getAuthToken())
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('about')
   const [me, setMe] = useState<any>(null)
@@ -118,13 +79,10 @@ function App() {
   const role = useMemo(() => detectRole(me), [me])
   const usersPerms = useMemo(() => getSectionPerms(role, 'users'), [role])
 
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem(tokenKey, token)
-    } else {
-      localStorage.removeItem(tokenKey)
-    }
-  }, [token])
+  const persistToken = (next: string) => {
+    setAuthToken(next)
+    setToken(next)
+  }
 
   // One-shot migration from legacy 'theme' key to shadcn ThemeProvider's 'vite-ui-theme' key.
   useEffect(() => {
@@ -212,6 +170,7 @@ function App() {
   const logout = () => {
     revokeAvatarUrl(avatarUrl)
     setAvatarUrl(null)
+    clearAuthToken()
     setToken('')
     setMe(null)
     setUsers([])
@@ -495,9 +454,9 @@ function App() {
     let cancelled = false
     void (async () => {
       try {
-        const jwt = await exchangeOAuthOneTimeForJwt(oneTime)
+        await exchangeOAuthOneTimeAndPersist(oneTime, apiBase)
         if (cancelled) return
-        setToken(jwt)
+        setToken(getAuthToken())
         toast.success('Logged in via OAuth2')
       } catch (err) {
         if (cancelled) return
@@ -597,7 +556,7 @@ function App() {
               passwordAuthMethods={passwordAuthMethods}
               oauthProviderNames={oauthProviderNames}
               autoOAuthProvider={autoOAuthProvider}
-              onLogin={setToken}
+              onLogin={persistToken}
               onOAuth2={loginOAuth2}
             />
           ) : (
