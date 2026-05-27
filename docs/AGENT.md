@@ -125,6 +125,8 @@ homer agent stats --host 10.0.0.5:8008 --user admin --pass secret
 homer agent watch --host 10.0.0.5:8008 --user admin --pass secret --interval 5s
 ```
 
+**HTTPS / self-signed TLS:** same as `homer search` — certificate verification is on by default. For self-signed heplify or coordinator certs, set **`HOMER_INSECURE_TLS=1`** before running the command. See [SEARCH.md — TLS to the coordinator](SEARCH.md#tls-to-the-coordinator).
+
 Note: the `/health` endpoint is always open (no auth required).
 
 ## heplify API Endpoints

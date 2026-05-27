@@ -10,7 +10,16 @@ For JWT lifecycle and logout, see the notes at the end.
 
 > **Implementation:** homer-core accepts **`coordinator.auth`** as a JSON **string** (`"internal"`, backward compatible), as **`{"type":"internal"}`** (recommended), or as an **object** without `type` (normalized to **`internal`**) with optional **`admin_user`** / **`admin_password_hash`**. **`--reset-admin-password`** is documented below.
 
-Password login with **`type`** omitted or **`internal`** on `POST /api/v4/auth/sessions` checks credentials **only** against rows in the coordinator **settings DuckDB** table **`users`** (`coordinator.settings_db_path`). There is **no** separate “login from JSON only” path: a user must exist in `users` with a matching **SHA-256** `password_hash` (hex) of the presented password.
+Password login with **`type`** omitted or **`internal`** on `POST /api/v4/auth/sessions` checks credentials **only** against rows in the coordinator **settings DuckDB** table **`users`** (`coordinator.settings_db_path`). There is **no** separate “login from JSON only” path: a user must exist in `users` with a matching `password_hash` for the presented password.
+
+**Password hash formats in `users.password_hash`:**
+
+| Format | When used | Verification |
+|--------|-----------|--------------|
+| **bcrypt** (`$2a$…`, `$2b$…`, `$2y$…`) | New or updated passwords via Users API / `PATCH /me` | `bcrypt.CompareHashAndPassword` |
+| **SHA-256 hex** (64 chars) | Default bootstrap admin (`sipcapture`), migrated homer-app rows, `--reset-admin-password` | Legacy compare (hex digest of password) |
+
+The coordinator accepts **either** format at login. Prefer letting the API create bcrypt hashes for new users instead of hand-editing SHA-256 in DuckDB.
 
 If **`coordinator.auth` is omitted** entirely (no `auth` key), the loader behaves like **`{"type":"internal"}`**: default admin `admin`, default bootstrap hash for **`sipcapture`**, and the same startup insert into **`users`** when missing.
 
@@ -59,7 +68,7 @@ Meaning (string or `{"type":"internal"}` without custom hash):
 - The loader treats **`"internal"`** (case-insensitive) or **`{"type":"internal"}`** as **built-in local auth** with default admin name **`admin`** and a **fixed bootstrap password hash** (SHA-256 hex of **`sipcapture`**):  
   `883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90`.
 - On coordinator startup, if there is **no** row in `users` whose **`username`** equals the configured admin name (default `admin`), the coordinator **inserts** that admin once (`is_admin` / `is_active` true) with that hash. If a row for that username **already** exists, nothing is inserted automatically (empty `password_hash` may still be repaired on startup in recent builds).
-- After first login, operators should **change the password** (Settings → Users, or `UPDATE` on `users` in DuckDB). Further logins use the stored hash only.
+- After first login, operators should **change the password** (Settings → Users, or `PATCH /me`). Updates store a **bcrypt** hash. Further logins use the stored hash only.
 
 ### Legacy object: only `admin_user` / `admin_password_hash` (no `type`)
 
@@ -73,7 +82,7 @@ You may still use an object **without** `type` (for environment overrides, confi
 ```
 
 - If **`admin_user`** is unset or **`admin`** and **`admin_password_hash`** is empty or equals the default sipcapture hash, the loader treats this as **`internal`** (same bootstrap as `{"type":"internal"}`). Any other combination is legacy credentials-only: provision **`users`** via API / SQL, or set **`{"type":"internal"}`** explicitly.
-- Generate a hash: `echo -n 'your-password' | sha256sum` (see also [COORDINATOR.md](./COORDINATOR.md#auth)).
+- For **`--reset-admin-password`**, the config field **`admin_password_hash`** remains **SHA-256 hex** (see [Reset admin password](#reset-admin-password)). User records created or updated through the API use **bcrypt** instead.
 
 ### Reset admin password
 
@@ -257,7 +266,7 @@ Under **`coordinator.oauth2_provider`**, set one object. Required for the code f
 | `profile_url` | UserInfo endpoint (GET with access token), e.g. OIDC `.../userinfo`. |
 | `scopes` | Optional; default if omitted: `["openid", "email"]`. |
 | `use_pkce` | If `true`, use PKCE (public clients may omit `client_secret`). |
-| `callback_url` | Where the coordinator redirects after success with `?token=<one-time>` (bundled UI: Homer origin + optional `?oauth=1`). On failure, `?oauth_error=...` is set instead. |
+| `callback_url` | Where the coordinator redirects after success with `?token=<one-time>` (bundled UI: Homer origin + optional `?oauth=1`). On failure, `?oauth_error=...` is set instead. **Required for production** when using absolute URLs (see [Redirect URL safety](#redirect-url-safety)). |
 | `skip_auto_provision` | If `true`, the IdP user must already exist in DuckDB (matched by `username` or `email`); otherwise login fails. |
 | `admin_groups` | If non-empty, membership in any of these group **names** (see `group_claim`) grants **admin** for the JWT session. |
 | `group_claim` | JSON claim on the profile response listing groups (default `groups`). |
@@ -289,6 +298,19 @@ Under **`coordinator.oauth2_provider`**, set one object. Required for the code f
 ```
 
 Register **`redirect_url`** exactly at the IdP. The **`auth_url`** / **`token_url`** / **`profile_url`** must match your issuer.
+
+### Redirect URL safety
+
+After OAuth callback, the coordinator redirects the browser to **`callback_url`** (configured on the provider) or, if that is empty, to the query parameter **`redirect_uri`**.
+
+| Rule | Behaviour |
+|------|-----------|
+| **`callback_url` set** | That URL is used. Optional `redirect_uri` must be a **relative path** on the same site (e.g. `/login`), not an external absolute URL. |
+| **`callback_url` empty** | Only **relative** `redirect_uri` values are allowed (must start with `/`, not `//`). |
+| **Absolute URL without `callback_url`** | Rejected (**400**) — prevents open redirects to attacker-controlled hosts. |
+| **Absolute `callback_url`** | Allowed; `redirect_uri` query must match the **same origin** (scheme + host) if both are sent. |
+
+Configure a fixed **`callback_url`** (e.g. `https://homer.example.org/`) in production. Do not rely on user-supplied absolute `redirect_uri` values.
 
 **Docker / environment variables:** Scalar fields under `coordinator.oauth2_provider` map to `HOMER_COORDINATOR_OAUTH2_PROVIDER_<FIELD>` with the field name uppercased (Viper + `HOMER_` prefix), for example `HOMER_COORDINATOR_OAUTH2_PROVIDER_CLIENT_ID`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_AUTH_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_TOKEN_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_REDIRECT_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_PROFILE_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_CALLBACK_URL`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_CLIENT_SECRET`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_USE_PKCE`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_ENABLE`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_NAME`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_PROVIDER_NAME`, `HOMER_COORDINATOR_OAUTH2_PROVIDER_AUTO_REDIRECT`. Slice fields such as **`scopes`** and **`admin_groups`** are easier to set in JSON than as flat env vars; see `src/config/env.go` and `src/config/env_test.go` for how `HOMER_*` overrides are merged.
 
