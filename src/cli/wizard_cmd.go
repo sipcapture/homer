@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 )
 
 // ---- Flags -----------------------------------------------------------------
@@ -725,6 +726,10 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 	if adminPass == "" {
 		adminPass = "sipcapture"
 	}
+	adminHash := config.DefaultInternalAuthPasswordHash
+	if adminPass != "sipcapture" {
+		adminHash = passwordhash.MustHash(adminPass)
+	}
 
 	settingsDB := m.inputs[wfSettingsDB].Value()
 	if settingsDB == "" {
@@ -814,7 +819,7 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 			Auth: config.AuthConfig{
 				Type:              "internal",
 				AdminUser:         adminUser,
-				AdminPasswordHash: config.HashPassword(adminPass),
+				AdminPasswordHash: adminHash,
 			},
 		},
 		Log: config.LogConfig{

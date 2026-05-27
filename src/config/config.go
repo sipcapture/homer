@@ -13,8 +13,6 @@
 package config
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -26,14 +24,13 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/mcuadros/go-defaults"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 	"github.com/spf13/viper"
 )
 
-// HashPassword creates a SHA256 hex hash of a plaintext password.
-// This matches the hashing used by the coordinator auth system.
-func HashPassword(password string) string {
-	hash := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(hash[:])
+// HashPassword returns a bcrypt hash for a new password.
+func HashPassword(password string) (string, error) {
+	return passwordhash.Hash(password)
 }
 
 // Config is the main configuration structure for Homer Server

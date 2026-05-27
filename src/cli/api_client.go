@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,7 +35,7 @@ func NewClient(host string) *Client {
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: cliTLSConfig(),
 			},
 		},
 	}

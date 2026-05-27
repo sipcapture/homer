@@ -9,14 +9,13 @@ package services
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 )
 
 // User represents a user in the system
@@ -195,7 +194,10 @@ func (s *UserService) CreateUser(ctx context.Context, username, password, email,
 		return 0, fmt.Errorf("settings db not available")
 	}
 
-	passwordHash := s.HashPassword(password)
+	passwordHash, err := passwordhash.Hash(password)
+	if err != nil {
+		return 0, err
+	}
 
 	query := fmt.Sprintf(
 		`INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
@@ -227,7 +229,10 @@ func (s *UserService) UpdateUser(ctx context.Context, id int64, email, password,
 		set = append(set, fmt.Sprintf("email = '%s'", sqlvalidator.SafeString(*email)))
 	}
 	if password != nil {
-		passwordHash := s.HashPassword(*password)
+		passwordHash, err := passwordhash.Hash(*password)
+		if err != nil {
+			return false, err
+		}
 		set = append(set, fmt.Sprintf("password_hash = '%s'", sqlvalidator.SafeString(passwordHash)))
 	}
 	if displayName != nil {
@@ -277,20 +282,9 @@ func (s *UserService) DeleteUser(ctx context.Context, id int64) (bool, error) {
 	return true, nil
 }
 
-// HashPassword creates a SHA256 hash of the password
-func (s *UserService) HashPassword(password string) string {
-	hash := sha256.Sum256([]byte(password))
-	return hex.EncodeToString(hash[:])
-}
-
-// verifyPassword checks if password matches hash
+// verifyPassword checks if password matches hash (bcrypt or legacy SHA-256 hex).
 func (s *UserService) verifyPassword(password, hash string) bool {
-	want := strings.TrimSpace(hash)
-	if want == "" {
-		return false
-	}
-	got := s.HashPassword(password)
-	return strings.EqualFold(got, want)
+	return passwordhash.Verify(password, hash)
 }
 
 // scanUserRow converts a single row to User struct.

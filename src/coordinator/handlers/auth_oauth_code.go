@@ -170,16 +170,9 @@ func (h *AuthHandler) V4OAuth2Callback(c echo.Context) error {
 		h.oneTimeStore.Put(one, u.Username, isAdmin, 10*time.Minute)
 	}
 
-	redirectURL := provider.CallbackURL
-	if redirectURL == "" {
-		redirectURL = c.QueryParam("redirect_uri")
-	}
-	if redirectURL == "" {
-		redirectURL = "/"
-	}
-	target, err := url.Parse(redirectURL)
+	target, err := resolveOAuthClientRedirect(c, provider)
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid redirect URL")
+		return writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
 	}
 	q := target.Query()
 	q.Set("token", one)
@@ -188,21 +181,71 @@ func (h *AuthHandler) V4OAuth2Callback(c echo.Context) error {
 }
 
 func (h *AuthHandler) oauthRedirectWithError(c echo.Context, provider *OAuthProvider, detail string) error {
-	redirectURL := provider.CallbackURL
-	if redirectURL == "" {
-		redirectURL = c.QueryParam("redirect_uri")
-	}
-	if redirectURL == "" {
-		redirectURL = "/"
-	}
-	u, err := url.Parse(redirectURL)
+	u, err := resolveOAuthClientRedirect(c, provider)
 	if err != nil {
-		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid callback_url")
+		return writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
 	}
 	q := u.Query()
 	q.Set("oauth_error", detail)
 	u.RawQuery = q.Encode()
 	return c.Redirect(http.StatusFound, u.String())
+}
+
+// resolveOAuthClientRedirect picks a safe post-login redirect URL.
+// Configured provider.CallbackURL wins; otherwise only same-site relative paths are allowed.
+func resolveOAuthClientRedirect(c echo.Context, provider *OAuthProvider) (*url.URL, error) {
+	configured := strings.TrimSpace(provider.CallbackURL)
+	requested := strings.TrimSpace(c.QueryParam("redirect_uri"))
+
+	raw := configured
+	if raw == "" {
+		raw = requested
+	}
+	if raw == "" {
+		return &url.URL{Path: "/"}, nil
+	}
+	if strings.HasPrefix(raw, "//") {
+		return nil, fmt.Errorf("invalid redirect URL")
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid redirect URL")
+	}
+
+	if u.Scheme != "" && u.Host != "" {
+		if configured == "" {
+			return nil, fmt.Errorf("absolute redirect URL requires provider callback_url")
+		}
+		allowed, err := url.Parse(configured)
+		if err != nil {
+			return nil, fmt.Errorf("invalid provider callback_url")
+		}
+		if !oauthRedirectOriginsMatch(allowed, u) {
+			return nil, fmt.Errorf("redirect URL origin not allowed")
+		}
+		return u, nil
+	}
+
+	// Path-only redirect (e.g. / or /login). Reject user override when callback_url is set.
+	if configured != "" && requested != "" && requested != configured {
+		req, err := url.Parse(requested)
+		if err != nil || req.Scheme != "" || req.Host != "" {
+			return nil, fmt.Errorf("redirect_uri not allowed")
+		}
+	}
+	if !strings.HasPrefix(u.Path, "/") {
+		return nil, fmt.Errorf("redirect path must start with /")
+	}
+	return u, nil
+}
+
+func oauthRedirectOriginsMatch(allowed, target *url.URL) bool {
+	if allowed == nil || target == nil {
+		return false
+	}
+	return strings.EqualFold(allowed.Scheme, target.Scheme) &&
+		strings.EqualFold(allowed.Host, target.Host)
 }
 
 func (h *AuthHandler) resolveOrProvisionOAuthUser(ctx context.Context, p *OAuthProvider, username, email, display string, staffAdmin bool) (*services.User, error) {
