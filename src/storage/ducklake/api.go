@@ -14,6 +14,18 @@ import (
 	"time"
 )
 
+func writeDuckLakeHandlerError(w http.ResponseWriter, err error, serverMsg string) {
+	if err == nil {
+		http.Error(w, serverMsg, http.StatusInternalServerError)
+		return
+	}
+	if IsClientInputError(err) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Error(w, serverMsg, http.StatusInternalServerError)
+}
+
 // API provides HTTP API for DuckLake operations (legacy single-table)
 type API struct {
 	reader *Reader
@@ -148,12 +160,13 @@ func (a *API) HandleSnapshots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	limit := 100
+	limit := DefaultQueryLimit
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		if l, err := strconv.Atoi(limitStr); err == nil {
 			limit = l
 		}
 	}
+	limit = ClampLimit(limit, DefaultQueryLimit, MaxQueryLimit)
 
 	snapshots, err := a.reader.ListSnapshots(limit)
 	if err != nil {
@@ -194,9 +207,7 @@ func (a *API) HandleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Limit <= 0 || req.Limit > 1000 {
-		req.Limit = 100
-	}
+	req.Limit = ClampLimit(req.Limit, DefaultQueryLimit, MaxQueryLimit)
 
 	var records []HEPRecord
 	var err error
@@ -218,7 +229,7 @@ func (a *API) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(w, "Query failed: "+err.Error(), http.StatusInternalServerError)
+		writeDuckLakeHandlerError(w, err, "Query failed")
 		return
 	}
 
@@ -382,28 +393,32 @@ func (a *MultiTableAPI) HandleSnapshots(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Build TableKey from query params
-	key := TableKey{ProtoType: 1, SubType: SIPTypeCall} // Default to SIP calls
-
+	protoType := uint32(ProtoTypeSIP)
 	if ptStr := r.URL.Query().Get("proto_type"); ptStr != "" {
-		if pt, err := strconv.ParseUint(ptStr, 10, 32); err == nil {
-			key.ProtoType = uint32(pt)
+		pt, err := strconv.ParseUint(ptStr, 10, 32)
+		if err != nil {
+			http.Error(w, "invalid proto_type", http.StatusBadRequest)
+			return
 		}
+		protoType = uint32(pt)
 	}
-	if subType := r.URL.Query().Get("sub_type"); subType != "" {
-		key.SubType = subType
+	key, err := ParseTableKey(protoType, r.URL.Query().Get("sub_type"))
+	if err != nil {
+		writeDuckLakeHandlerError(w, err, "invalid table key")
+		return
 	}
 
-	limit := 100
+	limit := DefaultQueryLimit
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		if l, err := strconv.Atoi(limitStr); err == nil {
 			limit = l
 		}
 	}
+	limit = ClampLimit(limit, DefaultQueryLimit, MaxQueryLimit)
 
 	snapshots, err := a.reader.ListSnapshots(key, limit)
 	if err != nil {
-		http.Error(w, "Failed to list snapshots", http.StatusInternalServerError)
+		writeDuckLakeHandlerError(w, err, "Failed to list snapshots")
 		return
 	}
 
@@ -442,24 +457,24 @@ func (a *MultiTableAPI) HandleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Limit <= 0 || req.Limit > 1000 {
-		req.Limit = 100
-	}
+	req.Limit = ClampLimit(req.Limit, DefaultQueryLimit, MaxQueryLimit)
 
 	var records []map[string]interface{}
 	var err error
 
 	if req.ProtoType != nil {
-		// Query specific table by TableKey
-		key := TableKey{ProtoType: *req.ProtoType, SubType: req.SubType}
+		key, keyErr := ParseTableKey(*req.ProtoType, req.SubType)
+		if keyErr != nil {
+			writeDuckLakeHandlerError(w, keyErr, "invalid table key")
+			return
+		}
 		records, err = a.reader.Query(key, req.Where, req.Limit)
 	} else {
-		// Query all tables
 		records, err = a.reader.QueryAll(req.Where, req.Limit)
 	}
 
 	if err != nil {
-		http.Error(w, "Query failed: "+err.Error(), http.StatusInternalServerError)
+		writeDuckLakeHandlerError(w, err, "Query failed")
 		return
 	}
 
