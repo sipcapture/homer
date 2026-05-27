@@ -501,6 +501,14 @@ func (r *MultiTableReader) ListSnapshots(key TableKey, limit int) ([]Snapshot, e
 		limit = 100
 	}
 
+	// Enforce allowlist of known table schemas to prevent SQL injection via dynamic table naming.
+	r.writer.mu.RLock()
+	_, ok := r.writer.schemas[key]
+	r.writer.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("invalid table key")
+	}
+
 	tableFQN := r.writer.GetTableFQN(key)
 
 	query := fmt.Sprintf(`
