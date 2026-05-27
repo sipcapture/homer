@@ -6,6 +6,7 @@ package pcapwriter
 
 import (
 	"math"
+	"strconv"
 	"testing"
 )
 
@@ -38,4 +39,19 @@ func TestParseUint16Decimal(t *testing.T) {
 		t.Fatal("expected overflow")
 	}
 	_ = math.MaxUint16
+}
+
+func TestRowInt_stringWithinIntRange(t *testing.T) {
+	row := map[string]interface{}{"n": "42"}
+	if got := RowInt(row, "n"); got != 42 {
+		t.Fatalf("got %d", got)
+	}
+}
+
+func TestRowInt_stringOverflowInt(t *testing.T) {
+	tooBig := strconv.FormatUint(uint64(math.MaxInt)+1, 10)
+	row := map[string]interface{}{"n": tooBig}
+	if got := RowInt(row, "n"); got != 0 {
+		t.Fatalf("expected 0 for overflow, got %d", got)
+	}
 }
