@@ -89,7 +89,7 @@ Separate from JWT login, the coordinator can accept **static tokens** stored in 
 | **`enable_token_access`** | If `true`, the JWT middleware first checks the configured header for a raw token matching an `auth_token` row. |
 | **`auth_token_header`** | Header name (default **`Auth-Token`**). |
 
-When a valid row is found, the request is treated as authenticated with a **synthetic** user derived from the row’s **`user_object`** JSON: **`username`** and admin if **`usergroup`** equals **`admin`** (case-insensitive) — see `authenticateWithAuthTokenHeader` in `src/coordinator/handlers/auth.go`.
+When a valid row is found, the request is treated as authenticated with a **synthetic** user derived from the row’s **`user_object`** JSON: **`username`** and admin if **`user_group`** equals **`admin`** (case-insensitive) — see `authenticateWithAuthTokenHeader` in `src/coordinator/handlers/auth.go`.
 
 **How to use:**
 
