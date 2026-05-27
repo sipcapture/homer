@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import type { RawMessage } from './flow-data'
 import { payloadTypeOf } from './flow-data'
 import {
-  DEFAULT_FILTERS,
   initialFlowFilters,
   saveStoredFlowPrefs,
   type FlowFilters,
