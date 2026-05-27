@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CrudModal, Field } from './CrudTable'
+import { getAuthToken } from '@/lib/authTokenStorage'
 
 interface ExportModalProps {
   searchPayload: Record<string, unknown>
@@ -93,7 +94,7 @@ export default function ExportModal({ searchPayload, onClose }: ExportModalProps
     const link = document.createElement('a')
     link.href = downloadUrl
     link.download = `export.${format}`
-    const token = localStorage.getItem('homer_v4_token')
+    const token = getAuthToken()
     if (token && downloadUrl.startsWith('/')) {
       fetch(downloadUrl, { headers: { Authorization: `Bearer ${token}` } })
         .then((r) => {

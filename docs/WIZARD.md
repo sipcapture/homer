@@ -162,7 +162,7 @@ Disabled modules have `"enable": false` but retain their default settings, so th
 
 ## Security Notes
 
-- **Admin bootstrap** uses **`"coordinator.auth": "internal"`** in the generated file (default first login: **`admin` / `sipcapture`** until changed). Passwords are stored as SHA-256 in DuckDB `users`, not in plaintext in JSON.
+- **Admin bootstrap** uses **`"coordinator.auth": "internal"`** in the generated file (default first login: **`admin` / `sipcapture`** until changed). The wizard embeds the default **SHA-256 hex** bootstrap hash for `sipcapture`; if you set a **custom** admin password in the TUI, the generated config stores a **bcrypt** hash instead. Passwords are never written in plaintext in JSON.
 - **JWT secret** is auto-generated using `crypto/rand` if left empty (64 hex characters).
 - The generated config file is written with `0644` permissions. Restrict access if it contains sensitive tokens.
 

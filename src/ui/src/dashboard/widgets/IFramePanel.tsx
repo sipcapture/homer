@@ -4,13 +4,7 @@ import { Button } from '@/components/ui/button'
 import { EditIconButton } from '@/components/ui/table-action-buttons'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-
-function normalizeUrl(raw: string): string {
-  const t = raw.trim()
-  if (!t) return ''
-  if (/^https?:\/\//i.test(t)) return t
-  return `https://${t}`
-}
+import { normalizeHttpUrl } from '@/lib/safeUrl'
 
 export default function IFramePanel({ config, onConfigChange }) {
   const savedUrl = config?.url || ''
@@ -21,7 +15,7 @@ export default function IFramePanel({ config, onConfigChange }) {
     if (!editing) setUrl(savedUrl)
   }, [savedUrl, editing])
 
-  const src = useMemo(() => normalizeUrl(savedUrl || url || ''), [savedUrl, url])
+  const src = useMemo(() => normalizeHttpUrl(savedUrl || url || ''), [savedUrl, url])
 
   if (editing) {
     return (
@@ -47,7 +41,7 @@ export default function IFramePanel({ config, onConfigChange }) {
           <Button
             size="sm"
             onClick={() => {
-              const next = normalizeUrl(url)
+              const next = normalizeHttpUrl(url)
               if (!next) return
               setUrl(next)
               onConfigChange?.({ ...config, url: next })

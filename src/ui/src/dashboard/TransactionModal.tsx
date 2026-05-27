@@ -23,6 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
 import { cn } from '@/lib/utils'
+import { newModalKey } from '@/lib/modalKey'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { getMethodColor } from './flow-utils'
 import { resolveTimeRange } from './utils/resolveTimeRange'
@@ -715,7 +716,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
         return ts ? { from: ts.from, to: ts.to } : undefined
       })(),
     }
-    const nestedKey = `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+    const nestedKey = newModalKey()
     const update = (modal) => setMessageModals(prev =>
       prev.map(m => m.modalKey === nestedKey ? modal : m)
     )

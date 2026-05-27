@@ -182,7 +182,7 @@ client.close()
 ```
 
 Reconnects use exponential backoff up to 30s with small jitter. The
-JWT from `localStorage` is attached as `?access_token=` automatically.
+JWT from `sessionStorage` (`homer_v4_token`) is attached as `?access_token=` automatically.
 
 ## Example clients
 

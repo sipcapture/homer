@@ -7,6 +7,7 @@ package pcapwriter
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -36,11 +37,75 @@ func RowInt(row map[string]interface{}, key string) int {
 		case float64:
 			return int(val)
 		case string:
-			n, _ := strconv.Atoi(val)
-			return n
+			if u, ok := parseUint32Decimal(val); ok {
+				if i, ok := intFromUint32(u); ok {
+					return i
+				}
+			}
 		}
 	}
 	return 0
+}
+
+// RowUint16 extracts a port-like field (0–65535) from a map row.
+func RowUint16(row map[string]interface{}, key string) (uint16, bool) {
+	if v, ok := row[key]; ok && v != nil {
+		switch val := v.(type) {
+		case uint16:
+			return val, true
+		case uint32:
+			if val <= 65535 {
+				return uint16(val), true
+			}
+			return 0, false
+		case int:
+			if val >= 0 && val <= 65535 {
+				return uint16(val), true
+			}
+			return 0, false
+		case int32:
+			if val >= 0 && val <= 65535 {
+				return uint16(val), true
+			}
+			return 0, false
+		case int64:
+			if val >= 0 && val <= 65535 {
+				return uint16(val), true
+			}
+			return 0, false
+		case float64:
+			if val >= 0 && val <= 65535 && val == float64(uint16(val)) {
+				return uint16(val), true
+			}
+			return 0, false
+		case string:
+			return parseUint16Decimal(val)
+		}
+	}
+	return 0, false
+}
+
+func parseUint16Decimal(s string) (uint16, bool) {
+	u, err := strconv.ParseUint(strings.TrimSpace(s), 10, 16)
+	if err != nil {
+		return 0, false
+	}
+	return uint16(u), true
+}
+
+func parseUint32Decimal(s string) (uint32, bool) {
+	u, err := strconv.ParseUint(strings.TrimSpace(s), 10, 32)
+	if err != nil {
+		return 0, false
+	}
+	return uint32(u), true
+}
+
+func intFromUint32(u uint32) (int, bool) {
+	if int64(u) > int64(math.MaxInt) {
+		return 0, false
+	}
+	return int(u), true
 }
 
 // RowTime parses a timestamp field from a map row.
@@ -112,8 +177,8 @@ func SIPSearchRowsToPCAP(rows []map[string]interface{}) ([]byte, error) {
 		ts := RowTime(row, "timestamp")
 		srcIP := RowStr(row, "src_ip")
 		dstIP := RowStr(row, "dst_ip")
-		srcPort := uint16(RowInt(row, "src_port"))
-		dstPort := uint16(RowInt(row, "dst_port"))
+		srcPort, _ := RowUint16(row, "src_port")
+		dstPort, _ := RowUint16(row, "dst_port")
 		if srcPort == 0 {
 			srcPort = 5060
 		}

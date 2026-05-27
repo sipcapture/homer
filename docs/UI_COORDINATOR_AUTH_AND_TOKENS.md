@@ -9,7 +9,7 @@ For full LDAP and OAuth2 configuration field tables and examples, see **[AUTH_LD
 ## Architecture
 
 - The **coordinator** is the authority: it serves `GET /api/v4/auth/providers`, creates sessions, validates requests, and issues JWTs.
-- The **bundled UI** (`src/ui`) calls the v4 API under `import.meta.env.VITE_API_BASE` or the default **`/api/v4`**. It loads provider metadata when the user is logged out and stores a session JWT in `localStorage` under the key `homer_v4_token`.
+- The **bundled UI** (`src/ui`) calls the v4 API under `import.meta.env.VITE_API_BASE` or the default **`/api/v4`**. It loads provider metadata when the user is logged out and stores a session JWT in **`sessionStorage`** under the key `homer_v4_token` (tab-scoped; legacy `localStorage` entries are migrated once on read). See `src/ui/src/lib/authTokenStorage.ts`.
 
 There is no separate “auth mode” flag in the UI alone: available methods are **entirely determined by coordinator configuration** after restart.
 
@@ -58,7 +58,7 @@ The UI (`src/ui/src/loginProviders.ts`, `LoginPage.tsx`):
 ## OAuth2 flow and JWT
 
 1. **`GET /api/v4/auth/oauth2/{provider}/redirect`** — Coordinator builds the IdP **authorize** URL (OAuth2 `state` + optional **PKCE**), then HTTP 302 to the IdP.
-2. **`GET /api/v4/auth/oauth2/{provider}/callback`** — IdP returns **`code`**; coordinator validates **`state`**, exchanges **`code`** for tokens at **`token_url`**, loads the user from **`profile_url`**, maps or creates a DuckDB **`users`** row, then issues a **short-lived one-time token** and redirects the browser to **`callback_url`** with **`?token=<one-time>`** (or **`?oauth_error=`** on failure).
+2. **`GET /api/v4/auth/oauth2/{provider}/callback`** — IdP returns **`code`**; coordinator validates **`state`**, exchanges **`code`** for tokens at **`token_url`**, loads the user from **`profile_url`**, maps or creates a DuckDB **`users`** row, then issues a **short-lived one-time token** and redirects the browser to **`callback_url`** with **`?token=<one-time>`** (or **`?oauth_error=`** on failure). Redirect targets are validated: configure **`callback_url`** on the provider; user-supplied absolute `redirect_uri` values are not accepted unless they match that origin (see [AUTH_LDAP_AND_OAUTH.md — Redirect URL safety](AUTH_LDAP_AND_OAUTH.md#redirect-url-safety)).
 3. **`POST /api/v4/auth/oauth2/token`** with body `{"token":"<one-time>"}` — Consumes the one-time token once and returns **`data.token`** as the **JWT** session (same shape as password login).
 
 The **bundled UI** (`src/ui/src/App.tsx`) reads **`oauth_error`** from the query (toast) and performs the one-time → JWT **POST** when `token` is present (no `Authorization` header on that POST). Custom SPAs must do the same.

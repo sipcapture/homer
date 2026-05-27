@@ -40,10 +40,16 @@ export function clearDashboardLocalStorage(): number {
   return removed
 }
 
-/** Clears all keys in localStorage for this origin (including session JWT). */
+/** Clears all keys in localStorage for this origin. */
 export function clearAllLocalStorage(): void {
   if (typeof localStorage === 'undefined') return
   localStorage.clear()
+}
+
+/** Clears sessionStorage (including tab-scoped JWT). */
+export function clearAllSessionStorage(): void {
+  if (typeof sessionStorage === 'undefined') return
+  sessionStorage.clear()
 }
 
 /**

@@ -233,7 +233,9 @@ homer --config-path /path/to/homer.json --reset-admin-password
 
 The process opens **`coordinator.settings_db_path`**, ensures schema, updates or inserts the **`users`** row for `admin_user`, and **exits** (no HTTP server). Details, JSON examples, and env overrides: [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password).
 
-**Generating a password hash (for object / reset):**
+**Password hashes:** Users created or updated via the API store **bcrypt** in `users.password_hash`. Login also accepts legacy **SHA-256 hex** (default bootstrap admin, migrated homer-app users). **`--reset-admin-password`** still expects **SHA-256 hex** in `admin_password_hash` (see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password)).
+
+**Generating a SHA-256 hex hash (for `admin_password_hash` / reset only):**
 
 ```bash
 # Linux/macOS
@@ -247,7 +249,7 @@ echo -n "your-password" | sha256sum | cut -d' ' -f1
 |-----------|------|---------|-------------|
 | `type` | string | *(see table above)* | `internal`, `ldap`, or `oauth`. If the whole `auth` section is omitted, or `type` is omitted / empty on the object, the effective type is **`internal`**. |
 | `admin_user` | string | "admin" | Admin username when **`type`** is **`internal`** (including when `type` is omitted and normalized to internal). |
-| `admin_password_hash` | string | "" | SHA256 hex. For **`type` internal** (or omitted auth normalized to internal), empty means the default **`sipcapture`** hash after load. **`--reset-admin-password`** reads this field; it must be non-empty in the loaded config (default internal configs satisfy this after normalization). |
+| `admin_password_hash` | string | "" | **SHA-256 hex** for bootstrap / **`--reset-admin-password`**. For **`type` internal** (or omitted auth normalized to internal), empty means the default **`sipcapture`** hash after load. API user password changes use bcrypt separately. |
 | `fallback_auth_type` | string | "" | If set to **`internal`** or **`ldap`**, password login tries this backend **after** the client-selected `type` fails (wrong password or backend unavailable). Must not be **`oauth`**. Empty disables the second attempt. |
 | `disable_password_login` | bool | false | If **`true`**, hide internal/LDAP from **`GET /auth/providers`** and return **403** on **`POST /auth/sessions`**. Use with OAuth2 for IdP-only login. Env: **`HOMER_COORDINATOR_AUTH_DISABLE_PASSWORD_LOGIN`**. |
 

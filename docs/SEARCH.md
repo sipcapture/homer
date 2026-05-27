@@ -57,6 +57,19 @@ homer search --host coordinator:8081 --method INVITE
 homer search --host coordinator:8081 --token "eyJhbGciOiJI..."
 ```
 
+### TLS to the coordinator
+
+Homer CLI commands (`homer search`, `homer agent`, etc.) use HTTPS when the host URL is `https://…`. **Certificate verification is enabled by default.**
+
+For coordinators with **private CAs** or **self-signed** certificates (common in lab deployments), set:
+
+```bash
+export HOMER_INSECURE_TLS=1   # or true / yes
+homer search --host https://coordinator:8081 --user admin --pass mypassword
+```
+
+Without this variable, TLS handshake or certificate errors indicate the server cert is not trusted by the system store. Production deployments should use proper CA-signed certificates and leave `HOMER_INSECURE_TLS` unset.
+
 ## Flags Reference
 
 ### Connection
