@@ -393,7 +393,7 @@ func (h *AuthHandler) authenticateWithAuthTokenHeader(c echo.Context) bool {
 
 type authTokenUserObject struct {
 	Username  string `json:"username"`
-	Usergroup string `json:"usergroup"`
+	UserGroup string `json:"user_group"`
 }
 
 func (h *AuthHandler) jwtTokenFromAuthTokenItem(item *services.AuthTokenItem) *jwt.Token {
@@ -405,7 +405,7 @@ func (h *AuthHandler) jwtTokenFromAuthTokenItem(item *services.AuthTokenItem) *j
 			if uo.Username != "" {
 				userName = uo.Username
 			}
-			if strings.EqualFold(uo.Usergroup, "admin") {
+			if strings.EqualFold(uo.UserGroup, "admin") {
 				isAdmin = true
 			}
 		}
