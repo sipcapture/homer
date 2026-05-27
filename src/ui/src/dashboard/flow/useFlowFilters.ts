@@ -1,32 +1,18 @@
-import { useMemo, useState } from 'react'
-import type { HostGrouping, RawMessage } from './flow-data'
+import { useEffect, useMemo, useState } from 'react'
+import type { RawMessage } from './flow-data'
 import { payloadTypeOf } from './flow-data'
+import {
+  initialFlowFilters,
+  saveStoredFlowPrefs,
+  type FlowFilters,
+} from './flowFilterPrefs'
+
+export type { FlowFilters } from './flowFilterPrefs'
+export { DEFAULT_FILTERS } from './flowFilterPrefs'
 
 export interface FilterToken {
   value: string
   selected: boolean
-}
-
-export interface FlowFilters {
-  isSimplify: boolean
-  isAbsoluteTime: boolean
-  isHighContrast: boolean
-  hostGrouping: HostGrouping
-  ipExcluded: Set<string>
-  methodExcluded: Set<string>
-  payloadTypeExcluded: Set<string>
-  callIdExcluded: Set<string>
-}
-
-export const DEFAULT_FILTERS: FlowFilters = {
-  isSimplify: false,
-  isAbsoluteTime: false,
-  isHighContrast: false,
-  hostGrouping: 'ungrouped',
-  ipExcluded: new Set(),
-  methodExcluded: new Set(),
-  payloadTypeExcluded: new Set(),
-  callIdExcluded: new Set(),
 }
 
 function collectUnique(items: RawMessage[], picker: (m: RawMessage) => string[]): string[] {
@@ -65,7 +51,11 @@ export interface UseFlowFiltersResult {
 }
 
 export function useFlowFilters(items: RawMessage[] | null | undefined): UseFlowFiltersResult {
-  const [filters, setFilters] = useState<FlowFilters>(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState<FlowFilters>(initialFlowFilters)
+
+  useEffect(() => {
+    saveStoredFlowPrefs(filters)
+  }, [filters.hostGrouping, filters.isSimplify, filters.isAbsoluteTime, filters.isHighContrast])
 
   const { filterIP, filterMethod, filterPayloadType, filterCallId, filteredItems } = useMemo(() => {
     const safe = items ?? []
