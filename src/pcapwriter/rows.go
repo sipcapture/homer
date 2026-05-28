@@ -7,7 +7,6 @@ package pcapwriter
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -37,10 +36,9 @@ func RowInt(row map[string]interface{}, key string) int {
 		case float64:
 			return int(val)
 		case string:
-			if u, ok := parseUint32Decimal(val); ok {
-				if i, ok := intFromUint32(u); ok {
-					return i
-				}
+			n, err := strconv.ParseInt(strings.TrimSpace(val), 10, strconv.IntSize)
+			if err == nil {
+				return int(n)
 			}
 		}
 	}
@@ -91,21 +89,6 @@ func parseUint16Decimal(s string) (uint16, bool) {
 		return 0, false
 	}
 	return uint16(u), true
-}
-
-func parseUint32Decimal(s string) (uint32, bool) {
-	u, err := strconv.ParseUint(strings.TrimSpace(s), 10, 32)
-	if err != nil {
-		return 0, false
-	}
-	return uint32(u), true
-}
-
-func intFromUint32(u uint32) (int, bool) {
-	if int64(u) > int64(math.MaxInt) {
-		return 0, false
-	}
-	return int(u), true
 }
 
 // RowTime parses a timestamp field from a map row.

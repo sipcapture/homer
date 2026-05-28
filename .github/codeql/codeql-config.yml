@@ -1,0 +1,5 @@
+# Homer CodeQL: exclude intentional legacy password digest comparison (bcrypt used for new hashes).
+name: "Homer CodeQL"
+paths-ignore:
+  - src/passwordhash/legacy_sha256_compat.go
+  - src/passwordhash/legacy_sha256_compat_test.go

@@ -181,7 +181,7 @@ func (h *AuthHandler) V4OAuth2Callback(c echo.Context) error {
 }
 
 func (h *AuthHandler) oauthRedirectWithError(c echo.Context, provider *OAuthProvider, detail string) error {
-	u, err := resolveOAuthClientRedirect(c, provider)
+	u, err := oauthErrorClientRedirect(provider)
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
 	}
@@ -189,6 +189,28 @@ func (h *AuthHandler) oauthRedirectWithError(c echo.Context, provider *OAuthProv
 	q.Set("oauth_error", detail)
 	u.RawQuery = q.Encode()
 	return c.Redirect(http.StatusFound, u.String())
+}
+
+// oauthErrorClientRedirect returns a safe redirect base for OAuth errors (never uses redirect_uri).
+func oauthErrorClientRedirect(provider *OAuthProvider) (*url.URL, error) {
+	configured := strings.TrimSpace(provider.CallbackURL)
+	if configured == "" {
+		return &url.URL{Path: "/"}, nil
+	}
+	if strings.HasPrefix(configured, "//") {
+		return nil, fmt.Errorf("invalid provider callback_url")
+	}
+	u, err := url.Parse(configured)
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider callback_url")
+	}
+	if u.Scheme != "" && u.Host != "" {
+		return u, nil
+	}
+	if strings.HasPrefix(u.Path, "/") {
+		return u, nil
+	}
+	return nil, fmt.Errorf("invalid provider callback_url")
 }
 
 // resolveOAuthClientRedirect picks a safe post-login redirect URL.

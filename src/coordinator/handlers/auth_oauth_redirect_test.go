@@ -56,6 +56,27 @@ func TestResolveOAuthClientRedirect_allowsConfiguredOrigin(t *testing.T) {
 	}
 }
 
+func TestOAuthErrorClientRedirect_ignoresRedirectURI(t *testing.T) {
+	provider := &OAuthProvider{CallbackURL: "https://homer.example/app/oauth"}
+	u, err := oauthErrorClientRedirect(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.String() != provider.CallbackURL {
+		t.Fatalf("got %q", u.String())
+	}
+}
+
+func TestOAuthErrorClientRedirect_defaultPathWithoutCallback(t *testing.T) {
+	u, err := oauthErrorClientRedirect(&OAuthProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Path != "/" {
+		t.Fatalf("path: got %q", u.Path)
+	}
+}
+
 func TestOAuthRedirectOriginsMatch(t *testing.T) {
 	a, _ := url.Parse("https://homer.example/app")
 	b, _ := url.Parse("https://homer.example/other")
