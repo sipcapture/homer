@@ -5,8 +5,6 @@
 package passwordhash
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"testing"
 )
 
@@ -27,8 +25,8 @@ func TestHashAndVerifyBcrypt(t *testing.T) {
 }
 
 func TestVerifyLegacySHA256(t *testing.T) {
-	sum := sha256.Sum256([]byte("sipcapture"))
-	legacy := hex.EncodeToString(sum[:])
+	// Default homer-app admin digest (sha256 hex of "sipcapture").
+	legacy := "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
 	if !Verify("sipcapture", legacy) {
 		t.Fatal("legacy sha256 verify failed")
 	}

@@ -7,8 +7,6 @@
 package passwordhash
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -43,15 +41,7 @@ func Verify(password, stored string) bool {
 	if isBcryptHash(stored) {
 		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil
 	}
-	return verifyLegacySHA256Hex(password, stored)
-}
-
-// verifyLegacySHA256Hex checks homer-app SHA-256 hex hashes (not used for new passwords).
-func verifyLegacySHA256Hex(password, storedHex string) bool {
-	// lgtm[go/weak-sensitive-data-hashing] legacy homer-app hex only; Hash() uses bcrypt for new passwords.
-
-	sum := sha256.Sum256([]byte(password)) // codeql[go/weak-sensitive-data-hashing]
-	return strings.EqualFold(hex.EncodeToString(sum[:]), storedHex)
+	return legacySHA256HexEqual(password, stored)
 }
 
 func isBcryptHash(stored string) bool {
