@@ -48,8 +48,9 @@ func Verify(password, stored string) bool {
 
 // verifyLegacySHA256Hex checks homer-app SHA-256 hex hashes (not used for new passwords).
 func verifyLegacySHA256Hex(password, storedHex string) bool {
-	// codeql[go/weak-sensitive-data-hashing]: legacy format only; Hash() uses bcrypt for new passwords.
-	sum := sha256.Sum256([]byte(password))
+	// lgtm[go/weak-sensitive-data-hashing] legacy homer-app hex only; Hash() uses bcrypt for new passwords.
+
+	sum := sha256.Sum256([]byte(password)) // codeql[go/weak-sensitive-data-hashing]
 	return strings.EqualFold(hex.EncodeToString(sum[:]), storedHex)
 }
 
