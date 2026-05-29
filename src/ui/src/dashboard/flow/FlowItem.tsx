@@ -74,10 +74,10 @@ export function FlowItem({
             ) : (
               <>
                 <div className={item.direction ? 'port-label-right' : 'port-label-left'}>
-                  {item.direction ? item.dstPort || '' : item.srcPort || ''}
+                  {item.srcPort || ''}
                 </div>
                 <div className={item.direction ? 'port-label-left' : 'port-label-right'}>
-                  {item.direction ? item.srcPort || '' : item.dstPort || ''}
+                  {item.dstPort || ''}
                 </div>
               </>
             )}
