@@ -6,6 +6,7 @@ Related docs:
 
 - [Search CLI](SEARCH.md) — terminal search and `--proto` names
 - [Mapping examples](../examples/mappings/README.md) — `fields_mapping` JSON per protocol
+- [Search mappings and field types](SEARCH_MAPPINGS_AND_FIELDS.md) — form fields, virtual filters, `form_type` reference
 - API: `POST /api/v4/transactions/search` — same `filter` object the UI sends
 
 ---

@@ -37,6 +37,12 @@ When you change a seed file under `src/coordinator/services/seeds/`, copy
 the same file here (or vice versa) so operators reading `examples/` see
 what the next release will ship.
 
+## Field definitions and search forms
+
+For `form_type`, virtual `data_extra` filters, widget configuration, and
+how `id` maps to `POST /api/v4/search`, see
+[docs/SEARCH_MAPPINGS_AND_FIELDS.md](../../docs/SEARCH_MAPPINGS_AND_FIELDS.md).
+
 ## Line Protocol (`hepid` 300)
 
 Not listed above: **`mapping_schema` rows for LP** are maintained when
