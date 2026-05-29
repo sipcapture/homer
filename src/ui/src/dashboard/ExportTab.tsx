@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { displaySrcIp } from '@/lib/ipAliasDisplay'
 import { Download, FileText, Network, Play, Check, Copy, Loader2, AlertCircle, ExternalLink } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -8,6 +8,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { resolveTimeRange, type CalendarPreset } from './utils/resolveTimeRange'
 import { useDashboard } from './context/DashboardContext'
 import { getAuthToken } from '@/lib/authTokenStorage'
+import MultiSelectInput from './components/MultiSelectInput'
+import { useExportExclusionHosts } from './useExportExclusionHosts'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -433,20 +435,49 @@ export default function ExportTab({
 }: ExportTabProps) {
   const { timeZone } = useDashboard()
   const ids = (sessionIds && sessionIds.length > 1) ? sessionIds : null
+  const { options: exclusionOptions, selectedIPs, setSelectedIPs, loading: exclusionLoading } =
+    useExportExclusionHosts(items)
+
+  const multiSelectOptions = useMemo(
+    () => exclusionOptions.map((o) => ({ value: o.ip, name: o.label })),
+    [exclusionOptions],
+  )
+
   const getRequestBody = useCallback(() => {
     const ts = resolveTimeRange(timeRange, timeZone)
-    return {
+    const body: Record<string, unknown> = {
       ...(ids ? { session_ids: ids } : { session_id: sessionId }),
       proto_type: protoType,
       event_type: eventType,
       ...(ts ? { timestamp: { from: ts.from, to: ts.to } } : {}),
     }
-  }, [ids, sessionId, protoType, eventType, timeRange, timeZone])
+    if (selectedIPs.length > 0) {
+      body.whitelist = selectedIPs
+    }
+    return body
+  }, [ids, sessionId, protoType, eventType, timeRange, timeZone, selectedIPs])
 
   const safeSid = (ids ? `multi_${ids.length}_sessions` : sessionId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64)
 
   return (
     <div className="h-full overflow-auto p-4 space-y-3">
+      <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+        <div>
+          <p className="text-sm font-medium">Export Exclusion</p>
+          <p className="text-[11px] text-muted-foreground">
+            Exclude selected IPs from PCAP and text export (internal infrastructure, SBCs, etc.).
+            Defaults come from Advanced settings (export / transaction / excludedCIDR).
+          </p>
+        </div>
+        <MultiSelectInput
+          options={multiSelectOptions}
+          value={selectedIPs}
+          onChange={setSelectedIPs}
+          placeholder={exclusionLoading ? 'Loading hosts…' : 'No IPs excluded'}
+          className="max-w-xl"
+        />
+      </div>
+
       <DirectExportCard
         title="Text Export"
         description="Download all SIP messages as plain text — one message per block with headers"

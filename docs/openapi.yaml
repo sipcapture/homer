@@ -2792,6 +2792,25 @@ components:
         event_type:
           type: string
           description: Event type (call, registration, default).
+        timestamp:
+          type: object
+          description: Optional millisecond UTC window (from/to).
+          properties:
+            from:
+              type: integer
+              format: int64
+            to:
+              type: integer
+              format: int64
+        whitelist:
+          type: array
+          description: >
+            IPs to exclude from PCAP/text export only (legacy Homer 7 field name; not an allow-list).
+            A row is omitted when src_ip or dst_ip equals any listed address. Applied on
+            POST /transactions/export/pcap, /transactions/export/text, and share export links.
+          items:
+            type: string
+          example: ["10.0.0.1", "192.168.0.1"]
     ProtocolHeader:
       type: object
       properties:
