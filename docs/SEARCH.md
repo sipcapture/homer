@@ -310,6 +310,27 @@ Also accepts aliases: `--format flow` or `--format ladder`.
 
 Writes a **libpcap** file from the search result rows. Framing matches the coordinator API **`POST /api/v4/transactions/export/pcap`** (Ethernet + IPv4/IPv6 + UDP + raw SIP payload per row).
 
+### Export exclusion (PCAP / text)
+
+Homer 7 **Export Exclusion** is supported on transaction export via the `whitelist` array on **`TransactionSessionRequest`** (legacy name: these are **IPs to exclude**, not an allow-list). Each listed address drops rows where `src_ip` or `dst_ip` matches that address (exact string match).
+
+```json
+{
+  "session_id": "abc@host",
+  "proto_type": 1,
+  "event_type": "call",
+  "whitelist": ["10.0.0.1", "192.168.1.5"]
+}
+```
+
+Default exclusions for the UI multiselect can be stored in Advanced settings:
+
+- **category:** `export`
+- **param:** `transaction`
+- **data:** `{ "excludedCIDR": [ { "ip": "10.0.0.1", "disabled": false }, { "alias": "my-sbc", "disabled": false } ] }`
+
+Share export links (`POST /api/v4/transactions/export/link`) persist the full request body; public PCAP/text downloads honor `whitelist` the same way.
+
 **Requirements:**
 
 - **`--output path`** or **`-o path`** — required (binary output is never written to stdout).

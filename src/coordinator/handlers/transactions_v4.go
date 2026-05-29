@@ -340,7 +340,9 @@ type TransactionSessionRequestV4 struct {
 	SessionIDs []string `json:"session_ids,omitempty"`
 	ProtoType  int      `json:"proto_type"`
 	EventType  string   `json:"event_type"`
-	Timestamp  struct {
+	// Whitelist lists IPs to exclude from PCAP/text export (legacy Homer 7 name; not an allow-list).
+	Whitelist []string `json:"whitelist,omitempty"`
+	Timestamp struct {
 		From int64 `json:"from,omitempty"`
 		To   int64 `json:"to,omitempty"`
 	} `json:"timestamp,omitempty"`
@@ -1198,8 +1200,24 @@ func (h *SearchHandler) buildTransactionExportSQL(req *TransactionSessionRequest
 			req.Timestamp.From, req.Timestamp.To,
 		)
 	}
+	where += buildExportExcludeIPClause(req.Whitelist)
 	sql := fmt.Sprintf("SELECT * FROM %s WHERE %s ORDER BY timestamp ASC LIMIT 10000", table, where)
 	return sql, ids, nil
+}
+
+// buildExportExcludeIPClause appends AND conditions so rows with src_ip or dst_ip matching any
+// listed address are omitted from export (Homer 7 export exclusion / param.whitelist parity).
+func buildExportExcludeIPClause(whitelist []string) string {
+	var b strings.Builder
+	for _, ip := range whitelist {
+		ip = strings.TrimSpace(ip)
+		if ip == "" {
+			continue
+		}
+		safe := sqlvalidator.SafeString(ip)
+		b.WriteString(fmt.Sprintf(" AND src_ip != '%s' AND dst_ip != '%s'", safe, safe))
+	}
+	return b.String()
 }
 
 func exportFilenameForSessionIDs(ids []string, ext string) string {
