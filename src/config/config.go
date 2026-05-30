@@ -598,9 +598,19 @@ type DuckLakeConfig struct {
 	FlushQueue    *bool  `json:"flush_queue" mapstructure:"flush_queue"` // nil = auto (true for SQLite), explicit true/false overrides
 	// DataInliningRowLimit controls the DuckLake data inlining threshold (DuckLake v1.0).
 	// Writes of ≤N rows are stored directly in the catalog database instead of creating
-	// small Parquet files. Default -1 means use DuckLake's built-in default (10 rows).
-	// Set to 0 to disable inlining entirely (always write Parquet).
-	DataInliningRowLimit int                 `json:"data_inlining_row_limit" mapstructure:"data_inlining_row_limit" default:"-1"`
+	// small Parquet files.
+	//
+	// Default 0 = inlining DISABLED (every write goes to a Parquet file). This is
+	// deliberate: DuckLake's own default inlines small writes into the catalog DB, and
+	// under streaming ingest with many small writes (Line Protocol, OTLP, low-volume
+	// HEP subtypes) that turns the catalog (sqlite) into the dominant memory + disk
+	// consumer — an 800 MB catalog backing only a few dozen Parquet files, and multi-GB
+	// RSS when DuckLake mirrors the catalog in memory. The CompactionService now also
+	// flushes inlined data on each maintenance cycle as a safety net.
+	//   *  0  -> disable inlining (recommended; always write Parquet)
+	//   * >0  -> inline writes smaller than N rows (only for low write cardinality)
+	//   * -1  -> leave DuckLake's own default (inlines ~10 rows) — avoid for streaming
+	DataInliningRowLimit int                 `json:"data_inlining_row_limit" mapstructure:"data_inlining_row_limit" default:"0"`
 	Tuning               DuckDBTuning        `json:"tuning" mapstructure:"tuning"`
 	S3                   S3Config            `json:"s3" mapstructure:"s3"`
 	Compaction           CompactionConfig    `json:"compaction" mapstructure:"compaction"`

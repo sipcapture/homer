@@ -424,6 +424,22 @@ func (c *CompactionService) runMerge(tables []string) error {
 		logger.Info("CompactionService: Active snapshots before merge", "count", snapshotCount)
 	}
 
+	// 0. Flush inlined data to Parquet FIRST. DuckLake inlines small writes
+	// (DATA_INLINING_ROW_LIMIT) directly into the catalog DB; with inlining
+	// left enabled and no periodic flush, those rows accumulate inside the
+	// catalog forever — an 800 MB catalog backing only a few dozen Parquet
+	// files is the classic symptom, and DuckLake mirrors the catalog in
+	// memory (multi-GB RSS). Flushing first also lets the subsequent merge /
+	// expire act on freshly written Parquet instead of catalog-resident rows.
+	// Harmless no-op when inlining is disabled (the recommended default).
+	c.withCatalogLock(func() {
+		logger.Info("CompactionService: Flush inlined data", "lake", c.lakeName)
+		flushSQL := fmt.Sprintf("CALL ducklake_flush_inlined_data('%s')", c.lakeName)
+		if _, err := c.execWithRetry(flushSQL); err != nil {
+			logger.Warn("CompactionService: flush_inlined_data failed", "error", err)
+		}
+	})
+
 	// 1. Merge adjacent small files FIRST — lock per table
 	for _, table := range tables {
 		tableName := tableNameFromFQN(table)
