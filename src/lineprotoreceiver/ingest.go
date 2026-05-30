@@ -269,34 +269,63 @@ func (i *Ingester) writeRows(ctx context.Context, fqTable string, rows []map[str
 			continue
 		}
 		cols := sortedMapKeys(bucket[0])
-		placeholders := make([]string, len(cols))
-		for j := range placeholders {
-			placeholders[j] = "?"
+		n, err := i.insertBucket(ctx, fqTable, cols, bucket)
+		inserted += n
+		if err != nil {
+			return inserted, err
+		}
+	}
+	return inserted, nil
+}
+
+// lpInsertChunkRows bounds how many rows go into a single multi-row INSERT
+// so a large batch doesn't blow past DuckDB's bound-parameter / statement
+// size limits. Chosen well below any practical limit while still collapsing
+// thousands of per-row commits into a handful of statements.
+const lpInsertChunkRows = 500
+
+// insertBucket writes a homogeneous set of rows (same column subset) using
+// chunked multi-row `INSERT ... VALUES (...),(...),...` statements instead of
+// one Exec per row.
+//
+// Each per-row Exec used to be its own DuckLake transaction — a catalog
+// snapshot plus a tiny Parquet (or inlined) write per row. Under sustained
+// Line Protocol traffic that micro-commit storm bloats the catalog and stalls
+// ingest (the same pattern fixed for OTLP/Python in the sibling ingest
+// service). Bulk inserts cut the transaction/snapshot count by up to
+// lpInsertChunkRows×.
+func (i *Ingester) insertBucket(ctx context.Context, fqTable string, cols []string, bucket []map[string]interface{}) (int, error) {
+	colList := strings.Join(cols, ", ")
+	// "(?, ?, ... ?)" for one row.
+	rowPlaceholder := "(" + strings.TrimSuffix(strings.Repeat("?, ", len(cols)), ", ") + ")"
+
+	inserted := 0
+	for start := 0; start < len(bucket); start += lpInsertChunkRows {
+		end := start + lpInsertChunkRows
+		if end > len(bucket) {
+			end = len(bucket)
+		}
+		chunk := bucket[start:end]
+
+		placeholders := make([]string, len(chunk))
+		args := make([]interface{}, 0, len(chunk)*len(cols))
+		for k, r := range chunk {
+			placeholders[k] = rowPlaceholder
+			for _, c := range cols {
+				args = append(args, r[c])
+			}
 		}
 		stmtSQL := fmt.Sprintf(
-			"INSERT INTO %s (%s) VALUES (%s)",
+			"INSERT INTO %s (%s) VALUES %s",
 			fqTable,
-			strings.Join(cols, ", "),
+			colList,
 			strings.Join(placeholders, ", "),
 		)
-		stmt, err := i.db.PrepareContext(ctx, stmtSQL)
-		if err != nil {
-			metrics.RecordLineProtoWriteError("prepare")
-			return inserted, fmt.Errorf("prepare: %w", err)
+		if _, err := i.db.ExecContext(ctx, stmtSQL, args...); err != nil {
+			metrics.RecordLineProtoWriteError("insert")
+			return inserted, fmt.Errorf("bulk insert: %w", err)
 		}
-		for _, r := range bucket {
-			vals := make([]interface{}, len(cols))
-			for j, c := range cols {
-				vals[j] = r[c]
-			}
-			if _, err := stmt.ExecContext(ctx, vals...); err != nil {
-				_ = stmt.Close()
-				metrics.RecordLineProtoWriteError("insert")
-				return inserted, fmt.Errorf("exec: %w", err)
-			}
-			inserted++
-		}
-		_ = stmt.Close()
+		inserted += len(chunk)
 	}
 	return inserted, nil
 }
