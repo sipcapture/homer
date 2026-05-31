@@ -652,9 +652,12 @@ type VolumeConfig struct {
 // CompactionConfig configures automatic compaction and retention
 type CompactionConfig struct {
 	// Enable turns on periodic compaction on the writer DuckLake catalog.
-	// When storage_policy has multiple volumes and at least one local volume,
-	// the writer forces compaction on regardless of this flag (hot parquet).
-	Enable           bool `json:"enable" mapstructure:"enable" default:"false"`
+	// On by default: small per-flush Parquet files and DuckLake snapshots
+	// accumulate quickly, so without periodic merge/expire/cleanup the catalog
+	// and file count grow unbounded. When storage_policy has multiple volumes
+	// and at least one local volume, the writer forces compaction on regardless
+	// of this flag (hot parquet). Set to false only to opt out explicitly.
+	Enable           bool `json:"enable" mapstructure:"enable" default:"true"`
 	CheckIntervalSec int  `json:"check_interval_sec" mapstructure:"check_interval_sec" default:"3600"` // 1 hour
 	RetentionDays    int  `json:"retention_days" mapstructure:"retention_days" default:"0"`            // 0 = disabled
 	// SnapshotExpireIntervalSec controls how long to keep DuckLake snapshots (seconds).
