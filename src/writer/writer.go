@@ -312,10 +312,14 @@ func (w *Writer) Start() error {
 	// When multi-volume storage_policy is active with a local volume (hot parquet),
 	// compaction is always enabled on the writer DuckLake manager — hot data
 	// accumulates small files and cannot be safely turned off for that mode.
+	// The compaction service is started unconditionally: when compaction is
+	// enabled it runs the full merge/expire/cleanup cycle, otherwise it runs a
+	// lightweight inline-flush-only loop so inlined-data backlog still drains
+	// (disabling inlining alone does not flush rows inlined earlier).
 	compactionEnable := w.storageConfig.DuckLake.Compaction.Enable || w.shouldAutoEnableCompactionForTieredHot()
-	if compactionEnable {
+	{
 		compactionCfg := CompactionConfig{
-			Enable:                    true,
+			Enable:                    compactionEnable,
 			CheckIntervalSec:          w.storageConfig.DuckLake.Compaction.CheckIntervalSec,
 			RetentionDays:             w.storageConfig.DuckLake.Compaction.RetentionDays,
 			SnapshotExpireIntervalSec: w.storageConfig.DuckLake.Compaction.SnapshotExpireIntervalSec,

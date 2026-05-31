@@ -204,7 +204,16 @@ func (c *CompactionService) warnMaintenanceS3Failure(op string, err error) {
 // Start begins the compaction service
 func (c *CompactionService) Start() error {
 	if !c.config.Enable {
-		logger.Info("CompactionService disabled")
+		// Compaction (merge/expire/cleanup) is off, but inlined data must
+		// still be drained. Disabling data inlining only stops NEW inlining;
+		// rows inlined earlier (e.g. a catalog created before inlining was
+		// disabled) stay in the catalog and resident in the DuckLake
+		// extension's memory until flushed. Without this, an upgraded node
+		// with compaction off would never release its legacy inline backlog.
+		logger.Info("CompactionService: compaction disabled; starting inline-flush-only maintenance",
+			"interval", fmt.Sprintf("%ds", c.config.CheckIntervalSec))
+		c.wg.Add(1)
+		go c.inlineFlushOnlyLoop()
 		return nil
 	}
 
@@ -299,6 +308,67 @@ func (c *CompactionService) withCatalogLock(fn func()) {
 		defer c.catalogLocker.CatalogUnlock()
 	}
 	fn()
+}
+
+// flushInlinedData drains DuckLake inlined rows into Parquet and drops the
+// backing ducklake_inlined_data_* tables. Disabling data inlining only stops
+// NEW inlining; rows inlined earlier stay in the catalog and resident in the
+// DuckLake extension's memory until flushed. Cheap no-op once nothing is
+// inlined. Shared by the full compaction cycle (step 0) and the flush-only
+// loop used when compaction is disabled.
+func (c *CompactionService) flushInlinedData() {
+	c.withCatalogLock(func() {
+		c.ensureS3ClientSettings()
+		logger.Info("CompactionService: Flush inlined data", "lake", c.lakeName)
+		flushSQL := fmt.Sprintf("CALL ducklake_flush_inlined_data('%s')", c.lakeName)
+		if _, err := c.execWithRetry(flushSQL); err != nil {
+			logger.Warn("CompactionService: flush_inlined_data failed", "error", err)
+		}
+	})
+}
+
+// inlineFlushOnlyLoop periodically drains inlined data when full compaction is
+// disabled, so an upgraded node with compaction off still releases its legacy
+// inline backlog from the DuckLake extension's memory. Paced by
+// CheckIntervalSec; the flush is a no-op once nothing is inlined.
+func (c *CompactionService) inlineFlushOnlyLoop() {
+	defer c.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("CompactionService: inline-flush loop panic", "panic", r)
+		}
+	}()
+
+	interval := time.Duration(c.config.CheckIntervalSec) * time.Second
+	if interval <= 0 {
+		interval = time.Hour
+	}
+
+	// First run shortly after startup so a legacy backlog drains promptly
+	// instead of waiting a full interval.
+	firstDelay := 1 * time.Minute
+	if interval < firstDelay {
+		firstDelay = interval
+	}
+	timer := time.NewTimer(firstDelay)
+	select {
+	case <-c.ctx.Done():
+		timer.Stop()
+		return
+	case <-timer.C:
+		c.flushInlinedData()
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-ticker.C:
+			c.flushInlinedData()
+		}
+	}
 }
 
 // runCompaction performs a single compaction cycle.
@@ -424,21 +494,10 @@ func (c *CompactionService) runMerge(tables []string) error {
 		logger.Info("CompactionService: Active snapshots before merge", "count", snapshotCount)
 	}
 
-	// 0. Flush inlined data to Parquet FIRST. DuckLake inlines small writes
-	// (DATA_INLINING_ROW_LIMIT) directly into the catalog DB; with inlining
-	// left enabled and no periodic flush, those rows accumulate inside the
-	// catalog forever — an 800 MB catalog backing only a few dozen Parquet
-	// files is the classic symptom, and DuckLake mirrors the catalog in
-	// memory (multi-GB RSS). Flushing first also lets the subsequent merge /
-	// expire act on freshly written Parquet instead of catalog-resident rows.
-	// Harmless no-op when inlining is disabled (the recommended default).
-	c.withCatalogLock(func() {
-		logger.Info("CompactionService: Flush inlined data", "lake", c.lakeName)
-		flushSQL := fmt.Sprintf("CALL ducklake_flush_inlined_data('%s')", c.lakeName)
-		if _, err := c.execWithRetry(flushSQL); err != nil {
-			logger.Warn("CompactionService: flush_inlined_data failed", "error", err)
-		}
-	})
+	// 0. Flush inlined data to Parquet FIRST, so the subsequent merge/expire
+	// act on freshly written Parquet rather than catalog-resident rows. See
+	// flushInlinedData for why this matters even when inlining is disabled.
+	c.flushInlinedData()
 
 	// 1. Merge adjacent small files FIRST — lock per table
 	for _, table := range tables {
