@@ -474,22 +474,33 @@ func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize 
 		tw.flushTruncateSQL[i] = "TRUNCATE TABLE " + tw.memTables[i]
 	}
 
+	// Did the table already exist before this CREATE? SET PARTITIONED BY /
+	// SET SORTED BY are DDL that bump the DuckLake schema_version every time
+	// they run, and each new schema_version spawns another (leaked)
+	// ducklake_inlined_data_* table (upstream duckdb/ducklake#1065). Re-issuing
+	// them on every restart is pure churn, so only configure a freshly created
+	// table.
+	tableName := fmt.Sprintf("hep_proto_%s", schema.TableSuffix)
+	alreadyExisted := duckLakeTableExists(db, lakeName, tableName)
+
 	// Create DuckLake persistent table
 	createSQL := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", tableFQN, schema.CreateSQL)
 	if _, err := db.Exec(createSQL); err != nil {
 		return nil, fmt.Errorf("failed to create table %s: %w", tableFQN, err)
 	}
 
-	// Set partitioning by date for efficient time-range queries
-	partitionSQL := fmt.Sprintf("ALTER TABLE %s SET PARTITIONED BY (date);", tableFQN)
-	if _, err := db.Exec(partitionSQL); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to set partitioning for %s: %v", tableFQN, err))
-	}
+	if !alreadyExisted {
+		// Set partitioning by date for efficient time-range queries
+		partitionSQL := fmt.Sprintf("ALTER TABLE %s SET PARTITIONED BY (date);", tableFQN)
+		if _, err := db.Exec(partitionSQL); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to set partitioning for %s: %v", tableFQN, err))
+		}
 
-	// Sort rows by timestamp within each file (DuckLake v1.0).
-	sortSQL := fmt.Sprintf("ALTER TABLE %s SET SORTED BY (timestamp ASC);", tableFQN)
-	if _, err := db.Exec(sortSQL); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to set sort order for %s: %v", tableFQN, err))
+		// Sort rows by timestamp within each file (DuckLake v1.0).
+		sortSQL := fmt.Sprintf("ALTER TABLE %s SET SORTED BY (timestamp ASC);", tableFQN)
+		if _, err := db.Exec(sortSQL); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to set sort order for %s: %v", tableFQN, err))
+		}
 	}
 
 	// Create both in-memory buffer tables (plain DuckDB, not DuckLake)
