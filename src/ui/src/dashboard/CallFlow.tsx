@@ -7,6 +7,7 @@ import { FlowItem } from './flow/FlowItem'
 import type { FlowItemData, RawMessage } from './flow/flow-data'
 import { buildFlow, buildCallIdLegend } from './flow/flow-data'
 import { useFlowFilters } from './flow/useFlowFilters'
+import { useLocale } from '@/components/locale/locale-provider'
 
 interface CallFlowProps {
   items: RawMessage[] | null | undefined
@@ -15,6 +16,7 @@ interface CallFlowProps {
 }
 
 export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowProps) {
+  const { resolved: locale } = useLocale()
   const {
     filters,
     setFilters,
@@ -30,8 +32,9 @@ export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowPr
       buildFlow(filteredItems, {
         timeZone,
         grouping: filters.hostGrouping,
+        locale,
       }),
-    [filteredItems, timeZone, filters.hostGrouping],
+    [filteredItems, timeZone, filters.hostGrouping, locale],
   )
 
   const callIds = useMemo(() => buildCallIdLegend(items), [items])

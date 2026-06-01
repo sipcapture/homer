@@ -7,6 +7,7 @@ import { FloatingWindow } from '@/components/ui/floating-window'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
+import { useLocale } from '@/components/locale/locale-provider'
 
 function escapeHtml(str) {
   if (typeof str !== 'string') return str
@@ -158,30 +159,27 @@ function parseTimestampValue(value) {
   return null
 }
 
-function formatDateTime(value, timeZone, dateOnly = false) {
+function formatDateTime(value, locale, timeZone, dateOnly = false) {
   const date = parseTimestampValue(value)
   if (!date) return value
   const options = {
     year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    month: 'numeric',
+    day: 'numeric',
     ...(dateOnly
       ? {}
       : {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
           fractionalSecondDigits: 3,
-          hour12: false,
         }),
   }
-  const formatter = timeZone && timeZone !== 'local'
-    ? new Intl.DateTimeFormat('en-GB', { ...options, timeZone })
-    : new Intl.DateTimeFormat('en-GB', options)
-  return formatter.format(date).replace(',', '')
+  if (timeZone && timeZone !== 'local') options.timeZone = timeZone
+  return new Intl.DateTimeFormat(locale, options).format(date)
 }
 
-function MetaGrid({ data, timeZone }) {
+function MetaGrid({ data, timeZone, locale }) {
   if (!data) return null
   return (
     <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-3">
@@ -190,9 +188,9 @@ function MetaGrid({ data, timeZone }) {
         const display = raw === undefined
           ? '—'
           : field === 'timestamp'
-            ? formatDateTime(raw, timeZone)
+            ? formatDateTime(raw, locale, timeZone)
             : field === 'date'
-              ? formatDateTime(raw, timeZone, true)
+              ? formatDateTime(raw, locale, timeZone, true)
               : field === 'src_ip'
                 ? displaySrcIp(data)
                 : field === 'dst_ip'
@@ -218,6 +216,7 @@ function MetaGrid({ data, timeZone }) {
 }
 
 export default function MessageModal({ modal, onClose, timeZone }) {
+  const { resolved: locale } = useLocale()
   const [decoded, setDecoded] = React.useState(null)
   const [decoding, setDecoding] = React.useState(false)
   const [decodeError, setDecodeError] = React.useState('')
@@ -286,7 +285,7 @@ export default function MessageModal({ modal, onClose, timeZone }) {
 
         {!loading && !error && (
           <>
-            <MetaGrid data={data} timeZone={timeZone} />
+            <MetaGrid data={data} timeZone={timeZone} locale={locale} />
 
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

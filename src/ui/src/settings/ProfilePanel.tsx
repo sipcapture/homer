@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { RefreshCw, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,10 +13,64 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { SettingsPageHeader } from './SettingsPageHeader'
 import UserAvatar from '@/components/UserAvatar'
 import { apiPatch } from '../api'
+import { useLocale } from '@/components/locale/locale-provider'
+
+const LOCALE_TAGS = [
+  'ar-EG', 'ar-SA', 'bg-BG', 'ca-ES', 'cs-CZ', 'da-DK',
+  'de-AT', 'de-CH', 'de-DE', 'el-GR',
+  'en-AU', 'en-CA', 'en-GB', 'en-IE', 'en-IN', 'en-NZ', 'en-US', 'en-ZA',
+  'es-AR', 'es-ES', 'es-MX', 'et-EE', 'fi-FI',
+  'fr-BE', 'fr-CA', 'fr-CH', 'fr-FR',
+  'he-IL', 'hi-IN', 'hr-HR', 'hu-HU', 'id-ID', 'is-IS',
+  'it-CH', 'it-IT', 'ja-JP', 'ko-KR',
+  'lt-LT', 'lv-LV', 'ms-MY',
+  'nb-NO', 'nl-BE', 'nl-NL', 'nn-NO',
+  'pl-PL', 'pt-BR', 'pt-PT',
+  'ro-RO', 'ru-RU', 'sk-SK', 'sl-SI', 'sr-RS',
+  'sv-FI', 'sv-SE',
+  'th-TH', 'tr-TR', 'uk-UA', 'vi-VN',
+  'zh-CN', 'zh-HK', 'zh-TW',
+]
+
+function localeLabel(tag: string, displayLocale: string): string {
+  try {
+    const loc = new Intl.Locale(tag)
+    const langNames = new Intl.DisplayNames([displayLocale, 'en'], { type: 'language' })
+    const regionNames = new Intl.DisplayNames([displayLocale, 'en'], { type: 'region' })
+    const lang = langNames.of(loc.language) || loc.language
+    const region = loc.region ? regionNames.of(loc.region) : ''
+    return region ? `${lang} (${region})` : lang
+  } catch {
+    return tag
+  }
+}
+
+function previewDate(locale: string): string {
+  const sample = new Date(2026, 5, 1, 14, 30, 0)
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    }).format(sample)
+  } catch {
+    return ''
+  }
+}
 
 interface Me {
   username?: string
@@ -48,6 +102,14 @@ export default function ProfilePanel({
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const { locale, setLocale, resolved, auto } = useLocale()
+  const localeChoices = useMemo(() => {
+    const collator = new Intl.Collator(resolved)
+    return LOCALE_TAGS
+      .map((tag) => ({ value: tag, label: localeLabel(tag, resolved) }))
+      .sort((a, b) => collator.compare(a.label, b.label))
+  }, [resolved])
+  const sample = previewDate(resolved)
 
   const saveProfile = async () => {
     if (readOnly) {
@@ -175,6 +237,38 @@ export default function ProfilePanel({
             {saving ? 'Saving...' : 'Save profile'}
           </Button>
         </CardFooter>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Date &amp; time format</CardTitle>
+          <CardDescription>
+            Controls how dates and times are rendered across the dashboard. Auto follows the
+            primary language of this browser ({auto}). Stored in this browser only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2 sm:max-w-md">
+            <Label htmlFor="profile-locale">Locale</Label>
+            <Select value={locale} onValueChange={(v) => setLocale(v)}>
+              <SelectTrigger id="profile-locale" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">{`Auto · ${auto}`}</SelectItem>
+                {localeChoices.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label} · {c.value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-sm">
+            <span className="text-muted-foreground">Sample: </span>
+            <span className="font-mono">{sample}</span>
+          </div>
+        </CardContent>
       </Card>
     </div>
   )

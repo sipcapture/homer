@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
 import { cn } from '@/lib/utils'
 import { newModalKey } from '@/lib/modalKey'
+import { useLocale } from '@/components/locale/locale-provider'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { getMethodColor } from './flow-utils'
 import { resolveTimeRange } from './utils/resolveTimeRange'
@@ -145,7 +146,7 @@ function compareMessageRowsForSort(colKey, dir, rowA, origA, rowB, origB) {
   return origA - origB
 }
 
-function formatMessageTableCell(col, row, timeZone) {
+function formatMessageTableCell(col, row, timeZone, locale) {
   let text
   if (col.accessor) {
     text = col.accessor(row)
@@ -156,7 +157,7 @@ function formatMessageTableCell(col, row, timeZone) {
     } else if (col.key === 'dst_ip') {
       value = displayDstIp(row)
     }
-    if (col.format === 'datetime') value = formatDateTime(value, timeZone)
+    if (col.format === 'datetime') value = formatDateTime(value, locale, timeZone)
     text = value === undefined || value === null ? '' : String(value)
   }
   if (text === '' || text == null) return '—'
@@ -240,23 +241,20 @@ function buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone, e
   return body
 }
 
-function formatDateTime(value, timeZone) {
+function formatDateTime(value, locale, timeZone) {
   const date = parseTimestampValue(value)
   if (!date) return value
   const options = {
     year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
     fractionalSecondDigits: 3,
-    hour12: false,
   }
-  const formatter = timeZone && timeZone !== 'local'
-    ? new Intl.DateTimeFormat('en-GB', { ...options, timeZone })
-    : new Intl.DateTimeFormat('en-GB', options)
-  return formatter.format(date).replace(',', '')
+  if (timeZone && timeZone !== 'local') options.timeZone = timeZone
+  return new Intl.DateTimeFormat(locale, options).format(date)
 }
 
 /** Transaction → Events (HEP LOG / proto 100): fixed columns; table-fixed + col widths keep cells from overflowing. */
@@ -287,10 +285,10 @@ function pickFirstField(row, keys) {
   return null
 }
 
-function formatEventsCell(value, col, timeZone) {
+function formatEventsCell(value, col, timeZone, locale) {
   if (value == null || value === '') return '—'
   if (col.isDate) {
-    const s = formatDateTime(value, timeZone)
+    const s = formatDateTime(value, locale, timeZone)
     return s || '—'
   }
   if (typeof value === 'object') {
@@ -317,7 +315,7 @@ function serializeRowJSONForWindow(row) {
   }
 }
 
-function EventsTab({ data, isLoading, err, emptyLabel, timeZone }) {
+function EventsTab({ data, isLoading, err, emptyLabel, timeZone, locale }) {
   const [detailRow, setDetailRow] = React.useState(null)
 
   const items = Array.isArray(data?.items) ? data.items : null
@@ -378,7 +376,7 @@ function EventsTab({ data, isLoading, err, emptyLabel, timeZone }) {
                         col.cellBreak,
                       )}
                     >
-                      {formatEventsCell(pickFirstField(row, col.keys), col, timeZone)}
+                      {formatEventsCell(pickFirstField(row, col.keys), col, timeZone, locale)}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -435,6 +433,7 @@ function OtlpLogsTab({
   resultData,
   hasSearched,
   timeZone,
+  locale,
 }) {
   const [detailRow, setDetailRow] = React.useState(null)
   const items = Array.isArray(resultData?.items) ? resultData.items : null
@@ -510,7 +509,7 @@ function OtlpLogsTab({
                           col.cellBreak,
                         )}
                       >
-                        {formatEventsCell(pickFirstField(row, col.keys), col, timeZone)}
+                        {formatEventsCell(pickFirstField(row, col.keys), col, timeZone, locale)}
                       </TableCell>
                     ))}
                   </TableRow>
@@ -559,6 +558,7 @@ function OtlpLogsTab({
 
 
 export default function TransactionModal({ modal, onClose, timeZone }) {
+  const { resolved: locale } = useLocale()
   const [activeTab, setActiveTab] = React.useState('messages')
   const [qosData, setQosData] = React.useState(null)
   const [qosLoading, setQosLoading] = React.useState(false)
@@ -853,7 +853,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
                           </TableCell>
                           {MESSAGE_TABLE_COLUMNS.map((col) => (
                             <TableCell key={col.key} className="font-mono text-[11px]">
-                              {formatMessageTableCell(col, row, timeZone)}
+                              {formatMessageTableCell(col, row, timeZone, locale)}
                             </TableCell>
                           ))}
                         </TableRow>
@@ -904,6 +904,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
                   err={eventsError}
                   emptyLabel="No events available for this transaction."
                   timeZone={timeZone}
+                  locale={locale}
                 />
               </TabsContent>
 
@@ -917,6 +918,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
                   resultData={otlpLogData}
                   hasSearched={otlpLogSearched}
                   timeZone={timeZone}
+                  locale={locale}
                 />
               </TabsContent>
 

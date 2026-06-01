@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useLocale } from '@/components/locale/locale-provider'
 
 const MAX_ZONES = 8
 
@@ -80,12 +81,11 @@ function normalizeZones(config?: ClockPanelConfig): string[] {
   return ['local']
 }
 
-function formatClock(time: Date, timeZone: string) {
+function formatClock(time: Date, timeZone: string, locale: string | undefined) {
   const opts: Intl.DateTimeFormatOptions = {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
   }
   const dateOpts: Intl.DateTimeFormatOptions = {
     weekday: 'short',
@@ -98,13 +98,14 @@ function formatClock(time: Date, timeZone: string) {
     dateOpts.timeZone = timeZone
   }
   return {
-    time: new Intl.DateTimeFormat('en-GB', opts).format(time),
-    date: new Intl.DateTimeFormat('en-GB', dateOpts).format(time),
+    time: new Intl.DateTimeFormat(locale, opts).format(time),
+    date: new Intl.DateTimeFormat(locale, dateOpts).format(time),
     label: timeZone === 'local' ? 'Local' : timeZone,
   }
 }
 
 export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) {
+  const { resolved: locale } = useLocale()
   const [now, setNow] = useState(() => new Date())
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [customTz, setCustomTz] = useState('')
@@ -245,7 +246,7 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
 
       <div className={`grid min-h-0 flex-1 gap-2 overflow-auto ${gridClass} place-content-center`}>
         {zones.map(z => {
-          const { time: timeStr, date, label } = formatClock(now, z)
+          const { time: timeStr, date, label } = formatClock(now, z, locale)
           return (
             <div
               key={z}
