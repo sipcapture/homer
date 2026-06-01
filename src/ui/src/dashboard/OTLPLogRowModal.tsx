@@ -4,6 +4,7 @@ import { FloatingWindow } from '@/components/ui/floating-window'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { useLocale } from '@/components/locale/locale-provider'
 
 function escapeHtml(str) {
   if (typeof str !== 'string') return str
@@ -79,23 +80,22 @@ function severityBadgeClass(label) {
   return 'border-border bg-card text-foreground'
 }
 
-function formatTs(val, timeZone) {
+function formatTs(val, locale, timeZone) {
   if (!val) return '—'
   try {
     const d = val instanceof Date ? val : new Date(val)
     if (Number.isNaN(d.getTime())) return String(val)
     const opts = {
       year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
       fractionalSecondDigits: 3,
-      hour12: false,
     }
     if (timeZone && timeZone !== 'local') opts.timeZone = timeZone
-    return new Intl.DateTimeFormat('en-GB', opts).format(d).replace(',', '')
+    return new Intl.DateTimeFormat(locale, opts).format(d)
   } catch {
     return String(val)
   }
@@ -120,6 +120,7 @@ const DETAIL_PRIORITY = [
 ]
 
 export default function OTLPLogRowModal({ modal, timeZone, onClose }) {
+  const { resolved: locale } = useLocale()
   const { modalKey, row } = modal
   const [jsonTab, setJsonTab] = useState('details')
 
@@ -134,7 +135,7 @@ export default function OTLPLogRowModal({ modal, timeZone, onClose }) {
       seen.add(k)
       const v = row[k]
       let display = v
-      if (k === 'timestamp' || k === 'TIMESTAMP') display = formatTs(v, timeZone)
+      if (k === 'timestamp' || k === 'TIMESTAMP') display = formatTs(v, locale, timeZone)
       else if (v != null && typeof v === 'object') display = JSON.stringify(v)
       else if (v != null) display = String(v)
       else display = '—'
@@ -159,7 +160,7 @@ export default function OTLPLogRowModal({ modal, timeZone, onClose }) {
     }
     const body = row?.body ?? row?.BODY ?? ''
     return { detailEntries: entries, jsonText: text, bodyText: String(body ?? '') }
-  }, [row, timeZone])
+  }, [row, timeZone, locale])
 
   const traceId = row?.trace_id ?? row?.TRACE_ID ?? ''
   const shortTrace =
@@ -200,7 +201,7 @@ export default function OTLPLogRowModal({ modal, timeZone, onClose }) {
               {sev}
             </span>
             <span className="font-mono text-muted-foreground">
-              {formatTs(row?.timestamp ?? row?.TIMESTAMP, timeZone)}
+              {formatTs(row?.timestamp ?? row?.TIMESTAMP, locale, timeZone)}
             </span>
           </div>
           {bodyText ? (

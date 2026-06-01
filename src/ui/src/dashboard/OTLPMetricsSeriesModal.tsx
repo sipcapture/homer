@@ -20,6 +20,7 @@ import {
   normalizeOtlpMetricChartType,
   rowTimestampMs,
 } from './otlpMetricsSeriesChart'
+import { useLocale } from '@/components/locale/locale-provider'
 
 function formatValue(row) {
   const vd = row?.value_double ?? row?.VALUE_DOUBLE
@@ -30,6 +31,7 @@ function formatValue(row) {
 }
 
 export default function OTLPMetricsSeriesModal({ modal, timeZone, onClose }) {
+  const { resolved: locale } = useLocale()
   const { modalKey, metricName, loading, items, error } = modal
   const chartElRef = useRef(null)
   const disposeRef = useRef(null)
@@ -75,16 +77,15 @@ export default function OTLPMetricsSeriesModal({ modal, timeZone, onClose }) {
       if (Number.isNaN(d.getTime())) return String(val)
       const opts = {
         year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
         fractionalSecondDigits: 3,
-        hour12: false,
       }
       if (timeZone && timeZone !== 'local') opts.timeZone = timeZone
-      return new Intl.DateTimeFormat('en-GB', opts).format(d).replace(',', '')
+      return new Intl.DateTimeFormat(locale, opts).format(d)
     } catch {
       return String(val)
     }

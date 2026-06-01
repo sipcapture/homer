@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import type { CalendarPreset } from '../utils/resolveTimeRange'
+import { useLocale } from '@/components/locale/locale-provider'
 
 const QUICK_RANGES = [
   { label: 'Last 5 minutes', minutes: 5 },
@@ -71,18 +72,17 @@ function formatForInput(date, tz) {
   return `${v.year}-${v.month}-${v.day}T${hr}:${v.minute}:${v.second}`
 }
 
-function formatDisplay(date: Date | null, tz: string) {
+function formatDisplay(date: Date | null, tz: string, locale: string | undefined) {
   if (!date) return '—'
   const opts: Intl.DateTimeFormatOptions = {
     month: 'short',
     day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
   }
   if (tz && tz !== 'local') opts.timeZone = tz
-  return new Intl.DateTimeFormat('en-GB', opts).format(date).replace(',', '')
+  return new Intl.DateTimeFormat(locale, opts).format(date)
 }
 
 function parseInputToMs(value, tz) {
@@ -139,6 +139,7 @@ export default function TimeRangePicker({
   timeZone,
   onTimeZoneChange,
 }: TimeRangePickerProps) {
+  const { resolved: locale } = useLocale()
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState('quick')
   const [absFrom, setAbsFrom] = useState('')
@@ -207,7 +208,7 @@ export default function TimeRangePicker({
     presetLabel ||
     calendarLabel ||
     (fromDate && toDate
-      ? `${formatDisplay(fromDate, timeZone)} — ${formatDisplay(toDate, timeZone)}`
+      ? `${formatDisplay(fromDate, timeZone, locale)} — ${formatDisplay(toDate, timeZone, locale)}`
       : 'Select time range')
 
   return (

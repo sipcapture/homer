@@ -41,6 +41,7 @@ import OTLPLogsTraceModal from '../OTLPLogsTraceModal'
 import OTLPLogRowModal from '../OTLPLogRowModal'
 import OTLPMetricsSeriesModal from '../OTLPMetricsSeriesModal'
 import MessageModal from '../MessageModal'
+import { useLocale } from '@/components/locale/locale-provider'
 
 const OTLP_TRACES_PROTO = 200
 const OTLP_METRICS_PROTO = 201
@@ -288,6 +289,7 @@ function ParserBadge({ meta }) {
 
 export default function ResultsPanel({ widgetId, config: _config }) {
   const { apiBase, authHeader, timeRange, timeZone, requestTimeRange, subscribeToTimeRange } = useDashboard()
+  const { resolved: locale } = useLocale()
   const searchData = useWidgetSearch(widgetId)
   const lastSearchDataRef = useRef(null)
   const lastTimerangeBroadcastKeyRef = useRef(null)
@@ -596,9 +598,9 @@ export default function ResultsPanel({ widgetId, config: _config }) {
     try {
       const d = val instanceof Date ? val : new Date(val)
       if (isNaN(d)) return val
-      const opts = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hour12: false }
+      const opts = { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', fractionalSecondDigits: 3 }
       if (timeZone && timeZone !== 'local') opts.timeZone = timeZone
-      return new Intl.DateTimeFormat('en-GB', opts).format(d).replace(',', '')
+      return new Intl.DateTimeFormat(locale, opts).format(d)
     } catch { return val }
   }
 

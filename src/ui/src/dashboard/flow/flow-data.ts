@@ -336,6 +336,7 @@ function indexOfHost(
 interface BuildOpts {
   timeZone?: string
   grouping: HostGrouping
+  locale?: string
 }
 
 export interface BuildResult {
@@ -372,18 +373,17 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
 
   const fmt: Intl.DateTimeFormatOptions = {
     year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
     fractionalSecondDigits: 3,
-    hour12: false,
   }
   const formatter =
     opts.timeZone && opts.timeZone !== 'local'
-      ? new Intl.DateTimeFormat('en-GB', { ...fmt, timeZone: opts.timeZone })
-      : new Intl.DateTimeFormat('en-GB', fmt)
+      ? new Intl.DateTimeFormat(opts.locale, { ...fmt, timeZone: opts.timeZone })
+      : new Intl.DateTimeFormat(opts.locale, fmt)
 
   let prevTs = 0
   const flowItems: FlowItemData[] = sorted.map((msg, idx) => {
@@ -429,7 +429,7 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
     const diffMs = ts - prevTs
     prevTs = ts
 
-    const fullDateStr = date ? formatter.format(date).replace(',', '') : ''
+    const fullDateStr = date ? formatter.format(date) : ''
     const diffStr = `+${diffMs.toFixed(1)}ms`
 
     let description =
