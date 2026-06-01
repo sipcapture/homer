@@ -142,24 +142,33 @@ func (s *OTLPStorage) EnsureOTLPSchema(ctx context.Context) error {
 		return fmt.Errorf("otlp storage: nil database handle")
 	}
 	s.once.Do(func() {
-		stmts := []string{
-			fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.otlp_traces  (%s);", s.lakeName, otlpTracesTableSQL),
-			fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.otlp_metrics (%s);", s.lakeName, otlpMetricsTableSQL),
-			fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.otlp_logs    (%s);", s.lakeName, otlpLogsTableSQL),
+		tables := []struct {
+			name      string
+			createSQL string
+		}{
+			{"otlp_traces", otlpTracesTableSQL},
+			{"otlp_metrics", otlpMetricsTableSQL},
+			{"otlp_logs", otlpLogsTableSQL},
 		}
-		for _, q := range stmts {
-			if _, err := s.db.ExecContext(ctx, q); err != nil {
+		for _, t := range tables {
+			fqn := fmt.Sprintf("%s.%s", s.lakeName, t.name)
+			// Check existence BEFORE create: SET PARTITIONED BY / SET SORTED BY
+			// bump schema_version on every run, and each bump leaks another
+			// ducklake_inlined_data_* table (upstream duckdb/ducklake#1065).
+			// Only configure freshly created tables, not on every restart.
+			alreadyExisted := duckLakeTableExists(s.db, s.lakeName, t.name)
+
+			if _, err := s.db.ExecContext(ctx,
+				fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", fqn, t.createSQL)); err != nil {
 				s.ddlErr = fmt.Errorf("otlp storage: %w", err)
 				return
 			}
-		}
-		// Best-effort: time-partition the OTLP tables the same way HEP
-		// tables are partitioned so range scans hit a single date
-		// folder. Failures are logged, not fatal — older DuckLake
-		// builds without ALTER...PARTITIONED BY simply keep a single
-		// partition.
-		for _, t := range []string{"otlp_traces", "otlp_metrics", "otlp_logs"} {
-			fqn := fmt.Sprintf("%s.%s", s.lakeName, t)
+			if alreadyExisted {
+				continue
+			}
+			// Best-effort: time-partition + sort the OTLP tables the same way
+			// HEP tables are. Failures are logged, not fatal — older DuckLake
+			// builds without ALTER...PARTITIONED BY keep a single partition.
 			if _, err := s.db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s SET PARTITIONED BY (date);", fqn)); err != nil {
 				logger.Warn(fmt.Sprintf("otlp storage: failed to set partitioning for %s: %v", fqn, err))
 			}
