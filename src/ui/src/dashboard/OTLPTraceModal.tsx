@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useLocale } from '@/components/locale/locale-provider'
 
 function isEmptyParentSpanId(v) {
   if (v == null) return true
@@ -351,6 +352,7 @@ function TraceMinimap({ items, traceMinMs, rangeMs, dark }) {
 }
 
 export default function OTLPTraceModal({ modal, timeZone, onClose }) {
+  const { resolved: locale } = useLocale()
   const { modalKey, traceId, loading, items, error } = modal
   const byParent = useMemo(() => buildSpanForest(items), [items])
   const [selected, setSelected] = useState(null)
@@ -432,16 +434,15 @@ export default function OTLPTraceModal({ modal, timeZone, onClose }) {
       const d = new Date(ms)
       const opts = {
         year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
         fractionalSecondDigits: 3,
-        hour12: false,
       }
       if (timeZone && timeZone !== 'local') opts.timeZone = timeZone
-      return new Intl.DateTimeFormat('en-GB', opts).format(d).replace(',', '')
+      return new Intl.DateTimeFormat(locale, opts).format(d)
     } catch {
       return String(ms)
     }

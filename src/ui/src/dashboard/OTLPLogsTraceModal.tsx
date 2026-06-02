@@ -5,6 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
 import OTLPLogRowModal from './OTLPLogRowModal'
+import { useLocale } from '@/components/locale/locale-provider'
 
 /** OpenTelemetry SeverityNumber ranges (stable mapping when severity_text is empty). */
 function severityFromNumber(n) {
@@ -53,6 +54,7 @@ function rowTimestampMs(row) {
 }
 
 export default function OTLPLogsTraceModal({ modal, timeZone, onClose }) {
+  const { resolved: locale } = useLocale()
   const { modalKey, traceId, loading, items, error } = modal
   const [detailModal, setDetailModal] = useState(null)
 
@@ -69,16 +71,15 @@ export default function OTLPLogsTraceModal({ modal, timeZone, onClose }) {
       if (Number.isNaN(d.getTime())) return String(val)
       const opts = {
         year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
         fractionalSecondDigits: 3,
-        hour12: false,
       }
       if (timeZone && timeZone !== 'local') opts.timeZone = timeZone
-      return new Intl.DateTimeFormat('en-GB', opts).format(d).replace(',', '')
+      return new Intl.DateTimeFormat(locale, opts).format(d)
     } catch {
       return String(val)
     }

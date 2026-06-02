@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { qosRouteArrow } from '@/lib/ipAliasDisplay'
+import { useLocale } from '@/components/locale/locale-provider'
 
 const METRIC_COLORS_RTCP = {
   packets:       { bg: 'rgba(244, 67, 54, 0.5)',  border: 'rgba(244, 67, 54, 1)' },
@@ -102,18 +103,17 @@ function eventTimeMs(row) {
   return 0
 }
 
-function formatAxisTime(unixSec, timeZone) {
+function formatAxisTime(unixSec, timeZone, locale) {
   const ms = unixSec * 1000
   if (!Number.isFinite(ms)) return '—'
   const opts = {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
   }
   try {
     if (timeZone && timeZone !== 'local') {
-      return new Intl.DateTimeFormat('en-GB', { ...opts, timeZone }).format(new Date(ms)).replace(',', '')
+      return new Intl.DateTimeFormat(locale, { ...opts, timeZone }).format(new Date(ms))
     }
     const d = new Date(ms)
     return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}:${String(d.getUTCSeconds()).padStart(2, '0')}`
@@ -255,7 +255,7 @@ function computeStats(allPoints, metricKeys) {
   return stats
 }
 
-function CombinedChart({ allPoints, metricKeys, colors, streams, height, chartType, timeZone }) {
+function CombinedChart({ allPoints, metricKeys, colors, streams, height, chartType, timeZone, locale }) {
   const containerRef = useRef(null)
   const chartRef = useRef(null)
   const rafRef = useRef(null)
@@ -319,7 +319,7 @@ function CombinedChart({ allPoints, metricKeys, colors, streams, height, chartTy
           grid: { stroke: gridStroke, width: 1 },
           ticks: { stroke: gridStroke, width: 1 },
           font: '10px Inter, sans-serif',
-          values: (u, vals) => vals.map(v => formatAxisTime(v, timeZone)),
+          values: (u, vals) => vals.map(v => formatAxisTime(v, timeZone, locale)),
           gap: 4,
         },
         {
@@ -340,7 +340,7 @@ function CombinedChart({ allPoints, metricKeys, colors, streams, height, chartTy
 
     if (chartRef.current) chartRef.current.destroy()
     chartRef.current = new uPlot(opts, seriesData, el)
-  }, [allPoints, metricKeys, colors, streams, height, chartType, timeZone])
+  }, [allPoints, metricKeys, colors, streams, height, chartType, timeZone, locale])
 
   useEffect(() => {
     narrowWidthRafAttempts.current = 0
@@ -462,6 +462,7 @@ function StreamCheckboxes({ streams, metricKeys, colors, onChange }) {
 }
 
 export default function QosPanel({ qosData, timeZone }) {
+  const { resolved: locale } = useLocale()
   const [subTab, setSubTab] = useState('rtcp')
   const [chartType, setChartType] = useState('bar')
   const [rtcpStreams, setRtcpStreams] = useState([])
@@ -561,6 +562,7 @@ export default function QosPanel({ qosData, timeZone }) {
           height={QOS_CHART_HEIGHT}
           chartType={chartType}
           timeZone={timeZone}
+          locale={locale}
         />
       </div>
 
