@@ -31,6 +31,7 @@ const QXIP_URL = 'https://qxip.net/'
 const QXIP_LOGO_SRC = '/sponsors/qxip.png'
 const HEPIC_URL = 'https://hepic.tel/'
 const HEPIC_LOGO_SRC = '/sponsors/hepic.png'
+const SPONSOR_LOGO_CLASS = 'h-10 w-auto object-contain object-left'
 
 export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }: AboutPanelProps) {
   return (
@@ -94,17 +95,17 @@ export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }:
             HOMER is developed by QXIP; Hepic extends the HEP stack with carrier-grade RTC observability.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-8 sm:flex-row sm:items-start sm:gap-10">
+        <CardContent className="flex flex-col gap-6 sm:flex-row sm:items-end sm:gap-10">
           <a
             href={QXIP_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-w-0 flex-1 flex-col gap-3 rounded-lg outline-none ring-offset-background transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex min-w-0 flex-col gap-2 rounded-lg outline-none ring-offset-background transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <img
               src={QXIP_LOGO_SRC}
               alt="QXIP — Telecom observability"
-              className="h-auto max-h-16 w-full max-w-xs object-contain object-left"
+              className={SPONSOR_LOGO_CLASS}
               loading="lazy"
               decoding="async"
             />
@@ -116,12 +117,12 @@ export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }:
             href={HEPIC_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-w-0 flex-1 flex-col gap-3 rounded-lg outline-none ring-offset-background transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex min-w-0 flex-col gap-2 rounded-lg outline-none ring-offset-background transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <img
               src={HEPIC_LOGO_SRC}
               alt="HEPIC — VoIP and RTC analyzer"
-              className="h-auto max-h-16 w-full max-w-xs object-contain object-left"
+              className={SPONSOR_LOGO_CLASS}
               loading="lazy"
               decoding="async"
             />
