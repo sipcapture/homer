@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 
-type LocalePref = "auto" | string
+type LocaleTag = string & {}
+type LocalePref = "auto" | LocaleTag
 
 type LocaleProviderProps = {
   children: React.ReactNode
@@ -53,14 +54,7 @@ function writeStoredPref(storageKey: string, value: LocalePref): void {
   }
 }
 
-const initialState: LocaleProviderState = {
-  locale: "auto",
-  setLocale: () => null,
-  resolved: "en-US",
-  auto: "en-US",
-}
-
-const LocaleProviderContext = createContext<LocaleProviderState>(initialState)
+const LocaleProviderContext = createContext<LocaleProviderState | undefined>(undefined)
 
 export function LocaleProvider({
   children,

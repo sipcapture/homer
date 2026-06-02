@@ -3,9 +3,10 @@ import { useLocale } from '@/components/locale/locale-provider'
 
 export type DateTimeFormatOptions = Intl.DateTimeFormatOptions
 
-function withTimeZone(opts: DateTimeFormatOptions, timeZone?: string): DateTimeFormatOptions {
-  if (!timeZone || timeZone === 'local') return opts
-  return { ...opts, timeZone }
+export function withTimeZone(opts: DateTimeFormatOptions, timeZone?: string): DateTimeFormatOptions {
+  const { timeZone: _ignored, ...rest } = opts
+  if (!timeZone || timeZone === 'local') return rest
+  return { ...rest, timeZone }
 }
 
 /**

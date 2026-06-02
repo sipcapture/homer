@@ -109,6 +109,7 @@ export default function ProfilePanel({
       .map((tag) => ({ value: tag, label: localeLabel(tag, resolved) }))
       .sort((a, b) => collator.compare(a.label, b.label))
   }, [resolved])
+  const hasLocaleChoice = locale === 'auto' || LOCALE_TAGS.includes(locale)
   const sample = previewDate(resolved)
 
   const saveProfile = async () => {
@@ -256,6 +257,11 @@ export default function ProfilePanel({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto">{`Auto · ${auto}`}</SelectItem>
+                {!hasLocaleChoice && (
+                  <SelectItem value={locale}>
+                    {localeLabel(locale, resolved)} · {locale}
+                  </SelectItem>
+                )}
                 {localeChoices.map((c) => (
                   <SelectItem key={c.value} value={c.value}>
                     {c.label} · {c.value}
