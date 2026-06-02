@@ -4,9 +4,9 @@ import ProfilePanel from './ProfilePanel'
 
 vi.mock('@/components/locale/locale-provider', () => ({
   useLocale: () => ({
-    locale: 'en',
+    locale: 'en-001',
     setLocale: vi.fn(),
-    resolved: 'en',
+    resolved: 'en-001',
     auto: 'en-US',
   }),
 }))
@@ -14,6 +14,6 @@ vi.mock('@/components/locale/locale-provider', () => ({
 describe('ProfilePanel locale selector', () => {
   it('keeps an unknown stored locale selectable', () => {
     render(<ProfilePanel me={null} />)
-    expect(screen.getByRole('combobox')).toHaveTextContent('· en')
+    expect(screen.getByRole('combobox')).toHaveTextContent('· en-001')
   })
 })
