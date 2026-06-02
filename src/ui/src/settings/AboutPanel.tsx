@@ -28,9 +28,9 @@ interface AboutPanelProps {
 }
 
 const QXIP_URL = 'https://qxip.net/'
-const QXIP_LOGO_URL = 'https://qxip.net/images/qxip.png'
+const QXIP_LOGO_SRC = '/sponsors/qxip.png'
 const HEPIC_URL = 'https://hepic.tel/'
-const HEPIC_LOGO_URL = 'https://hepic.tel/images/contents/hero-phone.png'
+const HEPIC_LOGO_SRC = '/sponsors/hepic-hero.png'
 
 export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }: AboutPanelProps) {
   return (
@@ -102,7 +102,7 @@ export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }:
             className="inline-flex min-w-0 flex-1 flex-col gap-3 rounded-lg outline-none ring-offset-background transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <img
-              src={QXIP_LOGO_URL}
+              src={QXIP_LOGO_SRC}
               alt="QXIP — Telecom observability"
               className="h-auto max-h-16 w-full max-w-xs object-contain object-left"
               loading="lazy"
@@ -119,7 +119,7 @@ export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }:
             className="inline-flex min-w-0 flex-1 flex-col gap-3 rounded-lg outline-none ring-offset-background transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <img
-              src={HEPIC_LOGO_URL}
+              src={HEPIC_LOGO_SRC}
               alt="HEPIC — VoIP and RTC analyzer"
               className="h-auto max-h-48 w-full max-w-md object-contain object-left"
               loading="lazy"
