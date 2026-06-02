@@ -30,7 +30,7 @@ interface AboutPanelProps {
 const QXIP_URL = 'https://qxip.net/'
 const QXIP_LOGO_SRC = '/sponsors/qxip.png'
 const HEPIC_URL = 'https://hepic.tel/'
-const HEPIC_LOGO_SRC = '/sponsors/hepic-hero.png'
+const HEPIC_LOGO_SRC = '/sponsors/hepic.png'
 
 export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }: AboutPanelProps) {
   return (
@@ -121,7 +121,7 @@ export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }:
             <img
               src={HEPIC_LOGO_SRC}
               alt="HEPIC — VoIP and RTC analyzer"
-              className="h-auto max-h-48 w-full max-w-md object-contain object-left"
+              className="h-auto max-h-16 w-full max-w-xs object-contain object-left"
               loading="lazy"
               decoding="async"
             />
