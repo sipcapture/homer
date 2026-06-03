@@ -99,21 +99,9 @@ Artifacts after the script: `cpu.pb.gz`, `pprof-top.txt`, `homer.log` under `OUT
 
 ## `duckdb-go-bindings`: upstream vs fork
 
-Homer pulls DuckDB’s CGO stack through **`github.com/duckdb/duckdb-go/v2`**, which depends on the prebuilt static libs in **[`github.com/duckdb/duckdb-go-bindings`](https://github.com/duckdb/duckdb-go-bindings)** (see that repo for versioning, e.g. DuckDB `v1.5.2` → module tag **`v0.10502.0`**).
+Homer pulls DuckDB’s CGO stack through **`github.com/duckdb/duckdb-go/v2`**, which depends on the prebuilt static libs in **[`github.com/duckdb/duckdb-go-bindings`](https://github.com/duckdb/duckdb-go-bindings)** (see that repo for versioning, e.g. DuckDB `v1.5.3` → module tag **`v0.10503.0`**).
 
 By default **`src/go.mod` contains a `replace` directive** pointing to a fork that eliminates per-string CGO malloc/free in the Appender hot path (visible as `VectorAssignStringElementLen` + `duckdb_free` per-column in profiles). This fork has been benchmarked against upstream and showed a measurable reduction in CGO overhead at high PPS.
-
-The current `replace` in `src/go.mod`:
-
-```go
-replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.3
-```
-
-To revert to upstream bindings, remove this `replace` line and run `go mod tidy`. For experiments (e.g. additional optimisations), you can update the fork reference:
-
-```go
-replace github.com/duckdb/duckdb-go-bindings => github.com/adubovikov/duckdb-go-bindings v0.10502.0-homer.gcopt.3
-```
 
 Then `go mod tidy`, rebuild, and compare with **`./scripts/profile_ingest_load.sh`** using the same `PROFILE_SEC`, `PPS`, and `OUT_DIR` naming. Use a **warm-up** (send traffic for several seconds before `profile?seconds=`) and **≥20–30 s** profiles so `runtime.cgocall` / Appender rows dominate over one-off init noise.
 

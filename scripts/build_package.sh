@@ -127,15 +127,15 @@ sed -i "s|arch: \".*\"|arch: \"${ARCH}\"|g" "${NFPM_CONFIG}"
 
 echo "==> Downloading DuckDB extensions for ${ARCH} ..."
 if [ "$ARCH" = "amd64" ]; then EXT_PLATFORM=linux_amd64; else EXT_PLATFORM=linux_arm64; fi
-DUCKDB_VERSION=v1.5.2 "${BUILD_DIR}/scripts/download_duckdb_extensions.sh" "$EXT_PLATFORM"
+DUCKDB_VERSION=v1.5.3 "${BUILD_DIR}/scripts/download_duckdb_extensions.sh" "$EXT_PLATFORM"
 
 echo "==> Packaging ${PACKAGE}_${VERSION}_${ARCH}.deb ..."
-DUCKDB_VERSION=v1.5.2 EXT_PLATFORM="${EXT_PLATFORM}" VERSION="${VERSION}" "${BUILD_DIR}/nfpm" pkg \
+DUCKDB_VERSION=v1.5.3 EXT_PLATFORM="${EXT_PLATFORM}" VERSION="${VERSION}" "${BUILD_DIR}/nfpm" pkg \
   --config "${NFPM_CONFIG}" \
   --target "${BUILD_DIR}/${PACKAGE}_${VERSION}_${ARCH}.deb"
 
 echo "==> Packaging ${PACKAGE}_${VERSION}_${ARCH}.rpm ..."
-DUCKDB_VERSION=v1.5.2 EXT_PLATFORM="${EXT_PLATFORM}" VERSION="${VERSION}" "${BUILD_DIR}/nfpm" pkg \
+DUCKDB_VERSION=v1.5.3 EXT_PLATFORM="${EXT_PLATFORM}" VERSION="${VERSION}" "${BUILD_DIR}/nfpm" pkg \
   --config "${NFPM_CONFIG}" \
   --target "${BUILD_DIR}/${PACKAGE}_${VERSION}_${ARCH}.rpm"
 
