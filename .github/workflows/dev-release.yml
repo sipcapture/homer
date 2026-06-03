@@ -177,7 +177,7 @@ jobs:
           set -euo pipefail
           export VERSION="${VERSION#v}"
           if [ "${{ matrix.goarch }}" = "amd64" ]; then export EXT_PLATFORM=linux_amd64; else export EXT_PLATFORM=linux_arm64; fi
-          export DUCKDB_VERSION=v1.5.2
+          export DUCKDB_VERSION=v1.5.3
           ./scripts/download_duckdb_extensions.sh "$EXT_PLATFORM"
           # Only change nfpm arch line (global amd64→* breaks if the word appears elsewhere)
           sed -i 's/^arch: ".*"/arch: "${{ matrix.goarch }}"/' homer-core_workflow.yaml
