@@ -299,6 +299,8 @@ The deprecated **`oauth2_providers`** array is still accepted at startup and mig
 | GET | `/api/v4/transactions` | List transactions |
 | POST | `/api/v4/transactions/search` | Search transactions |
 | POST | `/api/v4/transactions/messages` | Get transaction messages (with optional Lua call-id correlation, see [`LUA_CORRELATION.md`](./LUA_CORRELATION.md)) |
+| POST | `/api/v4/transactions/view/link` | Create a one-time SIP trace view URL (`data.url_view` → `GET /export/view/:uuid`) for external app redirects — see [Dashboard URL search — external apps](SEARCH_URL.md#external-apps) |
+| GET | `/export/view/:uuid` | Standalone HTML SIP transaction view (no JWT; counts toward view token open limit) |
 | GET | `/api/v4/messages/:id` | Get single message |
 | GET | `/api/v4/messages/:id/decoded` | Get decoded message |
 | POST | `/api/v4/transactions/qos` | Get QoS data |

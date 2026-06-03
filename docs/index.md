@@ -17,7 +17,7 @@ ingest, DuckLake storage, Node (FlightSQL), and Coordinator (REST API).
 |-------|--------|
 | First-time setup | [Config wizard](WIZARD.md) |
 | CLI search | [Search CLI](SEARCH.md) |
-| Dashboard search & mappings | [URL search](SEARCH_URL.md) · [Mappings & fields](SEARCH_MAPPINGS_AND_FIELDS.md) |
+| Dashboard search & mappings | [URL search](SEARCH_URL.md) · [External app Call-ID links](SEARCH_URL.md#external-apps) · [Mappings & fields](SEARCH_MAPPINGS_AND_FIELDS.md) |
 | REST API | [Coordinator](COORDINATOR.md) · [OpenAPI (Swagger)](swagger/index.html) |
 | Storage | [Architecture](STORAGE_ARCHITECTURE.md) · [Policies](STORAGE_POLICIES.md) |
 | Performance | [Ingest tuning](INGEST_PERFORMANCE.md) · [DuckDB tuning](DUCKDB_TUNING.md) |
