@@ -7,7 +7,101 @@ Related docs:
 - [Search CLI](SEARCH.md) — terminal search and `--proto` names
 - [Mapping examples](../examples/mappings/README.md) — `fields_mapping` JSON per protocol
 - [Search mappings and field types](SEARCH_MAPPINGS_AND_FIELDS.md) — form fields, virtual filters, `form_type` reference
+- [UI and API tokens](UI_COORDINATOR_AUTH_AND_TOKENS.md) — `Auth-Token` for server-side integrations
+- [Coordinator API](COORDINATOR.md) — `POST /api/v4/transactions/view/link`
 - API: `POST /api/v4/transactions/search` — same `filter` object the UI sends
+
+---
+
+## External applications (Call-ID drill-down) {#external-apps}
+
+Common question: an external call-search app has a **Call-ID** and you want one click to open Homer (SIP trace or search results) without copy-paste. See also [GitHub discussion #680](https://github.com/sipcapture/homer/discussions/680).
+
+Browsers only follow **GET** links (`<a href>`, redirects). You cannot POST a Call-ID from HTML alone. Use one of the patterns below.
+
+### Choose an integration pattern
+
+| Goal | Pattern | User must log into Homer UI? | Auth |
+|------|---------|-------------------------------|------|
+| Open **dashboard search** with Call-ID prefilled | GET deep link (this page) | **Yes** (JWT session) | None in URL |
+| Open **standalone SIP trace** HTML page | Backend `view/link` → redirect to `/export/view/<uuid>` | **No** (one-time view token) | `Auth-Token` or JWT on your server |
+| Embed results in **your own UI** | `POST /api/v4/transactions/search` or `/messages` | No | `Auth-Token` or JWT on your server |
+
+Always pass a **time window** (`from` / `to` in ms, or `minutes` / `m`) together with the Call-ID.
+
+### Homer 11 — dashboard deep link (logged-in users)
+
+Recommended URL (coordinator host, flat query params):
+
+```text
+https://<homer-host>/?call_id=<CALL-ID>&from=<from_ms>&to=<to_ms>#dashboard
+```
+
+- Alias: `callid` instead of `call_id`
+- URL-encode special characters in the Call-ID (`@`, `:`, …)
+- Defaults: `proto_type=1`, `event_type=call` (SIP calls)
+
+Example:
+
+```text
+https://homer.example/?call_id=abc-def-ghi%4010.0.0.1&from=1710000000000&to=1710086400000#dashboard
+```
+
+Relative window:
+
+```text
+https://<homer-host>/?call_id=<CALL-ID>&m=60#dashboard
+```
+
+### Homer 11 — SIP trace without UI login (API token on server)
+
+For portals that already have Homer API access but users are **not** logged into Homer:
+
+1. Enable static API tokens: `coordinator.api_settings.enable_token_access` (see [UI and API tokens](UI_COORDINATOR_AUTH_AND_TOKENS.md)).
+2. Your backend calls:
+
+```http
+POST /api/v4/transactions/view/link
+Auth-Token: <secret>
+Content-Type: application/json
+
+{
+  "session_id": "your-call-id-here",
+  "proto_type": 1,
+  "event_type": "call",
+  "timestamp": {
+    "from": 1710000000000,
+    "to": 1710086400000
+  }
+}
+```
+
+3. Response `data.url_view` is e.g. `/export/view/<uuid>`.
+4. Redirect the browser:
+
+```text
+https://<homer-host>/export/view/<uuid>
+```
+
+The view link is **time-limited** (default 72h) and capped by `coordinator.transaction_view_max_opens` (default 3 successful opens). The browser does **not** send `Auth-Token` to open that page.
+
+Use `Authorization: Bearer <jwt>` instead of `Auth-Token` when calling the API with a service account session JWT (not the one-time view UUID).
+
+### Homer 7 — legacy homer-ui JSON URL
+
+On Homer 7 (homer-app + homer-ui, often port **9080**), operators use a single JSON blob as the query string on `/search/result`:
+
+```text
+http://homer:9080/search/result?{"timestamp":{"from":<from_ms>,"to":<to_ms>},"param":{"search":{"1_call":{"callid":["<call-id>"]}}}}=
+```
+
+Notes:
+
+- Trailing `=` is required for homer-ui parsing.
+- Profile key `1_call` is the SIP-calls mapping in homer-app.
+- `callid` is a **JSON array** on Homer 7.
+
+Homer 11 does **not** use path `/search/result`. Prefer flat `/?call_id=…#dashboard` above. Legacy JSON (without `/search/result`) is partially supported on the coordinator UI; `callid` as an array may not parse — use flat `call_id` for new links.
 
 ---
 
@@ -150,9 +244,10 @@ Homer 11 accepts the same JSON when it starts with `{` (before or as `?q=...`). 
 
 - `param.search.<profile>.user_from` → `from_user`
 - `param.search.<profile>.user_to` / `callee` → `to_user`
+- `param.search.<profile>.call_id` / `callid` (string) → `call_id`
 - `timestamp.from` / `timestamp.to` → time range
 
-Prefer the flat query parameters above for new integrations.
+Prefer the flat query parameters above for new integrations. For Homer 7-style `callid` **arrays**, use [flat Call-ID links](#external-apps) instead.
 
 ---
 

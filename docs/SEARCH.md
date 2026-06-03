@@ -40,7 +40,7 @@ For full setup and configuration details, see [MCP UI Guide](MCP_UI_GUIDE.md).
 
 ## Dashboard URL search
 
-Bookmarkable dashboard links (`?from_user=…#dashboard`), per-protocol examples, and how to add new protocols: **[SEARCH_URL.md](SEARCH_URL.md)**.
+Bookmarkable dashboard links (`?from_user=…#dashboard`), **external Call-ID drill-down** from other apps, per-protocol examples, and how to add new protocols: **[SEARCH_URL.md](SEARCH_URL.md)** (including [external integrations](SEARCH_URL.md#external-apps)).
 
 ## Authentication
 
