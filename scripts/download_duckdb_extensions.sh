@@ -4,7 +4,7 @@
 # -> ~/.duckdb/extensions/<version>/<platform>/...
 #
 # DUCKDB_VERSION must stay in sync with embedded DuckDB from
-# github.com/duckdb/duckdb-go-bindings in src/go.mod (e.g. v0.10502.x -> v1.5.2).
+# github.com/duckdb/duckdb-go-bindings in src/go.mod (e.g. v0.10503.x -> v1.5.3).
 #
 # Usage:
 #   ./scripts/download_duckdb_extensions.sh [EXT_PLATFORM]
@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-DUCKDB_VERSION="${DUCKDB_VERSION:-v1.5.2}"
+DUCKDB_VERSION="${DUCKDB_VERSION:-v1.5.3}"
 
 if [ -n "${1:-}" ]; then
   EXT_PLATFORM="$1"
