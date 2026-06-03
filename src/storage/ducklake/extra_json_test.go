@@ -7,7 +7,6 @@ package ducklake
 import (
 	"testing"
 
-	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/sipcapture/homer-core/src/decoder"
 )
 
@@ -30,16 +29,16 @@ func TestBuildExtraJSONCell_PooledBuffer(t *testing.T) {
 	releaseExtraJSONCell(cell)
 }
 
-func TestCellToDriverValue_pooledJSONIsAppendBytesUnsafe(t *testing.T) {
+func TestCellToDriverValue_pooledJSONIsString(t *testing.T) {
 	b := []byte(`{"version":3}`)
 	cell := any(&b)
 	dv := cellToDriverValue(cell)
-	ab, ok := dv.(duckdb.AppendBytesUnsafe)
+	s, ok := dv.(string)
 	if !ok {
-		t.Fatalf("expected duckdb.AppendBytesUnsafe, got %T", dv)
+		t.Fatalf("expected string, got %T", dv)
 	}
-	if string(ab) != string(b) {
-		t.Fatalf("got %q", ab)
+	if s != string(b) {
+		t.Fatalf("got %q", s)
 	}
 }
 
