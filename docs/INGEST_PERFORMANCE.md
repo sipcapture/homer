@@ -99,7 +99,7 @@ Artifacts after the script: `cpu.pb.gz`, `pprof-top.txt`, `homer.log` under `OUT
 
 ## `duckdb-go-bindings`: upstream vs fork
 
-Homer pulls DuckDB’s CGO stack through **`github.com/duckdb/duckdb-go/v2`**, which depends on the prebuilt static libs in **[`github.com/duckdb/duckdb-go-bindings`](https://github.com/duckdb/duckdb-go-bindings)** (see that repo for versioning, e.g. DuckDB `v1.5.2` → module tag **`v0.10502.0`**).
+Homer pulls DuckDB’s CGO stack through **`github.com/duckdb/duckdb-go/v2`**, which depends on the prebuilt static libs in **[`github.com/duckdb/duckdb-go-bindings`](https://github.com/duckdb/duckdb-go-bindings)** (see that repo for versioning, e.g. DuckDB `v1.5.3` → module tag **`v0.10503.0`**).
 
 By default **`src/go.mod` contains a `replace` directive** pointing to a fork that eliminates per-string CGO malloc/free in the Appender hot path (visible as `VectorAssignStringElementLen` + `duckdb_free` per-column in profiles). This fork has been benchmarked against upstream and showed a measurable reduction in CGO overhead at high PPS.
 
