@@ -8,6 +8,81 @@ ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
 BUILD_DIR="$PWD"
 SRC_DIR="$BUILD_DIR/src"
 NFPM_VERSION="2.41.1"
+# Match CI release.yml — binaries must run on glibc 2.34 (e.g. Debian 12 / Ubuntu 22.04).
+GLIBC_TARGET="${GLIBC_TARGET:-2.34}"
+POLYFILL_GLIBC_IMAGE="${POLYFILL_GLIBC_IMAGE:-ghcr.io/lmangani/polyfill-glibc-action:latest}"
+
+build_polyfill_glibc_from_source() {
+  local tools_dir="${BUILD_DIR}/.tools"
+  local src_dir="${BUILD_DIR}/.polyfill-glibc-src"
+  local ninja_bin="${tools_dir}/ninja"
+  local renames="${src_dir}/src/x86_64/renames.txt"
+  mkdir -p "${tools_dir}"
+  if [ ! -x "${ninja_bin}" ]; then
+    echo "==> Downloading ninja (for polyfill-glibc) ..." >&2
+    curl -fsSL -o "${tools_dir}/ninja.zip" \
+      "https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-linux.zip"
+    unzip -oq "${tools_dir}/ninja.zip" -d "${tools_dir}"
+    chmod +x "${ninja_bin}"
+  fi
+  if [ ! -d "${src_dir}/.git" ]; then
+    echo "==> Cloning polyfill-glibc ..." >&2
+    git clone --depth 1 https://github.com/corsix/polyfill-glibc.git "${src_dir}"
+  fi
+  # go1.26+ on glibc 2.43 may link sqrtf@GLIBC_2.43; upstream renames lack it yet.
+  if [ -f "${renames}" ] && ! grep -q 'sqrtf@GLIBC_2.43' "${renames}"; then
+    echo 'sqrtf@GLIBC_2.43 sqrtf@GLIBC_2.2.5' >> "${renames}"
+  fi
+  echo "==> Building polyfill-glibc from source ..." >&2
+  (cd "${src_dir}" && "${ninja_bin}" polyfill-glibc)
+  cp "${src_dir}/polyfill-glibc" "${BUILD_DIR}/polyfill-glibc"
+  chmod +x "${BUILD_DIR}/polyfill-glibc"
+  echo "${BUILD_DIR}/polyfill-glibc"
+}
+
+polyfill_glibc_bin() {
+  if command -v polyfill-glibc >/dev/null 2>&1; then
+    command -v polyfill-glibc
+    return 0
+  fi
+  if [ -x "${BUILD_DIR}/polyfill-glibc" ]; then
+    echo "${BUILD_DIR}/polyfill-glibc"
+    return 0
+  fi
+  if command -v docker >/dev/null 2>&1; then
+    echo "==> Fetching polyfill-glibc from ${POLYFILL_GLIBC_IMAGE} ..." >&2
+    local cid
+    if cid=$(docker create "${POLYFILL_GLIBC_IMAGE}" 2>/dev/null); then
+      docker cp "${cid}:/usr/local/bin/polyfill-glibc" "${BUILD_DIR}/polyfill-glibc"
+      docker rm "${cid}" >/dev/null
+      chmod +x "${BUILD_DIR}/polyfill-glibc"
+      echo "${BUILD_DIR}/polyfill-glibc"
+      return 0
+    fi
+  fi
+  build_polyfill_glibc_from_source
+}
+
+apply_glibc_polyfill() {
+  local bin="$1"
+  if [ "$ARCH" != "amd64" ]; then
+    return 0
+  fi
+  echo "==> Applying glibc polyfill (target ${GLIBC_TARGET}) ..."
+  local pf
+  if ! pf=$(polyfill_glibc_bin); then
+    echo "error: polyfill-glibc not found (install from https://github.com/corsix/polyfill-glibc or enable docker pull ${POLYFILL_GLIBC_IMAGE})" >&2
+    echo "       binary on this host needs: $(objdump -T "${bin}" 2>/dev/null | grep -oE 'GLIBC_2\.[0-9]+' | sort -V -u | tail -1 || echo '?')" >&2
+    exit 1
+  fi
+  "${pf}" --target-glibc="${GLIBC_TARGET}" "${bin}"
+  if objdump -T "${bin}" | grep -qE '@GLIBC_2\.(3[5-9]|[4-9][0-9])'; then
+    echo "error: ${bin} still references GLIBC > ${GLIBC_TARGET} after polyfill" >&2
+    objdump -T "${bin}" | grep GLIBC | sort -u >&2 || true
+    exit 1
+  fi
+  echo "    OK: glibc <= ${GLIBC_TARGET}"
+}
 
 
 # ── Remove old packages (glob must stay *outside* quotes or '*' is literal) ───
@@ -58,8 +133,18 @@ if [ -d "${SRC_DIR}/ui" ]; then
     exit 1
   fi
   cd "${SRC_DIR}/ui"
-  npm ci --silent
-  npm run build --silent
+  # NODE_ENV=production makes npm ci skip devDependencies (typescript, vite, vitest).
+  # Unset so tsc/vite are available; keep npm quiet via flags instead of --silent.
+  (
+    unset NODE_ENV
+    # puppeteer postinstall downloads Chrome; not needed for production UI build.
+    export PUPPETEER_SKIP_DOWNLOAD=true
+    npm ci --no-audit --no-fund
+    npm run build
+  ) || {
+    echo "error: frontend build failed (see npm output above)" >&2
+    exit 1
+  }
   cd "${BUILD_DIR}"
 fi
 
@@ -108,6 +193,8 @@ if [ "$ARCH" = "arm64" ] && command -v ldd >/dev/null && ldd "${BINARY}" 2>/dev/
 fi
 
 echo "    Binary: $(ls -lh "${BUILD_DIR}/${BINARY}" | awk '{print $5, $9}')"
+
+apply_glibc_polyfill "${BUILD_DIR}/${BINARY}"
 
 # ── Download nfpm (same version as CI) ────────────────────────────────────────
 if [ ! -x "${BUILD_DIR}/nfpm" ]; then

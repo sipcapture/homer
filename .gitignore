@@ -60,6 +60,9 @@ site/
 .tmp/.static-cxx-link/
 .static-cxx-link/
 .static-cgo-link/
+.polyfill-glibc-src/
+.tools/
+polyfill-glibc
 
 # Locally-built distribution artifacts (never belong in the repo;
 # release pipeline publishes them as Github releases instead).
