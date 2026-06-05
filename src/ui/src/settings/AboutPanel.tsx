@@ -27,9 +27,15 @@ interface AboutPanelProps {
   onRefresh?: () => void
 }
 
+const QXIP_URL = 'https://qxip.net/'
+const QXIP_LOGO_SRC = '/sponsors/qxip.png'
+const HEPIC_URL = 'https://hepic.tel/'
+const HEPIC_LOGO_SRC = '/sponsors/hepic.png'
+const SPONSOR_LOGO_CLASS = 'h-10 w-auto object-contain object-left'
+
 export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }: AboutPanelProps) {
   return (
-    <div>
+    <div className="space-y-6">
       <SettingsPageHeader
         title="About"
         description="Your current profile and account details."
@@ -79,6 +85,51 @@ export default function AboutPanel({ me, avatarUrl = null, loading, onRefresh }:
           ) : (
             <p className="text-sm text-muted-foreground">No profile loaded.</p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Sponsored by QXIP and Hepic</CardTitle>
+          <CardDescription>
+            HOMER is developed by QXIP; Hepic extends the HEP stack with carrier-grade RTC observability.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-6 sm:flex-row sm:items-end sm:gap-10">
+          <a
+            href={QXIP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-w-0 flex-col gap-2 rounded-lg outline-none ring-offset-background transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <img
+              src={QXIP_LOGO_SRC}
+              alt="QXIP — Telecom observability"
+              className={SPONSOR_LOGO_CLASS}
+              loading="lazy"
+              decoding="async"
+            />
+            <span className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+              qxip.net
+            </span>
+          </a>
+          <a
+            href={HEPIC_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-w-0 flex-col gap-2 rounded-lg outline-none ring-offset-background transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <img
+              src={HEPIC_LOGO_SRC}
+              alt="HEPIC — VoIP and RTC analyzer"
+              className={SPONSOR_LOGO_CLASS}
+              loading="lazy"
+              decoding="async"
+            />
+            <span className="text-sm font-medium text-primary underline-offset-4 hover:underline">
+              hepic.tel
+            </span>
+          </a>
         </CardContent>
       </Card>
     </div>
