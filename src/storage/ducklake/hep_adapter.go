@@ -17,7 +17,6 @@ import (
 	"time"
 	"unsafe"
 
-	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/sipcapture/homer-core/src/decoder"
 )
 
@@ -622,13 +621,13 @@ func releaseExtraJSONCell(v interface{}) {
 }
 
 // cellToDriverValue converts a batch cell to a driver value. Pooled JSON
-// buffers use duckdb.AppendBytesUnsafe (zero-copy) instead of string/json.RawMessage.
+// buffers are copied to string at flush time (Appender copies again internally).
 func cellToDriverValue(v interface{}) interface{} {
 	if bp, ok := v.(*[]byte); ok {
 		if bp == nil || len(*bp) == 0 {
-			return duckdb.AppendBytesUnsafe([]byte("{}"))
+			return "{}"
 		}
-		return duckdb.AppendBytesUnsafe(*bp)
+		return string(*bp)
 	}
 	return v
 }

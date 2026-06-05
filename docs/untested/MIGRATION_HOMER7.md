@@ -185,6 +185,23 @@ left off — no duplicates, no gaps.
   due to homer-core's TTL — chunk the time range with `--since` / `--until`
   if needed.
 
+## Share / drill-down URLs (homer-ui → Homer 11)
+
+Homer 7 homer-ui links often look like:
+
+```text
+http://homer:9080/search/result?{"timestamp":{"from":...,"to":...},"param":{"search":{"1_call":{"callid":["..."]}}}}=
+```
+
+In Homer 11:
+
+| Homer 7 | Homer 11 equivalent |
+|---------|---------------------|
+| `/search/result?{json}=` on UI port | `https://<coordinator>/?call_id=...&from=...&to=...#dashboard` (user logged in) |
+| homer-app search/share API (POST) | `POST /api/v4/transactions/view/link` + redirect to `/export/view/<uuid>` |
+
+Full examples and API-token flows: [Dashboard URL search — external applications](../SEARCH_URL.md#external-apps).
+
 ## Caveats
 
 - **Custom widget configurations** in v7 dashboards do not transfer
