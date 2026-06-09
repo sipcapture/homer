@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       go_version:
-        description: Go version override (e.g. 1.26.3)
+        description: Go version override (empty = use src/go.mod)
         required: false
-        default: "1.26.3"
+        default: ""
 
 permissions:
   contents: read
@@ -28,7 +28,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ github.event_name == 'workflow_dispatch' && inputs.go_version || '1.26.3' }}
+          # Empty go-version falls back to go-version-file, so PR checks always
+          # match the toolchain required by src/go.mod (manual dispatch can override).
+          go-version: ${{ github.event_name == 'workflow_dispatch' && inputs.go_version || '' }}
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
