@@ -59,6 +59,27 @@ const DEFAULT_STATE: SearchFormState = {
   limit: 50,
 }
 
+/**
+ * Persisted-form key for a search widget. Keyed by protocol + profile (not
+ * dashboard/widget id) so filters typed in e.g. SIP Call Search survive
+ * switching dashboard tabs and are shared by widgets searching the same
+ * protocol — matching the Homer 7 behaviour requested in discussion #779.
+ * Unconfigured widgets (mapping not loaded / legacy static form) share one
+ * global SIP key for the same reason.
+ */
+export function searchStoreKey(config?: {
+  protocol_id?: { value?: unknown }
+  protocol_profile?: string
+  fields?: unknown[]
+}): string {
+  const hepid = config?.protocol_id?.value
+  const configured = Array.isArray(config?.fields) && config.fields.length > 0
+  if (configured && hepid !== undefined && hepid !== null && hepid !== '') {
+    return `proto:${hepid}:${config?.protocol_profile || 'default'}`
+  }
+  return 'legacy:sip'
+}
+
 interface SearchStore {
   forms: Record<string, SearchFormState>
   getForm: (key: string) => SearchFormState

@@ -23,7 +23,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { apiGet, apiPost } from '@/api'
 import { useDashboard } from '../context/DashboardContext'
 import { resolveTimeRange } from '../utils/resolveTimeRange'
-import { useSearchStore } from '../stores/search-store'
+import { useSearchStore, searchStoreKey } from '../stores/search-store'
 import { getWidgetMeta } from './registry'
 import { computeAvailableRows, fitWidgetHeight } from '../utils/grid-utils'
 import SearchWidgetSettings from '../components/SearchWidgetSettings'
@@ -199,10 +199,13 @@ function multiSelectOptionsFromMappingField(field) {
 }
 
 export default function SearchPanel({ config, onConfigChange, widgetId }) {
-  const { publishSearch, widgets, updateWidgets, setLocked, locked, timeRange, timeZone, activeDashboardId } = useDashboard()
-  // Never use '' — search-store ignores setField/setActiveTab when key is empty, so the form
-  // would not persist (SQL / filters) and Search would appear to do nothing.
-  const storeKey = `${activeDashboardId || '_'}:${widgetId ?? 'search'}`
+  const { publishSearch, widgets, updateWidgets, setLocked, locked, timeRange, timeZone } = useDashboard()
+  // Keyed by protocol+profile (searchStoreKey) so filters persist across
+  // dashboard tabs and are shared by search widgets of the same protocol
+  // (discussion #779). Never '' — search-store ignores setField/setActiveTab
+  // when key is empty, so the form would not persist and Search would appear
+  // to do nothing.
+  const storeKey = searchStoreKey(config)
   const { form, activeTab, limit } = useSearchStore((s) => s.getForm(storeKey))
   const { setField, setActiveTab, setLimit, clearForm } = useSearchStore.getState()
 
