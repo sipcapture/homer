@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useDashboard } from './context/DashboardContext'
-import { useSearchStore } from './stores/search-store'
+import { useSearchStore, searchStoreKey } from './stores/search-store'
 import {
   buildSearchPayload,
   deepLinkSpecToFormFields,
@@ -18,7 +18,6 @@ export default function SearchDeepLinkBootstrap() {
   const {
     widgets,
     loading,
-    activeDashboardId,
     publishSearch,
     requestTimeRange,
   } = useDashboard()
@@ -36,9 +35,7 @@ export default function SearchDeepLinkBootstrap() {
     appliedRef.current = true
 
     const searchWidget = widgets.find((w) => w.type === 'search')
-    const storeKey = searchWidget
-      ? `${activeDashboardId || '_'}:${searchWidget.id}`
-      : null
+    const storeKey = searchWidget ? searchStoreKey(searchWidget.config) : null
 
     const ts = resolveDeepLinkTimestamp(spec)
     requestTimeRange(null, ts.from, ts.to)
@@ -57,7 +54,7 @@ export default function SearchDeepLinkBootstrap() {
     const payload = buildSearchPayload(spec, { from: ts.from, to: ts.to }, spec.limit ?? 50)
     publishSearch(resultWidget.id, payload)
     stripDeepLinkParamsFromURL()
-  }, [widgets, loading, activeDashboardId, publishSearch, requestTimeRange])
+  }, [widgets, loading, publishSearch, requestTimeRange])
 
   return null
 }
