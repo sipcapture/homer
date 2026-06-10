@@ -36,7 +36,7 @@ contents:
   - src: ./src/dist/game/*
     dst: /usr/local/homer-core/dist/game/
   - src: ./scripts/fetch-doom-wad.sh
-    dst: /usr/local/homer-core/bin/fetch-doom-wad.sh
+    dst: /usr/local/homer-core/scripts/fetch-doom-wad.sh
   - src: ./examples/homer-core.service
     dst: /etc/systemd/system/homer-core.service
   - src: ./examples/homer-core.init
