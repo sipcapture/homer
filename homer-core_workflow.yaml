@@ -31,6 +31,12 @@ contents:
     dst: /usr/local/homer-core/dist/logo.png
   - src: ./src/dist/assets/*
     dst: /usr/local/homer-core/dist/assets/
+  # Doom widget engine (docs/VOIPGames.md §8). The IWAD is NOT packaged —
+  # users fetch it with fetch-doom-wad.sh and point gamedata_dir at it.
+  - src: ./src/dist/game/*
+    dst: /usr/local/homer-core/dist/game/
+  - src: ./scripts/fetch-doom-wad.sh
+    dst: /usr/local/homer-core/bin/fetch-doom-wad.sh
   - src: ./examples/homer-core.service
     dst: /etc/systemd/system/homer-core.service
   - src: ./examples/homer-core.init
