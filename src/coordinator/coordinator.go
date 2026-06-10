@@ -570,6 +570,15 @@ func mapNodeEndpoints(nodes []config.NodeEndpoint) []handlers.NodeInfo {
 func (c *Coordinator) setupStaticRoutes() {
 	staticPath := c.config.HTTPServer.StaticPath
 
+	// Large on-disk game assets (e.g. the Doom widget IWAD) are served from
+	// gamedata_dir and intentionally kept out of the embedded UI bundle so
+	// they never inflate the binary. Registered before the SPA handlers so
+	// /gamedata/* never falls through to index.html.
+	if dir := c.config.HTTPServer.GamedataDir; dir != "" {
+		logger.Info("Coordinator: Serving game data from filesystem", "path", dir)
+		c.echo.Static("/gamedata", dir)
+	}
+
 	// Serve from filesystem if static_path is configured
 	if staticPath != "" {
 		logger.Info("Coordinator: Serving UI from filesystem", "path", staticPath)

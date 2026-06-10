@@ -192,6 +192,7 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 | `read_timeout` | int | 30 | Read timeout in seconds |
 | `write_timeout` | int | 30 | Write timeout in seconds |
 | `static_path` | string | "" | Path to UI static files (optional) |
+| `gamedata_dir` | string | "/usr/local/homer-core/gamedata" | On-disk directory served read-only at `/gamedata/` for large game assets (Doom widget IWAD). A missing directory yields 404s; empty string disables the route. See `docs/VOIPGames.md`. |
 
 ### nodes
 
