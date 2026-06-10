@@ -335,17 +335,17 @@ over same-origin `postMessage` (`doomWad.ts` validates the frames).
 
 The shareware `doom1.wad` is freely distributable but deliberately kept out
 of the repo, the UI bundle, and the `go:embed` binary. On the coordinator
-host:
+host (the script ships with the deb/rpm under
+`/usr/local/homer-core/scripts/`):
 
 ```bash
-./scripts/fetch-doom-wad.sh /usr/local/homer-core/gamedata
+sudo /usr/local/homer-core/scripts/fetch-doom-wad.sh /usr/local/homer-core/gamedata
 ```
 
-then set the config and restart:
-
-```json
-{ "coordinator": { "http_server": { "gamedata_dir": "/usr/local/homer-core/gamedata" } } }
-```
+`gamedata_dir` defaults to `/usr/local/homer-core/gamedata`, so with the
+package layout no config change is needed — just download the WAD. To serve
+from another directory set `coordinator.http_server.gamedata_dir`; an empty
+string disables the `/gamedata/` route entirely.
 
 Any IWAD/PWAD named `doom1.wad` in that directory works (full Doom,
 Freedoom Phase 1 renamed — note vanilla visplane limits apply). If the WAD

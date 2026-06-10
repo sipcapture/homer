@@ -144,11 +144,12 @@ export default function DoomPanel() {
               the coordinator host run:
             </p>
             <code className="rounded bg-muted px-2 py-1 text-[11px]">
-              ./scripts/fetch-doom-wad.sh /path/to/gamedata
+              scripts/fetch-doom-wad.sh /usr/local/homer-core/gamedata
             </code>
             <p className="max-w-80 text-center text-xs text-muted-foreground">
-              and set <code className="text-[11px]">coordinator.http_server.gamedata_dir</code> to
-              that directory, then restart homer-core.
+              (default <code className="text-[11px]">gamedata_dir</code>; override via{' '}
+              <code className="text-[11px]">coordinator.http_server.gamedata_dir</code>, then
+              restart homer-core)
             </p>
             <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={start}>
               Retry

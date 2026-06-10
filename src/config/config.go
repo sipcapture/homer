@@ -710,8 +710,9 @@ type CoordinatorHTTPServerConfig struct {
 	StaticPath   string `json:"static_path" mapstructure:"static_path" default:""`
 	// GamedataDir is an on-disk directory served read-only at /gamedata/.
 	// Used for large game assets (e.g. the Doom widget IWAD) that must not
-	// be embedded into the binary via go:embed. Empty = route disabled.
-	GamedataDir string `json:"gamedata_dir" mapstructure:"gamedata_dir" default:""`
+	// be embedded into the binary via go:embed. The default matches the
+	// package install prefix; a missing directory simply yields 404s.
+	GamedataDir string `json:"gamedata_dir" mapstructure:"gamedata_dir" default:"/usr/local/homer-core/gamedata"`
 }
 
 // NodeEndpoint defines a FlightSQL node to query
@@ -1256,6 +1257,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("coordinator.http_server.enable", true)
 	v.SetDefault("coordinator.http_server.host", "0.0.0.0")
 	v.SetDefault("coordinator.http_server.port", 8080)
+	v.SetDefault("coordinator.http_server.gamedata_dir", "/usr/local/homer-core/gamedata")
 	v.SetDefault("coordinator.settings_db_path", "/var/lib/homer/homer_settings.duckdb")
 	v.SetDefault("coordinator.lake_name", "homer_lake")
 	v.SetDefault("coordinator.jwt.expire_hours", 24)
