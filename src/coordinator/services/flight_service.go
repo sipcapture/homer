@@ -23,27 +23,30 @@ import (
 
 // FlightService manages connections to nodes via HTTP API
 type FlightService struct {
-	nodes       []config.NodeEndpoint
-	queryClient *http.Client // used for POST /query (configurable timeout)
+	nodes        []config.NodeEndpoint
+	queryClient  *http.Client // used for POST /query (timeout applied per request via context)
 	healthClient *http.Client // used for GET /health (short fixed timeout)
-	connected   map[string]bool
-	mu          sync.RWMutex
-	stopCh      chan struct{}
-	stopOnce    sync.Once
-	lakeName    string
+	// queryTimeout bounds each individual POST /query. It is applied as a
+	// context deadline (not http.Client.Timeout) so callers with their own,
+	// shorter deadline are still honored.
+	queryTimeout time.Duration
+	connected    map[string]bool
+	mu           sync.RWMutex
+	stopCh       chan struct{}
+	stopOnce     sync.Once
+	lakeName     string
 }
 
 // NewFlightService creates a new FlightSQL service.
-// queryTimeout controls the HTTP timeout for data queries to nodes.
+// queryTimeout controls the per-query timeout for data queries to nodes.
 func NewFlightService(nodes []config.NodeEndpoint, queryTimeout time.Duration) *FlightService {
 	if queryTimeout <= 0 {
 		queryTimeout = 30 * time.Second
 	}
 	return &FlightService{
-		nodes: nodes,
-		queryClient: &http.Client{
-			Timeout: queryTimeout,
-		},
+		nodes:        nodes,
+		queryClient:  &http.Client{},
+		queryTimeout: queryTimeout,
 		healthClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -281,6 +284,11 @@ func (s *FlightService) QueryNode(ctx context.Context, nodeName string, sql stri
 
 // queryNode executes a query on a single node via HTTP
 func (s *FlightService) queryNode(ctx context.Context, node config.NodeEndpoint, sql string) ([]map[string]interface{}, error) {
+	// Per-query timeout; context.WithTimeout keeps the parent deadline when
+	// the caller's is sooner.
+	ctx, cancel := context.WithTimeout(ctx, s.queryTimeout)
+	defer cancel()
+
 	// Node HTTP API runs on FlightServer.Port + 1
 	httpPort := node.Port + 1
 	url := fmt.Sprintf("http://%s:%d/query", node.Host, httpPort)
