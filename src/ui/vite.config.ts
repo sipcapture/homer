@@ -33,6 +33,12 @@ export default defineConfig({
         target: 'http://de7.sipcapture.io:8081',
         changeOrigin: true,
       },
+      // Doom widget IWAD — served by the coordinator from gamedata_dir,
+      // never part of the UI bundle (see docs/VOIPGames.md).
+      '/gamedata': {
+        target: 'http://de7.sipcapture.io:8081',
+        changeOrigin: true,
+      },
     },
   },
   build: {

@@ -20,6 +20,7 @@ const SIPetrisPanel = lazy(() => import('./SIPetrisPanel'))
 const NetrisPanel = lazy(() => import('./NetrisPanel'))
 const ChessPanel = lazy(() => import('./ChessPanel'))
 const NetChessPanel = lazy(() => import('./NetChessPanel'))
+const DoomPanel = lazy(() => import('./DoomPanel'))
 
 /**
  * Preset variant of a base widget type. Lets the AddWidgetDialog show a
@@ -311,6 +312,18 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
     // NetChess board to render wider than the single-player one.
     minW: 4,
     minH: 8,
+    defaultW: 8,
+    defaultH: 12,
+  },
+  doom: {
+    component: DoomPanel,
+    label: 'Doom',
+    icon: 'game',
+    category: 'Games',
+    // 4:3 engine canvas scales inside the iframe; floor keeps the HUD
+    // readable. Requires gamedata_dir on the coordinator for the IWAD.
+    minW: 4,
+    minH: 6,
     defaultW: 8,
     defaultH: 12,
   },

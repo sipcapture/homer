@@ -708,6 +708,10 @@ type CoordinatorHTTPServerConfig struct {
 	ReadTimeout  int    `json:"read_timeout" mapstructure:"read_timeout" default:"30"`
 	WriteTimeout int    `json:"write_timeout" mapstructure:"write_timeout" default:"30"`
 	StaticPath   string `json:"static_path" mapstructure:"static_path" default:""`
+	// GamedataDir is an on-disk directory served read-only at /gamedata/.
+	// Used for large game assets (e.g. the Doom widget IWAD) that must not
+	// be embedded into the binary via go:embed. Empty = route disabled.
+	GamedataDir string `json:"gamedata_dir" mapstructure:"gamedata_dir" default:""`
 }
 
 // NodeEndpoint defines a FlightSQL node to query

@@ -15,6 +15,8 @@ const GAME_FILES = [
   'chessCore.ts',
   'chessEngine.ts',
   'chessEngine.worker.ts',
+  'DoomPanel.tsx',
+  'doomWad.ts',
 ]
 
 // Token deny-list applied to the raw source. We match on identifiers

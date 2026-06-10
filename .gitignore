@@ -73,3 +73,8 @@ bundled_extensions/
 .cursor/*
 !.cursor/rules/
 !.cursor/rules/**
+
+# Doom widget IWAD — served from disk via gamedata_dir, never committed
+# nor embedded into the binary (see scripts/fetch-doom-wad.sh)
+gamedata/
+*.wad

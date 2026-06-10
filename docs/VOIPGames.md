@@ -1,6 +1,6 @@
 # Games (Homer Next-Gen dashboard)
 
-The dashboard includes seven mini-games under the **Games** category. Widgets are added from the dashboard palette (`registry.ts`: `packet_defender`, `sip_dialog_master`, `jitter_buffer_hero`, `sipetris`, `netris`, `chess`, `netchess`). Five are educational (SIP/RTP-themed) and two are general-purpose chess games. The chess pair shares one rules engine (`chess.js` on the UI, `notnil/chess` on the server) and one presentational board component (`ChessBoard.tsx`).
+The dashboard includes eight mini-games under the **Games** category. Widgets are added from the dashboard palette (`registry.ts`: `packet_defender`, `sip_dialog_master`, `jitter_buffer_hero`, `sipetris`, `netris`, `chess`, `netchess`, `doom`). Five are educational (SIP/RTP-themed), two are general-purpose chess games, and one is the actual 1993 Doom compiled to WebAssembly. The chess pair shares one rules engine (`chess.js` on the UI, `notnil/chess` on the server) and one presentational board component (`ChessBoard.tsx`).
 
 ### Default dashboards
 
@@ -312,6 +312,62 @@ JSON envelope shared with the client; constants live in `src/coordinator/games/n
 
 ---
 
+## 8. Doom (`doom`)
+
+**Concept:** the real thing — Chocolate Doom compiled to WebAssembly (the
+[cloudflare/doom-wasm](https://github.com/cloudflare/doom-wasm) build, GPL-2)
+running inside the widget. No SIP theming, no excuses.
+
+### Architecture
+
+| Piece | Where | Shipped how |
+|-------|-------|-------------|
+| Engine (`websockets-doom.js` + `.wasm`, ~2.5 MB) | `src/ui/public/game/` | Committed + embedded with the UI bundle (provenance and sha256 in `public/game/README.md`) |
+| Host page | `src/ui/public/game/index.html` | Embedded; loaded by the widget in an `<iframe>` |
+| IWAD (`doom1.wad`, ~4 MB) | On-disk `gamedata_dir`, served at `/gamedata/` | **Never embedded** into the homer-core binary; provisioned manually |
+
+The engine runs in an iframe because Emscripten/SDL2 builds pollute window
+globals and cannot be torn down cleanly — removing the iframe (the Stop
+button or deleting the widget) is the teardown. Widget and host page talk
+over same-origin `postMessage` (`doomWad.ts` validates the frames).
+
+### WAD provisioning
+
+The shareware `doom1.wad` is freely distributable but deliberately kept out
+of the repo, the UI bundle, and the `go:embed` binary. On the coordinator
+host:
+
+```bash
+./scripts/fetch-doom-wad.sh /usr/local/homer-core/gamedata
+```
+
+then set the config and restart:
+
+```json
+{ "coordinator": { "http_server": { "gamedata_dir": "/usr/local/homer-core/gamedata" } } }
+```
+
+Any IWAD/PWAD named `doom1.wad` in that directory works (full Doom,
+Freedoom Phase 1 renamed — note vanilla visplane limits apply). If the WAD
+or the route is missing, the widget shows provisioning instructions instead
+of starting. The download happens once per page load with a progress bar;
+afterwards the browser HTTP cache applies.
+
+### Controls
+
+Standard Chocolate Doom bindings: arrows move, **Ctrl** fire, **Space**
+use, **ESC** in-game menu (which is also the pause). Click the game screen
+first so the iframe has keyboard focus. The header has **Fullscreen** and
+**Stop** buttons; music is disabled (`-nomusic`), sound effects work after
+the first user gesture (the Start click satisfies autoplay policy).
+
+### Dev mode
+
+`vite.config.ts` proxies `/gamedata` to the coordinator, mirroring `/api` —
+run a coordinator with `gamedata_dir` set, or expect the WAD-missing hint.
+
+---
+
 ## Source locations
 
 | Game | File |
@@ -323,6 +379,7 @@ JSON envelope shared with the client; constants live in `src/coordinator/games/n
 | Netris | `src/ui/src/dashboard/widgets/NetrisPanel.tsx` |
 | Chess | `src/ui/src/dashboard/widgets/ChessPanel.tsx` |
 | NetChess | `src/ui/src/dashboard/widgets/NetChessPanel.tsx` |
+| Doom | `src/ui/src/dashboard/widgets/DoomPanel.tsx`, `doomWad.ts`, `src/ui/public/game/` |
 | Widget registration | `src/ui/src/dashboard/widgets/registry.ts` |
 
-The single-player widgets (Packet Defender, SIP Dialog Master, Jitter Buffer Hero, SIPetris, Chess in bot mode) are **not** wired to live Homer capture; they are **local dashboard UI** only. **Netris** and **NetChess** talk to homer-core's coordinator over JWT-protected WebSockets (`/api/v4/games/netris`, `/api/v4/games/netchess`); the **Chess LLM mode** also relies on the coordinator (`/api/v4/games/chess/llm-{status,move}`). None of these endpoints consume captured traffic.
+The single-player widgets (Packet Defender, SIP Dialog Master, Jitter Buffer Hero, SIPetris, Chess in bot mode, Doom) are **not** wired to live Homer capture; they are **local dashboard UI** only. **Netris** and **NetChess** talk to homer-core's coordinator over JWT-protected WebSockets (`/api/v4/games/netris`, `/api/v4/games/netchess`); the **Chess LLM mode** also relies on the coordinator (`/api/v4/games/chess/llm-{status,move}`); **Doom** only fetches its IWAD from the static `/gamedata/` route. None of these endpoints consume captured traffic.
