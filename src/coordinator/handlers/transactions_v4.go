@@ -487,6 +487,106 @@ func (h *SearchHandler) V4TransactionsList(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// transactionSearchChunkMs is the slice size for time-sliced transaction
+// searches. Long bounded ranges are executed newest-first in chunks of this
+// size and stop as soon as the row limit is reached, so non-prunable filters
+// (e.g. session_id LIKE '%…%') over a week of data do not have to scan the
+// whole range in a single query that then hits the coordinator query timeout
+// (sipcapture/homer#785).
+const transactionSearchChunkMs = int64(24 * time.Hour / time.Millisecond)
+
+// searchTimeChunk is one newest-first slice of a chunked transaction search.
+// ToInclusive is true only for the newest chunk: interior chunks use an
+// exclusive upper bound so rows with sub-millisecond timestamps on a chunk
+// boundary are neither lost nor duplicated.
+type searchTimeChunk struct {
+	FromMs      int64
+	ToMs        int64
+	ToInclusive bool
+}
+
+// splitSearchTimeRange slices [fromMs, toMs] into chunks of at most chunkMs,
+// ordered newest-first. Unbounded or small ranges yield a single chunk.
+func splitSearchTimeRange(fromMs, toMs, chunkMs int64) []searchTimeChunk {
+	if fromMs <= 0 || toMs <= 0 || toMs <= fromMs || chunkMs <= 0 || toMs-fromMs <= chunkMs {
+		return []searchTimeChunk{{FromMs: fromMs, ToMs: toMs, ToInclusive: true}}
+	}
+	chunks := make([]searchTimeChunk, 0, (toMs-fromMs)/chunkMs+1)
+	hi := toMs
+	inclusive := true
+	for hi > fromMs {
+		lo := hi - chunkMs
+		if lo < fromMs {
+			lo = fromMs
+		}
+		chunks = append(chunks, searchTimeChunk{FromMs: lo, ToMs: hi, ToInclusive: inclusive})
+		hi = lo
+		inclusive = false
+	}
+	return chunks
+}
+
+// transactionSearchChunkable reports whether a search request can be executed
+// as independent newest-first time slices with early exit. Aggregations,
+// custom projections and non-default ordering must see the whole range in a
+// single query, so they are excluded.
+func transactionSearchChunkable(req *SearchObjectV4) bool {
+	if req.Timestamp.From <= 0 || req.Timestamp.To <= 0 {
+		return false
+	}
+	if req.Timestamp.To-req.Timestamp.From <= transactionSearchChunkMs {
+		return false
+	}
+	if strings.TrimSpace(req.Param.Select) != "" || strings.TrimSpace(req.Param.GroupBy) != "" {
+		return false
+	}
+	orderBy := strings.TrimSpace(req.Param.OrderBy)
+	return orderBy == "" ||
+		strings.EqualFold(orderBy, "timestamp desc") ||
+		strings.EqualFold(orderBy, "time desc")
+}
+
+// queryTransactionSearch executes a v4 transaction search. fullSQL is the
+// already-validated query for the whole time range; chunkable requests are
+// instead executed as newest-first time slices that stop as soon as the row
+// limit is collected (see transactionSearchChunkMs).
+func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL string, req *SearchObjectV4, virtualRules map[string]services.VirtualFieldRule) ([]map[string]interface{}, error) {
+	if !transactionSearchChunkable(req) {
+		return h.flightService.Query(ctx, fullSQL)
+	}
+
+	chunks := splitSearchTimeRange(req.Timestamp.From, req.Timestamp.To, transactionSearchChunkMs)
+	limit := effectiveSearchLimit(req.Param.Limit)
+	logger.Info("V4TransactionsSearch: chunked execution",
+		"chunks", len(chunks), "limit", limit,
+		"from", req.Timestamp.From, "to", req.Timestamp.To)
+
+	results := make([]map[string]interface{}, 0, limit)
+	for i, chunk := range chunks {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		chunkReq := *req
+		chunkReq.Timestamp.From = chunk.FromMs
+		chunkReq.Timestamp.To = chunk.ToMs
+		sql, err := buildSearchSQLV4WithOpts(h.flightService.LakeName(), &chunkReq, virtualRules, searchSQLOpts{toExclusive: !chunk.ToInclusive})
+		if err != nil {
+			return nil, err
+		}
+		rows, err := h.flightService.Query(ctx, sql)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, rows...)
+		if len(results) >= limit {
+			logger.Info("V4TransactionsSearch: chunked early exit",
+				"chunks_done", i+1, "chunks_total", len(chunks), "rows", len(results))
+			return results[:limit], nil
+		}
+	}
+	return results, nil
+}
+
 func (h *SearchHandler) V4TransactionsSearch(c echo.Context) error {
 	var req SearchObjectV4
 	if err := c.Bind(&req); err != nil {
@@ -500,7 +600,7 @@ func (h *SearchHandler) V4TransactionsSearch(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", fmt.Sprintf("SQL validation failed: %v", err))
 	}
 	logger.Info("V4TransactionsSearch", "proto", req.Filter.ProtoType, "event", req.Filter.EventType, "sql", sql)
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	results, err := h.queryTransactionSearch(c.Request().Context(), sql, &req, virtualRules)
 	if err != nil {
 		logger.Error(fmt.Sprintf("V4TransactionsSearch: query error: %v", err))
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
@@ -1575,7 +1675,7 @@ func (h *SearchHandler) runMCPAsStructured(c echo.Context, req *MCPQueryRequest)
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, "Bad Request", fmt.Sprintf("SQL validation failed: %v", err))
 	}
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	results, err := h.queryTransactionSearch(c.Request().Context(), sql, &searchReq, virtualRules)
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
@@ -2093,7 +2193,44 @@ func (h *SearchHandler) loadVirtualRulesForReq(ctx context.Context, req *SearchO
 	return rules
 }
 
+// searchSQLOpts tweaks SQL generation for chunked search execution.
+type searchSQLOpts struct {
+	// toExclusive renders the upper time bound as "<" instead of "<=" so
+	// interior slices of a chunked search neither lose nor duplicate rows
+	// on chunk boundaries (timestamps can carry sub-millisecond precision).
+	toExclusive bool
+}
+
+// timestampRangeConditions renders WHERE bounds for a [fromMs, toMs] window
+// in epoch milliseconds. Zero values omit the corresponding bound.
+func timestampRangeConditions(column string, fromMs, toMs int64, toExclusive bool) []string {
+	conds := make([]string, 0, 2)
+	if fromMs > 0 {
+		conds = append(conds, fmt.Sprintf("%s >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", column, fromMs))
+	}
+	if toMs > 0 {
+		op := "<="
+		if toExclusive {
+			op = "<"
+		}
+		conds = append(conds, fmt.Sprintf("%s %s (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", column, op, toMs))
+	}
+	return conds
+}
+
+// effectiveSearchLimit mirrors the LIMIT clamp applied by the SQL builders.
+func effectiveSearchLimit(limit int) int {
+	if limit <= 0 || limit > 50000 {
+		return 50
+	}
+	return limit
+}
+
 func buildSearchSQLV4(lakeName string, req *SearchObjectV4, virtualRules map[string]services.VirtualFieldRule) (string, error) {
+	return buildSearchSQLV4WithOpts(lakeName, req, virtualRules, searchSQLOpts{})
+}
+
+func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules map[string]services.VirtualFieldRule, opts searchSQLOpts) (string, error) {
 	protoType := req.Filter.ProtoType
 	if protoType == 0 {
 		protoType = 1
@@ -2106,7 +2243,7 @@ func buildSearchSQLV4(lakeName string, req *SearchObjectV4, virtualRules map[str
 	// node_id, payload, …) exist on otlp_*. Build SQL separately so we
 	// don't generate WHERE clauses that fail at parse time.
 	if isOTLPProtoType(protoType) {
-		return buildOTLPSearchSQLV4(tableName, protoType, req)
+		return buildOTLPSearchSQLV4(tableName, protoType, req, opts)
 	}
 	// Line Protocol virtual mappings address dynamic lp_<measurement>
 	// tables whose only guaranteed columns are `time` and the user
@@ -2114,17 +2251,12 @@ func buildSearchSQLV4(lakeName string, req *SearchObjectV4, virtualRules map[str
 	// (caller, callee, method, …) make sense for them — route to the
 	// LP-specific builder.
 	if isLPProtoType(protoType) {
-		return buildLPSearchSQLV4(tableName, req)
+		return buildLPSearchSQLV4(tableName, req, opts)
 	}
 	txType := normalizeSIPTransactionType(protoType, transactionType)
 
 	conditions := make([]string, 0)
-	if req.Timestamp.From > 0 {
-		conditions = append(conditions, fmt.Sprintf("timestamp >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", req.Timestamp.From))
-	}
-	if req.Timestamp.To > 0 {
-		conditions = append(conditions, fmt.Sprintf("timestamp <= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", req.Timestamp.To))
-	}
+	conditions = append(conditions, timestampRangeConditions("timestamp", req.Timestamp.From, req.Timestamp.To, opts.toExclusive)...)
 	// session_id / call_id / correlation: column layout depends on proto (see ducklake.TableSchema).
 	sessionFilter := firstNonEmpty(req.Filter.CallID, req.Filter.SessionID)
 	if sessionFilter != "" {
@@ -2277,11 +2409,7 @@ func buildSearchSQLV4(lakeName string, req *SearchObjectV4, virtualRules map[str
 		sql += " ORDER BY timestamp DESC"
 	}
 
-	limit := req.Param.Limit
-	if limit <= 0 || limit > 50000 {
-		limit = 50
-	}
-	sql += fmt.Sprintf(" LIMIT %d", limit)
+	sql += fmt.Sprintf(" LIMIT %d", effectiveSearchLimit(req.Param.Limit))
 	return sql, nil
 }
 
@@ -2293,14 +2421,9 @@ func buildSearchSQLV4(lakeName string, req *SearchObjectV4, virtualRules map[str
 // ports, node_id, …) are intentionally ignored; cross-cutting filters
 // (call/session id, payload contains, src_ip/dst_ip when meaningful) are
 // translated to the appropriate OTLP column or scoped to the raw blob.
-func buildOTLPSearchSQLV4(tableName string, protoType int, req *SearchObjectV4) (string, error) {
+func buildOTLPSearchSQLV4(tableName string, protoType int, req *SearchObjectV4, opts searchSQLOpts) (string, error) {
 	conditions := make([]string, 0, 8)
-	if req.Timestamp.From > 0 {
-		conditions = append(conditions, fmt.Sprintf("timestamp >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", req.Timestamp.From))
-	}
-	if req.Timestamp.To > 0 {
-		conditions = append(conditions, fmt.Sprintf("timestamp <= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", req.Timestamp.To))
-	}
+	conditions = append(conditions, timestampRangeConditions("timestamp", req.Timestamp.From, req.Timestamp.To, opts.toExclusive)...)
 	// Trace / span correlation. session_id is treated as a synonym for
 	// trace_id so callers wired up for HEP CID-style searches still work.
 	// OTLP metrics: explicit filter.name (exact) takes precedence over
@@ -2400,11 +2523,7 @@ func buildOTLPSearchSQLV4(tableName string, protoType int, req *SearchObjectV4) 
 	} else {
 		sql += " ORDER BY timestamp DESC"
 	}
-	limit := req.Param.Limit
-	if limit <= 0 || limit > 50000 {
-		limit = 50
-	}
-	sql += fmt.Sprintf(" LIMIT %d", limit)
+	sql += fmt.Sprintf(" LIMIT %d", effectiveSearchLimit(req.Param.Limit))
 	return sql, nil
 }
 
@@ -2421,14 +2540,9 @@ func buildOTLPSearchSQLV4(tableName string, protoType int, req *SearchObjectV4) 
 // SELECT/GROUP BY/ORDER BY clauses pass through the same sqlvalidator
 // gate as elsewhere so callers can craft custom widgets without
 // compromising the SQL injection posture.
-func buildLPSearchSQLV4(tableName string, req *SearchObjectV4) (string, error) {
+func buildLPSearchSQLV4(tableName string, req *SearchObjectV4, opts searchSQLOpts) (string, error) {
 	conditions := make([]string, 0, 4)
-	if req.Timestamp.From > 0 {
-		conditions = append(conditions, fmt.Sprintf("time >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", req.Timestamp.From))
-	}
-	if req.Timestamp.To > 0 {
-		conditions = append(conditions, fmt.Sprintf("time <= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", req.Timestamp.To))
-	}
+	conditions = append(conditions, timestampRangeConditions("time", req.Timestamp.From, req.Timestamp.To, opts.toExclusive)...)
 	// Free-text payload search: dynamic schemas mean we don't know
 	// which column the user wants, so cast the whole row to VARCHAR
 	// via DuckDB's record stringifier and LIKE on it. Slow on huge
@@ -2466,11 +2580,7 @@ func buildLPSearchSQLV4(tableName string, req *SearchObjectV4) (string, error) {
 	} else {
 		sql += " ORDER BY time DESC"
 	}
-	limit := req.Param.Limit
-	if limit <= 0 || limit > 50000 {
-		limit = 50
-	}
-	sql += fmt.Sprintf(" LIMIT %d", limit)
+	sql += fmt.Sprintf(" LIMIT %d", effectiveSearchLimit(req.Param.Limit))
 	return sql, nil
 }
 

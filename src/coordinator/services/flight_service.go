@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,27 +24,30 @@ import (
 
 // FlightService manages connections to nodes via HTTP API
 type FlightService struct {
-	nodes       []config.NodeEndpoint
-	queryClient *http.Client // used for POST /query (configurable timeout)
+	nodes        []config.NodeEndpoint
+	queryClient  *http.Client // used for POST /query (timeout applied per request via context)
 	healthClient *http.Client // used for GET /health (short fixed timeout)
-	connected   map[string]bool
-	mu          sync.RWMutex
-	stopCh      chan struct{}
-	stopOnce    sync.Once
-	lakeName    string
+	// queryTimeout bounds each individual POST /query. It is applied as a
+	// context deadline (not http.Client.Timeout) so callers with their own,
+	// shorter deadline are still honored.
+	queryTimeout time.Duration
+	connected    map[string]bool
+	mu           sync.RWMutex
+	stopCh       chan struct{}
+	stopOnce     sync.Once
+	lakeName     string
 }
 
 // NewFlightService creates a new FlightSQL service.
-// queryTimeout controls the HTTP timeout for data queries to nodes.
+// queryTimeout controls the per-query timeout for data queries to nodes.
 func NewFlightService(nodes []config.NodeEndpoint, queryTimeout time.Duration) *FlightService {
 	if queryTimeout <= 0 {
 		queryTimeout = 30 * time.Second
 	}
 	return &FlightService{
-		nodes: nodes,
-		queryClient: &http.Client{
-			Timeout: queryTimeout,
-		},
+		nodes:        nodes,
+		queryClient:  &http.Client{},
+		queryTimeout: queryTimeout,
 		healthClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -229,6 +233,8 @@ func (s *FlightService) Query(ctx context.Context, sql string) ([]map[string]int
 	logger.Debug("Hub: Query to nodes", "sql", sql)
 
 	allResults := make([]map[string]interface{}, 0)
+	var nodeErrs []error
+	succeeded := 0
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -243,18 +249,27 @@ func (s *FlightService) Query(ctx context.Context, sql string) ([]map[string]int
 			defer wg.Done()
 
 			results, err := s.queryNode(ctx, n, sql)
-			if err != nil {
-				logger.Error(fmt.Sprintf("Hub: Query failed on node %s: %v", n.Name, err))
-				return
-			}
 
 			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				logger.Error(fmt.Sprintf("Hub: Query failed on node %s: %v", n.Name, err))
+				nodeErrs = append(nodeErrs, fmt.Errorf("node %s: %w", n.Name, err))
+				return
+			}
+			succeeded++
 			allResults = append(allResults, results...)
-			mu.Unlock()
 		}(node)
 	}
 
 	wg.Wait()
+
+	// Surface the failure when no node produced a result; silently returning
+	// an empty set hides real errors (query timeouts, SQL errors) from API
+	// consumers. Partial results from a degraded cluster are still returned.
+	if succeeded == 0 && len(nodeErrs) > 0 {
+		return nil, errors.Join(nodeErrs...)
+	}
 	return allResults, nil
 }
 
@@ -281,6 +296,11 @@ func (s *FlightService) QueryNode(ctx context.Context, nodeName string, sql stri
 
 // queryNode executes a query on a single node via HTTP
 func (s *FlightService) queryNode(ctx context.Context, node config.NodeEndpoint, sql string) ([]map[string]interface{}, error) {
+	// Per-query timeout; context.WithTimeout keeps the parent deadline when
+	// the caller's is sooner.
+	ctx, cancel := context.WithTimeout(ctx, s.queryTimeout)
+	defer cancel()
+
 	// Node HTTP API runs on FlightServer.Port + 1
 	httpPort := node.Port + 1
 	url := fmt.Sprintf("http://%s:%d/query", node.Host, httpPort)
