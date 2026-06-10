@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -232,6 +233,8 @@ func (s *FlightService) Query(ctx context.Context, sql string) ([]map[string]int
 	logger.Debug("Hub: Query to nodes", "sql", sql)
 
 	allResults := make([]map[string]interface{}, 0)
+	var nodeErrs []error
+	succeeded := 0
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -246,18 +249,27 @@ func (s *FlightService) Query(ctx context.Context, sql string) ([]map[string]int
 			defer wg.Done()
 
 			results, err := s.queryNode(ctx, n, sql)
-			if err != nil {
-				logger.Error(fmt.Sprintf("Hub: Query failed on node %s: %v", n.Name, err))
-				return
-			}
 
 			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				logger.Error(fmt.Sprintf("Hub: Query failed on node %s: %v", n.Name, err))
+				nodeErrs = append(nodeErrs, fmt.Errorf("node %s: %w", n.Name, err))
+				return
+			}
+			succeeded++
 			allResults = append(allResults, results...)
-			mu.Unlock()
 		}(node)
 	}
 
 	wg.Wait()
+
+	// Surface the failure when no node produced a result; silently returning
+	// an empty set hides real errors (query timeouts, SQL errors) from API
+	// consumers. Partial results from a degraded cluster are still returned.
+	if succeeded == 0 && len(nodeErrs) > 0 {
+		return nil, errors.Join(nodeErrs...)
+	}
 	return allResults, nil
 }
 
