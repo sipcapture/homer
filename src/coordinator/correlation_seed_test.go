@@ -9,7 +9,9 @@ package coordinator
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -175,6 +177,69 @@ func TestSeedDefaultCorrelationScript_RepairsLegacyDoubleEscape(t *testing.T) {
 	if got != operatorEdited {
 		t.Errorf("operator-edited `registration` row must not be overwritten; got %q",
 			safeSlice(got, 0, 80))
+	}
+}
+
+// TestSeedDefaultCorrelationScript_UpgradesLegacyTemplate verifies that a
+// stored script matching a superseded bundled template (fingerprinted in
+// legacySeedSHA256) is upgraded in place — preserving status — while
+// operator-edited scripts whose hash does not match stay untouched.
+func TestSeedDefaultCorrelationScript_UpgradesLegacyTemplate(t *testing.T) {
+	db := openTestSettingsDB(t)
+
+	callSeed := defaultCorrelationSeeds[0] // profile=call
+
+	legacyScript := "-- legacy bundled template\nfunction correlate(data, nodes) return {} end\n"
+	operatorEdited := "-- operator tweaked\nfunction correlate(data, nodes) return {\"x\"} end\n"
+
+	sum := sha256.Sum256([]byte(legacyScript))
+	old := legacySeedSHA256["call"]
+	legacySeedSHA256["call"] = append([]string{hex.EncodeToString(sum[:])}, old...)
+	t.Cleanup(func() { legacySeedSHA256["call"] = old })
+
+	// Enabled legacy row (must be upgraded, status preserved) and an
+	// operator row under another guid (must stay).
+	for _, r := range []struct {
+		guid, script string
+		status       bool
+	}{
+		{"legacy-template-guid", legacyScript, true},
+		{"operator-call-guid", operatorEdited, false},
+	} {
+		if _, err := db.Exec(
+			fmt.Sprintf(`INSERT INTO %s (guid, profile, hep_alias, type, hepid, status, script, create_date)
+			 VALUES (?, ?, ?, 'correlation', ?, ?, ?, current_timestamp)`,
+				services.CorrelationScriptsTable),
+			r.guid, callSeed.profile, callSeed.hepAlias, callSeed.hepID, r.status, r.script); err != nil {
+			t.Fatalf("insert %s: %v", r.guid, err)
+		}
+	}
+
+	if err := seedDefaultCorrelationScript(db); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	var script string
+	var status bool
+	if err := db.QueryRow(
+		fmt.Sprintf(`SELECT script, status FROM %s WHERE guid = ?`, services.CorrelationScriptsTable),
+		"legacy-template-guid").Scan(&script, &status); err != nil {
+		t.Fatalf("read upgraded row: %v", err)
+	}
+	if script != callSeed.script {
+		t.Errorf("legacy template row was not upgraded to the current template")
+	}
+	if !status {
+		t.Errorf("upgrade must preserve status=TRUE")
+	}
+
+	if err := db.QueryRow(
+		fmt.Sprintf(`SELECT script FROM %s WHERE guid = ?`, services.CorrelationScriptsTable),
+		"operator-call-guid").Scan(&script); err != nil {
+		t.Fatalf("read operator row: %v", err)
+	}
+	if script != operatorEdited {
+		t.Errorf("operator-edited row must not be overwritten")
 	}
 }
 

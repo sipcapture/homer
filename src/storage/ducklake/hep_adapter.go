@@ -10,6 +10,7 @@ package ducklake
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -349,7 +350,7 @@ func (a *MultiTableAdapter) buildRTCPValues(hep *decoder.HEP, uid string, date t
 	row[9] = nodeID
 	row[10] = hep.CID
 	row[11] = hep.Payload
-	row[12] = buildSimpleExtraJSON(hep)
+	row[12] = buildSimpleExtraJSONCell(hep)
 	return row
 }
 
@@ -368,7 +369,7 @@ func (a *MultiTableAdapter) buildDNSValues(hep *decoder.HEP, uid string, date ti
 	row[7] = hep.Protocol
 	row[8] = nodeID
 	row[9] = hep.Payload
-	row[10] = buildSimpleExtraJSON(hep)
+	row[10] = buildSimpleExtraJSONCell(hep)
 	return row
 }
 
@@ -385,7 +386,7 @@ func (a *MultiTableAdapter) buildLOGValues(hep *decoder.HEP, uid string, date ti
 	row[5] = hep.DstIP
 	row[6] = nodeID
 	row[7] = hep.Payload
-	row[8] = buildSimpleExtraJSON(hep)
+	row[8] = buildSimpleExtraJSONCell(hep)
 	return row
 }
 
@@ -407,7 +408,7 @@ func (a *MultiTableAdapter) buildDefaultValues(hep *decoder.HEP, uid string, dat
 	row[9] = nodeID
 	row[10] = hep.CID
 	row[11] = hep.Payload
-	row[12] = buildSimpleExtraJSON(hep)
+	row[12] = buildSimpleExtraJSONCell(hep)
 	return row
 }
 
@@ -559,22 +560,23 @@ func appendSIPExtraFields(b *[]byte, first *bool, hep *decoder.HEP) {
 }
 
 // sipVersionOnlyCache caches {"version":N} for SIP when no optional fields are set.
-var sipVersionOnlyCache sync.Map // uint32 version -> string
+var sipVersionOnlyCache sync.Map // uint32 version -> json.RawMessage
 
-func cachedSIPVersionOnlyJSON(version uint32) string {
+func cachedSIPVersionOnlyJSON(version uint32) json.RawMessage {
 	if v, ok := sipVersionOnlyCache.Load(version); ok {
-		return v.(string)
+		return v.(json.RawMessage)
 	}
 	bp := sbPool.Get().(*[]byte)
 	b := (*bp)[:0]
 	b = append(b, `{"version":`...)
 	b = strconv.AppendUint(b, uint64(version), 10)
 	b = append(b, '}')
-	s := string(b)
+	// The cached value lives indefinitely, so copy out of the pooled buffer.
+	m := json.RawMessage(string(b))
 	*bp = b
 	sbPool.Put(bp)
-	sipVersionOnlyCache.Store(version, s)
-	return s
+	sipVersionOnlyCache.Store(version, m)
+	return m
 }
 
 func buildSIPExtraJSONInto(b []byte, hep *decoder.HEP) []byte {
@@ -588,10 +590,15 @@ func buildSIPExtraJSONInto(b []byte, hep *decoder.HEP) []byte {
 }
 
 // buildExtraJSONCell returns a value suitable for row data_extra column.
-// Either a cached string or *([]byte) (pooled; released in putRowSlice).
+// Either a cached json.RawMessage or *([]byte) (pooled; released in
+// putRowSlice). data_extra columns are JSON-typed, and the duckdb-go
+// Appender json.Marshal()s whatever it receives — a plain Go string would
+// be stored as a double-encoded JSON string scalar instead of an object
+// (breaking json_extract_string and Lua call correlation), so JSON cells
+// must always be json.RawMessage or pooled raw bytes here.
 func buildExtraJSONCell(hep *decoder.HEP) interface{} {
 	if hep.SIP == nil {
-		return buildSimpleExtraJSON(hep)
+		return buildSimpleExtraJSONCell(hep)
 	}
 	bp := sbPool.Get().(*[]byte)
 	b := buildSIPExtraJSONInto((*bp)[:0], hep)
@@ -621,22 +628,31 @@ func releaseExtraJSONCell(v interface{}) {
 }
 
 // cellToDriverValue converts a batch cell to a driver value. Pooled JSON
-// buffers are copied to string at flush time (Appender copies again internally).
+// buffers become json.RawMessage: the upstream duckdb-go Appender runs
+// json.Marshal on values destined for JSON columns, so a plain string would
+// be re-encoded into a JSON string scalar ("{\"a\":1}" instead of {"a":1}),
+// silently breaking every json_extract_* consumer (Lua call correlation,
+// data_extra virtual-field search). json.RawMessage marshals to itself.
+// The pooled buffer is only released after Appender.Close (putRowSlice),
+// so aliasing it here is safe.
 func cellToDriverValue(v interface{}) interface{} {
 	if bp, ok := v.(*[]byte); ok {
 		if bp == nil || len(*bp) == 0 {
-			return "{}"
+			return emptyJSONObject
 		}
-		return string(*bp)
+		return json.RawMessage(*bp)
 	}
 	return v
 }
 
+// emptyJSONObject is the shared driver value for empty data_extra cells.
+var emptyJSONObject = json.RawMessage("{}")
+
 // buildExtraJSON builds the data_extra JSON string (legacy single-table path).
 func buildExtraJSON(hep *decoder.HEP) string {
 	cell := buildExtraJSONCell(hep)
-	if s, ok := cell.(string); ok {
-		return s
+	if m, ok := cell.(json.RawMessage); ok {
+		return string(m)
 	}
 	bp := cell.(*[]byte)
 	s := string(*bp)
@@ -644,16 +660,18 @@ func buildExtraJSON(hep *decoder.HEP) string {
 	return s
 }
 
-// simpleExtraCache caches "{\"version\":N,\"proto_type\":M}" strings for non-SIP packets.
+// simpleExtraCache caches {"version":N,"proto_type":M} for non-SIP packets.
 // Keyed by version<<16 | protoType (both fit in 16 bits for known HEP protos).
-var simpleExtraCache sync.Map // uint32 -> string
+var simpleExtraCache sync.Map // uint32 -> json.RawMessage
 
-// buildSimpleExtraJSON builds a minimal extra JSON for non-SIP packets.
+// buildSimpleExtraJSONCell builds a minimal extra JSON cell for non-SIP packets.
 // Result is cached since version and proto_type rarely change between packets.
-func buildSimpleExtraJSON(hep *decoder.HEP) string {
+// Returned as json.RawMessage so the Appender writes it as a JSON document
+// (see cellToDriverValue).
+func buildSimpleExtraJSONCell(hep *decoder.HEP) json.RawMessage {
 	key := uint32(hep.Version)<<16 | (hep.ProtoType & 0xffff)
 	if v, ok := simpleExtraCache.Load(key); ok {
-		return v.(string)
+		return v.(json.RawMessage)
 	}
 	bp := sbPool.Get().(*[]byte)
 	b := (*bp)[:0]
@@ -662,12 +680,17 @@ func buildSimpleExtraJSON(hep *decoder.HEP) string {
 	b = append(b, `,"proto_type":`...)
 	b = strconv.AppendUint(b, uint64(hep.ProtoType), 10)
 	b = append(b, '}')
-	// For the cache we need a real heap string (lives indefinitely).
-	s := string(b)
+	// The cached value lives indefinitely, so copy out of the pooled buffer.
+	m := json.RawMessage(string(b))
 	*bp = b
 	sbPool.Put(bp)
-	simpleExtraCache.Store(key, s)
-	return s
+	simpleExtraCache.Store(key, m)
+	return m
+}
+
+// buildSimpleExtraJSON is the string variant for legacy single-table records.
+func buildSimpleExtraJSON(hep *decoder.HEP) string {
+	return string(buildSimpleExtraJSONCell(hep))
 }
 
 // GetWriter returns the underlying writer
