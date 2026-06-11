@@ -10,6 +10,7 @@ package coordinator
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	_ "embed"
 	"encoding/hex"
@@ -42,6 +43,17 @@ type seedSpec struct {
 var defaultCorrelationSeeds = []seedSpec{
 	{profile: "call", hepAlias: "SIP", hepID: 1, script: defaultCallCorrelationLua},
 	{profile: "registration", hepAlias: "SIP", hepID: 1, script: defaultRegistrationCorrelationLua},
+}
+
+// legacySeedSHA256 fingerprints superseded versions of the bundled templates
+// (keyed by profile). Stored rows that still match one of these byte-for-byte
+// were never edited by an operator and are upgraded in place on start-up.
+// Operator-modified scripts never match and are left untouched.
+var legacySeedSHA256 = map[string][]string{
+	// sip_call.lua before 11.0.242: row_correlation_id only looked at
+	// top-level columns, so B-leg -> A-leg correlation never found the
+	// x_call_id stored inside the data_extra JSON.
+	"call": {"d22553459a7bd3e7ad05d68d56e9cd0fbf0343d430003995c0e356104e8559a3"},
 }
 
 // seedDefaultCorrelationScript inserts the bundled correlation templates
@@ -96,7 +108,7 @@ func seedOne(ctx context.Context, db *sql.DB, s seedSpec) error {
 			s.script, s.hepID, s.profile, mangled); err != nil {
 			return err
 		}
-		return nil
+		return upgradeLegacySeed(ctx, db, s)
 	}
 
 	guid, err := randomGUID()
@@ -114,6 +126,60 @@ func seedOne(ctx context.Context, db *sql.DB, s seedSpec) error {
 			services.CorrelationScriptsTable),
 		guid, s.profile, s.hepAlias, s.hepID, s.script)
 	return err
+}
+
+// upgradeLegacySeed replaces stored scripts that byte-for-byte match a
+// superseded bundled template (see legacySeedSHA256) with the current one.
+// status and all other columns are preserved, so an enabled script stays
+// enabled across the upgrade.
+func upgradeLegacySeed(ctx context.Context, db *sql.DB, s seedSpec) error {
+	hashes := legacySeedSHA256[s.profile]
+	if len(hashes) == 0 {
+		return nil
+	}
+	rows, err := db.QueryContext(ctx,
+		fmt.Sprintf(`SELECT guid, script FROM %s
+		 WHERE type = 'correlation' AND hepid = ? AND profile = ?`,
+			services.CorrelationScriptsTable),
+		s.hepID, s.profile)
+	if err != nil {
+		return err
+	}
+	type upd struct{ guid string }
+	var updates []upd
+	for rows.Next() {
+		var guid, script sql.NullString
+		if err := rows.Scan(&guid, &script); err != nil {
+			rows.Close()
+			return err
+		}
+		if !guid.Valid || !script.Valid || script.String == s.script {
+			continue
+		}
+		sum := sha256.Sum256([]byte(script.String))
+		hexSum := hex.EncodeToString(sum[:])
+		for _, h := range hashes {
+			if hexSum == h {
+				updates = append(updates, upd{guid: guid.String})
+				break
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	for _, u := range updates {
+		if _, err := db.ExecContext(ctx,
+			fmt.Sprintf(`UPDATE %s SET script = ? WHERE guid = ?`,
+				services.CorrelationScriptsTable),
+			s.script, u.guid); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // randomGUID returns a 32-hex-char random id without pulling in uuid.

@@ -5,6 +5,7 @@
 package ducklake
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -137,10 +138,23 @@ func BuildInsertMultiValues(lakeName string, key TableKey, rows [][]interface{})
 	for ri, row := range rows {
 		parts := make([]string, len(row))
 		for ci, cell := range row {
-			// data_extra is JSON in DuckLake
+			// data_extra is JSON in DuckLake. Row builders emit it as a
+			// string, json.RawMessage or pooled *[]byte (see
+			// buildExtraJSONCell); all three carry the raw JSON text.
 			if cols[ci] == "data_extra" {
-				if s, ok := cell.(string); ok {
-					esc, err := formatSQLLiteral(s)
+				var text string
+				switch x := cell.(type) {
+				case string:
+					text = x
+				case json.RawMessage:
+					text = string(x)
+				case *[]byte:
+					if x != nil {
+						text = string(*x)
+					}
+				}
+				if text != "" {
+					esc, err := formatSQLLiteral(text)
 					if err != nil {
 						return "", err
 					}

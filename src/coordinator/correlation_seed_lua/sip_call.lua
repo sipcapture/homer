@@ -83,10 +83,29 @@ end
 -- handful of common keys so user-customised schemas keep working.
 local function row_correlation_id(row)
   if type(row) ~= "table" then return nil end
-  return row["correlation_id"]
+  local v = row["correlation_id"]
       or row["x_call_id"]
       or row["xcid"]
       or row["callid_aleg"]
+  if is_non_empty(v) then return v end
+
+  -- The default schema stores x_call_id inside the data_extra JSON
+  -- string, not as a top-level column, so extract it from there. This is
+  -- what makes B-leg -> A-leg correlation work: the B-leg row carries
+  -- x_call_id = A-leg Call-ID.
+  local de = row["data_extra"]
+  if type(de) == "string" then
+    v = de:match('"x_call_id"%s*:%s*"([^"]*)"')
+    if is_non_empty(v) then return v end
+  end
+
+  -- HEP cid column: the decoder stores the aleg id there when the
+  -- capture agent did not send its own correlation chunk. When unused it
+  -- just mirrors session_id, which we must not treat as a peer id.
+  local cid = row["cid"]
+  if is_non_empty(cid) and cid ~= row["session_id"] then return cid end
+
+  return nil
 end
 
 function correlate(data, nodes, ctx)
