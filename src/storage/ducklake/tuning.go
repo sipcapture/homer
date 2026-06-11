@@ -15,21 +15,20 @@ import (
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
-// ApplyDuckDBS3ClientSettings configures DuckDB's built-in S3/httpfs client
-// (SET s3_*) before any s3:// reads or writes. Use the same rules everywhere:
-// writer MultiTableWriter, node global prefix (configureDuckLake), CLI helpers.
+// S3ClientSettingsSQL returns the session-scoped SET statements that configure
+// DuckDB's built-in S3/httpfs client. SET s3_* applies per connection, so the
+// statements must be replayed on every freshly pooled connection (see the
+// connector init in MultiTableWriter.connect). Values are embedded as
+// single-quote-escaped literals so the statements are self-contained.
 //
-// If accessKeyID is empty, this is a no-op (returns nil).
+// If accessKeyID is empty, returns nil (nothing to apply).
 //
 // When endpoint is non-empty, the scheme is stripped (DuckDB expects host:port)
 // and s3_url_style is set to path — required for most S3-compatible stores
 // (MinIO, RustFS) and aligned with per-volume CREATE SECRET in attachVolume.
 // If region is empty but a custom endpoint is set, region defaults to us-east-1
 // (signing requires a non-empty region for many S3-compatible backends).
-func ApplyDuckDBS3ClientSettings(db *sql.DB, region, accessKeyID, secretAccessKey, endpoint string, useSSL bool) error {
-	if db == nil {
-		return nil
-	}
+func S3ClientSettingsSQL(region, accessKeyID, secretAccessKey, endpoint string, useSSL bool) []string {
 	if strings.TrimSpace(accessKeyID) == "" {
 		return nil
 	}
@@ -40,30 +39,47 @@ func ApplyDuckDBS3ClientSettings(db *sql.DB, region, accessKeyID, secretAccessKe
 	if reg == "" && epRaw != "" {
 		reg = "us-east-1"
 	}
-	// One SET per Exec: DuckDB rejects a single multi-statement script with
-	// multiple bound parameters ("incorrect argument count ... have 0 want 1").
-	if _, err := db.Exec("SET s3_region = ?;", reg); err != nil {
-		return fmt.Errorf("duckdb SET s3_region: %w", err)
+	quote := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
+	stmts := []string{
+		fmt.Sprintf("SET s3_region = '%s';", quote(reg)),
+		fmt.Sprintf("SET s3_access_key_id = '%s';", quote(accessKeyID)),
+		fmt.Sprintf("SET s3_secret_access_key = '%s';", quote(secretAccessKey)),
 	}
-	if _, err := db.Exec("SET s3_access_key_id = ?;", accessKeyID); err != nil {
-		return fmt.Errorf("duckdb SET s3_access_key_id: %w", err)
-	}
-	if _, err := db.Exec("SET s3_secret_access_key = ?;", secretAccessKey); err != nil {
-		return fmt.Errorf("duckdb SET s3_secret_access_key: %w", err)
-	}
-	if ep := epRaw; ep != "" {
-		ep = strings.TrimPrefix(ep, "http://")
-		ep = strings.TrimPrefix(ep, "https://")
-		if _, err := db.Exec("SET s3_endpoint = ?;", ep); err != nil {
-			return fmt.Errorf("duckdb SET s3_endpoint: %w", err)
-		}
-		if _, err := db.Exec("SET s3_url_style = 'path';"); err != nil {
-			return fmt.Errorf("duckdb SET s3_url_style: %w", err)
-		}
+	if epRaw != "" {
+		ep := strings.TrimPrefix(strings.TrimPrefix(epRaw, "http://"), "https://")
+		stmts = append(stmts,
+			fmt.Sprintf("SET s3_endpoint = '%s';", quote(ep)),
+			"SET s3_url_style = 'path';",
+		)
 	}
 	if !useSSL {
-		if _, err := db.Exec("SET s3_use_ssl = false;"); err != nil {
-			return fmt.Errorf("duckdb SET s3_use_ssl: %w", err)
+		stmts = append(stmts, "SET s3_use_ssl = false;")
+	}
+	return stmts
+}
+
+// s3SettingName extracts the setting identifier from a "SET name = ..."
+// statement for log-safe error messages (values may contain secrets).
+func s3SettingName(stmt string) string {
+	fields := strings.Fields(stmt)
+	if len(fields) >= 2 {
+		return fields[1]
+	}
+	return "s3 setting"
+}
+
+// ApplyDuckDBS3ClientSettings configures DuckDB's built-in S3/httpfs client
+// (SET s3_*) on the given DB handle. Use the same rules everywhere:
+// writer MultiTableWriter, node global prefix (configureDuckLake), CLI helpers.
+// Note: SET s3_* is session-scoped — this only reliably covers pools with
+// MaxOpenConns(1); pooled writers replay S3ClientSettingsSQL per connection.
+func ApplyDuckDBS3ClientSettings(db *sql.DB, region, accessKeyID, secretAccessKey, endpoint string, useSSL bool) error {
+	if db == nil {
+		return nil
+	}
+	for _, stmt := range S3ClientSettingsSQL(region, accessKeyID, secretAccessKey, endpoint, useSSL) {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("duckdb SET %s: %w", s3SettingName(stmt), err)
 		}
 	}
 	return nil

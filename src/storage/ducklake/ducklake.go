@@ -13,7 +13,9 @@
 package ducklake
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/duckdb/duckdb-go/v2"
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -290,19 +292,43 @@ func NewMultiTableWriter(config Config) (*MultiTableWriter, error) {
 	return mtw, nil
 }
 
+// writerPoolConns is the connection pool size for the writer's DuckDB.
+// All pool connections are sessions on ONE DuckDB instance (one Connector ==
+// one duckdb database), so the attached DuckLake catalog, mem_* buffer tables
+// and secrets are shared. More than one connection lets node search queries
+// (handleQuery runs on this DB via SetSharedDB) execute concurrently with
+// flush inserts and long compaction calls — with a single connection every
+// SELECT queues behind maintenance and intermittently hits the coordinator
+// query timeout (sipcapture/homer#785). Catalog-modifying operations stay
+// serialized via catalogMu, so write-write races are unchanged.
+const writerPoolConns = 4
+
 // connect establishes connection to DuckDB and attaches DuckLake
 func (mtw *MultiTableWriter) connect() error {
-	// Open in-memory DuckDB (DuckLake uses it as query engine)
-	db, err := sql.Open("duckdb", "")
+	// SET s3_* is session-scoped: replay it on every new pooled connection.
+	// Without this, the pool can hand out a fresh connection without those
+	// settings → intermittent S3 404 / NoSuchBucket on flush.
+	s3Stmts := S3ClientSettingsSQL(
+		mtw.config.S3Region,
+		mtw.config.S3AccessKeyID,
+		mtw.config.S3SecretAccessKey,
+		mtw.config.S3Endpoint,
+		mtw.config.S3UseSSL,
+	)
+	connector, err := duckdb.NewConnector("", func(execer driver.ExecerContext) error {
+		for _, stmt := range s3Stmts {
+			if _, err := execer.ExecContext(context.Background(), stmt, nil); err != nil {
+				return fmt.Errorf("duckdb conn init %s: %w", s3SettingName(stmt), err)
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("failed to open DuckDB: %w", err)
 	}
-	// Single connection: SET s3_* and CREATE SECRET from connect() apply per
-	// sql.DB connection; with MaxOpenConns>1 the pool can hand out a fresh
-	// connection without those settings → intermittent S3 404 / NoSuchBucket on
-	// flush (same pattern as node Flight DuckDB: SetMaxOpenConns(1)).
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	db := sql.OpenDB(connector)
+	db.SetMaxOpenConns(writerPoolConns)
+	db.SetMaxIdleConns(writerPoolConns)
 	mtw.db = db
 
 	// Apply DuckDB engine tuning (memory_limit, threads, temp_directory)
@@ -352,15 +378,7 @@ func (mtw *MultiTableWriter) connect() error {
 		logger.Info("DuckLake inline GC: dropped empty ducklake_inlined_data_* tables (upstream #1065)", "dropped", n)
 	}
 
-	if err := ApplyDuckDBS3ClientSettings(db,
-		mtw.config.S3Region,
-		mtw.config.S3AccessKeyID,
-		mtw.config.S3SecretAccessKey,
-		mtw.config.S3Endpoint,
-		mtw.config.S3UseSSL,
-	); err != nil {
-		return fmt.Errorf("failed to configure S3: %w", err)
-	}
+	// SET s3_* is applied per pooled connection by the connector init above.
 	if isS3Path(mtw.config.DataPath) {
 		if err := EnsureWriterS3Secret(db,
 			mtw.config.S3Region,
