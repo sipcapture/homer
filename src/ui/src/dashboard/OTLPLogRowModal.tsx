@@ -3,45 +3,13 @@ import { useMemo, useState } from 'react'
 import { FloatingWindow } from '@/components/ui/floating-window'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  highlightJSON,
+  isJsonDisplayable,
+  serializeRowForDisplay,
+} from '@/lib/jsonDisplay'
 import { cn } from '@/lib/utils'
 import { useLocale } from '@/components/locale/locale-provider'
-
-function escapeHtml(str) {
-  if (typeof str !== 'string') return str
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function isJSON(str) {
-  if (!str) return false
-  const trimmed = String(str).trim()
-  return (trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))
-}
-
-function highlightJSON(payload) {
-  try {
-    const obj = JSON.parse(payload)
-    const formatted = JSON.stringify(obj, null, 2)
-    let html = escapeHtml(formatted)
-    html = html.replace(/&quot;([^&]+)&quot;(\s*:)/g,
-      '<span class="text-sky-500">&quot;$1&quot;</span><span class="text-muted-foreground">$2</span>')
-    html = html.replace(/: &quot;([^&]*)&quot;/g,
-      ': <span class="text-emerald-500">&quot;$1&quot;</span>')
-    html = html.replace(/: (-?\d+\.?\d*)/g,
-      ': <span class="text-amber-500">$1</span>')
-    html = html.replace(/: (true|false)/g,
-      ': <span class="text-violet-500">$1</span>')
-    html = html.replace(/: (null)/g,
-      ': <span class="text-muted-foreground">$1</span>')
-    html = html.replace(/([{}\[\]])/g, '<span class="text-muted-foreground">$1</span>')
-    return html
-  } catch {
-    return escapeHtml(payload)
-  }
-}
 
 function severityFromNumber(n) {
   if (n == null || Number.isNaN(n)) return ''
@@ -152,12 +120,7 @@ export default function OTLPLogRowModal({ modal, timeZone, onClose }) {
       else display = '—'
       entries.push({ key: k, display })
     }
-    let text
-    try {
-      text = JSON.stringify(row, null, 2)
-    } catch {
-      text = String(row)
-    }
+    const text = serializeRowForDisplay(row)
     const body = row?.body ?? row?.BODY ?? ''
     return { detailEntries: entries, jsonText: text, bodyText: String(body ?? '') }
   }, [row, timeZone, locale])
@@ -170,7 +133,9 @@ export default function OTLPLogRowModal({ modal, timeZone, onClose }) {
 
   const sev = resolvedSeverityLabel(row)
   const badgeCls = severityBadgeClass(sev)
-  const prettyHtml = isJSON(jsonText) ? highlightJSON(jsonText) : escapeHtml(jsonText)
+  const prettyHtml = highlightJSON(jsonText)
+  const bodyIsJson = isJsonDisplayable(bodyText)
+  const bodyPrettyHtml = bodyIsJson ? highlightJSON(bodyText) : ''
 
   return (
     <FloatingWindow
@@ -208,9 +173,16 @@ export default function OTLPLogRowModal({ modal, timeZone, onClose }) {
             <div>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Body</span>
               <ScrollArea className="mt-1 max-h-[140px] rounded-sm border border-border bg-muted/20">
-                <pre className="whitespace-pre-wrap break-words p-2 font-mono text-[11px] text-foreground">
-                  {bodyText}
-                </pre>
+                {bodyIsJson ? (
+                  <pre
+                    className="whitespace-pre p-2 font-mono text-[11px] leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: bodyPrettyHtml }}
+                  />
+                ) : (
+                  <pre className="whitespace-pre-wrap break-words p-2 font-mono text-[11px] text-foreground">
+                    {bodyText}
+                  </pre>
+                )}
               </ScrollArea>
             </div>
           ) : null}
