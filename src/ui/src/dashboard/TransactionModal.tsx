@@ -22,6 +22,13 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
+import {
+  eventPayloadField,
+  formatJsonField,
+  highlightJSON,
+  isJsonDisplayable,
+  serializeRowForDisplay,
+} from '@/lib/jsonDisplay'
 import { cn } from '@/lib/utils'
 import { newModalKey } from '@/lib/modalKey'
 import { useLocale } from '@/components/locale/locale-provider'
@@ -291,6 +298,11 @@ function formatEventsCell(value, col, timeZone, locale) {
     const s = formatDateTime(value, locale, timeZone)
     return s || '—'
   }
+  const payloadLike = col.keys?.some((k) => k === 'payload' || k === 'message' || k === 'data' || k === 'body')
+  if (payloadLike && isJsonDisplayable(value)) {
+    const pretty = formatJsonField(value).replace(/\s+/g, ' ')
+    return pretty.length > 200 ? `${pretty.slice(0, 197)}…` : pretty
+  }
   if (typeof value === 'object') {
     try {
       const j = JSON.stringify(value)
@@ -303,16 +315,85 @@ function formatEventsCell(value, col, timeZone, locale) {
   return s.length > 200 ? `${s.slice(0, 197)}…` : s
 }
 
-function serializeRowJSONForWindow(row) {
-  try {
-    return JSON.stringify(
-      row,
-      (_k, v) => (typeof v === 'bigint' ? v.toString() : v),
-      2,
-    )
-  } catch (e) {
-    return `Error serializing row: ${e?.message || e}`
-  }
+function EventRecordDetail({ row }) {
+  const [recordTab, setRecordTab] = React.useState('pretty')
+  const [payloadTab, setPayloadTab] = React.useState('pretty')
+  const payloadVal = eventPayloadField(row)
+  const payloadIsJson = isJsonDisplayable(payloadVal)
+  const recordText = serializeRowForDisplay(row)
+  const recordPrettyHtml = highlightJSON(recordText)
+  const payloadPrettyHtml = highlightJSON(payloadVal)
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      {payloadIsJson ? (
+        <div className="shrink-0 space-y-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Payload
+          </span>
+          <Tabs value={payloadTab} onValueChange={setPayloadTab} className="flex flex-col gap-2">
+            <TabsList variant="line" className="h-8 w-fit justify-start">
+              <TabsTrigger value="pretty" className="text-[11px]">
+                Pretty
+              </TabsTrigger>
+              <TabsTrigger value="raw" className="text-[11px]">
+                Raw
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="pretty" className="mt-0">
+              <ScrollArea className="max-h-[220px] rounded-md border border-border bg-muted/40">
+                <pre
+                  className="whitespace-pre p-2 font-mono text-[11px] leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: payloadPrettyHtml || '(no payload)' }}
+                />
+              </ScrollArea>
+            </TabsContent>
+            <TabsContent value="raw" className="mt-0">
+              <ScrollArea className="max-h-[220px] rounded-md border border-border bg-muted/40">
+                <pre className="whitespace-pre-wrap break-all p-2 font-mono text-[11px] leading-relaxed text-foreground">
+                  {formatJsonField(payloadVal)}
+                </pre>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+        </div>
+      ) : null}
+      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Full record
+        </span>
+        <Tabs
+          value={recordTab}
+          onValueChange={setRecordTab}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          <TabsList variant="line" className="h-8 w-fit shrink-0 justify-start">
+            <TabsTrigger value="pretty" className="text-[11px]">
+              Pretty
+            </TabsTrigger>
+            <TabsTrigger value="raw" className="text-[11px]">
+              Raw
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="pretty" className="mt-0 min-h-0 flex-1 overflow-hidden">
+            <ScrollArea className="min-h-0 flex-1 rounded-md border border-border bg-muted/40">
+              <pre
+                className="whitespace-pre p-2 font-mono text-[11px] leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: recordPrettyHtml || '(empty)' }}
+              />
+            </ScrollArea>
+          </TabsContent>
+          <TabsContent value="raw" className="mt-0 min-h-0 flex-1 overflow-hidden">
+            <ScrollArea className="min-h-0 flex-1 rounded-md border border-border bg-muted/40">
+              <pre className="whitespace-pre-wrap break-words p-2 font-mono text-[11px] leading-relaxed text-foreground">
+                {recordText}
+              </pre>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  )
 }
 
 function EventsTab({ data, isLoading, err, emptyLabel, timeZone, locale }) {
@@ -408,15 +489,8 @@ function EventsTab({ data, isLoading, err, emptyLabel, timeZone, locale }) {
           minHeight={280}
           className="flex min-h-0 flex-col"
         >
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-0">
-            <p className="shrink-0 text-[10px] text-muted-foreground">
-              Full record including data_extra (JSON).
-            </p>
-            <ScrollArea className="min-h-0 flex-1 rounded-md border border-border bg-muted/40">
-              <pre className="whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-relaxed text-foreground">
-                {serializeRowJSONForWindow(detailRow)}
-              </pre>
-            </ScrollArea>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3 pt-0">
+            <EventRecordDetail row={detailRow} />
           </div>
         </FloatingWindow>
       ) : null}
@@ -539,15 +613,8 @@ function OtlpLogsTab({
           minHeight={320}
           className="flex min-h-0 flex-col"
         >
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-0">
-            <p className="shrink-0 text-[10px] text-muted-foreground">
-              Full record (JSON), including fields not shown in the table.
-            </p>
-            <ScrollArea className="min-h-0 flex-1 rounded-md border border-border bg-muted/40">
-              <pre className="whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-relaxed text-foreground">
-                {serializeRowJSONForWindow(detailRow)}
-              </pre>
-            </ScrollArea>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3 pt-0">
+            <EventRecordDetail row={detailRow} />
           </div>
         </FloatingWindow>
       ) : null}

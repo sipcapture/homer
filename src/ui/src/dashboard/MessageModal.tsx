@@ -7,50 +7,18 @@ import { FloatingWindow } from '@/components/ui/floating-window'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
+import {
+  escapeHtml,
+  highlightJSON,
+  isJsonDisplayable,
+  payloadAsString,
+} from '@/lib/jsonDisplay'
 import { useLocale } from '@/components/locale/locale-provider'
-
-function escapeHtml(str) {
-  if (typeof str !== 'string') return str
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function isJSON(str) {
-  if (!str) return false
-  const trimmed = str.trim()
-  return (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-    (trimmed.startsWith('[') && trimmed.endsWith(']'))
-}
 
 // Tailwind v4 scans source files for class strings — keeping literal classnames
 // here so the compiler picks them up:
 // text-sky-500 text-violet-500 text-amber-500 text-emerald-500
 // text-destructive text-muted-foreground font-semibold font-medium
-
-function highlightJSON(payload) {
-  try {
-    const obj = JSON.parse(payload)
-    const formatted = JSON.stringify(obj, null, 2)
-    let html = escapeHtml(formatted)
-    html = html.replace(/&quot;([^&]+)&quot;(\s*:)/g,
-      '<span class="text-sky-500">&quot;$1&quot;</span><span class="text-muted-foreground">$2</span>')
-    html = html.replace(/: &quot;([^&]*)&quot;/g,
-      ': <span class="text-emerald-500">&quot;$1&quot;</span>')
-    html = html.replace(/: (-?\d+\.?\d*)/g,
-      ': <span class="text-amber-500">$1</span>')
-    html = html.replace(/: (true|false)/g,
-      ': <span class="text-violet-500">$1</span>')
-    html = html.replace(/: (null)/g,
-      ': <span class="text-muted-foreground">$1</span>')
-    html = html.replace(/([{}\[\]])/g, '<span class="text-muted-foreground">$1</span>')
-    return html
-  } catch {
-    return escapeHtml(payload)
-  }
-}
 
 function highlightSIP(payload) {
   if (!payload) return '(no payload)'
@@ -233,9 +201,9 @@ export default function MessageModal({ modal, onClose, timeZone }) {
   if (!modal) return null
 
   const { uuid, loading, data, error, messageContext, modalKey } = modal
-  const payload = data?.payload || ''
-  const payloadIsJson = isJSON(payload)
-  const payloadHtml = payloadIsJson ? highlightJSON(payload) : highlightSIP(payload)
+  const payload = payloadAsString(data?.payload)
+  const payloadIsJson = isJsonDisplayable(data?.payload ?? payload)
+  const payloadHtml = payloadIsJson ? highlightJSON(data?.payload ?? payload) : highlightSIP(payload)
 
   const handleDecode = async () => {
     if (!uuid || decoding) return

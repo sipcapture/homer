@@ -146,6 +146,41 @@
   }
 }
 
+/* JSON syntax highlighting (dangerouslySetInnerHTML) — plain CSS so Tailwind
+   content scan does not need to see class names inside TS string literals. */
+.json-hl-key {
+  color: oklch(0.52 0.16 245);
+}
+.json-hl-str {
+  color: oklch(0.48 0.14 155);
+}
+.json-hl-num {
+  color: oklch(0.58 0.16 75);
+}
+.json-hl-bool {
+  color: oklch(0.52 0.17 295);
+}
+.json-hl-null,
+.json-hl-punct {
+  color: oklch(0.48 0.015 255);
+}
+.dark .json-hl-key {
+  color: oklch(0.74 0.14 245);
+}
+.dark .json-hl-str {
+  color: oklch(0.72 0.14 155);
+}
+.dark .json-hl-num {
+  color: oklch(0.80 0.14 75);
+}
+.dark .json-hl-bool {
+  color: oklch(0.76 0.14 295);
+}
+.dark .json-hl-null,
+.dark .json-hl-punct {
+  color: oklch(0.72 0.015 255);
+}
+
 /* uPlot legend: small circular swatches (Grafana-style) instead of 1em squares */
 .uplot .u-legend .u-marker {
   width: 7px;
