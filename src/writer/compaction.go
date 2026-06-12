@@ -528,6 +528,9 @@ func (c *CompactionService) runMerge(tables []string) error {
 			}
 			if err != nil {
 				logger.Warn("CompactionService: merge_adjacent_files failed", "table", tableName, "error", err)
+				if strings.Contains(err.Error(), "Out of Memory") {
+					c.logMemoryBreakdown()
+				}
 			} else if result != nil {
 				rowsAffected, _ := result.RowsAffected()
 				logger.Info("CompactionService: merge_adjacent_files completed", "table", tableName, "files_merged", rowsAffected)
@@ -664,6 +667,43 @@ func (c *CompactionService) buildMergeSQL(tableName string) string {
 		tableName,
 		strings.Join(params, ", "),
 	)
+}
+
+// logMemoryBreakdown dumps DuckDB's buffer-manager accounting after an
+// Out of Memory failure so operators can see WHO holds the memory_limit
+// budget (in-memory buffer tables, hash joins, parquet readers, ...) and
+// whether temp spilling is actually engaged (temporary_storage_bytes > 0
+// proves temp_directory is set and used; all-zero means spilling is off,
+// i.e. the instance runs without a temp_directory).
+func (c *CompactionService) logMemoryBreakdown() {
+	rows, err := c.db.Query(`
+		SELECT tag,
+		       memory_usage_bytes,
+		       temporary_storage_bytes
+		FROM duckdb_memory()
+		ORDER BY memory_usage_bytes DESC`)
+	if err != nil {
+		logger.Warn("CompactionService: duckdb_memory() failed", "error", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tag string
+		var memBytes, tempBytes int64
+		if err := rows.Scan(&tag, &memBytes, &tempBytes); err != nil {
+			continue
+		}
+		if memBytes == 0 && tempBytes == 0 {
+			continue
+		}
+		logger.Warn("CompactionService: duckdb memory breakdown",
+			"tag", tag,
+			"memory_mb", memBytes/(1<<20),
+			"spilled_to_disk_mb", tempBytes/(1<<20))
+	}
+	if err := rows.Err(); err != nil {
+		logger.Warn("CompactionService: duckdb_memory() iteration failed", "error", err)
+	}
 }
 
 func (c *CompactionService) execWithRetry(query string, args ...any) (sql.Result, error) {

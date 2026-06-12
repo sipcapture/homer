@@ -698,7 +698,9 @@ type CompactionConfig struct {
 	MinFileSizeBytes int64 `json:"min_file_size_bytes" mapstructure:"min_file_size_bytes" default:"0"`
 	// MaxFileSizeBytes: maximum size of merged file. 0 = no limit (DuckLake default).
 	MaxFileSizeBytes int64 `json:"max_file_size_bytes" mapstructure:"max_file_size_bytes" default:"0"`
-	// MaxCompactedFiles: maximum number of files to merge per table per cycle. 0 = no limit.
+	// MaxCompactedFiles: maximum number of files to merge per table per cycle.
+	// 0 = writer default (100). Bounding the merge batch keeps the compaction
+	// working set within memory_limit on memory-capped writers.
 	MaxCompactedFiles int `json:"max_compacted_files" mapstructure:"max_compacted_files" default:"0"`
 }
 

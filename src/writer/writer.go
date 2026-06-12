@@ -341,6 +341,14 @@ func (w *Writer) Start() error {
 		if compactionCfg.MinAgeSec <= 0 {
 			compactionCfg.MinAgeSec = 3600 // default 1 hour
 		}
+		if compactionCfg.MaxCompactedFiles <= 0 {
+			// Unbounded merge rewrites every small parquet of a table in one
+			// CALL; on a memory-capped writer that working set alone can hit
+			// memory_limit and abort with Out of Memory while search/flush
+			// run on the same instance. Capping keeps each cycle's peak
+			// bounded — leftovers are picked up by the next cycle.
+			compactionCfg.MaxCompactedFiles = 100
+		}
 		var compactionS3 *CompactionS3Client
 		if ducklake.IsRemoteLakeDataPath(w.storageConfig.DuckLake.DataPath) {
 			s := w.storageConfig.DuckLake.S3
