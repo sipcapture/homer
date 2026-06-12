@@ -466,6 +466,7 @@ export default function DataChartPanel({ widgetId, config, onConfigChange }: Dat
       const res = await fetch(`${apiBase}/query`, {
         method: 'POST',
         headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ sql: finalSql, limit: 50000 }),
       })
       if (!res.ok) {

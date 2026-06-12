@@ -28,6 +28,10 @@ import (
 type AuthHandler struct {
 	jwtSecret    string
 	expireHours  int
+	cookieEnable bool
+	cookieName   string
+	cookieSameSite string
+	cookieSecure   *bool
 	userService  *services.UserService
 	ldapAuth     *services.LDAPAuthService
 	sessionStore *SessionStore
@@ -71,6 +75,7 @@ type OAuthProvider struct {
 func NewAuthHandlerWithUserService(
 	secret string,
 	expireHours int,
+	jwtCookie config.JWTConfig,
 	userService *services.UserService,
 	providers []OAuthProvider,
 	authTokenSvc *services.AuthTokenService,
@@ -79,9 +84,25 @@ func NewAuthHandlerWithUserService(
 	fallbackAuthType string,
 	disablePasswordLogin bool,
 ) *AuthHandler {
+	cookieEnable := true
+	if jwtCookie.CookieEnable != nil {
+		cookieEnable = *jwtCookie.CookieEnable
+	}
+	cookieName := jwtCookie.CookieName
+	if cookieName == "" {
+		cookieName = defaultSessionCookieName
+	}
+	cookieSameSite := jwtCookie.CookieSameSite
+	if cookieSameSite == "" {
+		cookieSameSite = "Lax"
+	}
 	return &AuthHandler{
 		jwtSecret:            secret,
 		expireHours:          expireHours,
+		cookieEnable:         cookieEnable,
+		cookieName:           cookieName,
+		cookieSameSite:       cookieSameSite,
+		cookieSecure:         jwtCookie.CookieSecure,
 		userService:          userService,
 		ldapAuth:             ldapAuth,
 		sessionStore:         NewSessionStore(),
@@ -150,6 +171,8 @@ type LoginRequest struct {
 	// Type selects the password backend: "internal" (default) or "ldap" when LDAP is enabled.
 	// If login fails, coordinator.auth.fallback_auth_type may be tried server-side.
 	Type string `json:"type"`
+	// Remember asks the UI to persist the JWT in localStorage (optional; HttpOnly cookie is always set when enabled).
+	Remember bool `json:"remember"`
 }
 
 // LoginResponse represents the login response
@@ -284,45 +307,21 @@ func (h *AuthHandler) JWTMiddleware() echo.MiddlewareFunc {
 				return next(c)
 			}
 
-			// Get token from header
-			authHeader := c.Request().Header.Get("Authorization")
-			if authHeader == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-					"error": "Missing authorization header",
-				})
-			}
-
-			// Parse Bearer token
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-					"error": "Invalid authorization header",
-				})
-			}
-
-			tokenString := parts[1]
-
-			// Parse and validate token
-			token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-				return []byte(h.jwtSecret), nil
-			})
-
+			token, claims, src, err := h.parseAuthToken(c)
 			if err != nil {
+				httpErr, ok := err.(*echo.HTTPError)
+				if ok {
+					return c.JSON(httpErr.Code, map[string]interface{}{
+						"error": httpErr.Message,
+					})
+				}
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"error": "Invalid token",
 				})
 			}
-
-			if !token.Valid {
-				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-					"error": "Token expired",
-				})
-			}
-
-			claims, ok := token.Claims.(*JWTClaims)
-			if !ok {
-				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
-					"error": "Invalid claims",
+			if src == authSourceCookie && isMutatingHTTPMethod(c.Request().Method) && !validateCSRFForCookieAuth(c) {
+				return c.JSON(http.StatusForbidden, map[string]interface{}{
+					"error": "CSRF validation failed",
 				})
 			}
 
@@ -332,7 +331,6 @@ func (h *AuthHandler) JWTMiddleware() echo.MiddlewareFunc {
 				})
 			}
 
-			// Set user in context
 			c.Set("user", token)
 			return next(c)
 		}

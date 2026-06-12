@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { handleUnauthorized } from '../../api'
+import { isCookieSessionMarker } from '@/lib/authTokenStorage'
 import { sortDashboardsByWeight } from '../utils/dashboard-sort'
 import type { CalendarPreset } from '../utils/resolveTimeRange'
 
@@ -149,7 +150,7 @@ export function DashboardProvider({
 
   const authHeader = useMemo<Record<string, string>>(() => {
     const headers: Record<string, string> = {}
-    if (token) headers.Authorization = `Bearer ${token}`
+    if (token && !isCookieSessionMarker(token)) headers.Authorization = `Bearer ${token}`
     return headers
   }, [token])
 
@@ -158,6 +159,7 @@ export function DashboardProvider({
       const opts: RequestInit = {
         method,
         headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
       }
       if (body !== undefined) opts.body = JSON.stringify(body)
       const res = await fetch(`${apiBase}${path}`, opts)

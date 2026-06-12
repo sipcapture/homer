@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import type { PasswordAuthMethodRow } from "./loginProviders"
 
 /** Outlined input + label that floats up on focus or when non-empty. */
@@ -74,7 +75,7 @@ interface LoginPageProps {
   oauthProviderNames: string[]
   /** If set, immediately redirect to OAuth (homer-app auto_redirect). */
   autoOAuthProvider: string | null
-  onLogin: (token: string) => void
+  onLogin: (token: string, remember?: boolean) => void
   onOAuth2: (provider: string) => void
 }
 
@@ -90,6 +91,7 @@ export function LoginPage({
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
 
   const enabledPwd = useMemo(
     () => passwordAuthMethods.filter((m) => m.enable),
@@ -129,7 +131,13 @@ export function LoginPage({
       const res = await fetch(`${apiBase}/auth/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, type: effectiveType }),
+        credentials: "include",
+        body: JSON.stringify({
+          username,
+          password,
+          type: effectiveType,
+          remember: rememberMe,
+        }),
       })
 
       if (!res.ok) {
@@ -149,7 +157,7 @@ export function LoginPage({
         setError("Token missing in server response")
         return
       }
-      onLogin(token)
+      onLogin(token, rememberMe)
     } catch (err) {
       setError(`Connection failed: ${(err as Error).message}`)
     } finally {
@@ -246,6 +254,15 @@ export function LoginPage({
                 autoComplete="current-password"
                 disabled={loading}
               />
+
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={rememberMe}
+                  onCheckedChange={(v) => setRememberMe(v === true)}
+                  disabled={loading}
+                />
+                Remember me on this browser
+              </label>
 
               <Button
                 type="submit"
