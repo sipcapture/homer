@@ -9,6 +9,7 @@ package ducklake
 
 import (
 	"database/sql"
+	"os"
 	"strings"
 	"testing"
 
@@ -83,6 +84,45 @@ func TestApplyDuckDBTuning_NilDB(t *testing.T) {
 		}
 	}()
 	ApplyDuckDBTuning(nil, 4, "1GB", "/tmp", "test")
+}
+
+// TestDefaultSpillDirectory verifies the spill dir is derived from the
+// catalog location and created on disk, and that degenerate catalog paths
+// yield "" (leave temp_directory untouched).
+func TestDefaultSpillDirectory(t *testing.T) {
+	tmp := t.TempDir()
+	got := DefaultSpillDirectory(tmp + "/homer_catalog.sqlite")
+	want := tmp + "/.duckdb_spill"
+	if got != want {
+		t.Fatalf("DefaultSpillDirectory = %q, want %q", got, want)
+	}
+	if st, err := os.Stat(got); err != nil || !st.IsDir() {
+		t.Fatalf("spill directory not created: %v", err)
+	}
+
+	if got := DefaultSpillDirectory("homer_catalog.sqlite"); got != "" {
+		t.Fatalf("bare filename: got %q, want empty", got)
+	}
+	if got := DefaultSpillDirectory(""); got != "" {
+		t.Fatalf("empty path: got %q, want empty", got)
+	}
+}
+
+// TestApplyDuckDBMemorySafety asserts preserve_insertion_order is switched
+// off on the instance and that a nil DB is a no-op.
+func TestApplyDuckDBMemorySafety(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	ApplyDuckDBMemorySafety(db, "test")
+	if got := getSetting(t, db, "preserve_insertion_order"); got != "false" {
+		t.Fatalf("preserve_insertion_order = %q, want %q", got, "false")
+	}
+
+	ApplyDuckDBMemorySafety(nil, "test") // must not panic
 }
 
 func TestEnsureWriterS3Secret_MinIOStyle(t *testing.T) {

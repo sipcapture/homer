@@ -354,7 +354,20 @@ func (mtw *MultiTableWriter) connect() error {
 		logger.Info("DuckDB writer: auto-limiting memory (operator did not set tuning.memory_limit)",
 			"memory_limit", memLimit)
 	}
-	ApplyDuckDBTuning(db, threads, memLimit, mtw.config.TuningTempDirectory, "writer")
+	// In-memory DuckDB has disk spilling DISABLED unless temp_directory is
+	// set. With the writer pool, search + flush + compaction run concurrently
+	// against the same memory_limit, so without a spill path long-range
+	// searches abort with Out of Memory instead of spilling to disk.
+	tempDir := mtw.config.TuningTempDirectory
+	if strings.TrimSpace(tempDir) == "" {
+		tempDir = DefaultSpillDirectory(mtw.config.CatalogPath)
+		if tempDir != "" {
+			logger.Info("DuckDB writer: defaulting spill directory (operator did not set tuning.temp_directory)",
+				"temp_directory", tempDir)
+		}
+	}
+	ApplyDuckDBTuning(db, threads, memLimit, tempDir, "writer")
+	ApplyDuckDBMemorySafety(db, "writer")
 
 	// Load DuckLake extension (must be pre-installed via --install-extensions)
 	if _, err := db.Exec("LOAD ducklake;"); err != nil {

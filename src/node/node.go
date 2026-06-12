@@ -1107,13 +1107,21 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 	if strings.TrimSpace(nodeMemLimit) == "" {
 		nodeMemLimit = "2GB"
 	}
+	// Same rationale as the writer: the node DB is in-memory, and in-memory
+	// DuckDB cannot spill to disk without an explicit temp_directory —
+	// long-range searches then die with Out of Memory at memory_limit.
+	nodeTempDir := cfg.DuckLake.Tuning.TempDirectory
+	if strings.TrimSpace(nodeTempDir) == "" {
+		nodeTempDir = ducklake.DefaultSpillDirectory(cfg.DuckLake.CatalogPath)
+	}
 	ducklake.ApplyDuckDBTuning(
 		db,
 		nodeThreads,
 		nodeMemLimit,
-		cfg.DuckLake.Tuning.TempDirectory,
+		nodeTempDir,
 		"node",
 	)
+	ducklake.ApplyDuckDBMemorySafety(db, "node")
 
 	// Install and load DuckLake extension
 	_, err := db.Exec("INSTALL ducklake; LOAD ducklake;")
