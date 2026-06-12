@@ -10,6 +10,8 @@ package ducklake
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
@@ -181,5 +183,53 @@ func ApplyDuckDBTuning(db *sql.DB, threads int, memoryLimit, tempDirectory, who 
 		} else {
 			logger.Info("DuckDB tuning: temp_directory set", "where", who, "temp_directory", s)
 		}
+	}
+}
+
+// DefaultSpillDirectory returns the spill path to use when the operator did
+// not set tuning.temp_directory: "<dir of catalogPath>/.duckdb_spill".
+//
+// This matters because the writer (and the node when it shares the writer DB)
+// runs DuckDB as an IN-MEMORY instance, and in-memory DuckDB disables disk
+// spilling entirely unless temp_directory is set explicitly. Without it any
+// query whose working set exceeds memory_limit fails with Out of Memory
+// instead of spilling — e.g. long-range LIKE searches over wide SIP tables.
+// The catalog directory is used (not os.TempDir) because /tmp is commonly a
+// RAM-backed tmpfs in containers, which would defeat the purpose.
+//
+// The directory is created eagerly; on failure an empty string is returned
+// and the caller should leave temp_directory untouched.
+func DefaultSpillDirectory(catalogPath string) string {
+	dir := strings.TrimSpace(filepath.Dir(strings.TrimSpace(catalogPath)))
+	if dir == "" || dir == "." {
+		return ""
+	}
+	spill := filepath.Join(dir, ".duckdb_spill")
+	if err := os.MkdirAll(spill, 0o755); err != nil {
+		logger.Warn("DuckDB tuning: cannot create default spill directory, disk spilling stays disabled",
+			"path", spill, "error", err)
+		return ""
+	}
+	return spill
+}
+
+// ApplyDuckDBMemorySafety applies instance-global settings that keep
+// memory-heavy queries from taking down the shared writer DuckDB:
+//
+//   - preserve_insertion_order = false: lets DuckDB stream large scans and
+//     UNION ALL results instead of buffering them to keep row order. Safe
+//     here because search queries always ORDER BY explicitly and HEP ingest
+//     order within a flush batch is irrelevant (timestamp column rules).
+//
+// Call once per DuckDB instance after ApplyDuckDBTuning. Errors are logged
+// and swallowed, same contract as ApplyDuckDBTuning.
+func ApplyDuckDBMemorySafety(db *sql.DB, who string) {
+	if db == nil {
+		return
+	}
+	if _, err := db.Exec("SET preserve_insertion_order = false"); err != nil {
+		logger.Warn(fmt.Sprintf("DuckDB tuning (%s): SET preserve_insertion_order = false failed: %v", who, err))
+	} else {
+		logger.Info("DuckDB tuning: preserve_insertion_order disabled", "where", who)
 	}
 }
