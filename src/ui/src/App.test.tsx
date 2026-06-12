@@ -18,15 +18,20 @@ describe('App smoke/integration', () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()
+    let sessionActive = false
     vi.stubGlobal('fetch', vi.fn(async (url, opts = {}) => {
       const asString = String(url)
       if (asString.endsWith('/auth/providers')) {
-        return { ok: true, status: 200, json: async () => ({ data: { items: [] } }) }
+        return { ok: true, status: 200, json: async () => ({ data: { internal: { enable: true } } }) }
       }
       if (asString.endsWith('/auth/sessions') && opts.method === 'POST') {
-        return { ok: true, status: 200, json: async () => ({ data: { token: 'test-token' } }) }
+        sessionActive = true
+        return { ok: true, status: 201, json: async () => ({ data: { token: 'test-token' } }) }
       }
       if (asString.endsWith('/me')) {
+        if (!sessionActive) {
+          return { ok: false, status: 401, json: async () => ({}) }
+        }
         return { ok: true, status: 200, json: async () => ({ data: { username: 'tester', admin: true } }) }
       }
       if (asString.endsWith('/dashboards')) {
@@ -40,24 +45,27 @@ describe('App smoke/integration', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders login form', () => {
+  it('renders login form', async () => {
     renderApp()
-    expect(screen.getByLabelText('Login')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Login')).toBeInTheDocument()
+    })
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 
-  it('performs login and stores token', async () => {
+  it('performs login without persisting JWT by default (cookie session)', async () => {
     renderApp()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Login')).toBeInTheDocument()
+    })
 
     fireEvent.change(screen.getByLabelText('Login'), { target: { value: 'admin' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
     await waitFor(() => {
-      expect(sessionStorage.getItem('homer_v4_token')).toBe('test-token')
-    })
-    await waitFor(() => {
+      expect(localStorage.getItem('homer_v4_token')).toBeNull()
       expect(screen.getByText('No dashboards available. Create one above or reset to defaults.')).toBeInTheDocument()
     })
   })

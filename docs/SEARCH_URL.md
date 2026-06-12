@@ -23,13 +23,15 @@ Browsers only follow **GET** links (`<a href>`, redirects). You cannot POST a Ca
 
 | Goal | Pattern | User must log into Homer UI? | Auth |
 |------|---------|-------------------------------|------|
-| Open **dashboard search** with Call-ID prefilled | GET deep link (this page) | **Yes** (JWT session) | None in URL |
+| Open **dashboard search** with Call-ID prefilled | GET deep link (this page) | **Yes** (cookie or remembered JWT in same browser profile) | None in URL |
 | Open **standalone SIP trace** HTML page | Backend `view/link` → redirect to `/export/view/<uuid>` | **No** (one-time view token) | `Auth-Token` or JWT on your server |
 | Embed results in **your own UI** | `POST /api/v4/transactions/search` or `/messages` | No | `Auth-Token` or JWT on your server |
 
 Always pass a **time window** (`from` / `to` in ms, or `minutes` / `m`) together with the Call-ID.
 
 ### Homer 11 — dashboard deep link (logged-in users)
+
+After you sign in once, the UI session is kept in an **HttpOnly cookie** shared across tabs on the same Homer host (see [UI and API tokens](UI_COORDINATOR_AUTH_AND_TOKENS.md)). Opening a deep link in a **new tab** should not require login again. If it does, check that cookies are allowed for the Homer origin and that you are not in a private window with an isolated cookie jar.
 
 Recommended URL (coordinator host, flat query params):
 

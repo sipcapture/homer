@@ -36,15 +36,19 @@ import { toast } from 'sonner'
 import {
   clearAuthToken,
   exchangeOAuthOneTimeAndPersist,
+  COOKIE_SESSION_MARKER,
   getAuthToken,
+  isCookieSessionMarker,
   setAuthToken,
 } from './lib/authTokenStorage'
+import { apiDelete } from './api'
 
 const apiBase = import.meta.env.VITE_API_BASE || '/api/v4'
 
 function App() {
   const confirm = useConfirm()
   const [token, setToken] = useState(() => getAuthToken())
+  const [authReady, setAuthReady] = useState(() => !!getAuthToken())
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('about')
   const [me, setMe] = useState<any>(null)
@@ -80,9 +84,9 @@ function App() {
   const role = useMemo(() => detectRole(me), [me])
   const usersPerms = useMemo(() => getSectionPerms(role, 'users'), [role])
 
-  const persistToken = (next: string) => {
-    setAuthToken(next)
-    setToken(next)
+  const persistToken = (next: string, remember = false) => {
+    setAuthToken(next, remember)
+    setToken(remember ? next : COOKIE_SESSION_MARKER)
   }
 
   // One-shot migration from legacy 'theme' key to shadcn ThemeProvider's 'vite-ui-theme' key.
@@ -92,6 +96,28 @@ function App() {
       localStorage.setItem('vite-ui-theme', legacy)
     }
     if (legacy) localStorage.removeItem('theme')
+  }, [])
+
+  useEffect(() => {
+    if (getAuthToken()) {
+      setAuthReady(true)
+      return
+    }
+    let cancelled = false
+    void fetch(`${apiBase}/me`, { credentials: 'include' })
+      .then((res) => {
+        if (cancelled) return
+        if (res.ok) setToken(COOKIE_SESSION_MARKER)
+      })
+      .catch(() => {
+        if (!cancelled) setToken('')
+      })
+      .finally(() => {
+        if (!cancelled) setAuthReady(true)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -124,7 +150,7 @@ function App() {
   }, [settingsOpen, role, activeSection])
 
   const authHeader = useMemo<Record<string, string>>(() => {
-    if (!token) return {} as Record<string, string>
+    if (!token || isCookieSessionMarker(token)) return {} as Record<string, string>
     return { Authorization: `Bearer ${token}` }
   }, [token])
 
@@ -168,7 +194,12 @@ function App() {
     }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await apiDelete('/auth/sessions/current')
+    } catch {
+      // Best-effort server revoke; always clear client state.
+    }
     revokeAvatarUrl(avatarUrl)
     setAvatarUrl(null)
     clearAuthToken()
@@ -207,7 +238,7 @@ function App() {
     if (!token) return
     setLoadingMe(true)
     try {
-      const res = await fetch(`${apiBase}/me`, { headers: authHeader })
+      const res = await fetch(`${apiBase}/me`, { headers: authHeader, credentials: 'include' })
       if (res.status === 401) {
         handleUnauthorized()
         return
@@ -261,6 +292,7 @@ function App() {
       const query = buildUsersQuery()
       const res = await fetch(`${apiBase}/users${query ? `?${query}` : ''}`, {
         headers: authHeader,
+        credentials: 'include',
       })
       if (!res.ok) {
         const message = await parseError(res)
@@ -320,6 +352,7 @@ function App() {
       const res = await fetch(`${apiBase}/users`, {
         method: 'POST',
         headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           username: userForm.username,
           name: String(userForm.name || '').trim(),
@@ -362,6 +395,7 @@ function App() {
       const res = await fetch(`${apiBase}/users/${editingUser.guid}`, {
         method: 'PATCH',
         headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload),
       })
       if (!res.ok) {
@@ -392,6 +426,7 @@ function App() {
       const res = await fetch(`${apiBase}/users/${user.guid}`, {
         method: 'DELETE',
         headers: authHeader,
+        credentials: 'include',
       })
       if (!res.ok) {
         const message = await parseError(res)
@@ -457,7 +492,8 @@ function App() {
       try {
         await exchangeOAuthOneTimeAndPersist(oneTime, apiBase)
         if (cancelled) return
-        setToken(getAuthToken())
+        const remembered = getAuthToken()
+        setToken(remembered || COOKIE_SESSION_MARKER)
         toast.success('Logged in via OAuth2')
       } catch (err) {
         if (cancelled) return
@@ -552,7 +588,11 @@ function App() {
       <LocaleProvider defaultLocale="auto" storageKey="vite-ui-locale">
       <div className="app">
         <main className="content">
-          {!token ? (
+          {!authReady ? (
+            <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+              Loading…
+            </div>
+          ) : !token ? (
             <LoginPage
               apiBase={apiBase}
               passwordAuthMethods={passwordAuthMethods}

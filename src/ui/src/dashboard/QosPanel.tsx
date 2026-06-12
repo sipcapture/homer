@@ -28,6 +28,13 @@ const METRIC_COLORS_RTP = {
   PACKET_LOSS: { bg: 'rgba(244, 67, 54, 0.7)',   border: 'rgba(244, 67, 54, 1)' },
 }
 
+const METRIC_COLORS_VQRTCP = {
+  MOS_LQ:      { bg: 'rgba(33, 150, 243, 0.5)',   border: 'rgba(33, 150, 243, 1)' },
+  MOS_CQ:      { bg: 'rgba(63, 81, 181, 0.5)',    border: 'rgba(63, 81, 181, 1)' },
+  JITTER:      { bg: 'rgba(0, 188, 212, 0.5)',   border: 'rgba(0, 188, 212, 1)' },
+  PACKET_LOSS: { bg: 'rgba(244, 67, 54, 0.7)',   border: 'rgba(244, 67, 54, 1)' },
+}
+
 const STAT_COLORS = [
   '#e53935', '#d81b60', '#8e24aa', '#5e35b1',
   '#1e88e5', '#00acc1', '#43a047', '#f4511e',
@@ -236,6 +243,65 @@ function processRTPItems(items) {
 
   allPoints.sort((a, b) => a.ts - b.ts)
   return { streams, allPoints, metricKeys: ['TOTAL_PK', 'EXPECTED_PK', 'JITTER', 'MOS', 'DELTA', 'PACKET_LOSS'], colors: METRIC_COLORS_RTP }
+}
+
+function parseVqrtcpMessage(item) {
+  const raw = item?.message ?? item?.data_extra
+  if (!raw) return null
+  if (typeof raw === 'object') return raw
+  return parsePayload(raw)
+}
+
+function parseMetricFromKV(str, key) {
+  if (!str || typeof str !== 'string') return 0
+  const re = new RegExp(`${key}=([0-9.]+)`, 'i')
+  const m = str.match(re)
+  return m ? Number(m[1]) : 0
+}
+
+function processVQRTCPItems(items) {
+  const streams = []
+  const streamMap = {}
+  const allPoints = []
+
+  for (const item of items) {
+    const msg = parseVqrtcpMessage(item) || {}
+    const srcIp = item.source_ip || item.src_ip || 'unknown'
+    const dstIp = item.destination_ip || item.dst_ip || 'unknown'
+    const srcPort = item.source_port || item.src_port || 0
+    const dstPort = item.destination_port || item.dst_port || 0
+    const sid = qosSessionKey({ session_id: item.callid, cid: item.callid })
+    const route = qosRouteArrow({ src_ip: srcIp, dst_ip: dstIp, src_port: srcPort, dst_port: dstPort })
+    const key = sid ? `${sid}|${srcIp}:${srcPort}` : `${srcIp}:${srcPort}`
+    const ts = eventTimeMs(item)
+    if (!ts) continue
+
+    if (!streamMap[key]) {
+      streamMap[key] = {
+        key, sid, srcIp, dstIp, srcPort, dstPort,
+        label: sid ? `${sid} · ${route}` : route,
+        enabled: { MOS_LQ: true, MOS_CQ: true, JITTER: true, PACKET_LOSS: true },
+      }
+      streams.push(streamMap[key])
+    }
+
+    const mosLQ = Number(msg.moslq ?? item.mos ?? 0)
+    const mosCQ = Number(msg.moscq ?? 0)
+    const jitter = parseMetricFromKV(msg.jitter_buffer, 'JBN')
+    const packetLoss = parseMetricFromKV(msg.packet_loss, 'NLR')
+
+    allPoints.push({
+      ts, streamKey: key,
+      MOS_LQ: mosLQ,
+      MOS_CQ: mosCQ,
+      JITTER: jitter,
+      PACKET_LOSS: packetLoss,
+      event: item.event || '',
+    })
+  }
+
+  allPoints.sort((a, b) => a.ts - b.ts)
+  return { streams, allPoints, metricKeys: ['MOS_LQ', 'MOS_CQ', 'JITTER', 'PACKET_LOSS'], colors: METRIC_COLORS_VQRTCP }
 }
 
 function computeStats(allPoints, metricKeys) {
@@ -467,24 +533,28 @@ export default function QosPanel({ qosData, timeZone }) {
   const [chartType, setChartType] = useState('bar')
   const [rtcpStreams, setRtcpStreams] = useState([])
   const [rtpStreams, setRtpStreams] = useState([])
+  const [vqrtcpStreams, setVqrtcpStreams] = useState([])
 
   const rtcpParsed = useMemo(() => processRTCPItems(qosData?.rtcp?.data || []), [qosData])
   const rtpParsed = useMemo(() => processRTPItems(qosData?.rtp?.data || []), [qosData])
+  const vqrtcpParsed = useMemo(() => processVQRTCPItems(qosData?.vqrtcp?.data || []), [qosData])
 
   useEffect(() => { setRtcpStreams(rtcpParsed.streams) }, [rtcpParsed])
   useEffect(() => { setRtpStreams(rtpParsed.streams) }, [rtpParsed])
+  useEffect(() => { setVqrtcpStreams(vqrtcpParsed.streams) }, [vqrtcpParsed])
 
   const hasRTCP = rtcpParsed.allPoints.length > 0
   const hasRTP = rtpParsed.allPoints.length > 0
+  const hasVQRTCP = vqrtcpParsed.allPoints.length > 0
 
   const toggleMetric = useCallback((streamKey, metricKey) => {
-    const setter = subTab === 'rtcp' ? setRtcpStreams : setRtpStreams
+    const setter = subTab === 'rtcp' ? setRtcpStreams : subTab === 'rtp' ? setRtpStreams : setVqrtcpStreams
     setter(prev => prev.map(s =>
       s.key === streamKey ? { ...s, enabled: { ...s.enabled, [metricKey]: !s.enabled[metricKey] } } : s
     ))
   }, [subTab])
 
-  if (!hasRTCP && !hasRTP) {
+  if (!hasRTCP && !hasRTP && !hasVQRTCP) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-xs text-muted-foreground">
         No QoS data available for this transaction.
@@ -492,13 +562,13 @@ export default function QosPanel({ qosData, timeZone }) {
     )
   }
 
-  const parsed = subTab === 'rtcp' ? rtcpParsed : rtpParsed
-  const activeStreams = subTab === 'rtcp' ? rtcpStreams : rtpStreams
+  const parsed = subTab === 'rtcp' ? rtcpParsed : subTab === 'rtp' ? rtpParsed : vqrtcpParsed
+  const activeStreams = subTab === 'rtcp' ? rtcpStreams : subTab === 'rtp' ? rtpStreams : vqrtcpStreams
   const stats = computeStats(parsed.allPoints, parsed.metricKeys)
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 p-2">
-      {(hasRTCP || hasRTP) && (
+      {(hasRTCP || hasRTP || hasVQRTCP) && (
         <Tabs value={subTab} onValueChange={setSubTab}>
           <TabsList variant="line" className="h-8 border-b border-border">
             {hasRTCP && (
@@ -509,6 +579,11 @@ export default function QosPanel({ qosData, timeZone }) {
             {hasRTP && (
               <TabsTrigger value="rtp">
                 RTP ({(qosData?.rtp?.data || []).length})
+              </TabsTrigger>
+            )}
+            {hasVQRTCP && (
+              <TabsTrigger value="vqrtcp">
+                VQRTCP ({(qosData?.vqrtcp?.data || []).length})
               </TabsTrigger>
             )}
           </TabsList>

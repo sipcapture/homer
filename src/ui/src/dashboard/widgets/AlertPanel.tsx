@@ -54,6 +54,7 @@ export default function AlertPanel({ config, onConfigChange }: AlertPanelProps) 
     const res = await fetch(`${apiBase}/query`, {
       method: 'POST',
       headers: { ...authHeader, 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ sql, limit: 100 }),
     })
     if (!res.ok) return
@@ -64,7 +65,7 @@ export default function AlertPanel({ config, onConfigChange }: AlertPanelProps) 
 
   const fetchDb = useCallback(async () => {
     const q = new URLSearchParams({ 'page[limit]': '100' })
-    const res = await fetch(`${apiBase}/alerts?${q}`, { headers: { ...authHeader } })
+    const res = await fetch(`${apiBase}/alerts?${q}`, { headers: { ...authHeader }, credentials: 'include' })
     if (!res.ok) return
     const data = await res.json()
     const items = (data?.data?.items || []) as DashboardAlertRow[]
@@ -97,7 +98,7 @@ export default function AlertPanel({ config, onConfigChange }: AlertPanelProps) 
   const handleClear = async () => {
     if (source === 'db') {
       try {
-        const res = await fetch(`${apiBase}/alerts`, { method: 'DELETE', headers: { ...authHeader } })
+        const res = await fetch(`${apiBase}/alerts`, { method: 'DELETE', headers: { ...authHeader }, credentials: 'include' })
         if (res.ok) setAlerts([])
       } catch {
         // silent

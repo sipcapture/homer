@@ -250,6 +250,8 @@ func normalizeSIPTransactionType(protoType int, transactionType string) string {
 		transactionType = "call"
 	case "registration", "registrations", "register":
 		transactionType = "registration"
+	case "siprec":
+		transactionType = "siprec"
 	default:
 		transactionType = "default"
 	}

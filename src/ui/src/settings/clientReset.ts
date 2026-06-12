@@ -46,7 +46,7 @@ export function clearAllLocalStorage(): void {
   localStorage.clear()
 }
 
-/** Clears sessionStorage (including tab-scoped JWT). */
+/** Clears sessionStorage (legacy JWT keys if any). HttpOnly session cookies require server logout. */
 export function clearAllSessionStorage(): void {
   if (typeof sessionStorage === 'undefined') return
   sessionStorage.clear()

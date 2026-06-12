@@ -17,6 +17,8 @@
 - Linear Scaling to query over shared Object Storage catalog/pool
 - Flexible Schema support for growing problems and protocols
 - Backwards compatible with all HEPv3 Agents
+- Optional **VQRTCP** SIP QoS collector (`application/vq-rtcpxr` → DuckLake + transaction QoS UI)
+- Optional **SIPREC** Signaling SRS (RFC 7865/7866 metadata capture)
 - Easy to maintain, operate and scale *(down to zero!)*
 - Cloud Native Design for K8s and standard deployments
 - Built-In User Interface for Humans
@@ -44,7 +46,7 @@ Homer uses a modular architecture with four main components:
 
 | Module | Description |
 |--------|-------------|
-| **Ingest** | Receives HEP packets via UDP/TCP/TLS/HTTP/HTTPS |
+| **Ingest** | Receives HEP packets via UDP/TCP/TLS/HTTP/HTTPS; optional SIP listeners for VQRTCP and SIPREC |
 | **Storage** | Writes data to DuckLake (Parquet + catalog) |
 | **Node** | Airport gRPC + HTTP `/query`; optional Arrow FlightSQL for Grafana ([docs/FLIGHTSQL.md](docs/FLIGHTSQL.md)) |
 | **Coordinator** | REST API gateway for UI and external applications |
@@ -87,6 +89,41 @@ Homer uses a modular architecture with four main components:
 
 > For more storage options consult the available [STORAGE POLICIES](https://github.com/sipcapture/homer/blob/homer11/docs/STORAGE_POLICIES.md)
 
+### Optional: VQRTCP collector & SIPREC support
+
+Both features are **disabled by default** and require the **writer** module (DuckLake). Enable them under `ingest` in `homer.json`:
+
+```json
+{
+  "ingest": {
+    "vqrtcp": {
+      "enable": true,
+      "bind_ip": "0.0.0.0",
+      "sip_port": 5063,
+      "transports": ["udp", "tcp"],
+      "methods": ["PUBLISH", "MESSAGE"],
+      "reply_200": true
+    },
+    "siprec": {
+      "enable": true,
+      "bind_ip": "0.0.0.0",
+      "advertise_ip": "203.0.113.10",
+      "sip_port": 5062,
+      "transports": ["udp", "tcp"],
+      "require_siprec": true
+    }
+  }
+}
+```
+
+| Feature | Listener | Storage | UI |
+|---------|----------|---------|-----|
+| **VQRTCP** | Dedicated SIP (default `:5063`) | `vqrtcpxr_stats` | Transaction **QoS** tab → VQRTCP |
+| **SIPREC** | In-process SRS (default `:5062`) | `hep_proto_1_siprec` | Protocol Search profile `siprec` |
+
+Point your SBC or media gateway at the VQRTCP SIP port for `application/vq-rtcpxr` reports. Point the SIPREC Session Recording Client (SRC) at the SIPREC port for recording signaling and rs-metadata.
+
+See [docs/VQRTCP.md](docs/VQRTCP.md) and [docs/SIPREC.md](docs/SIPREC.md) for format details, correlation, and tuning.
 
 ### Build & Run
 
@@ -248,6 +285,8 @@ python3 -m venv .venv-docs && .venv-docs/bin/pip install -r docs-requirements.tx
 - [Storage Architecture](docs/STORAGE_ARCHITECTURE.md) - DuckLake storage
 - [Storage Policies](docs/STORAGE_POLICIES.md) - Tiered storage (hot/cold)
 - [Compaction Setup](docs/COMPACTION_SETUP.md) - File compaction
+- [VQRTCP collector](docs/VQRTCP.md) - SIP QoS reports (`vqrtcpxr_stats`, QoS UI)
+- [SIPREC support](docs/SIPREC.md) - Signaling SRS (`hep_proto_1_siprec`)
 
 ## License
 Released under the [AGPL-3.0 License](LICENSE.md)

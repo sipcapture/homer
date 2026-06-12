@@ -1,0 +1,72 @@
+[
+  {
+    "id": "call_id",
+    "name": "SIP Session ID",
+    "type": "string",
+    "index": "secondary",
+    "form_type": "input",
+    "position": 1,
+    "sid_type": true,
+    "hide": false
+  },
+  {
+    "id": "method",
+    "name": "SIP method",
+    "type": "string",
+    "index": "none",
+    "form_type": "input_multi_select",
+    "form_default": [
+      { "name": "INVITE", "value": "INVITE" },
+      { "name": "ACK", "value": "ACK" },
+      { "name": "BYE", "value": "BYE" },
+      { "name": "CANCEL", "value": "CANCEL" }
+    ],
+    "position": 2,
+    "hide": false
+  },
+  {
+    "id": "from_user",
+    "name": "From user (caller)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 3,
+    "hide": false
+  },
+  {
+    "id": "to_user",
+    "name": "To user (callee)",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 4,
+    "hide": false
+  },
+  {
+    "id": "source_ip",
+    "name": "Source IP",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 5,
+    "hide": false
+  },
+  {
+    "id": "destination_ip",
+    "name": "Destination IP",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 6,
+    "hide": false
+  },
+  {
+    "id": "create_date",
+    "name": "Timestamp",
+    "type": "date",
+    "index": "primary",
+    "form_type": "date",
+    "position": 7,
+    "hide": false
+  }
+]
