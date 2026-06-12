@@ -33,3 +33,23 @@ PacketLoss:NLR=0.5 JDR=0.1
 		t.Fatalf("local: %s %d", host, port)
 	}
 }
+
+func TestSplitHostPort(t *testing.T) {
+	tests := []struct {
+		addr     string
+		wantHost string
+		wantPort uint16
+	}{
+		{"10.0.0.1 5060", "10.0.0.1", 5060},
+		{"10.0.0.1:5070", "10.0.0.1", 5070},
+		{"10.0.0.1 70000", "10.0.0.1 70000", 0},
+		{"10.0.0.1:-1", "10.0.0.1:-1", 0},
+		{"", "", 0},
+	}
+	for _, tt := range tests {
+		host, port := SplitHostPort(tt.addr)
+		if host != tt.wantHost || port != tt.wantPort {
+			t.Errorf("SplitHostPort(%q) = (%q, %d), want (%q, %d)", tt.addr, host, port, tt.wantHost, tt.wantPort)
+		}
+	}
+}

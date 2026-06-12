@@ -110,6 +110,14 @@ func (r Report) EventType() string {
 	return ""
 }
 
+func parsePort(s string) (uint16, bool) {
+	p, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || p < 0 || p > 65535 {
+		return 0, false
+	}
+	return uint16(p), true
+}
+
 // SplitHostPort parses "IP PORT" or "IP:PORT" style LocalAddr/RemoteAddr.
 func SplitHostPort(addr string) (host string, port uint16) {
 	addr = strings.TrimSpace(addr)
@@ -118,14 +126,14 @@ func SplitHostPort(addr string) (host string, port uint16) {
 	}
 	if i := strings.LastIndex(addr, ":"); i > 0 && strings.Count(addr, ":") == 1 {
 		host = addr[:i]
-		if p, err := strconv.Atoi(addr[i+1:]); err == nil {
-			return host, uint16(p)
+		if p, ok := parsePort(addr[i+1:]); ok {
+			return host, p
 		}
 	}
 	fields := strings.Fields(addr)
 	if len(fields) >= 2 {
-		if p, err := strconv.Atoi(fields[1]); err == nil {
-			return fields[0], uint16(p)
+		if p, ok := parsePort(fields[1]); ok {
+			return fields[0], p
 		}
 	}
 	return addr, 0
