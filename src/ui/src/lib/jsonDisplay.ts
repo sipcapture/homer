@@ -154,6 +154,7 @@ export const EVENT_PAYLOAD_FIELD_KEYS = ['payload', 'message', 'data', 'body'] a
 
 /** First non-empty payload-like field on a LOG / event row. */
 export function eventPayloadField(row: Record<string, unknown> | null | undefined): unknown {
+  if (!row) return ''
   const key = eventPayloadFieldKey(row)
   return key ? row[key] : ''
 }
