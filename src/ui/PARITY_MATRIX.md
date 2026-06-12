@@ -44,7 +44,7 @@
 | --- | --- | --- |
 | messages | done | present |
 | flow | done | present |
-| qos | done | present |
+| qos | done | RTCP, RTP, VQRTCP tabs |
 | logs | done | present |
 | callinfo | missing | add tab + endpoint integration |
 | events | missing | add tab + endpoint integration |

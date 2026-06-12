@@ -9,7 +9,7 @@ For full LDAP and OAuth2 configuration field tables and examples, see **[AUTH_LD
 ## Architecture
 
 - The **coordinator** is the authority: it serves `GET /api/v4/auth/providers`, creates sessions, validates requests, and issues JWTs.
-- The **bundled UI** (`src/ui`) calls the v4 API under `import.meta.env.VITE_API_BASE` or the default **`/api/v4`**. It loads provider metadata when the user is logged out and stores a session JWT in **`sessionStorage`** under the key `homer_v4_token` (tab-scoped; legacy `localStorage` entries are migrated once on read). See `src/ui/src/lib/authTokenStorage.ts`.
+- The **bundled UI** (`src/ui`) calls the v4 API under `import.meta.env.VITE_API_BASE` or the default **`/api/v4`**. On login the coordinator sets an **HttpOnly** session cookie **`homer_session`** (Path `/api/v4`, `SameSite=Lax` by default) so the session is **shared across browser tabs** without putting the JWT in JavaScript. The UI sends `credentials: include` on API calls. Optional **Remember me** stores the JWT in **`localStorage`** (`homer_v4_token`) for Bearer/WebSocket fallback — less safe on shared machines. See `src/ui/src/lib/authTokenStorage.ts`.
 
 There is no separate “auth mode” flag in the UI alone: available methods are **entirely determined by coordinator configuration** after restart.
 
@@ -71,10 +71,23 @@ API clients and SPAs should **exchange** the query `token` for the JWT and then 
 
 ## JWT session tokens
 
-- **Login response:** `POST /api/v4/auth/sessions` (password) and `POST /api/v4/auth/oauth2/token` (after exchange) return `data.token` (JWT) and `data.scope` / `data.user.admin`.
-- **Usage:** `Authorization: Bearer <jwt>` on protected v4 routes. The UI builds this in `App.tsx` as `authHeader`.
+- **Login response:** `POST /api/v4/auth/sessions` (password) and `POST /api/v4/auth/oauth2/token` (after exchange) return `data.token` (JWT) and `data.scope` / `data.user.admin`, and (when `coordinator.jwt.cookie_enable` is true, the default) set **`Set-Cookie: homer_session=<jwt>; HttpOnly; …`**.
+- **Usage (pick one per request):**
+  - **Browser UI (recommended):** HttpOnly cookie — automatic on same-origin `/api/v4` with `credentials: include`; not readable from JS (mitigates XSS token theft).
+  - **Scripts / API clients:** `Authorization: Bearer <jwt>` (unchanged).
+  - **WebSocket:** cookie on the handshake when using the UI; otherwise `?access_token=<jwt>` (browsers cannot set `Authorization` on WS upgrade).
 - **Lifetime:** `coordinator.jwt.expire_hours` (default 24) and `coordinator.jwt.secret`.
-- **Logout / revocation:** JWT **`jti`** is the session id. **`DELETE /api/v4/auth/sessions/{sessionId}`** revokes that session for the remainder of the token lifetime (in-memory revocation store). The bundled UI’s logout control currently clears the client token only; integrations that need server-side invalidation should call this DELETE with the **`jti`** from the JWT claims.
+- **Cookie settings** (`coordinator.jwt`): `cookie_enable` (default true), `cookie_name` (default `homer_session`), `cookie_same_site` (`Lax` | `Strict` | `None`), `cookie_secure` (optional; auto from TLS / `X-Forwarded-Proto`).
+- **CSRF:** Cookie-authenticated **POST/PUT/PATCH/DELETE** requests validate `Origin` / `Referer` against the request host (defense in depth with `SameSite=Lax`).
+- **Logout / revocation:** JWT **`jti`** is the session id. **`DELETE /api/v4/auth/sessions/current`** revokes the caller’s session and clears the cookie (bundled UI logout). **`DELETE /api/v4/auth/sessions/{sessionId}`** revokes a specific `jti` when it matches the Bearer/cookie session.
+
+### Why not sessionStorage only?
+
+Homer 11.0.229+ briefly stored the JWT in **`sessionStorage`** (tab-scoped) after a CodeQL security pass. That meant **each new tab required login** — painful for search deep links opened in another tab. HttpOnly cookies restore multi-tab UX **without** exposing the JWT to JavaScript like always-on `localStorage` did in Homer 7.
+
+### Remember me (optional, UI)
+
+Login body may include `"remember": true`. The UI then keeps `data.token` in **`localStorage`** so Bearer headers and WebSocket `access_token` work without relying on the cookie alone. Skip on shared workstations.
 
 ---
 
@@ -109,7 +122,8 @@ Tokens support optional **expiry**, **call limits**, and **active** flag; the se
 | LDAP users | Configure LDAP; `POST /auth/sessions` with `"type":"ldap"`. |
 | OAuth2 users | Configure single `oauth2_provider`; redirect + **`POST /auth/oauth2/token`**. |
 | Scripts / integrations without JWT | Enable `api_settings.enable_token_access`; send **`Auth-Token`**. |
-| Revoke JWT session | `DELETE /api/v4/auth/sessions/{jti}`. |
+| Revoke JWT session (UI logout) | `DELETE /api/v4/auth/sessions/current`. |
+| Revoke specific session | `DELETE /api/v4/auth/sessions/{jti}`. |
 
 ---
 

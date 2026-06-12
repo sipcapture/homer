@@ -41,6 +41,8 @@ import (
 	"github.com/sipcapture/homer-core/src/node"
 	"github.com/sipcapture/homer-core/src/otlpreceiver"
 	otlpsink "github.com/sipcapture/homer-core/src/otlpreceiver/sink"
+	"github.com/sipcapture/homer-core/src/siprecreceiver"
+	"github.com/sipcapture/homer-core/src/vqrtcpreceiver"
 	input "github.com/sipcapture/homer-core/src/server"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"github.com/sipcapture/homer-core/src/stream/hepstream"
@@ -675,6 +677,48 @@ func runServer() {
 							"default_db", cfg.Ingest.LineProto.DefaultDB,
 							"table_prefix", cfg.Ingest.LineProto.TablePrefix)
 					}
+				}
+			}
+		}
+
+		if cfg.Ingest.Vqrtcp.Enable {
+			if writerModule == nil {
+				logger.Warn("VQRTCP receiver enabled but writer module is disabled — skipping")
+			} else if duckMgr := writerModule.GetDuckLakeManager(); duckMgr == nil {
+				logger.Warn("VQRTCP receiver enabled but DuckLake manager is unavailable; skipping")
+			} else if vqStorage := duckMgr.VqrtcpStorage(); vqStorage == nil {
+				logger.Warn("VQRTCP receiver enabled but storage handle is unavailable; skipping")
+			} else {
+				vqMod, err := vqrtcpreceiver.New(&cfg.Ingest.Vqrtcp, vqStorage)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to create VQRTCP receiver: %v\n", err)
+					os.Exit(1)
+				}
+				if vqMod != nil {
+					mm.AddModule(vqMod)
+					logger.Info("VQRTCP receiver configured",
+						"bind", cfg.Ingest.Vqrtcp.BindIP,
+						"port", cfg.Ingest.Vqrtcp.SIPPort)
+				}
+			}
+		}
+
+		if cfg.Ingest.Siprec.Enable {
+			if writerModule == nil {
+				logger.Warn("SIPREC receiver enabled but writer module is disabled — skipping")
+			} else if duckMgr := writerModule.GetDuckLakeManager(); duckMgr == nil {
+				logger.Warn("SIPREC receiver enabled but DuckLake manager is unavailable; skipping")
+			} else {
+				srMod, err := siprecreceiver.New(&cfg.Ingest.Siprec, duckMgr)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to create SIPREC receiver: %v\n", err)
+					os.Exit(1)
+				}
+				if srMod != nil {
+					mm.AddModule(srMod)
+					logger.Info("SIPREC receiver configured",
+						"bind", cfg.Ingest.Siprec.BindIP,
+						"port", cfg.Ingest.Siprec.SIPPort)
 				}
 			}
 		}

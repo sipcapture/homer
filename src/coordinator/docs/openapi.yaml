@@ -57,10 +57,22 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/ServerError"
+  /auth/sessions/current:
+    delete:
+      tags: [Auth]
+      summary: Log out current session (revoke JWT and clear HttpOnly cookie)
+      operationId: authSessionLogoutCurrent
+      responses:
+        "204":
+          description: Session closed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/ServerError"
   /auth/sessions/{sessionId}:
     delete:
       tags: [Auth]
-      summary: Close session (logout)
+      summary: Close session by id (logout)
       operationId: authSessionDelete
       parameters:
         - $ref: "#/components/parameters/SessionId"
@@ -2533,6 +2545,10 @@ components:
           description: Password backend — internal (DuckDB users / admin hash) or ldap when LDAP is enabled.
           enum: [internal, ldap]
           default: internal
+        remember:
+          type: boolean
+          description: When true, the UI may persist data.token in localStorage (Remember me). HttpOnly cookie is always set when cookie_enable is true.
+          default: false
     LoginResponse:
       type: object
       properties:

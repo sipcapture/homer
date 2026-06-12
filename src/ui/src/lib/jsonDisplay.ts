@@ -171,13 +171,22 @@ export function eventPayloadFieldKey(
   return null
 }
 
-/** Row copy without the primary payload column (for metadata-only panels). */
+/**
+ * Row copy without payload columns shown in the dedicated panel.
+ * Strips the primary payload field plus any other populated JSON payload
+ * columns (duplicate message/data/body from migration or API quirks).
+ */
 export function rowWithoutEventPayload(
   row: Record<string, unknown>,
+  primaryKey: (typeof EVENT_PAYLOAD_FIELD_KEYS)[number] | null = eventPayloadFieldKey(row),
 ): Record<string, unknown> {
-  const key = eventPayloadFieldKey(row)
-  if (!key) return row
+  if (!primaryKey) return row
   const copy = { ...row }
-  delete copy[key]
+  delete copy[primaryKey]
+  for (const k of EVENT_PAYLOAD_FIELD_KEYS) {
+    if (k === primaryKey) continue
+    const v = copy[k]
+    if (v != null && v !== '' && isJsonDisplayable(v)) delete copy[k]
+  }
   return copy
 }

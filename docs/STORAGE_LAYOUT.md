@@ -80,6 +80,7 @@ SIP messages are split into three tables by transaction type:
 | `hep_proto_1_call` | INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO | Call messages |
 | `hep_proto_1_registration` | REGISTER | Registrations |
 | `hep_proto_1_default` | OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE, REFER | Other |
+| `hep_proto_1_siprec` | SIPREC SRS signaling (in-process receiver) | Recording metadata + SIP |
 
 **Important**: SIP responses (200 OK, 180 Ringing) are routed by the method from `CSeq` header.
 
@@ -92,6 +93,15 @@ SIP messages are split into three tables by transaction type:
 | 35 | `hep_proto_35_default` | RTP packets |
 | 53 | `hep_proto_53_default` | DNS queries |
 | 100 | `hep_proto_100_default` | Logs |
+
+### Dedicated ingest tables
+
+| Table | Source | Description |
+|-------|--------|-------------|
+| `vqrtcpxr_stats` | VQRTCP SIP receiver (`ingest.vqrtcp`) | VQ-RTCPXR QoS reports (Call-ID correlated) |
+| `otlp_traces` / `otlp_metrics` / `otlp_logs` | OTLP receiver | OpenTelemetry signals |
+
+See [VQRTCP.md](VQRTCP.md) and [SIPREC.md](SIPREC.md).
 
 ## Partitioning
 

@@ -1,4 +1,11 @@
-import { AUTH_TOKEN_KEY, clearAuthToken, getAuthToken } from './lib/authTokenStorage'
+import {
+  AUTH_TOKEN_KEY,
+  clearAuthToken,
+  getAuthToken,
+  isCookieSessionMarker,
+} from './lib/authTokenStorage'
+
+const apiCredentials: RequestCredentials = 'include'
 
 const apiBase: string = import.meta.env.VITE_API_BASE || '/api/v4'
 const tokenKey = AUTH_TOKEN_KEY
@@ -18,7 +25,7 @@ function getToken(): string {
 
 function authHeaders(): Record<string, string> {
   const token = getToken()
-  if (!token) return {}
+  if (!token || isCookieSessionMarker(token)) return {}
   return { Authorization: `Bearer ${token}` }
 }
 
@@ -52,7 +59,7 @@ export async function apiGet<T = any>(path: string, params?: QueryParams): Promi
       }
     }
   }
-  const res = await fetch(url.toString(), { headers: authHeaders() })
+  const res = await fetch(url.toString(), { headers: authHeaders(), credentials: apiCredentials })
   if (res.status === 401) {
     handleUnauthorized()
     throw new Error('Unauthorized')
@@ -65,7 +72,7 @@ export async function apiGet<T = any>(path: string, params?: QueryParams): Promi
 
 /** Fetch SSO profile photo via coordinator proxy (requires Authorization). */
 export async function fetchMeAvatarObjectUrl(): Promise<string | null> {
-  const res = await fetch(`${apiBase}/me/avatar`, { headers: authHeaders() })
+  const res = await fetch(`${apiBase}/me/avatar`, { headers: authHeaders(), credentials: apiCredentials })
   if (res.status === 401) {
     handleUnauthorized()
     throw new Error('Unauthorized')
@@ -87,6 +94,7 @@ export async function apiPost<T = unknown>(path: string, body?: unknown): Promis
   const res = await fetch(`${apiBase}${path}`, {
     method: 'POST',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    credentials: apiCredentials,
     body: JSON.stringify(body),
   })
   if (res.status === 401) {
@@ -104,6 +112,7 @@ export async function apiPut<T = unknown>(path: string, body?: unknown): Promise
   const res = await fetch(`${apiBase}${path}`, {
     method: 'PUT',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    credentials: apiCredentials,
     body: JSON.stringify(body),
   })
   if (res.status === 401) {
@@ -121,6 +130,7 @@ export async function apiPatch<T = unknown>(path: string, body?: unknown): Promi
   const res = await fetch(`${apiBase}${path}`, {
     method: 'PATCH',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    credentials: apiCredentials,
     body: JSON.stringify(body),
   })
   if (res.status === 401) {
@@ -138,6 +148,7 @@ export async function apiDelete(path: string): Promise<null> {
   const res = await fetch(`${apiBase}${path}`, {
     method: 'DELETE',
     headers: authHeaders(),
+    credentials: apiCredentials,
   })
   if (res.status === 401) {
     handleUnauthorized()
@@ -155,6 +166,7 @@ export async function apiPostFile<T = unknown>(path: string, file: File): Promis
   const res = await fetch(`${apiBase}${path}`, {
     method: 'POST',
     headers: authHeaders(),
+    credentials: apiCredentials,
     body: formData,
   })
   if (res.status === 401) {
@@ -173,8 +185,10 @@ export function apiDownloadUrl(path: string): string {
 
 /**
  * Build a WebSocket URL rooted at the same origin as the REST API.
- * The JWT is appended as `?access_token=...` because browsers can't
- * attach Authorization headers to a WS handshake. Extra query params
+ * When a Bearer JWT is stored (Remember me), it is appended as
+ * `?access_token=...` because browsers can't attach Authorization headers
+ * to a WS handshake. With HttpOnly cookie auth the cookie is sent on the
+ * handshake automatically. Extra query params
  * (e.g. `?proto=1`, `?method=INVITE`) are merged on top of the caller's.
  */
 export function buildWsURL(path: string, params?: QueryParams): string {
@@ -183,7 +197,7 @@ export function buildWsURL(path: string, params?: QueryParams): string {
   const u = new URL(`${apiBase}${path}`, window.location.origin)
   u.protocol = scheme
   const token = getToken()
-  if (token) u.searchParams.set('access_token', token)
+  if (token && !isCookieSessionMarker(token)) u.searchParams.set('access_token', token)
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       if (v === undefined || v === null || v === '') continue
