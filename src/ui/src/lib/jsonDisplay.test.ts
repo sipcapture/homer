@@ -61,4 +61,17 @@ describe('jsonDisplay', () => {
     expect(meta).toEqual({ uuid: '1', session_id: 'a@b' })
     expect(meta.payload).toBeUndefined()
   })
+
+  it('rowWithoutEventPayload drops duplicate JSON payload columns', () => {
+    const inner = { type: 'auth_request', authUser: '5000' }
+    const row = {
+      uuid: '1',
+      payload: inner,
+      message: JSON.stringify(inner),
+      session_id: 'a@b',
+    }
+    const meta = rowWithoutEventPayload(row)
+    expect(meta).toEqual({ uuid: '1', session_id: 'a@b' })
+    expect(serializeRowForDisplay(meta)).not.toContain('authUser')
+  })
 })

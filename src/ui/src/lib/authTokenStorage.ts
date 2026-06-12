@@ -1,12 +1,23 @@
-/** Session JWT for the bundled UI (tab-scoped; not localStorage). */
+/**
+ * Browser session helpers for the bundled UI.
+ *
+ * Primary auth: HttpOnly cookie `homer_session` set by the coordinator on login
+ * (shared across tabs; not readable from JS).
+ *
+ * Optional: "Remember me" persists the JWT in localStorage for Bearer header /
+ * WebSocket `access_token` fallback (less safe on XSS; see docs).
+ */
+
 export const AUTH_TOKEN_KEY = 'homer_v4_token'
+
+/** React/API sentinel when authenticated via HttpOnly cookie only. */
+export const COOKIE_SESSION_MARKER = '__homer_cookie__'
 
 /** Deduplicate OAuth one-time → JWT exchange when React Strict Mode runs effects twice. */
 const oauthTokenExchangeInflight = new Map<string, Promise<void>>()
 
 /**
- * Exchange OAuth one-time query token for JWT and persist in sessionStorage.
- * Callers should refresh React state via getAuthToken() (avoids passing JWT through App state sinks).
+ * Exchange OAuth one-time query token for JWT; coordinator sets HttpOnly cookie.
  */
 export async function exchangeOAuthOneTimeAndPersist(
   oneTime: string,
@@ -21,6 +32,7 @@ export async function exchangeOAuthOneTimeAndPersist(
       const res = await fetch(`${apiBase}/auth/oauth2/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ token: oneTime }),
       })
       let detail = `Request failed (${res.status})`
@@ -42,7 +54,7 @@ export async function exchangeOAuthOneTimeAndPersist(
       if (!jwt || typeof jwt !== 'string') {
         throw new Error('Invalid OAuth2 response: missing data.token')
       }
-      setAuthToken(jwt)
+      setAuthToken(jwt, false)
     } finally {
       oauthTokenExchangeInflight.delete(oneTime)
     }
@@ -51,41 +63,53 @@ export async function exchangeOAuthOneTimeAndPersist(
   return p
 }
 
-function storage(): Storage | null {
-  if (typeof sessionStorage === 'undefined') return null
-  return sessionStorage
+function rememberStorage(): Storage | null {
+  if (typeof localStorage === 'undefined') return null
+  return localStorage
 }
 
-/** One-time migration from legacy localStorage key. */
+/** One-time migration from legacy sessionStorage key to localStorage (remember path). */
 export function migrateLegacyAuthToken(): void {
-  if (typeof localStorage === 'undefined') return
-  const legacy = localStorage.getItem(AUTH_TOKEN_KEY)
-  if (!legacy) return
-  const s = storage()
-  if (s && !s.getItem(AUTH_TOKEN_KEY)) {
-    s.setItem(AUTH_TOKEN_KEY, legacy)
+  if (typeof sessionStorage === 'undefined') return
+  const legacySession = sessionStorage.getItem(AUTH_TOKEN_KEY)
+  if (!legacySession) return
+  const ls = rememberStorage()
+  if (ls && !ls.getItem(AUTH_TOKEN_KEY)) {
+    ls.setItem(AUTH_TOKEN_KEY, legacySession)
   }
-  localStorage.removeItem(AUTH_TOKEN_KEY)
+  sessionStorage.removeItem(AUTH_TOKEN_KEY)
 }
 
+export function isCookieSessionMarker(token: string | null | undefined): boolean {
+  return token === COOKIE_SESSION_MARKER
+}
+
+/** Persisted JWT for Bearer / WebSocket (only when user chose Remember me). */
 export function getAuthToken(): string {
   migrateLegacyAuthToken()
-  return storage()?.getItem(AUTH_TOKEN_KEY) || ''
+  return rememberStorage()?.getItem(AUTH_TOKEN_KEY) || ''
 }
 
-export function setAuthToken(token: string): void {
-  const s = storage()
-  if (!s) return
+export function setAuthToken(token: string, remember = false): void {
+  const ls = rememberStorage()
+  if (!ls) return
   if (!token) {
-    s.removeItem(AUTH_TOKEN_KEY)
+    ls.removeItem(AUTH_TOKEN_KEY)
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(AUTH_TOKEN_KEY)
+    }
     return
   }
-  s.setItem(AUTH_TOKEN_KEY, token)
+  if (remember) {
+    ls.setItem(AUTH_TOKEN_KEY, token)
+  } else {
+    ls.removeItem(AUTH_TOKEN_KEY)
+  }
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+  }
 }
 
 export function clearAuthToken(): void {
   setAuthToken('')
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(AUTH_TOKEN_KEY)
-  }
 }

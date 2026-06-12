@@ -761,6 +761,15 @@ type NodeEndpoint struct {
 type JWTConfig struct {
 	Secret      string `json:"secret" mapstructure:"secret" default:""`
 	ExpireHours int    `json:"expire_hours" mapstructure:"expire_hours" default:"24"`
+	// CookieEnable issues an HttpOnly session cookie on login (default true).
+	// The bundled UI sends credentials: include so the cookie is shared across tabs.
+	CookieEnable *bool `json:"cookie_enable,omitempty" mapstructure:"cookie_enable"`
+	// CookieName is the HttpOnly cookie name (default homer_session).
+	CookieName string `json:"cookie_name,omitempty" mapstructure:"cookie_name"`
+	// CookieSameSite is Lax (default), Strict, or None.
+	CookieSameSite string `json:"cookie_same_site,omitempty" mapstructure:"cookie_same_site"`
+	// CookieSecure forces the Secure flag; nil = auto (TLS or X-Forwarded-Proto: https).
+	CookieSecure *bool `json:"cookie_secure,omitempty" mapstructure:"cookie_secure"`
 }
 
 // DefaultInternalAuthPasswordHash is the SHA-256 hex digest of the default
@@ -1470,6 +1479,16 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Coordinator.JWT.ExpireHours == 0 {
 		cfg.Coordinator.JWT.ExpireHours = 24
+	}
+	if cfg.Coordinator.JWT.CookieEnable == nil {
+		enable := true
+		cfg.Coordinator.JWT.CookieEnable = &enable
+	}
+	if cfg.Coordinator.JWT.CookieName == "" {
+		cfg.Coordinator.JWT.CookieName = "homer_session"
+	}
+	if cfg.Coordinator.JWT.CookieSameSite == "" {
+		cfg.Coordinator.JWT.CookieSameSite = "Lax"
 	}
 	if cfg.Coordinator.Auth.AdminUser == "" {
 		cfg.Coordinator.Auth.AdminUser = "admin"

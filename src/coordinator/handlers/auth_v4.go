@@ -129,6 +129,7 @@ func (h *AuthHandler) V4CreateSession(c echo.Context) error {
 	resp.Data.User.Admin = user.IsAdmin
 	resp.Meta = buildMeta(c, "")
 
+	h.setSessionCookie(c, token)
 	return c.JSON(http.StatusCreated, resp)
 }
 
@@ -156,6 +157,25 @@ func (h *AuthHandler) V4DeleteSession(c echo.Context) error {
 		h.sessionStore.Revoke(sessionID, exp)
 	}
 
+	h.clearSessionCookie(c)
+	return c.NoContent(http.StatusNoContent)
+}
+
+// V4LogoutCurrentSession handles DELETE /api/v4/auth/sessions/current — revoke the
+// caller's JWT (from Bearer or cookie) and clear the HttpOnly session cookie.
+func (h *AuthHandler) V4LogoutCurrentSession(c echo.Context) error {
+	claims, err := h.jwtClaimsFromContext(c)
+	if err != nil {
+		return v4ContextError(c, err)
+	}
+	if claims.ID != "" && h.sessionStore != nil {
+		exp := time.Now().Add(time.Duration(h.expireHours) * time.Hour)
+		if claims.ExpiresAt != nil {
+			exp = claims.ExpiresAt.Time
+		}
+		h.sessionStore.Revoke(claims.ID, exp)
+	}
+	h.clearSessionCookie(c)
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -245,6 +265,7 @@ func (h *AuthHandler) V4OAuth2TokenExchange(c echo.Context) error {
 	resp.Data.User.Admin = isAdmin
 	resp.Meta = buildMeta(c, "")
 
+	h.setSessionCookie(c, jwtToken)
 	return c.JSON(http.StatusCreated, resp)
 }
 

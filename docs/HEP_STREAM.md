@@ -182,7 +182,7 @@ client.close()
 ```
 
 Reconnects use exponential backoff up to 30s with small jitter. The
-JWT from `sessionStorage` (`homer_v4_token`) is attached as `?access_token=` automatically.
+The HttpOnly `homer_session` cookie is sent on the WebSocket handshake automatically. If **Remember me** stored a JWT in `localStorage`, it is also attached as `?access_token=` when needed.
 
 ## Example clients
 

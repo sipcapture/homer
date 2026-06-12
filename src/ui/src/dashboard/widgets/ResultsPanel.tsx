@@ -379,6 +379,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
         body,
       })
       const elapsed = (performance.now() - t0).toFixed(1)
@@ -673,6 +674,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
       const res = await fetch(`${apiBase}/messages`, {
         method: 'POST',
         headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body),
       })
       const data = await res.json().catch(() => ({}))
@@ -787,6 +789,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
         const res = await fetch(`${apiBase}/transactions/messages`, {
           method: 'POST',
           headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
           body: JSON.stringify(body),
         })
         if (res.status === 401) {
@@ -828,6 +831,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
         const res = await fetch(`${apiBase}/transactions/otlp-logs-trace`, {
           method: 'POST',
           headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
           body: JSON.stringify(body),
         })
         if (res.status === 401) {
@@ -865,6 +869,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
         const res = await fetch(`${apiBase}/transactions/messages`, {
           method: 'POST',
           headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
           body: JSON.stringify(body),
         })
         if (res.status === 401) {
@@ -915,6 +920,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
       const res = await fetch(`${apiBase}/transactions/messages`, {
         method: 'POST',
         headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(body),
       })
       if (res.status === 401) {

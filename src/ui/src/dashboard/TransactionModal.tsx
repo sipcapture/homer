@@ -23,12 +23,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
 import {
-  eventPayloadField,
-  eventPayloadFieldKey,
   formatJsonField,
   highlightJSON,
   isJsonDisplayable,
-  rowWithoutEventPayload,
   serializeRowForDisplay,
 } from '@/lib/jsonDisplay'
 import { cn } from '@/lib/utils'
@@ -319,97 +316,65 @@ function formatEventsCell(value, col, timeZone, locale) {
 
 function EventRecordDetail({ row }) {
   const [recordTab, setRecordTab] = React.useState('pretty')
-  const [payloadTab, setPayloadTab] = React.useState('pretty')
-  const payloadKey = eventPayloadFieldKey(row)
-  const payloadVal = eventPayloadField(row)
-  const payloadIsJson = isJsonDisplayable(payloadVal)
-  // When the payload is shown in its own panel, keep uuid/timestamp/src_ip/etc.
-  // in the lower panel only so the same JSON blob is not rendered twice.
-  const metaRow = payloadIsJson && payloadKey ? rowWithoutEventPayload(row) : row
-  const recordText = serializeRowForDisplay(metaRow)
-  const recordPrettyHtml = highlightJSON(metaRow)
-  const payloadPrettyHtml = highlightJSON(payloadVal)
-  const payloadLabel = payloadKey ? payloadKey.replace(/_/g, ' ') : 'payload'
+  const recordText = serializeRowForDisplay(row)
+  const recordPrettyHtml = highlightJSON(row)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-      {payloadIsJson ? (
-        <div className="shrink-0 space-y-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {payloadLabel}
-          </span>
-          <Tabs value={payloadTab} onValueChange={setPayloadTab} className="flex flex-col gap-2">
-            <TabsList variant="line" className="h-8 w-fit justify-start">
-              <TabsTrigger value="pretty" className="text-[11px]">
-                Pretty
-              </TabsTrigger>
-              <TabsTrigger value="raw" className="text-[11px]">
-                Raw
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="pretty" className="mt-0">
-              <ScrollArea className="max-h-[220px] rounded-md border border-border bg-muted/40">
-                <pre
-                  className="whitespace-pre p-2 font-mono text-[11px] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: payloadPrettyHtml || '(no payload)' }}
-                />
-              </ScrollArea>
-            </TabsContent>
-            <TabsContent value="raw" className="mt-0">
-              <ScrollArea className="max-h-[220px] rounded-md border border-border bg-muted/40">
-                <pre className="whitespace-pre-wrap break-all p-2 font-mono text-[11px] leading-relaxed text-foreground">
-                  {formatJsonField(payloadVal)}
-                </pre>
-              </ScrollArea>
-            </TabsContent>
-          </Tabs>
-        </div>
-      ) : null}
-      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {payloadIsJson ? 'Other fields' : 'Full record'}
-        </span>
-        <Tabs
-          value={recordTab}
-          onValueChange={setRecordTab}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <Tabs
+        value={recordTab}
+        onValueChange={setRecordTab}
+        className="flex h-full min-h-0 flex-1 flex-col gap-1 overflow-hidden"
+      >
+        <TabsList variant="line" className="h-8 w-fit shrink-0 justify-start">
+          <TabsTrigger value="pretty" className="text-[11px]">
+            Pretty
+          </TabsTrigger>
+          <TabsTrigger value="raw" className="text-[11px]">
+            Raw
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent
+          value="pretty"
+          className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
         >
-          <TabsList variant="line" className="h-8 w-fit shrink-0 justify-start">
-            <TabsTrigger value="pretty" className="text-[11px]">
-              Pretty
-            </TabsTrigger>
-            <TabsTrigger value="raw" className="text-[11px]">
-              Raw
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="pretty" className="mt-0 min-h-0 flex-1 overflow-hidden">
-            <ScrollArea className="min-h-0 flex-1 rounded-md border border-border bg-muted/40">
-              <pre
-                className="whitespace-pre p-2 font-mono text-[11px] leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: recordPrettyHtml || '(empty)' }}
-              />
-            </ScrollArea>
-          </TabsContent>
-          <TabsContent value="raw" className="mt-0 min-h-0 flex-1 overflow-hidden">
-            <ScrollArea className="min-h-0 flex-1 rounded-md border border-border bg-muted/40">
-              <pre className="whitespace-pre-wrap break-words p-2 font-mono text-[11px] leading-relaxed text-foreground">
-                {recordText}
-              </pre>
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
-      </div>
+          <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-muted/40">
+            <pre
+              className="w-max min-w-full whitespace-pre p-2 font-mono text-[11px] leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: recordPrettyHtml || '(empty)' }}
+            />
+          </div>
+        </TabsContent>
+        <TabsContent
+          value="raw"
+          className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+        >
+          <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-muted/40">
+            <pre className="min-w-full whitespace-pre-wrap break-words p-2 font-mono text-[11px] leading-relaxed text-foreground">
+              {recordText}
+            </pre>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
 
 function EventsTab({ data, isLoading, err, emptyLabel, timeZone, locale }) {
-  const [detailRow, setDetailRow] = React.useState(null)
+  const [detailWindows, setDetailWindows] = React.useState([])
 
   const items = Array.isArray(data?.items) ? data.items : null
   React.useEffect(() => {
-    setDetailRow(null)
+    setDetailWindows([])
   }, [data, isLoading, err])
+
+  const openDetailWindow = (row) => {
+    setDetailWindows((prev) => [...prev, { windowKey: newModalKey(), row }])
+  }
+
+  const closeDetailWindow = (windowKey) => {
+    setDetailWindows((prev) => prev.filter((w) => w.windowKey !== windowKey))
+  }
 
   if (isLoading) {
     return <div className="p-4 text-xs text-muted-foreground">Loading...</div>
@@ -431,7 +396,7 @@ function EventsTab({ data, isLoading, err, emptyLabel, timeZone, locale }) {
     <>
       <div className="flex h-full min-h-0 flex-col gap-1">
         <p className="shrink-0 px-1 text-[10px] text-muted-foreground">
-          Click a row to open the full log record (all fields, including data_extra) in a resizable window.
+          Click a row to open the full log record in a resizable window. Each click opens a new window.
         </p>
         <ScrollArea className="min-h-0 flex-1 border border-border">
           <Table className="table-fixed">
@@ -453,7 +418,7 @@ function EventsTab({ data, isLoading, err, emptyLabel, timeZone, locale }) {
                   key={row.uuid || row.guid || idx}
                   className={`cursor-pointer hover:brightness-95 ${idx % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-sky-50 dark:bg-sky-900/60'}`}
                   title="View full event"
-                  onClick={() => setDetailRow(row)}
+                  onClick={() => openDetailWindow(row)}
                 >
                   {EVENTS_TABLE_COLUMNS.map((col) => (
                     <TableCell
@@ -474,18 +439,19 @@ function EventsTab({ data, isLoading, err, emptyLabel, timeZone, locale }) {
         </ScrollArea>
       </div>
 
-      {detailRow ? (
+      {detailWindows.map(({ windowKey, row }) => (
         <FloatingWindow
+          key={windowKey}
           open
-          onClose={() => setDetailRow(null)}
-          id={`evlog:${[detailRow.uuid, detailRow.guid, detailRow.timestamp, detailRow.session_id].filter(Boolean).join('|') || 'event'}`}
+          onClose={() => closeDetailWindow(windowKey)}
+          id={`evlog:${windowKey}`}
           title={
             <span className="truncate font-mono text-xs">
               Event log
-              {(detailRow.uuid || detailRow.guid) && (
+              {(row.uuid || row.guid) && (
                 <span className="text-muted-foreground">
                   {' '}
-                  — {String(detailRow.uuid || detailRow.guid)}
+                  — {String(row.uuid || row.guid)}
                 </span>
               )}
             </span>
@@ -494,13 +460,13 @@ function EventsTab({ data, isLoading, err, emptyLabel, timeZone, locale }) {
           defaultHeight={Math.min(Math.round(window.innerHeight * 0.72), 640)}
           minWidth={420}
           minHeight={280}
-          className="flex min-h-0 flex-col"
+          className="flex min-h-0 flex-col overflow-hidden"
         >
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3 pt-0">
-            <EventRecordDetail row={detailRow} />
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3 pt-1">
+            <EventRecordDetail row={row} />
           </div>
         </FloatingWindow>
-      ) : null}
+      ))}
     </>
   )
 }
@@ -618,9 +584,9 @@ function OtlpLogsTab({
           defaultHeight={Math.min(Math.round(window.innerHeight * 0.78), 720)}
           minWidth={480}
           minHeight={320}
-          className="flex min-h-0 flex-col"
+          className="flex min-h-0 flex-col overflow-hidden"
         >
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3 pt-0">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3 pt-1">
             <EventRecordDetail row={detailRow} />
           </div>
         </FloatingWindow>

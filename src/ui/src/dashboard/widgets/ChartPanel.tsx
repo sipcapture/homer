@@ -358,6 +358,7 @@ export default function ChartPanel({ widgetId, config, onConfigChange }: ChartPa
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { ...authHeader, 'Content-Type': 'application/json' },
+        credentials: 'include',
         body,
       })
       if (!res.ok) return

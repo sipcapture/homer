@@ -214,6 +214,7 @@ func (c *Coordinator) setupRoutes() {
 	authHandler := handlers.NewAuthHandlerWithUserService(
 		c.config.JWT.Secret,
 		c.config.JWT.ExpireHours,
+		c.config.JWT,
 		userService,
 		mapOAuthProvider(c.config.OAuth2Provider),
 		authTokenSvc,
@@ -365,6 +366,7 @@ func (c *Coordinator) setupRoutes() {
 		protectedV4.Use(authHandler.JWTMiddlewareV4())
 	}
 	{
+		protectedV4.DELETE("/auth/sessions/current", authHandler.V4LogoutCurrentSession)
 		protectedV4.DELETE("/auth/sessions/:sessionId", authHandler.V4DeleteSession)
 		protectedV4.GET("/me", authHandler.V4GetMe)
 		protectedV4.GET("/me/avatar", authHandler.V4GetMeAvatar)
