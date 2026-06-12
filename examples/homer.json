@@ -45,6 +45,12 @@
       "aleg_ids": ["X-CID", "X-Session-ID"],
       "custom_headers": [],
       "force_aleg_id": false
+    },
+    "siprec": {
+      "enable": false
+    },
+    "vqrtcp": {
+      "enable": false
     }
   },
   "storage": {

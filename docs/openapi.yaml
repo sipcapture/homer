@@ -3035,6 +3035,14 @@ components:
           $ref: "#/components/schemas/SearchTransactionRtcpList"
         rtp:
           $ref: "#/components/schemas/SearchTransactionRtpList"
+        vqrtcp:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
     SearchTransactionLog:
       type: object
       properties:

@@ -42,6 +42,7 @@ const (
 	SIPTypeCall         = "call"         // INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO
 	SIPTypeRegistration = "registration" // REGISTER
 	SIPTypeDefault      = "default"      // OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE, REFER
+	SIPTypeSiprec       = "siprec"       // SIPREC SRS signaling captured in Homer
 )
 
 // TableKey uniquely identifies a table (proto_type + optional sub_type)
@@ -168,6 +169,43 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 			InsertSQL: `(uuid, date, timestamp, session_id, aor, contact, expires, user_agent,
 				src_ip, dst_ip, src_port, dst_port, method, response_code,
 				protocol, node_id, payload, data_extra)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
+		},
+
+		// SIPREC - signaling from in-process SRS
+		{ProtoType: ProtoTypeSIP, SubType: SIPTypeSiprec}: {
+			ProtoType:   ProtoTypeSIP,
+			SubType:     SIPTypeSiprec,
+			TableSuffix: "1_siprec",
+			Columns: []string{
+				"uuid", "timestamp", "session_id", "caller", "callee",
+				"src_ip", "dst_ip", "src_port", "dst_port",
+				"method", "response_code", "cseq_method",
+				"protocol", "node_id", "cid", "payload", "data_extra",
+			},
+			CreateSQL: `
+				uuid VARCHAR,
+				date DATE,
+				timestamp TIMESTAMP,
+				session_id VARCHAR,
+				caller VARCHAR,
+				callee VARCHAR,
+				src_ip VARCHAR,
+				dst_ip VARCHAR,
+				src_port UINTEGER,
+				dst_port UINTEGER,
+				method VARCHAR,
+				response_code VARCHAR,
+				cseq_method VARCHAR,
+				protocol UINTEGER,
+				node_id VARCHAR,
+				cid VARCHAR,
+				payload VARCHAR,
+				data_extra JSON
+			`,
+			InsertSQL: `(uuid, date, timestamp, session_id, caller, callee, src_ip, dst_ip,
+				src_port, dst_port, method, response_code, cseq_method,
+				protocol, node_id, cid, payload, data_extra)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
 		},
 

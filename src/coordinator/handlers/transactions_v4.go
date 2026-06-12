@@ -250,9 +250,18 @@ func sessionMatchOneSQL(sid string) string {
 
 // buildSessionIDMatchOrChain ORs B2B-aware session_id clauses for multiple Call-IDs (QoS, logs, callinfo, etc.).
 func buildSessionIDMatchOrChain(sessionIDs []string) string {
-	parts := make([]string, 0, len(sessionIDs))
-	for _, sid := range sessionIDs {
-		if p := sessionMatchOneSQL(sid); p != "" {
+	return buildColumnMatchOrChain("session_id", sessionIDs)
+}
+
+// buildCallIDMatchOrChain ORs B2B-aware callid clauses for VQ-RTCPXR stats correlation.
+func buildCallIDMatchOrChain(callIDs []string) string {
+	return buildColumnMatchOrChain("callid", callIDs)
+}
+
+func buildColumnMatchOrChain(column string, ids []string) string {
+	parts := make([]string, 0, len(ids))
+	for _, sid := range ids {
+		if p := columnMatchOneSQL(column, sid); p != "" {
 			parts = append(parts, p)
 		}
 	}
@@ -260,6 +269,19 @@ func buildSessionIDMatchOrChain(sessionIDs []string) string {
 		return "FALSE"
 	}
 	return "(" + strings.Join(parts, " OR ") + ")"
+}
+
+func columnMatchOneSQL(column, sid string) string {
+	safe := sqlvalidator.SafeString(strings.TrimSpace(sid))
+	if safe == "" {
+		return ""
+	}
+	base := stripB2BSuffix(safe)
+	baseSafe := sqlvalidator.SafeString(base)
+	if baseSafe != safe {
+		return fmt.Sprintf("(%s = '%s' OR %s = '%s')", column, safe, column, baseSafe)
+	}
+	return fmt.Sprintf("%s = '%s'", column, safe)
 }
 
 // buildExactColumnMatchOrChain builds (col = 'a' OR col = 'b') with escaped
@@ -937,10 +959,23 @@ func (h *SearchHandler) V4TransactionQos(c echo.Context) error {
 	}
 	h.enrichRowsWithIPAliases(c.Request().Context(), rtpResults)
 
+	vqrtcpTable := fmt.Sprintf("%s.vqrtcpxr_stats", h.flightService.LakeName())
+	callidCondition := buildCallIDMatchOrChain(ids)
+	vqrtcpSQL := fmt.Sprintf(
+		"SELECT * FROM %s WHERE %s%s ORDER BY timestamp ASC",
+		vqrtcpTable, callidCondition, tsCondition,
+	)
+	vqrtcpResults, vqrtcpErr := h.flightService.Query(c.Request().Context(), vqrtcpSQL)
+	if vqrtcpErr != nil {
+		vqrtcpResults = []map[string]interface{}{}
+	}
+	h.enrichRowsWithIPAliases(c.Request().Context(), vqrtcpResults)
+
 	resp := QosResponseV4{
 		Data: map[string]interface{}{
-			"rtcp": map[string]interface{}{"data": rtcpResults},
-			"rtp":  map[string]interface{}{"data": rtpResults},
+			"rtcp":   map[string]interface{}{"data": rtcpResults},
+			"rtp":    map[string]interface{}{"data": rtpResults},
+			"vqrtcp": map[string]interface{}{"data": vqrtcpResults},
 		},
 		Meta: buildMeta(c, ""),
 	}

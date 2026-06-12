@@ -25,6 +25,9 @@ var fieldsMappingSIPDefault []byte
 //go:embed seeds/fields_sip_registration.json
 var fieldsMappingSIPRegistration []byte
 
+//go:embed seeds/fields_siprec_1_siprec.json
+var fieldsMappingSIPSiprec []byte
+
 //go:embed seeds/fields_rtcp_5_default.json
 var fieldsMappingRTCP5Default []byte
 
@@ -58,6 +61,7 @@ const (
 	defaultMappingGUIDCall         = "a1111111-1111-4111-8111-111111111101"
 	defaultMappingGUIDDefault      = "a1111111-1111-4111-8111-111111111102"
 	defaultMappingGUIDRegistration = "a1111111-1111-4111-8111-111111111103"
+	defaultMappingGUIDSiprec       = "a1111111-1111-4111-8111-111111111110"
 	defaultMappingGUIDRTCP5        = "a1111111-1111-4111-8111-111111111104"
 	defaultMappingGUIDDNS53        = "a1111111-1111-4111-8111-111111111105"
 	defaultMappingGUIDLOG100       = "a1111111-1111-4111-8111-111111111106"
@@ -97,6 +101,7 @@ func SeedDefaultMappingSchema(ctx context.Context, db *sql.DB) error {
 		{defaultMappingGUIDCall, "call", "SIP", 1, fieldsMappingSIPCall},
 		{defaultMappingGUIDDefault, "default", "SIP", 1, fieldsMappingSIPDefault},
 		{defaultMappingGUIDRegistration, "registration", "SIP", 1, fieldsMappingSIPRegistration},
+		{defaultMappingGUIDSiprec, "siprec", "SIPREC", 1, fieldsMappingSIPSiprec},
 		{defaultMappingGUIDRTCP5, "default", "RTCP", 5, fieldsMappingRTCP5Default},
 		{defaultMappingGUIDDNS53, "default", "DNS", 53, fieldsMappingDNS53Default},
 		{defaultMappingGUIDLOG100, "default", "LOG", 100, fieldsMappingLOG100Default},

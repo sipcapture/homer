@@ -135,8 +135,38 @@ type IngestConfig struct {
 	// setting ingest.line_protocol.enable=true.
 	LineProto LineProtoConfig `json:"line_protocol" mapstructure:"line_protocol"`
 
+	// Siprec configures the in-process SIPREC SRS (signaling-only).
+	Siprec SiprecConfig `json:"siprec" mapstructure:"siprec"`
+
+	// Vqrtcp configures the dedicated SIP listener for VQ-RTCPXR QoS reports.
+	Vqrtcp VqrtcpConfig `json:"vqrtcp" mapstructure:"vqrtcp"`
+
 	// Force HEP payload storage for specific types (e.g., [34, 35, 38])
 	ForceHEPPayload []int `json:"force_hep_payload" mapstructure:"force_hep_payload"`
+}
+
+// SiprecConfig configures the Homer SIPREC signaling server (RFC 7865/7866).
+type SiprecConfig struct {
+	Enable        bool     `json:"enable" mapstructure:"enable" default:"false"`
+	BindIP        string   `json:"bind_ip" mapstructure:"bind_ip" default:"0.0.0.0"`
+	AdvertiseIP   string   `json:"advertise_ip" mapstructure:"advertise_ip" default:""`
+	SIPPort       int      `json:"sip_port" mapstructure:"sip_port" default:"5062"`
+	Transports    []string `json:"transports" mapstructure:"transports"`
+	RequireSiprec bool     `json:"require_siprec" mapstructure:"require_siprec" default:"true"`
+	UserAgent     string   `json:"user_agent" mapstructure:"user_agent" default:"homer-siprec-srs"`
+	NodeID        string   `json:"node_id" mapstructure:"node_id" default:"homer"`
+}
+
+// VqrtcpConfig configures the VQ-RTCPXR SIP QoS report receiver.
+type VqrtcpConfig struct {
+	Enable          bool     `json:"enable" mapstructure:"enable" default:"false"`
+	BindIP          string   `json:"bind_ip" mapstructure:"bind_ip" default:"0.0.0.0"`
+	SIPPort         int      `json:"sip_port" mapstructure:"sip_port" default:"5063"`
+	Transports      []string `json:"transports" mapstructure:"transports"`
+	Methods         []string `json:"methods" mapstructure:"methods"`
+	Reply200        bool     `json:"reply_200" mapstructure:"reply_200" default:"true"`
+	AsyncQueueDepth int      `json:"async_queue_depth" mapstructure:"async_queue_depth" default:"1024"`
+	NodeID          string   `json:"node_id" mapstructure:"node_id" default:"homer"`
 }
 
 // LineProtoConfig configures the InfluxDB Line Protocol HTTP receiver.
@@ -1527,6 +1557,33 @@ func applyDefaults(cfg *Config) {
 	if cfg.Ingest.LineProto.WriteTimeoutSec <= 0 {
 		cfg.Ingest.LineProto.WriteTimeoutSec = 30
 	}
+	if cfg.Ingest.Siprec.SIPPort <= 0 {
+		cfg.Ingest.Siprec.SIPPort = 5062
+	}
+	if len(cfg.Ingest.Siprec.Transports) == 0 {
+		cfg.Ingest.Siprec.Transports = []string{"udp", "tcp"}
+	}
+	if cfg.Ingest.Siprec.UserAgent == "" {
+		cfg.Ingest.Siprec.UserAgent = "homer-siprec-srs"
+	}
+	if cfg.Ingest.Siprec.NodeID == "" {
+		cfg.Ingest.Siprec.NodeID = "homer"
+	}
+	if cfg.Ingest.Vqrtcp.SIPPort <= 0 {
+		cfg.Ingest.Vqrtcp.SIPPort = 5063
+	}
+	if len(cfg.Ingest.Vqrtcp.Transports) == 0 {
+		cfg.Ingest.Vqrtcp.Transports = []string{"udp", "tcp"}
+	}
+	if len(cfg.Ingest.Vqrtcp.Methods) == 0 {
+		cfg.Ingest.Vqrtcp.Methods = []string{"PUBLISH", "MESSAGE"}
+	}
+	if cfg.Ingest.Vqrtcp.AsyncQueueDepth <= 0 {
+		cfg.Ingest.Vqrtcp.AsyncQueueDepth = 1024
+	}
+	if cfg.Ingest.Vqrtcp.NodeID == "" {
+		cfg.Ingest.Vqrtcp.NodeID = "homer"
+	}
 	cfg.Coordinator.LineProtoTablePrefix = cfg.Ingest.LineProto.TablePrefix
 
 	// MCP defaults
@@ -1608,6 +1665,12 @@ func SaveExample(path string) error {
 				HepV3Enable:    true,
 				ProtobufEnable: true,
 				Deduplicate:    false,
+			},
+			Siprec: SiprecConfig{
+				Enable: false,
+			},
+			Vqrtcp: VqrtcpConfig{
+				Enable: false,
 			},
 		},
 		Storage: StorageConfig{

@@ -62,6 +62,26 @@
       "default_db": "",
       "read_timeout_sec": 30,
       "write_timeout_sec": 30
+    },
+    "siprec": {
+      "enable": false,
+      "bind_ip": "0.0.0.0",
+      "advertise_ip": "",
+      "sip_port": 5062,
+      "transports": ["udp", "tcp"],
+      "require_siprec": true,
+      "user_agent": "homer-siprec-srs",
+      "node_id": "homer"
+    },
+    "vqrtcp": {
+      "enable": false,
+      "bind_ip": "0.0.0.0",
+      "sip_port": 5063,
+      "transports": ["udp", "tcp"],
+      "methods": ["PUBLISH", "MESSAGE"],
+      "reply_200": true,
+      "async_queue_depth": 1024,
+      "node_id": "homer"
     }
   },
   "storage": {
