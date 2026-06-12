@@ -24,9 +24,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
 import {
   eventPayloadField,
+  eventPayloadFieldKey,
   formatJsonField,
   highlightJSON,
   isJsonDisplayable,
+  rowWithoutEventPayload,
   serializeRowForDisplay,
 } from '@/lib/jsonDisplay'
 import { cn } from '@/lib/utils'
@@ -318,18 +320,23 @@ function formatEventsCell(value, col, timeZone, locale) {
 function EventRecordDetail({ row }) {
   const [recordTab, setRecordTab] = React.useState('pretty')
   const [payloadTab, setPayloadTab] = React.useState('pretty')
+  const payloadKey = eventPayloadFieldKey(row)
   const payloadVal = eventPayloadField(row)
   const payloadIsJson = isJsonDisplayable(payloadVal)
-  const recordText = serializeRowForDisplay(row)
-  const recordPrettyHtml = highlightJSON(recordText)
+  // When the payload is shown in its own panel, keep uuid/timestamp/src_ip/etc.
+  // in the lower panel only so the same JSON blob is not rendered twice.
+  const metaRow = payloadIsJson && payloadKey ? rowWithoutEventPayload(row) : row
+  const recordText = serializeRowForDisplay(metaRow)
+  const recordPrettyHtml = highlightJSON(metaRow)
   const payloadPrettyHtml = highlightJSON(payloadVal)
+  const payloadLabel = payloadKey ? payloadKey.replace(/_/g, ' ') : 'payload'
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       {payloadIsJson ? (
         <div className="shrink-0 space-y-1">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Payload
+            {payloadLabel}
           </span>
           <Tabs value={payloadTab} onValueChange={setPayloadTab} className="flex flex-col gap-2">
             <TabsList variant="line" className="h-8 w-fit justify-start">
@@ -360,7 +367,7 @@ function EventRecordDetail({ row }) {
       ) : null}
       <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
         <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Full record
+          {payloadIsJson ? 'Other fields' : 'Full record'}
         </span>
         <Tabs
           value={recordTab}

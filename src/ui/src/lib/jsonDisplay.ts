@@ -22,7 +22,32 @@ export function escapeHtml(str: string): string {
 
 export function looksLikeJsonString(str: string): boolean {
   const t = str.trim()
-  return (t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))
+  return (
+    (t.startsWith('{') && t.endsWith('}')) ||
+    (t.startsWith('[') && t.endsWith(']')) ||
+    (t.startsWith('"') && t.endsWith('"'))
+  )
+}
+
+/**
+ * Parse JSON that may be stored as a string, including double-encoded hlog()
+ * payloads (`"{\"cause\":...}"`). Returns the inner object/array, or null when
+ * the input is not structured JSON.
+ */
+export function parseJsonDeep(input: unknown, maxDepth = 3): unknown {
+  let v: unknown = input
+  for (let i = 0; i <= maxDepth; i++) {
+    if (v !== null && typeof v === 'object') return v
+    if (typeof v !== 'string') return null
+    const t = v.trim()
+    if (!looksLikeJsonString(t)) return null
+    try {
+      v = JSON.parse(t)
+    } catch {
+      return null
+    }
+  }
+  return null
 }
 
 /** Parse a JSON string; return the original value when it is not JSON text. */
@@ -30,19 +55,14 @@ export function parseJsonLoose(val: unknown): unknown {
   if (val == null) return val
   if (typeof val === 'object') return val
   if (typeof val !== 'string') return val
-  const t = val.trim()
-  if (!looksLikeJsonString(t)) return val
-  try {
-    return JSON.parse(t)
-  } catch {
-    return val
-  }
+  const deep = parseJsonDeep(val)
+  return deep ?? val
 }
 
 export function isJsonDisplayable(val: unknown): boolean {
   if (val == null || val === '') return false
   if (typeof val === 'object') return true
-  if (typeof val === 'string') return looksLikeJsonString(val)
+  if (typeof val === 'string') return parseJsonDeep(val) !== null
   return false
 }
 
@@ -92,10 +112,23 @@ export function serializeRowForDisplay(row: Record<string, unknown>): string {
   }
 }
 
+function formatJsonForHighlight(payload: unknown): string {
+  if (payload !== null && typeof payload === 'object' && !Array.isArray(payload)) {
+    return JSON.stringify(payload, expandEmbeddedJsonReplacer, 2)
+  }
+  const parsed = parseJsonLoose(payload)
+  if (parsed !== payload) {
+    return JSON.stringify(parsed, null, 2)
+  }
+  if (typeof payload === 'string') {
+    return payload
+  }
+  return JSON.stringify(parsed, null, 2)
+}
+
 export function highlightJSON(payload: unknown): string {
   try {
-    const obj = parseJsonLoose(payload)
-    const formatted = JSON.stringify(obj, null, 2)
+    const formatted = formatJsonForHighlight(payload)
     let html = escapeHtml(formatted)
     // Value highlighting before keys — the key pass wraps colons and breaks later ": …" patterns.
     html = html.replace(
@@ -116,12 +149,34 @@ export function highlightJSON(payload: unknown): string {
   }
 }
 
+/** Primary payload column names on LOG / event rows (first match wins). */
+export const EVENT_PAYLOAD_FIELD_KEYS = ['payload', 'message', 'data', 'body'] as const
+
 /** First non-empty payload-like field on a LOG / event row. */
 export function eventPayloadField(row: Record<string, unknown> | null | undefined): unknown {
-  if (!row || typeof row !== 'object') return ''
-  for (const k of ['payload', 'message', 'data', 'body']) {
+  const key = eventPayloadFieldKey(row)
+  return key ? row[key] : ''
+}
+
+/** Which payload column is populated on this row, if any. */
+export function eventPayloadFieldKey(
+  row: Record<string, unknown> | null | undefined,
+): (typeof EVENT_PAYLOAD_FIELD_KEYS)[number] | null {
+  if (!row || typeof row !== 'object') return null
+  for (const k of EVENT_PAYLOAD_FIELD_KEYS) {
     const v = row[k]
-    if (v != null && v !== '') return v
+    if (v != null && v !== '') return k
   }
-  return ''
+  return null
+}
+
+/** Row copy without the primary payload column (for metadata-only panels). */
+export function rowWithoutEventPayload(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const key = eventPayloadFieldKey(row)
+  if (!key) return row
+  const copy = { ...row }
+  delete copy[key]
+  return copy
 }

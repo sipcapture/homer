@@ -3,6 +3,8 @@ import {
   formatJsonField,
   highlightJSON,
   isJsonDisplayable,
+  parseJsonDeep,
+  rowWithoutEventPayload,
   serializeRowForDisplay,
 } from './jsonDisplay'
 
@@ -43,5 +45,20 @@ describe('jsonDisplay', () => {
     expect(html).toContain('json-hl-num')
     expect(html).toContain('json-hl-bool')
     expect(html).toContain('json-hl-null')
+  })
+
+  it('parses double-encoded JSON strings from hlog()', () => {
+    const inner = '{"level":"INFO","msg":"hello"}'
+    const wrapped = JSON.stringify(inner)
+    expect(parseJsonDeep(wrapped)).toEqual({ level: 'INFO', msg: 'hello' })
+    expect(isJsonDisplayable(wrapped)).toBe(true)
+    expect(formatJsonField(wrapped)).toContain('"level": "INFO"')
+  })
+
+  it('rowWithoutEventPayload omits only the populated payload column', () => {
+    const row = { uuid: '1', payload: '{"x":1}', session_id: 'a@b' }
+    const meta = rowWithoutEventPayload(row)
+    expect(meta).toEqual({ uuid: '1', session_id: 'a@b' })
+    expect(meta.payload).toBeUndefined()
   })
 })
