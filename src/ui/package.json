@@ -60,7 +60,7 @@
     "puppeteer": "^24.37.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.58.1",
-    "vite": "^7.2.4",
+    "vite": "^8.0.16",
     "vitest": "^4.0.18"
   },
   "overrides": {
