@@ -26,6 +26,11 @@ var reBrokenParquet = regexp.MustCompile(
 	`Cannot open file "([^"]+\.parquet)"|Invalid footer.*for file '([^']+\.parquet)'`)
 var reNonIdent = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
+const (
+	partitionFallbackStepTimeout  = 60 * time.Second
+	maxPartitionFallbacksPerCycle = 1
+)
+
 // catalogPathToAbs converts a DuckLake catalog-relative path to an absolute filesystem path.
 //
 // DuckLake stores file paths in ducklake_data_file.path relative to the per-table
@@ -515,6 +520,8 @@ func (c *CompactionService) runMerge(tables []string) error {
 			"max_file_size_bytes", effectiveMaxFileSize)
 	}
 
+	partitionFallbacksUsed := 0
+
 	// 1. Merge adjacent small files FIRST — lock per table
 	for _, table := range tables {
 		tableName := tableNameFromFQN(table)
@@ -569,9 +576,17 @@ func (c *CompactionService) runMerge(tables []string) error {
 				logger.Warn("CompactionService: merge_adjacent_files failed", "table", tableName, "error", err)
 				if isOutOfMemoryError(err) {
 					c.logMemoryBreakdown()
-					if rerr := c.compactSingleDatePartition(tableName); rerr != nil {
-						logger.Warn("CompactionService: date-partition compaction fallback failed",
-							"table", tableName, "error", rerr)
+					if partitionFallbacksUsed >= maxPartitionFallbacksPerCycle {
+						logger.Warn("CompactionService: date-partition compaction fallback skipped (cycle limit reached)",
+							"table", tableName,
+							"max_fallbacks_per_cycle", maxPartitionFallbacksPerCycle)
+					} else {
+						if rerr := c.compactSingleDatePartition(tableName); rerr != nil {
+							logger.Warn("CompactionService: date-partition compaction fallback failed",
+								"table", tableName, "error", rerr)
+						} else {
+							partitionFallbacksUsed++
+						}
 					}
 				}
 			} else if result != nil {
@@ -863,6 +878,7 @@ func (c *CompactionService) compactSingleDatePartition(tableName string) error {
 }
 
 func (c *CompactionService) selectDatePartitionForCompaction(tableName string) (string, int64, error) {
+	cutoffDate := time.Now().UTC().Format("2006-01-02")
 	metadataSchema := fmt.Sprintf("__ducklake_metadata_%s", c.lakeName)
 	query := fmt.Sprintf(`
 		SELECT
@@ -873,13 +889,14 @@ func (c *CompactionService) selectDatePartitionForCompaction(tableName string) (
 		WHERE t.table_name = ?
 		  AND f.end_snapshot IS NULL
 		  AND regexp_extract(f.path, 'date=([0-9]{4}-[0-9]{2}-[0-9]{2})', 1) <> ''
+		  AND regexp_extract(f.path, 'date=([0-9]{4}-[0-9]{2}-[0-9]{2})', 1) < ?
 		GROUP BY 1
 		HAVING COUNT(*) > 1
 		ORDER BY file_count DESC, part_date ASC
 		LIMIT 1
 	`, metadataSchema, metadataSchema)
 
-	rows, err := c.queryWithRetry(query, tableName)
+	rows, err := c.queryWithRetry(query, tableName, cutoffDate)
 	if err != nil {
 		return "", 0, err
 	}
@@ -932,7 +949,15 @@ func (c *CompactionService) rewriteDatePartition(tableName, partDate string) err
 		stepStart := time.Now()
 		logger.Info("CompactionService: date-partition compaction step start",
 			"table", tableName, "date", partDate, "step", step.name)
-		if _, err := tx.ExecContext(c.ctx, step.sql); err != nil {
+		stepCtx, cancel := context.WithTimeout(c.ctx, partitionFallbackStepTimeout)
+		_, err := tx.ExecContext(stepCtx, step.sql)
+		cancel()
+		if err != nil {
+			if isContextTimeout(err) {
+				logger.Warn("CompactionService: date-partition compaction step timeout",
+					"table", tableName, "date", partDate, "step", step.name,
+					"timeout_sec", int(partitionFallbackStepTimeout/time.Second))
+			}
 			logger.Warn("CompactionService: date-partition compaction step failed",
 				"table", tableName, "date", partDate, "step", step.name, "error", err)
 			_ = tx.Rollback()
@@ -951,6 +976,10 @@ func (c *CompactionService) rewriteDatePartition(tableName, partDate string) err
 	logger.Info("CompactionService: date-partition compaction completed",
 		"table", tableName, "date", partDate, "duration_ms", time.Since(start).Milliseconds())
 	return nil
+}
+
+func isContextTimeout(err error) bool {
+	return err != nil && (strings.Contains(strings.ToLower(err.Error()), "context deadline exceeded") || strings.Contains(strings.ToLower(err.Error()), "deadline exceeded"))
 }
 
 // logMemoryBreakdown dumps DuckDB's buffer-manager accounting after an
