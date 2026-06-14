@@ -704,8 +704,8 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	// Rewrite query for tiered storage (UNION ALL across volumes).
 	rewrittenSQL := n.rewriteQueryForVolumes(req.SQL)
-	logger.Info("Node: handleQuery", "sql_chars", len(req.SQL), "sql", req.SQL)
-	logger.Debug("Node: handleQuery", "original", req.SQL, "rewritten", rewrittenSQL)
+	logger.Info("Node: handleQuery", "sql_chars", len(req.SQL))
+	logger.Debug("Node: handleQuery", "sql", req.SQL, "original", req.SQL, "rewritten", rewrittenSQL)
 
 	db := n.queryDB()
 
@@ -731,7 +731,8 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sharedResults, sharedCols, sharedPlan, err := n.runSharedSelectWithMemoryPolicy(r.Context(), db, rewrittenSQL)
-	logger.Info("Node: handleQuery execution plan",
+	logger.Info("Node: handleQuery execution plan", "mode", sharedPlan.mode)
+	logger.Debug("Node: handleQuery execution plan",
 		"mode", sharedPlan.mode,
 		"lake_sql", sharedPlan.lakeSQL,
 		"mem_sql", sharedPlan.memSQL,
