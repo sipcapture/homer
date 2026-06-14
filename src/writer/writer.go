@@ -327,6 +327,8 @@ func (w *Writer) Start() error {
 			MinFileSizeBytes:          w.storageConfig.DuckLake.Compaction.MinFileSizeBytes,
 			MaxFileSizeBytes:          w.storageConfig.DuckLake.Compaction.MaxFileSizeBytes,
 			MaxCompactedFiles:         w.storageConfig.DuckLake.Compaction.MaxCompactedFiles,
+			Engine:                    w.storageConfig.DuckLake.Compaction.Engine,
+			TargetFileSizeBytes:       w.storageConfig.DuckLake.Compaction.TargetFileSizeBytes,
 		}
 		if !w.storageConfig.DuckLake.Compaction.Enable && w.shouldAutoEnableCompactionForTieredHot() {
 			logger.Info("Writer: DuckLake compaction auto-enabled (tiered storage with local hot volume)",
@@ -366,6 +368,7 @@ func (w *Writer) Start() error {
 			w.ducklakeManager.GetDB(),
 			w.ducklakeManager.GetLakeName(),
 			w.storageConfig.DuckLake.DataPath,
+			w.storageConfig.DuckLake.CatalogPath,
 			compactionCfg,
 			w.ducklakeManager,
 			compactionS3,

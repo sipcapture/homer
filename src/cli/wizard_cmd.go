@@ -170,9 +170,11 @@ func baseConfig() config.Config {
 				BatchSize:     10000,
 				FlushInterval: 30,
 				Compaction: config.CompactionConfig{
-					Enable:           true,
-					CheckIntervalSec: 1800,
-					RetentionDays:    30,
+					Enable:              true,
+					CheckIntervalSec:    1800,
+					RetentionDays:       30,
+					Engine:              "native",
+					TargetFileSizeBytes: 536870912, // 512MB
 				},
 			},
 		},
@@ -777,9 +779,11 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 				BatchSize:     batchSize,
 				FlushInterval: 30,
 				Compaction: config.CompactionConfig{
-					Enable:           true,
-					CheckIntervalSec: 1800,
-					RetentionDays:    retentionDays,
+					Enable:              true,
+					CheckIntervalSec:    1800,
+					RetentionDays:       retentionDays,
+					Engine:              "native",
+					TargetFileSizeBytes: 536870912, // 512MB
 				},
 			},
 		},
