@@ -22,6 +22,7 @@ import (
 //	Input Error: Invalid footer length provided for file '/path/to/file.parquet'
 var reBrokenParquet = regexp.MustCompile(
 	`Cannot open file "([^"]+\.parquet)"|Invalid footer.*for file '([^']+\.parquet)'`)
+var reNonIdent = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
 // catalogPathToAbs converts a DuckLake catalog-relative path to an absolute filesystem path.
 //
@@ -560,6 +561,10 @@ func (c *CompactionService) runMerge(tables []string) error {
 				logger.Warn("CompactionService: merge_adjacent_files failed", "table", tableName, "error", err)
 				if isOutOfMemoryError(err) {
 					c.logMemoryBreakdown()
+					if rerr := c.compactSingleDatePartition(tableName); rerr != nil {
+						logger.Warn("CompactionService: date-partition compaction fallback failed",
+							"table", tableName, "error", rerr)
+					}
 				}
 			} else if result != nil {
 				rowsAffected, _ := result.RowsAffected()
@@ -753,6 +758,93 @@ func (c *CompactionService) oomRetryLimits(initial int) []int {
 
 func isOutOfMemoryError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "Out of Memory")
+}
+
+func (c *CompactionService) compactSingleDatePartition(tableName string) error {
+	datePart, filesInPart, err := c.selectDatePartitionForCompaction(tableName)
+	if err != nil {
+		return err
+	}
+	if datePart == "" {
+		logger.Info("CompactionService: no eligible date partition for fallback compaction", "table", tableName)
+		return nil
+	}
+	logger.Warn("CompactionService: fallback to date-partition compaction",
+		"table", tableName,
+		"date", datePart,
+		"files_in_partition", filesInPart)
+	return c.rewriteDatePartition(tableName, datePart)
+}
+
+func (c *CompactionService) selectDatePartitionForCompaction(tableName string) (string, int64, error) {
+	metadataSchema := fmt.Sprintf("__ducklake_metadata_%s", c.lakeName)
+	query := fmt.Sprintf(`
+		SELECT
+			regexp_extract(f.path, 'date=([0-9]{4}-[0-9]{2}-[0-9]{2})', 1) AS part_date,
+			COUNT(*) AS file_count
+		FROM %s.ducklake_data_file f
+		JOIN %s.ducklake_table t ON t.table_id = f.table_id
+		WHERE t.table_name = ?
+		  AND f.end_snapshot IS NULL
+		  AND regexp_extract(f.path, 'date=([0-9]{4}-[0-9]{2}-[0-9]{2})', 1) <> ''
+		GROUP BY 1
+		HAVING COUNT(*) > 1
+		ORDER BY file_count DESC, part_date ASC
+		LIMIT 1
+	`, metadataSchema, metadataSchema)
+
+	rows, err := c.queryWithRetry(query, tableName)
+	if err != nil {
+		return "", 0, err
+	}
+	defer rows.Close()
+	var partDate string
+	var fileCount int64
+	if rows.Next() {
+		if err := rows.Scan(&partDate, &fileCount); err != nil {
+			return "", 0, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", 0, err
+	}
+	return partDate, fileCount, nil
+}
+
+func compactTempTableName(tableName string) string {
+	safe := reNonIdent.ReplaceAllString(tableName, "_")
+	if safe == "" {
+		safe = "table"
+	}
+	return fmt.Sprintf("__compact_%s_%d", safe, time.Now().UnixNano())
+}
+
+func (c *CompactionService) rewriteDatePartition(tableName, partDate string) error {
+	tx, err := c.db.BeginTx(c.ctx, nil)
+	if err != nil {
+		return err
+	}
+	fqn := fmt.Sprintf("%s.main.%s", c.lakeName, tableName)
+	tmp := compactTempTableName(tableName)
+	statements := []string{
+		fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM %s WHERE date = DATE '%s'", tmp, fqn, partDate),
+		fmt.Sprintf("DELETE FROM %s WHERE date = DATE '%s'", fqn, partDate),
+		fmt.Sprintf("INSERT INTO %s SELECT * FROM %s ORDER BY timestamp", fqn, tmp),
+		fmt.Sprintf("DROP TABLE %s", tmp),
+	}
+	for _, q := range statements {
+		if _, err := tx.ExecContext(c.ctx, q); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	logger.Info("CompactionService: date-partition compaction completed",
+		"table", tableName, "date", partDate)
+	return nil
 }
 
 // logMemoryBreakdown dumps DuckDB's buffer-manager accounting after an

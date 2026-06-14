@@ -47,3 +47,10 @@ func TestBuildMergeSQLWithLimit(t *testing.T) {
 		t.Fatalf("did not expect max_compacted_files in SQL when limit=0, got: %s", sqlNoLimit)
 	}
 }
+
+func TestCompactTempTableNameSanitizes(t *testing.T) {
+	name := compactTempTableName("hep.proto-1/call")
+	if !strings.HasPrefix(name, "__compact_hep_proto_1_call_") {
+		t.Fatalf("unexpected compact temp table name: %s", name)
+	}
+}
