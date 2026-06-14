@@ -340,6 +340,15 @@ func addStorageColumnsToQuery(sql, lakeName, volumeName string) string {
 }
 
 var sqlLimitRegexp = regexp.MustCompile(`(?is)\s+LIMIT\s+(\d+)\s*$`)
+var (
+	sqlTimestampFromRegexp = regexp.MustCompile(`(?is)\btimestamp\s*>=\s*\(to_timestamp\((\d+)\s*/\s*1000(?:\.0)?\)\s*AT\s+TIME\s+ZONE\s+'UTC'\)`)
+	sqlTimestampToRegexp   = regexp.MustCompile(`(?is)\btimestamp\s*(?:<=|<)\s*\(to_timestamp\((\d+)\s*/\s*1000(?:\.0)?\)\s*AT\s+TIME\s+ZONE\s+'UTC'\)`)
+	sqlGroupByRegexp       = regexp.MustCompile(`(?is)\bGROUP\s+BY\b`)
+	sqlDistinctRegexp      = regexp.MustCompile(`(?is)\bSELECT\s+DISTINCT\b`)
+	sqlAggregateRegexp     = regexp.MustCompile(`(?is)\b(COUNT|SUM|AVG|MIN|MAX)\s*\(`)
+)
+
+const memorySplitThresholdMs = int64(time.Hour / time.Millisecond)
 
 func extractSQLLimit(sql string) int {
 	m := sqlLimitRegexp.FindStringSubmatch(sql)
@@ -463,6 +472,160 @@ func mergeSelectResults(a, b []map[string]interface{}, colsA, colsB []string, li
 	return merged, cols
 }
 
+func runSelectQuery(ctx context.Context, db *sql.DB, query string) ([]map[string]interface{}, []string, error) {
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	return scanAllSQLRows(rows)
+}
+
+type memoryUnionQueries struct {
+	lakeSQL     string
+	memSQL      string
+	combinedSQL string
+	ok          bool
+}
+
+func normalizeSQLWhitespace(s string) string {
+	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(s))), " ")
+}
+
+func memorySplitRangeMs(sql string) (int64, bool) {
+	fromM := sqlTimestampFromRegexp.FindStringSubmatch(sql)
+	toM := sqlTimestampToRegexp.FindStringSubmatch(sql)
+	if len(fromM) < 2 || len(toM) < 2 {
+		return 0, false
+	}
+	fromMs, err := strconv.ParseInt(fromM[1], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	toMs, err := strconv.ParseInt(toM[1], 10, 64)
+	if err != nil || toMs <= fromMs {
+		return 0, false
+	}
+	return toMs - fromMs, true
+}
+
+func sqlSplitSafeForTimestampTopN(sql, baseSQL, orderByClause, limitClause string) bool {
+	if strings.TrimSpace(limitClause) == "" {
+		return false
+	}
+	if normalizeSQLWhitespace(orderByClause) != "order by timestamp desc" {
+		return false
+	}
+	upper := strings.ToUpper(baseSQL)
+	if sqlGroupByRegexp.MatchString(upper) || sqlDistinctRegexp.MatchString(upper) || sqlAggregateRegexp.MatchString(upper) {
+		return false
+	}
+	selectIdx := strings.Index(upper, "SELECT")
+	fromIdx := strings.Index(upper, "FROM")
+	if selectIdx == -1 || fromIdx == -1 || fromIdx <= selectIdx+len("SELECT") {
+		return false
+	}
+	selectList := strings.TrimSpace(baseSQL[selectIdx+len("SELECT") : fromIdx])
+	return strings.HasPrefix(selectList, "*")
+}
+
+func (n *Node) buildMemoryUnionQueries(sql string) memoryUnionQueries {
+	out := memoryUnionQueries{lakeSQL: sql}
+	if n.sharedDB == nil {
+		return out
+	}
+	upper := strings.ToUpper(sql)
+	if !strings.HasPrefix(strings.TrimSpace(upper), "SELECT") {
+		return out
+	}
+
+	marker := ".main.hep_proto_"
+	markerIdx := strings.Index(sql, marker)
+	if markerIdx == -1 {
+		return out
+	}
+
+	lakeStart := markerIdx
+	for lakeStart > 0 {
+		ch := sql[lakeStart-1]
+		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '(' || ch == ',' {
+			break
+		}
+		lakeStart--
+	}
+	lakeName := sql[lakeStart:markerIdx]
+	suffixStart := markerIdx + len(marker)
+	suffixEnd := suffixStart
+	for suffixEnd < len(sql) {
+		ch := sql[suffixEnd]
+		if ch == ' ' || ch == '\t' || ch == '\n' || ch == ',' || ch == ')' || ch == ';' {
+			break
+		}
+		suffixEnd++
+	}
+	tableSuffix := sql[suffixStart:suffixEnd]
+	memTableA := "mem_hep_proto_" + tableSuffix + "_a"
+	memTableB := "mem_hep_proto_" + tableSuffix + "_b"
+	lakeTableFQN := sql[lakeStart:suffixEnd]
+
+	orderByClause, limitClause, baseSQL := extractOrderLimit(sql)
+	memSQLA := strings.Replace(baseSQL, lakeTableFQN, memTableA, 1)
+	memSQLB := strings.Replace(baseSQL, lakeTableFQN, memTableB, 1)
+	for _, memSQL := range []*string{&memSQLA, &memSQLB} {
+		*memSQL = strings.Replace(*memSQL, "'"+lakeName+"' AS storage_lake", "'memory' AS storage_lake", 1)
+		for _, vol := range n.volumes {
+			*memSQL = strings.Replace(*memSQL, "'"+vol.Name+"' AS storage_volume", "'buffer' AS storage_volume", 1)
+		}
+	}
+
+	memUnion := "SELECT * FROM (" + memSQLA + " UNION ALL " + memSQLB + ") _m"
+	combined := "SELECT * FROM (" + baseSQL + " UNION ALL " + memSQLA + " UNION ALL " + memSQLB + ") _u"
+	if orderByClause != "" {
+		memUnion += " " + orderByClause
+		combined += " " + orderByClause
+	}
+	if limitClause != "" {
+		memUnion += " " + limitClause
+		combined += " " + limitClause
+	}
+	out.memSQL = memUnion
+	out.combinedSQL = combined
+	out.ok = true
+	return out
+}
+
+func shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause string) bool {
+	if !sqlSplitSafeForTimestampTopN(sql, baseSQL, orderByClause, limitClause) {
+		return false
+	}
+	rangeMs, ok := memorySplitRangeMs(sql)
+	return ok && rangeMs > memorySplitThresholdMs
+}
+
+func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, sql string) ([]map[string]interface{}, []string, string, error) {
+	mq := n.buildMemoryUnionQueries(sql)
+	if !mq.ok {
+		data, cols, err := runSelectQuery(ctx, db, sql)
+		return data, cols, sql, err
+	}
+	orderByClause, limitClause, baseSQL := extractOrderLimit(sql)
+	if shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause) {
+		lakeData, lakeCols, err := runSelectQuery(ctx, db, mq.lakeSQL)
+		if err != nil {
+			return nil, nil, "", fmt.Errorf("lake query: %w", err)
+		}
+		memData, memCols, err := runSelectQuery(ctx, db, mq.memSQL)
+		if err != nil {
+			return nil, nil, "", fmt.Errorf("memory query: %w", err)
+		}
+		limit := extractSQLLimit(sql)
+		merged, cols := mergeSelectResults(lakeData, memData, lakeCols, memCols, limit)
+		return merged, cols, "split(lake+mem)", nil
+	}
+	data, cols, err := runSelectQuery(ctx, db, mq.combinedSQL)
+	return data, cols, mq.combinedSQL, err
+}
+
 func (n *Node) querySelectMerged(ctx context.Context, sharedSQL string, sharedDB *sql.DB, tieredSQL string, tieredDB *sql.DB, originalSQL string) ([]map[string]interface{}, []string, error) {
 	rows1, err := sharedDB.QueryContext(ctx, sharedSQL)
 	if err != nil {
@@ -519,10 +682,8 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Rewrite query for tiered storage (UNION ALL across volumes)
+	// Rewrite query for tiered storage (UNION ALL across volumes).
 	rewrittenSQL := n.rewriteQueryForVolumes(req.SQL)
-	// Include unflushed in-memory buffer for real-time results
-	rewrittenSQL = n.addMemoryUnion(rewrittenSQL)
 	logger.Info("Node: handleQuery", "sql_chars", len(req.SQL))
 	logger.Debug("Node: handleQuery", "original", req.SQL, "rewritten", rewrittenSQL)
 
@@ -549,66 +710,34 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sharedResults, sharedCols, sharedSQLInfo, err := n.runSharedSelectWithMemoryPolicy(r.Context(), db, rewrittenSQL)
+	if err != nil {
+		logger.Error("Node: Query failed", "sql", req.SQL, "rewritten", sharedSQLInfo, "error", err)
+		writeJSON(w, http.StatusOK, QueryResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	results := sharedResults
+	columns := sharedCols
 	tieredUnion, tieredOk := n.tryBuildVolumeUnionSQL(req.SQL)
 	tieredDB := n.tieredQueryDBForRead()
 	if tieredOk && tieredDB != nil && n.sharedDB != nil {
-		merged, columns, err := n.querySelectMerged(r.Context(), rewrittenSQL, db, tieredUnion, tieredDB, req.SQL)
-		if err == nil {
-			logger.Info("Node: handleQuery: returning merged results", "rows", len(merged), "columns", fmt.Sprintf("%v", columns))
+		tieredResults, tieredCols, terr := runSelectQuery(r.Context(), tieredDB, tieredUnion)
+		if terr == nil {
+			limit := extractSQLLimit(req.SQL)
+			results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, limit)
+			logger.Info("Node: handleQuery: returning merged results", "rows", len(results), "columns", fmt.Sprintf("%v", columns))
 			writeJSON(w, http.StatusOK, QueryResponse{
 				Success: true,
-				Data:    merged,
-				Count:   len(merged),
+				Data:    results,
+				Count:   len(results),
 			})
 			return
 		}
-		logger.Warn("Node: merged writer+tiered query failed, falling back to writer-only", "error", err)
-	}
-
-	rows, err := db.QueryContext(r.Context(), rewrittenSQL)
-	if err != nil {
-		logger.Error("Node: Query failed", "sql", req.SQL, "rewritten", rewrittenSQL, "error", err)
-		writeJSON(w, http.StatusOK, QueryResponse{
-			Success: false,
-			Error:   err.Error(),
-		})
-		return
-	}
-	defer rows.Close()
-
-	columns, err := rows.Columns()
-	if err != nil {
-		writeJSON(w, http.StatusOK, QueryResponse{
-			Success: false,
-			Error:   err.Error(),
-		})
-		return
-	}
-
-	var results []map[string]interface{}
-	for rows.Next() {
-		values := make([]interface{}, len(columns))
-		valuePtrs := make([]interface{}, len(columns))
-		for i := range values {
-			valuePtrs[i] = &values[i]
-		}
-
-		if err := rows.Scan(valuePtrs...); err != nil {
-			continue
-		}
-
-		row := make(map[string]interface{})
-		for i, col := range columns {
-			row[col] = values[i]
-		}
-		results = append(results, row)
-	}
-	if err := rows.Err(); err != nil {
-		writeJSON(w, http.StatusOK, QueryResponse{
-			Success: false,
-			Error:   err.Error(),
-		})
-		return
+		logger.Warn("Node: merged writer+tiered query failed, falling back to writer-only", "error", terr)
 	}
 
 	logger.Info("Node: handleQuery: returning results", "rows", len(results), "columns", fmt.Sprintf("%v", columns))
@@ -623,7 +752,17 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 // prepareFlightSQLDataSQL applies node query rewrites (tiered volumes + memory union) after Grafana/sqlrewrite.
 func (n *Node) prepareFlightSQLDataSQL(q string) string {
 	q = n.rewriteQueryForVolumes(q)
-	return n.addMemoryUnion(q)
+	mq := n.buildMemoryUnionQueries(q)
+	if !mq.ok {
+		return q
+	}
+	orderByClause, limitClause, baseSQL := extractOrderLimit(q)
+	if shouldSplitLakeAndMem(q, baseSQL, orderByClause, limitClause) {
+		// FlightSQL prepares a single SQL statement; for wide ranges avoid
+		// the huge lake+mem UNION and keep a lake-only query.
+		return q
+	}
+	return mq.combinedSQL
 }
 
 // duckLakeCatalogForQuery returns the DuckLake catalog name used in rewritten SQL FROM clauses.
@@ -789,73 +928,11 @@ func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 //
 // ) _u ORDER BY ts DESC LIMIT 50
 func (n *Node) addMemoryUnion(sql string) string {
-	if n.sharedDB == nil {
+	mq := n.buildMemoryUnionQueries(sql)
+	if !mq.ok {
 		return sql
 	}
-
-	upper := strings.ToUpper(sql)
-	if !strings.HasPrefix(strings.TrimSpace(upper), "SELECT") {
-		return sql
-	}
-
-	// Find any DuckLake table reference: *.main.hep_proto_*
-	// This works regardless of which lake name was set by rewriteQueryForVolumes
-	marker := ".main.hep_proto_"
-	markerIdx := strings.Index(sql, marker)
-	if markerIdx == -1 {
-		return sql
-	}
-
-	// Walk backwards to find the start of the lake name (e.g. "homer_lake" or "homer_lake_hot")
-	lakeStart := markerIdx
-	for lakeStart > 0 {
-		ch := sql[lakeStart-1]
-		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '(' || ch == ',' {
-			break
-		}
-		lakeStart--
-	}
-	lakeName := sql[lakeStart:markerIdx] // e.g. "homer_lake" or "homer_lake_hot"
-
-	// Extract table suffix (e.g. "1_call")
-	suffixStart := markerIdx + len(marker)
-	suffixEnd := suffixStart
-	for suffixEnd < len(sql) {
-		ch := sql[suffixEnd]
-		if ch == ' ' || ch == '\t' || ch == '\n' || ch == ',' || ch == ')' || ch == ';' {
-			break
-		}
-		suffixEnd++
-	}
-	tableSuffix := sql[suffixStart:suffixEnd]
-	// DuckLake uses double-buffer: mem_hep_proto_{suffix}_a and mem_hep_proto_{suffix}_b
-	memTableA := "mem_hep_proto_" + tableSuffix + "_a"
-	memTableB := "mem_hep_proto_" + tableSuffix + "_b"
-	lakeTableFQN := sql[lakeStart:suffixEnd] // e.g. "homer_lake.main.hep_proto_1_call"
-
-	// Extract ORDER BY and LIMIT clauses from the end of the query
-	orderByClause, limitClause, baseSQL := extractOrderLimit(sql)
-
-	// Build memory-table queries for both buffers
-	memSQLA := strings.Replace(baseSQL, lakeTableFQN, memTableA, 1)
-	memSQLB := strings.Replace(baseSQL, lakeTableFQN, memTableB, 1)
-	for _, memSQL := range []*string{&memSQLA, &memSQLB} {
-		*memSQL = strings.Replace(*memSQL, "'"+lakeName+"' AS storage_lake", "'memory' AS storage_lake", 1)
-		for _, vol := range n.volumes {
-			*memSQL = strings.Replace(*memSQL, "'"+vol.Name+"' AS storage_volume", "'buffer' AS storage_volume", 1)
-		}
-	}
-
-	// Combine: SELECT * FROM (lake UNION ALL mem_a UNION ALL mem_b) _u ORDER BY ... LIMIT ...
-	combined := "SELECT * FROM (" + baseSQL + " UNION ALL " + memSQLA + " UNION ALL " + memSQLB + ") _u"
-	if orderByClause != "" {
-		combined += " " + orderByClause
-	}
-	if limitClause != "" {
-		combined += " " + limitClause
-	}
-
-	return combined
+	return mq.combinedSQL
 }
 
 // extractOrderLimit splits a SQL query into the base query, ORDER BY clause,
