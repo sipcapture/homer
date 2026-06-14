@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -507,6 +509,12 @@ func (c *CompactionService) runMerge(tables []string) error {
 	// flushInlinedData for why this matters even when inlining is disabled.
 	c.flushInlinedData()
 
+	effectiveMaxFileSize := c.effectiveMergeMaxFileSizeBytes()
+	if effectiveMaxFileSize > 0 {
+		logger.Info("CompactionService: Merge max file size derived",
+			"max_file_size_bytes", effectiveMaxFileSize)
+	}
+
 	// 1. Merge adjacent small files FIRST — lock per table
 	for _, table := range tables {
 		tableName := tableNameFromFQN(table)
@@ -521,7 +529,7 @@ func (c *CompactionService) runMerge(tables []string) error {
 				logger.Info("CompactionService: Files before merge", "table", tableName, "count", fileCount)
 			}
 
-			mergeSQL, maxFiles := c.buildMergeSQL(tableName, fileCount)
+			mergeSQL, maxFiles := c.buildMergeSQL(tableName, fileCount, effectiveMaxFileSize)
 			if maxFiles > 0 {
 				logger.Info("CompactionService: Merge batch limit", "table", tableName, "max_compacted_files", maxFiles)
 			}
@@ -543,7 +551,7 @@ func (c *CompactionService) runMerge(tables []string) error {
 					logger.Warn("CompactionService: merge OOM retry with smaller batch",
 						"table", tableName,
 						"retry_max_compacted_files", retryLimit)
-					retrySQL := c.buildMergeSQLWithLimit(tableName, retryLimit)
+					retrySQL := c.buildMergeSQLWithLimit(tableName, retryLimit, effectiveMaxFileSize)
 					result, err = c.execWithRetry(retrySQL)
 					if err == nil {
 						maxFiles = retryLimit
@@ -711,12 +719,12 @@ func (c *CompactionService) effectiveMaxCompactedFiles(fileCount int64) int {
 	return limit
 }
 
-func (c *CompactionService) buildMergeSQL(tableName string, fileCount int64) (string, int) {
+func (c *CompactionService) buildMergeSQL(tableName string, fileCount int64, maxFileSizeBytes int64) (string, int) {
 	maxFiles := c.effectiveMaxCompactedFiles(fileCount)
-	return c.buildMergeSQLWithLimit(tableName, maxFiles), maxFiles
+	return c.buildMergeSQLWithLimit(tableName, maxFiles, maxFileSizeBytes), maxFiles
 }
 
-func (c *CompactionService) buildMergeSQLWithLimit(tableName string, maxFiles int) string {
+func (c *CompactionService) buildMergeSQLWithLimit(tableName string, maxFiles int, maxFileSizeBytes int64) string {
 	// Build optional parameters
 	var params []string
 	params = append(params, "schema => 'main'")
@@ -724,8 +732,8 @@ func (c *CompactionService) buildMergeSQLWithLimit(tableName string, maxFiles in
 	if c.config.MinFileSizeBytes > 0 {
 		params = append(params, fmt.Sprintf("min_file_size => %d", c.config.MinFileSizeBytes))
 	}
-	if c.config.MaxFileSizeBytes > 0 {
-		params = append(params, fmt.Sprintf("max_file_size => %d", c.config.MaxFileSizeBytes))
+	if maxFileSizeBytes > 0 {
+		params = append(params, fmt.Sprintf("max_file_size => %d", maxFileSizeBytes))
 	}
 	if maxFiles > 0 {
 		params = append(params, fmt.Sprintf("max_compacted_files => %d", maxFiles))
@@ -758,6 +766,84 @@ func (c *CompactionService) oomRetryLimits(initial int) []int {
 
 func isOutOfMemoryError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "Out of Memory")
+}
+
+func (c *CompactionService) effectiveMergeMaxFileSizeBytes() int64 {
+	if c.config.MaxFileSizeBytes > 0 {
+		return c.config.MaxFileSizeBytes
+	}
+	memLimit, err := c.currentDuckDBMemoryLimitBytes()
+	if err != nil || memLimit <= 0 {
+		return 0
+	}
+	return memLimit
+}
+
+func (c *CompactionService) currentDuckDBMemoryLimitBytes() (int64, error) {
+	rows, err := c.queryWithRetry("SELECT current_setting('memory_limit')")
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	var setting string
+	if rows.Next() {
+		if err := rows.Scan(&setting); err != nil {
+			return 0, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	return parseDuckDBByteSize(setting)
+}
+
+func parseDuckDBByteSize(s string) (int64, error) {
+	raw := strings.TrimSpace(strings.ToUpper(s))
+	raw = strings.ReplaceAll(raw, " ", "")
+	if raw == "" || raw == "-1" {
+		return 0, fmt.Errorf("invalid memory_limit: %q", s)
+	}
+	re := regexp.MustCompile(`^([0-9]+(?:\.[0-9]+)?)([A-Z]+)?$`)
+	m := re.FindStringSubmatch(raw)
+	if len(m) < 2 {
+		return 0, fmt.Errorf("unparsable byte size: %q", s)
+	}
+	v, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return 0, err
+	}
+	unit := "B"
+	if len(m) >= 3 && m[2] != "" {
+		unit = m[2]
+	}
+	mul := float64(1)
+	switch unit {
+	case "B":
+		mul = 1
+	case "KB":
+		mul = 1e3
+	case "MB":
+		mul = 1e6
+	case "GB":
+		mul = 1e9
+	case "TB":
+		mul = 1e12
+	case "KIB":
+		mul = 1 << 10
+	case "MIB":
+		mul = 1 << 20
+	case "GIB":
+		mul = 1 << 30
+	case "TIB":
+		mul = 1 << 40
+	default:
+		return 0, fmt.Errorf("unknown byte size unit: %q", unit)
+	}
+	bytes := v * mul
+	if bytes <= 0 || bytes > float64(math.MaxInt64) {
+		return 0, fmt.Errorf("invalid byte size value: %q", s)
+	}
+	return int64(bytes), nil
 }
 
 func (c *CompactionService) compactSingleDatePartition(tableName string) error {

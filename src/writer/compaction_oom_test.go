@@ -34,15 +34,17 @@ func TestBuildMergeSQLWithLimit(t *testing.T) {
 		lakeName: "homer_lake",
 		config: CompactionConfig{
 			MinFileSizeBytes:  1024,
-			MaxFileSizeBytes:  8192,
 			MaxCompactedFiles: 25,
 		},
 	}
-	sqlWithLimit := c.buildMergeSQLWithLimit("hep_proto_1_call", 5)
+	sqlWithLimit := c.buildMergeSQLWithLimit("hep_proto_1_call", 5, 8192)
 	if !strings.Contains(sqlWithLimit, "max_compacted_files => 5") {
 		t.Fatalf("expected explicit max_compacted_files in SQL, got: %s", sqlWithLimit)
 	}
-	sqlNoLimit := c.buildMergeSQLWithLimit("hep_proto_1_call", 0)
+	if !strings.Contains(sqlWithLimit, "max_file_size => 8192") {
+		t.Fatalf("expected explicit max_file_size in SQL, got: %s", sqlWithLimit)
+	}
+	sqlNoLimit := c.buildMergeSQLWithLimit("hep_proto_1_call", 0, 0)
 	if strings.Contains(sqlNoLimit, "max_compacted_files") {
 		t.Fatalf("did not expect max_compacted_files in SQL when limit=0, got: %s", sqlNoLimit)
 	}
@@ -52,5 +54,25 @@ func TestCompactTempTableNameSanitizes(t *testing.T) {
 	name := compactTempTableName("hep.proto-1/call")
 	if !strings.HasPrefix(name, "__compact_hep_proto_1_call_") {
 		t.Fatalf("unexpected compact temp table name: %s", name)
+	}
+}
+
+func TestParseDuckDBByteSize(t *testing.T) {
+	cases := []struct {
+		in   string
+		want int64
+	}{
+		{in: "4GB", want: 4_000_000_000},
+		{in: "3.7 GiB", want: 3972844748},
+		{in: "1500MB", want: 1_500_000_000},
+	}
+	for _, tc := range cases {
+		got, err := parseDuckDBByteSize(tc.in)
+		if err != nil {
+			t.Fatalf("parse %q: %v", tc.in, err)
+		}
+		if got != tc.want {
+			t.Fatalf("parse %q got=%d want=%d", tc.in, got, tc.want)
+		}
 	}
 }
