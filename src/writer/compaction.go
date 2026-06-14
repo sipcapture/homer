@@ -121,16 +121,16 @@ type CompactionConfig struct {
 	MaxFileSizeBytes int64 `json:"max_file_size_bytes"`
 	// MaxCompactedFiles: maximum number of files to merge per table per cycle. 0 = no limit.
 	MaxCompactedFiles int `json:"max_compacted_files"`
-	// Engine selects the compaction backend: "duckdb" (default) or "native_go".
+	// Engine selects the compaction backend: "duckdb" (default) or "native".
 	Engine string `json:"engine"`
-	// TargetFileSizeBytes caps each merged file for the native_go engine. 0 = 512MB.
+	// TargetFileSizeBytes caps each merged file for the native engine. 0 = 512MB.
 	TargetFileSizeBytes int64 `json:"target_file_size_bytes"`
 }
 
 // Compaction engine identifiers.
 const (
 	EngineDuckDB   = "duckdb"
-	EngineNativeGo = "native_go"
+	EngineNativeGo = "native"
 )
 
 // CatalogLocker provides Lock/Unlock for serializing catalog-modifying operations.
@@ -155,7 +155,7 @@ type CompactionService struct {
 	db            *sql.DB
 	lakeName      string
 	dataPath      string       // root dir for parquet files; catalog paths are relative to this
-	catalogPath   string       // DuckLake SQLite catalog file (used by the native_go engine)
+	catalogPath   string       // DuckLake SQLite catalog file (used by the native engine)
 	config        CompactionConfig
 	tables        []string
 	catalogLocker CatalogLocker // serializes catalog access with writer flush
@@ -620,12 +620,12 @@ func (c *CompactionService) runMerge(tables []string) error {
 // files/snapshots, so no DuckLake expire/cleanup CALL is needed afterwards.
 func (c *CompactionService) runNativeMerge(tables []string) error {
 	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
-		logger.Warn("CompactionService: native_go engine requires a local data_path; skipping merge",
+		logger.Warn("CompactionService: native engine requires a local data_path; skipping merge",
 			"lake", c.lakeName, "data_path", c.dataPath)
 		return nil
 	}
 	if strings.TrimSpace(c.catalogPath) == "" {
-		logger.Warn("CompactionService: native_go engine requires catalog_path; skipping merge",
+		logger.Warn("CompactionService: native engine requires catalog_path; skipping merge",
 			"lake", c.lakeName)
 		return nil
 	}

@@ -126,7 +126,7 @@ partition into memory to sort/rewrite it. On wide SIP data (large `payload`
 columns) this can exceed `memory_limit` and OOM even for a handful of ~77MB
 files, because the parquet write buffers are not spillable.
 
-The `native_go` engine avoids this entirely. It does **not** use DuckDB for
+The `native` engine avoids this entirely. It does **not** use DuckDB for
 compaction. Instead it:
 
 - groups a partition's parquet files into batches up to `target_file_size_bytes`
@@ -151,7 +151,7 @@ compaction. Instead it:
       "data_path": "/data/homer/parquet",
       "compaction": {
         "enable": true,
-        "engine": "native_go",
+        "engine": "native",
         "target_file_size_bytes": 536870912
       }
     }
@@ -167,7 +167,7 @@ Requirements and limits:
   reassigns row ids, which is only safe without positional deletes). HEP ingest
   is append-only, so this always holds for Homer.
 - Runs under the same `CatalogLock` as flush, so it never races a DuckDB write.
-- `engine` defaults to `duckdb`; set `native_go` to opt in.
+- `engine` defaults to `duckdb`; set `native` to opt in.
 
 Memory profile: bounded by one row group regardless of partition size, so a
 512MB target safely compacts 76×77MB files on a writer capped well under the
