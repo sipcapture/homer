@@ -536,9 +536,29 @@ func (c *CompactionService) runMerge(tables []string) error {
 					}
 				}
 			}
+			if err != nil && isOutOfMemoryError(err) {
+				c.logMemoryBreakdown()
+				for _, retryLimit := range c.oomRetryLimits(maxFiles) {
+					logger.Warn("CompactionService: merge OOM retry with smaller batch",
+						"table", tableName,
+						"retry_max_compacted_files", retryLimit)
+					retrySQL := c.buildMergeSQLWithLimit(tableName, retryLimit)
+					result, err = c.execWithRetry(retrySQL)
+					if err == nil {
+						maxFiles = retryLimit
+						logger.Info("CompactionService: merge OOM retry succeeded",
+							"table", tableName,
+							"max_compacted_files", retryLimit)
+						break
+					}
+					if !isOutOfMemoryError(err) {
+						break
+					}
+				}
+			}
 			if err != nil {
 				logger.Warn("CompactionService: merge_adjacent_files failed", "table", tableName, "error", err)
-				if strings.Contains(err.Error(), "Out of Memory") {
+				if isOutOfMemoryError(err) {
 					c.logMemoryBreakdown()
 				}
 			} else if result != nil {
@@ -687,6 +707,11 @@ func (c *CompactionService) effectiveMaxCompactedFiles(fileCount int64) int {
 }
 
 func (c *CompactionService) buildMergeSQL(tableName string, fileCount int64) (string, int) {
+	maxFiles := c.effectiveMaxCompactedFiles(fileCount)
+	return c.buildMergeSQLWithLimit(tableName, maxFiles), maxFiles
+}
+
+func (c *CompactionService) buildMergeSQLWithLimit(tableName string, maxFiles int) string {
 	// Build optional parameters
 	var params []string
 	params = append(params, "schema => 'main'")
@@ -697,7 +722,6 @@ func (c *CompactionService) buildMergeSQL(tableName string, fileCount int64) (st
 	if c.config.MaxFileSizeBytes > 0 {
 		params = append(params, fmt.Sprintf("max_file_size => %d", c.config.MaxFileSizeBytes))
 	}
-	maxFiles := c.effectiveMaxCompactedFiles(fileCount)
 	if maxFiles > 0 {
 		params = append(params, fmt.Sprintf("max_compacted_files => %d", maxFiles))
 	}
@@ -707,7 +731,28 @@ func (c *CompactionService) buildMergeSQL(tableName string, fileCount int64) (st
 		c.lakeName,
 		tableName,
 		strings.Join(params, ", "),
-	), maxFiles
+	)
+}
+
+func (c *CompactionService) oomRetryLimits(initial int) []int {
+	if initial <= 1 {
+		return nil
+	}
+	candidates := []int{10, 5, 2, 1}
+	out := make([]int, 0, len(candidates))
+	seen := make(map[int]bool, len(candidates))
+	for _, n := range candidates {
+		if n >= initial || seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
+}
+
+func isOutOfMemoryError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "Out of Memory")
 }
 
 // logMemoryBreakdown dumps DuckDB's buffer-manager accounting after an
