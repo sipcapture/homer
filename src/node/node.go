@@ -488,6 +488,13 @@ type memoryUnionQueries struct {
 	ok          bool
 }
 
+type sharedQueryPlanLog struct {
+	mode        string
+	lakeSQL     string
+	memSQL      string
+	combinedSQL string
+}
+
 func normalizeSQLWhitespace(s string) string {
 	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(s))), " ")
 }
@@ -602,28 +609,41 @@ func shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause string) bool
 	return ok && rangeMs > memorySplitThresholdMs
 }
 
-func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, sql string) ([]map[string]interface{}, []string, string, error) {
+func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, sql string) ([]map[string]interface{}, []string, sharedQueryPlanLog, error) {
+	plan := sharedQueryPlanLog{
+		mode:        "no_mem_union",
+		lakeSQL:     sql,
+		combinedSQL: sql,
+	}
 	mq := n.buildMemoryUnionQueries(sql)
 	if !mq.ok {
 		data, cols, err := runSelectQuery(ctx, db, sql)
-		return data, cols, sql, err
+		return data, cols, plan, err
 	}
 	orderByClause, limitClause, baseSQL := extractOrderLimit(sql)
 	if shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause) {
+		plan.mode = "split_lake_and_mem"
+		plan.lakeSQL = mq.lakeSQL
+		plan.memSQL = mq.memSQL
+		plan.combinedSQL = ""
 		lakeData, lakeCols, err := runSelectQuery(ctx, db, mq.lakeSQL)
 		if err != nil {
-			return nil, nil, "", fmt.Errorf("lake query: %w", err)
+			return nil, nil, plan, fmt.Errorf("lake query: %w", err)
 		}
 		memData, memCols, err := runSelectQuery(ctx, db, mq.memSQL)
 		if err != nil {
-			return nil, nil, "", fmt.Errorf("memory query: %w", err)
+			return nil, nil, plan, fmt.Errorf("memory query: %w", err)
 		}
 		limit := extractSQLLimit(sql)
 		merged, cols := mergeSelectResults(lakeData, memData, lakeCols, memCols, limit)
-		return merged, cols, "split(lake+mem)", nil
+		return merged, cols, plan, nil
 	}
+	plan.mode = "single_union"
+	plan.lakeSQL = mq.lakeSQL
+	plan.memSQL = mq.memSQL
+	plan.combinedSQL = mq.combinedSQL
 	data, cols, err := runSelectQuery(ctx, db, mq.combinedSQL)
-	return data, cols, mq.combinedSQL, err
+	return data, cols, plan, err
 }
 
 func (n *Node) querySelectMerged(ctx context.Context, sharedSQL string, sharedDB *sql.DB, tieredSQL string, tieredDB *sql.DB, originalSQL string) ([]map[string]interface{}, []string, error) {
@@ -684,7 +704,7 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	// Rewrite query for tiered storage (UNION ALL across volumes).
 	rewrittenSQL := n.rewriteQueryForVolumes(req.SQL)
-	logger.Info("Node: handleQuery", "sql_chars", len(req.SQL))
+	logger.Info("Node: handleQuery", "sql_chars", len(req.SQL), "sql", req.SQL)
 	logger.Debug("Node: handleQuery", "original", req.SQL, "rewritten", rewrittenSQL)
 
 	db := n.queryDB()
@@ -710,9 +730,21 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sharedResults, sharedCols, sharedSQLInfo, err := n.runSharedSelectWithMemoryPolicy(r.Context(), db, rewrittenSQL)
+	sharedResults, sharedCols, sharedPlan, err := n.runSharedSelectWithMemoryPolicy(r.Context(), db, rewrittenSQL)
+	logger.Info("Node: handleQuery execution plan",
+		"mode", sharedPlan.mode,
+		"lake_sql", sharedPlan.lakeSQL,
+		"mem_sql", sharedPlan.memSQL,
+		"combined_sql", sharedPlan.combinedSQL,
+	)
 	if err != nil {
-		logger.Error("Node: Query failed", "sql", req.SQL, "rewritten", sharedSQLInfo, "error", err)
+		logger.Error("Node: Query failed",
+			"sql", req.SQL,
+			"mode", sharedPlan.mode,
+			"lake_sql", sharedPlan.lakeSQL,
+			"mem_sql", sharedPlan.memSQL,
+			"combined_sql", sharedPlan.combinedSQL,
+			"error", err)
 		writeJSON(w, http.StatusOK, QueryResponse{
 			Success: false,
 			Error:   err.Error(),
