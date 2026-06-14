@@ -2,6 +2,7 @@ package node
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -113,5 +114,75 @@ func TestExtractSQLLimit(t *testing.T) {
 	}
 	if g := extractSQLLimit("SELECT 1"); g != 0 {
 		t.Fatalf("got %d", g)
+	}
+}
+
+func defaultMemoryUnionNode() *Node {
+	return &Node{
+		config: &config.NodeConfig{
+			DuckLake: config.DuckLakeConfig{LakeName: "homer_lake"},
+		},
+		sharedDB: new(sql.DB),
+		volumes: []VolumeInfo{
+			{Name: "default", LakeName: "homer_lake"},
+		},
+	}
+}
+
+func searchSQLWithRange(fromMs, toMs int64) string {
+	return fmt.Sprintf(
+		"SELECT *, 'homer_lake' AS storage_lake, 'default' AS storage_volume FROM homer_lake.main.hep_proto_1_call WHERE timestamp >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC') AND timestamp <= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC') ORDER BY timestamp DESC LIMIT 50",
+		fromMs, toMs,
+	)
+}
+
+func TestBuildMemoryUnionQueries(t *testing.T) {
+	n := defaultMemoryUnionNode()
+	sqlIn := searchSQLWithRange(1_700_000_000_000, 1_700_000_300_000)
+	q := n.buildMemoryUnionQueries(sqlIn)
+	if !q.ok {
+		t.Fatal("expected memory union query plan")
+	}
+	if !strings.Contains(q.combinedSQL, "mem_hep_proto_1_call_a") || !strings.Contains(q.combinedSQL, "mem_hep_proto_1_call_b") {
+		t.Fatalf("expected combined SQL to include both memory buffers, got: %s", q.combinedSQL)
+	}
+	if !strings.Contains(q.memSQL, "UNION ALL") {
+		t.Fatalf("expected mem SQL to union both buffers, got: %s", q.memSQL)
+	}
+}
+
+func TestShouldSplitLakeAndMemThresholdAndFallback(t *testing.T) {
+	smallRangeSQL := searchSQLWithRange(1_700_000_000_000, 1_700_003_000_000) // 50 min
+	orderBy, limit, base := extractOrderLimit(smallRangeSQL)
+	if shouldSplitLakeAndMem(smallRangeSQL, base, orderBy, limit) {
+		t.Fatal("did not expect split for <= 1h range")
+	}
+
+	largeRangeSQL := searchSQLWithRange(1_700_000_000_000, 1_700_007_500_000) // > 2h
+	orderBy, limit, base = extractOrderLimit(largeRangeSQL)
+	if !shouldSplitLakeAndMem(largeRangeSQL, base, orderBy, limit) {
+		t.Fatal("expected split for > 1h range")
+	}
+
+	customOrderSQL := strings.Replace(largeRangeSQL, "ORDER BY timestamp DESC", "ORDER BY date DESC", 1)
+	orderBy, limit, base = extractOrderLimit(customOrderSQL)
+	if shouldSplitLakeAndMem(customOrderSQL, base, orderBy, limit) {
+		t.Fatal("expected fallback to legacy single-UNION path for custom ORDER BY")
+	}
+}
+
+func TestPrepareFlightSQLDataSQLUsesThresholdDecision(t *testing.T) {
+	n := defaultMemoryUnionNode()
+
+	smallRangeSQL := searchSQLWithRange(1_700_000_000_000, 1_700_003_000_000)
+	gotSmall := n.prepareFlightSQLDataSQL(smallRangeSQL)
+	if !strings.Contains(gotSmall, "mem_hep_proto_1_call_a") {
+		t.Fatalf("expected mem union for <=1h in FlightSQL rewrite, got: %s", gotSmall)
+	}
+
+	largeRangeSQL := searchSQLWithRange(1_700_000_000_000, 1_700_007_500_000)
+	gotLarge := n.prepareFlightSQLDataSQL(largeRangeSQL)
+	if strings.Contains(gotLarge, "mem_hep_proto_1_call_a") || strings.Contains(gotLarge, "mem_hep_proto_1_call_b") {
+		t.Fatalf("expected no mem union SQL for >1h in FlightSQL rewrite, got: %s", gotLarge)
 	}
 }
