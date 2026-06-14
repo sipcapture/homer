@@ -136,14 +136,14 @@ type CatalogLocker interface {
 // Nil or empty AccessKeyID means skip (ApplyDuckDBS3ClientSettings is a no-op).
 type CompactionS3Client struct {
 	Region, AccessKeyID, SecretAccessKey, Endpoint string
-	UseSSL                                           bool
+	UseSSL                                         bool
 }
 
 // CompactionService handles periodic compaction and retention
 type CompactionService struct {
 	db            *sql.DB
 	lakeName      string
-	dataPath      string       // root dir for parquet files; catalog paths are relative to this
+	dataPath      string // root dir for parquet files; catalog paths are relative to this
 	config        CompactionConfig
 	tables        []string
 	catalogLocker CatalogLocker // serializes catalog access with writer flush
@@ -158,6 +158,7 @@ type CompactionService struct {
 	lastCompactionTime time.Time
 	totalCompactions   int64
 	totalRowsDeleted   int64
+	startupCompaction  bool
 }
 
 // NewCompactionService creates a new compaction service.
@@ -237,7 +238,13 @@ func (c *CompactionService) Start() error {
 		time.Sleep(5 * time.Second) // Wait for system to stabilize
 		logger.Info("CompactionService: Running initial compaction on startup")
 		c.withCatalogLock(c.recoverGhostFiles)
+		c.mu.Lock()
+		c.startupCompaction = true
+		c.mu.Unlock()
 		c.runCompaction()
+		c.mu.Lock()
+		c.startupCompaction = false
+		c.mu.Unlock()
 	}()
 
 	// Start periodic compaction
@@ -513,7 +520,10 @@ func (c *CompactionService) runMerge(tables []string) error {
 				logger.Info("CompactionService: Files before merge", "table", tableName, "count", fileCount)
 			}
 
-			mergeSQL := c.buildMergeSQL(tableName)
+			mergeSQL, maxFiles := c.buildMergeSQL(tableName, fileCount)
+			if maxFiles > 0 {
+				logger.Info("CompactionService: Merge batch limit", "table", tableName, "max_compacted_files", maxFiles)
+			}
 			logger.Info("CompactionService: Merge adjacent files", "lake", c.lakeName, "table", tableName)
 			result, err := c.execWithRetry(mergeSQL)
 			if err != nil {
@@ -646,7 +656,37 @@ func (c *CompactionService) GetStats() map[string]interface{} {
 }
 
 // buildMergeSQL constructs the merge SQL with optional parameters
-func (c *CompactionService) buildMergeSQL(tableName string) string {
+func (c *CompactionService) effectiveMaxCompactedFiles(fileCount int64) int {
+	limit := c.config.MaxCompactedFiles
+	if limit <= 0 {
+		return 0
+	}
+	c.mu.RLock()
+	startup := c.startupCompaction
+	c.mu.RUnlock()
+	if !startup {
+		return limit
+	}
+	// Startup compaction often faces large backlogs; reduce merge fan-in aggressively
+	// to keep the working set inside constrained memory_limit values.
+	switch {
+	case fileCount >= 1000:
+		if limit > 10 {
+			return 10
+		}
+	case fileCount >= 300:
+		if limit > 15 {
+			return 15
+		}
+	case fileCount >= 100:
+		if limit > 20 {
+			return 20
+		}
+	}
+	return limit
+}
+
+func (c *CompactionService) buildMergeSQL(tableName string, fileCount int64) (string, int) {
 	// Build optional parameters
 	var params []string
 	params = append(params, "schema => 'main'")
@@ -657,8 +697,9 @@ func (c *CompactionService) buildMergeSQL(tableName string) string {
 	if c.config.MaxFileSizeBytes > 0 {
 		params = append(params, fmt.Sprintf("max_file_size => %d", c.config.MaxFileSizeBytes))
 	}
-	if c.config.MaxCompactedFiles > 0 {
-		params = append(params, fmt.Sprintf("max_compacted_files => %d", c.config.MaxCompactedFiles))
+	maxFiles := c.effectiveMaxCompactedFiles(fileCount)
+	if maxFiles > 0 {
+		params = append(params, fmt.Sprintf("max_compacted_files => %d", maxFiles))
 	}
 
 	return fmt.Sprintf(
@@ -666,7 +707,7 @@ func (c *CompactionService) buildMergeSQL(tableName string) string {
 		c.lakeName,
 		tableName,
 		strings.Join(params, ", "),
-	)
+	), maxFiles
 }
 
 // logMemoryBreakdown dumps DuckDB's buffer-manager accounting after an

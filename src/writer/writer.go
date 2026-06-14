@@ -347,7 +347,7 @@ func (w *Writer) Start() error {
 			// memory_limit and abort with Out of Memory while search/flush
 			// run on the same instance. Capping keeps each cycle's peak
 			// bounded — leftovers are picked up by the next cycle.
-			compactionCfg.MaxCompactedFiles = 100
+			compactionCfg.MaxCompactedFiles = 25
 		}
 		var compactionS3 *CompactionS3Client
 		if ducklake.IsRemoteLakeDataPath(w.storageConfig.DuckLake.DataPath) {
