@@ -119,6 +119,63 @@ Why this helps:
 3. Reduce query range temporarily (narrower time window).
 4. Re-enable compaction only after search is stable.
 
+## 6) Native Go Compaction Engine (OOM-free merge)
+
+The default DuckDB merge (`ducklake_merge_adjacent_files`) loads a whole
+partition into memory to sort/rewrite it. On wide SIP data (large `payload`
+columns) this can exceed `memory_limit` and OOM even for a handful of ~77MB
+files, because the parquet write buffers are not spillable.
+
+The `native_go` engine avoids this entirely. It does **not** use DuckDB for
+compaction. Instead it:
+
+- groups a partition's parquet files into batches up to `target_file_size_bytes`
+  (default 512MB), based on their on-disk sizes;
+- concatenates each batch by copying parquet **row groups** one at a time, so
+  peak memory is bounded by a single row group (a few hundred MB), never the
+  whole partition;
+- registers the new files and retires the old ones by writing the DuckLake
+  SQLite catalog directly (new snapshot, `ducklake_data_file`,
+  `ducklake_file_column_stats`, `ducklake_file_partition_value`, retire via
+  `end_snapshot`, `ducklake_table_stats` bookkeeping);
+- reaps fully-superseded files and aged-out snapshots once they fall outside
+  the retention window (`snapshot_expire_interval_sec`).
+
+### Enable it
+
+```json
+{
+  "storage": {
+    "ducklake": {
+      "catalog_path": "/data/homer/homer_catalog.sqlite",
+      "data_path": "/data/homer/parquet",
+      "compaction": {
+        "enable": true,
+        "engine": "native_go",
+        "target_file_size_bytes": 536870912
+      }
+    }
+  }
+}
+```
+
+Requirements and limits:
+
+- **Local storage only** — `data_path` must be a local filesystem (not `s3://`).
+- **Absolute `catalog_path`** — the compactor opens the SQLite file directly.
+- **Append-only tables only** — tables with delete files are skipped (the engine
+  reassigns row ids, which is only safe without positional deletes). HEP ingest
+  is append-only, so this always holds for Homer.
+- Runs under the same `CatalogLock` as flush, so it never races a DuckDB write.
+- `engine` defaults to `duckdb`; set `native_go` to opt in.
+
+Memory profile: bounded by one row group regardless of partition size, so a
+512MB target safely compacts 76×77MB files on a writer capped well under the
+multi-GB working set the DuckDB merge required.
+
+> Note: after a native commit, the search node picks up the new snapshot on its
+> next periodic catalog refresh.
+
 ## Notes
 
 - Runtime config changes do **not** require recompilation.

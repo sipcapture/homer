@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
+	"github.com/sipcapture/homer-core/src/storage/ducklake/compactor"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -120,7 +121,17 @@ type CompactionConfig struct {
 	MaxFileSizeBytes int64 `json:"max_file_size_bytes"`
 	// MaxCompactedFiles: maximum number of files to merge per table per cycle. 0 = no limit.
 	MaxCompactedFiles int `json:"max_compacted_files"`
+	// Engine selects the compaction backend: "duckdb" (default) or "native_go".
+	Engine string `json:"engine"`
+	// TargetFileSizeBytes caps each merged file for the native_go engine. 0 = 512MB.
+	TargetFileSizeBytes int64 `json:"target_file_size_bytes"`
 }
+
+// Compaction engine identifiers.
+const (
+	EngineDuckDB   = "duckdb"
+	EngineNativeGo = "native_go"
+)
 
 // CatalogLocker provides Lock/Unlock for serializing catalog-modifying operations.
 // Implemented by the DuckLake Manager to coordinate flush and compaction.
@@ -144,6 +155,7 @@ type CompactionService struct {
 	db            *sql.DB
 	lakeName      string
 	dataPath      string       // root dir for parquet files; catalog paths are relative to this
+	catalogPath   string       // DuckLake SQLite catalog file (used by the native_go engine)
 	config        CompactionConfig
 	tables        []string
 	catalogLocker CatalogLocker // serializes catalog access with writer flush
@@ -164,13 +176,14 @@ type CompactionService struct {
 // catalogLocker serializes catalog access with writer flush to prevent "database is locked".
 // dataPath is the root directory for Parquet files; catalog paths are relative to it.
 // s3Client may be nil when data_path is local or credentials are not used.
-func NewCompactionService(db *sql.DB, lakeName, dataPath string, config CompactionConfig, catalogLocker CatalogLocker, s3Client *CompactionS3Client) *CompactionService {
+func NewCompactionService(db *sql.DB, lakeName, dataPath, catalogPath string, config CompactionConfig, catalogLocker CatalogLocker, s3Client *CompactionS3Client) *CompactionService {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &CompactionService{
 		db:            db,
 		lakeName:      lakeName,
 		dataPath:      dataPath,
+		catalogPath:   catalogPath,
 		config:        config,
 		catalogLocker: catalogLocker,
 		s3Client:      s3Client,
@@ -499,6 +512,12 @@ func (c *CompactionService) runMerge(tables []string) error {
 	// flushInlinedData for why this matters even when inlining is disabled.
 	c.flushInlinedData()
 
+	// Native Go engine: replace the whole DuckDB merge/expire/cleanup path with
+	// a memory-bounded, DuckDB-free compactor (see storage/ducklake/compactor).
+	if c.config.Engine == EngineNativeGo {
+		return c.runNativeMerge(tables)
+	}
+
 	// 1. Merge adjacent small files FIRST — lock per table
 	for _, table := range tables {
 		tableName := tableNameFromFQN(table)
@@ -591,6 +610,78 @@ func (c *CompactionService) runMerge(tables []string) error {
 	}
 
 	logger.Info("CompactionService: Maintenance completed", "lake", c.lakeName)
+	return nil
+}
+
+// runNativeMerge compacts every table with the DuckDB-free Go compactor. Each
+// table is processed under the CatalogLock so it never races a DuckDB catalog
+// mutation (flush). The compactor concatenates parquet row groups (peak memory
+// ≈ one row group), writes the SQLite catalog directly, and reaps superseded
+// files/snapshots, so no DuckLake expire/cleanup CALL is needed afterwards.
+func (c *CompactionService) runNativeMerge(tables []string) error {
+	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
+		logger.Warn("CompactionService: native_go engine requires a local data_path; skipping merge",
+			"lake", c.lakeName, "data_path", c.dataPath)
+		return nil
+	}
+	if strings.TrimSpace(c.catalogPath) == "" {
+		logger.Warn("CompactionService: native_go engine requires catalog_path; skipping merge",
+			"lake", c.lakeName)
+		return nil
+	}
+
+	// Lock/Unlock are passed into the compactor so it can hold the CatalogLock
+	// only for the short per-partition commit/reap phases — never during the
+	// slow parquet merge — keeping flush/ingest responsive.
+	var lockFn, unlockFn func()
+	if c.catalogLocker != nil {
+		lockFn = c.catalogLocker.CatalogLock
+		unlockFn = c.catalogLocker.CatalogUnlock
+	}
+
+	retention := time.Duration(c.config.SnapshotExpireIntervalSec) * time.Second
+	for _, table := range tables {
+		tableName := tableNameFromFQN(table)
+		if tableName == "" {
+			logger.Warn("CompactionService: Skipping table with invalid name", "table", table)
+			continue
+		}
+		logger.Info("CompactionService: native merge starting", "table", tableName)
+		res, err := compactor.CompactTable(c.ctx, compactor.Options{
+			CatalogPath:         c.catalogPath,
+			DataPath:            c.dataPath,
+			TargetFileSizeBytes: c.config.TargetFileSizeBytes,
+			SnapshotRetention:   retention,
+			Lock:                lockFn,
+			Unlock:              unlockFn,
+		}, tableName)
+		if err != nil {
+			logger.Warn("CompactionService: native merge failed", "table", tableName, "error", err)
+			continue
+		}
+		if res.Skipped {
+			logger.Info("CompactionService: native merge skipped", "table", tableName, "reason", res.SkipReason)
+			continue
+		}
+		logger.Info("CompactionService: native merge completed",
+			"table", tableName,
+			"files_before", res.FilesBefore,
+			"files_merged", res.FilesMerged,
+			"files_created", res.FilesCreated,
+			"partitions", res.PartitionsCompacted,
+			"snapshot", res.NewSnapshot,
+			"files_reaped", res.FilesReaped,
+			"snapshots_pruned", res.SnapshotsPruned)
+	}
+
+	// Remove now-empty partition directories left after reaping.
+	if c.dataPath != "" {
+		if removed := cleanupEmptyDirs(filepath.Join(c.dataPath, "main")); removed > 0 {
+			logger.Info("CompactionService: Removed empty directories", "lake", c.lakeName, "count", removed)
+		}
+	}
+
+	logger.Info("CompactionService: Native maintenance completed", "lake", c.lakeName)
 	return nil
 }
 
