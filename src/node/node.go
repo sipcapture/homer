@@ -472,13 +472,42 @@ func mergeSelectResults(a, b []map[string]interface{}, colsA, colsB []string, li
 	return merged, cols
 }
 
+// runSelectQuery executes a single read-only SELECT and scans all rows.
+//
+// The query is server-composed (rewritten from the request by the node/hub,
+// see rewriteQueryForVolumes and buildMemoryUnionQueries); it is not a raw
+// end-user string and cannot be parameterized because table names, volume
+// UNIONs and the overall statement shape are built dynamically. As defence in
+// depth we still reject anything that is not a single read-only SELECT before
+// it reaches the driver, so a malformed/stacked statement can never run here.
 func runSelectQuery(ctx context.Context, db *sql.DB, query string) ([]map[string]interface{}, []string, error) {
-	rows, err := db.QueryContext(ctx, query)
+	if err := ensureReadOnlySingleStatement(query); err != nil {
+		return nil, nil, err
+	}
+	rows, err := db.QueryContext(ctx, query) //nolint:rowserrcheck // scanAllSQLRows checks rows.Err
 	if err != nil {
 		return nil, nil, err
 	}
 	defer rows.Close()
 	return scanAllSQLRows(rows)
+}
+
+// ensureReadOnlySingleStatement rejects stacked statements and non-SELECT
+// (DDL/DML) queries before execution.
+func ensureReadOnlySingleStatement(query string) error {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return fmt.Errorf("empty query")
+	}
+	// Disallow stacked statements (only a single trailing ';' is allowed).
+	if idx := strings.IndexByte(trimmed, ';'); idx >= 0 && strings.TrimSpace(trimmed[idx+1:]) != "" {
+		return fmt.Errorf("multiple statements are not allowed")
+	}
+	head := strings.ToUpper(trimmed)
+	if !strings.HasPrefix(head, "SELECT") && !strings.HasPrefix(head, "WITH") {
+		return fmt.Errorf("only read-only SELECT queries are allowed")
+	}
+	return nil
 }
 
 type memoryUnionQueries struct {
