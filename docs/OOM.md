@@ -126,8 +126,8 @@ partition into memory to sort/rewrite it. On wide SIP data (large `payload`
 columns) this can exceed `memory_limit` and OOM even for a handful of ~77MB
 files, because the parquet write buffers are not spillable.
 
-The `native` engine avoids this entirely. It does **not** use DuckDB for
-compaction. Instead it:
+The `native` engine (the **default**) avoids this entirely. It does **not** use
+DuckDB for compaction. Instead it:
 
 - groups a partition's parquet files into batches up to `target_file_size_bytes`
   (default 512MB), based on their on-disk sizes;
@@ -141,7 +141,9 @@ compaction. Instead it:
 - reaps fully-superseded files and aged-out snapshots once they fall outside
   the retention window (`snapshot_expire_interval_sec`).
 
-### Enable it
+### Configuration
+
+It is on by default. To pin it (or tune the output size) explicitly:
 
 ```json
 {
@@ -159,15 +161,18 @@ compaction. Instead it:
 }
 ```
 
-Requirements and limits:
+To force the old DuckDB merge instead, set `"engine": "duckdb"`.
 
-- **Local storage only** — `data_path` must be a local filesystem (not `s3://`).
-- **Absolute `catalog_path`** — the compactor opens the SQLite file directly.
+Requirements and behavior:
+
+- **Local storage + SQLite catalog** — for remote (`s3://`) `data_path` or a
+  missing `catalog_path`, the writer **automatically falls back to the `duckdb`
+  engine**, so compaction always runs.
 - **Append-only tables only** — tables with delete files are skipped (the engine
   reassigns row ids, which is only safe without positional deletes). HEP ingest
   is append-only, so this always holds for Homer.
-- Runs under the same `CatalogLock` as flush, so it never races a DuckDB write.
-- `engine` defaults to `duckdb`; set `native` to opt in.
+- Holds the `CatalogLock` only for the short per-partition commit/reap phases,
+  never during the slow merge, so flush/ingest stays responsive.
 
 Memory profile: bounded by one row group regardless of partition size, so a
 512MB target safely compacts 76×77MB files on a writer capped well under the

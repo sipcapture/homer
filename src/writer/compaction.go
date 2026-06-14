@@ -512,10 +512,19 @@ func (c *CompactionService) runMerge(tables []string) error {
 	// flushInlinedData for why this matters even when inlining is disabled.
 	c.flushInlinedData()
 
-	// Native Go engine: replace the whole DuckDB merge/expire/cleanup path with
-	// a memory-bounded, DuckDB-free compactor (see storage/ducklake/compactor).
-	if c.config.Engine == EngineNativeGo {
+	// Native engine: replace the whole DuckDB merge/expire/cleanup path with a
+	// memory-bounded, DuckDB-free compactor (see storage/ducklake/compactor).
+	// It needs local storage + a SQLite catalog; for remote (S3) data or a
+	// missing catalog_path we transparently fall back to the DuckDB path so
+	// compaction still runs.
+	if c.useNativeEngine() {
 		return c.runNativeMerge(tables)
+	}
+	if c.config.Engine == EngineNativeGo {
+		logger.Info("CompactionService: native engine unavailable for this storage, using duckdb",
+			"lake", c.lakeName,
+			"remote_data_path", ducklake.IsRemoteLakeDataPath(c.dataPath),
+			"has_catalog_path", strings.TrimSpace(c.catalogPath) != "")
 	}
 
 	// 1. Merge adjacent small files FIRST — lock per table
@@ -611,6 +620,22 @@ func (c *CompactionService) runMerge(tables []string) error {
 
 	logger.Info("CompactionService: Maintenance completed", "lake", c.lakeName)
 	return nil
+}
+
+// useNativeEngine reports whether the native compactor should run. Native is
+// the default (empty engine == native), but it requires local storage and a
+// SQLite catalog; otherwise the caller falls back to the DuckDB path.
+func (c *CompactionService) useNativeEngine() bool {
+	switch c.config.Engine {
+	case EngineNativeGo, "":
+		// native (default)
+	default:
+		return false // explicit "duckdb" or unknown
+	}
+	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
+		return false
+	}
+	return strings.TrimSpace(c.catalogPath) != ""
 }
 
 // runNativeMerge compacts every table with the DuckDB-free Go compactor. Each
