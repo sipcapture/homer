@@ -906,30 +906,50 @@ func compactTempTableName(tableName string) string {
 }
 
 func (c *CompactionService) rewriteDatePartition(tableName, partDate string) error {
+	start := time.Now()
+	logger.Info("CompactionService: date-partition compaction start",
+		"table", tableName, "date", partDate)
+
 	tx, err := c.db.BeginTx(c.ctx, nil)
 	if err != nil {
+		logger.Warn("CompactionService: date-partition compaction begin failed",
+			"table", tableName, "date", partDate, "error", err)
 		return err
 	}
 	fqn := fmt.Sprintf("%s.main.%s", c.lakeName, tableName)
 	tmp := compactTempTableName(tableName)
-	statements := []string{
-		fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM %s WHERE date = DATE '%s'", tmp, fqn, partDate),
-		fmt.Sprintf("DELETE FROM %s WHERE date = DATE '%s'", fqn, partDate),
-		fmt.Sprintf("INSERT INTO %s SELECT * FROM %s ORDER BY timestamp", fqn, tmp),
-		fmt.Sprintf("DROP TABLE %s", tmp),
+	type stepSQL struct {
+		name string
+		sql  string
 	}
-	for _, q := range statements {
-		if _, err := tx.ExecContext(c.ctx, q); err != nil {
+	statements := []stepSQL{
+		{name: "create_temp_partition_copy", sql: fmt.Sprintf("CREATE TEMP TABLE %s AS SELECT * FROM %s WHERE date = DATE '%s'", tmp, fqn, partDate)},
+		{name: "delete_partition_rows", sql: fmt.Sprintf("DELETE FROM %s WHERE date = DATE '%s'", fqn, partDate)},
+		{name: "insert_repacked_partition_rows", sql: fmt.Sprintf("INSERT INTO %s SELECT * FROM %s ORDER BY timestamp", fqn, tmp)},
+		{name: "drop_temp_partition_copy", sql: fmt.Sprintf("DROP TABLE %s", tmp)},
+	}
+	for _, step := range statements {
+		stepStart := time.Now()
+		logger.Info("CompactionService: date-partition compaction step start",
+			"table", tableName, "date", partDate, "step", step.name)
+		if _, err := tx.ExecContext(c.ctx, step.sql); err != nil {
+			logger.Warn("CompactionService: date-partition compaction step failed",
+				"table", tableName, "date", partDate, "step", step.name, "error", err)
 			_ = tx.Rollback()
 			return err
 		}
+		logger.Info("CompactionService: date-partition compaction step done",
+			"table", tableName, "date", partDate, "step", step.name,
+			"duration_ms", time.Since(stepStart).Milliseconds())
 	}
 	if err := tx.Commit(); err != nil {
+		logger.Warn("CompactionService: date-partition compaction commit failed",
+			"table", tableName, "date", partDate, "error", err)
 		_ = tx.Rollback()
 		return err
 	}
 	logger.Info("CompactionService: date-partition compaction completed",
-		"table", tableName, "date", partDate)
+		"table", tableName, "date", partDate, "duration_ms", time.Since(start).Milliseconds())
 	return nil
 }
 
