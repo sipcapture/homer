@@ -824,14 +824,21 @@ func (h *SearchHandler) hydrateHeavyColumns(ctx context.Context, req *SearchObje
 		return rows
 	}
 
-	// Prune the lookup to the timestamp span of the matched rows (padded for
-	// sub-ms rounding). The uuid IN filter is what guarantees correctness, so
-	// these bounds only narrow the files scanned. Fall back to the request
-	// range if no row timestamps parsed.
+	// Bound the lookup by the timestamp span of the matched rows (padded for
+	// sub-ms rounding), falling back to the request range. The timestamp
+	// predicate is REQUIRED for memory safety: DuckDB pushes a timestamp range
+	// down into the Parquet scan and late-materializes payload only for the
+	// surviving rows, but a bare "uuid IN (…)" (uuid has no useful min/max
+	// stats) forces a full eager decompression of the wide column and OOMs.
+	// If we cannot establish any bound, skip hydration and return narrow rows.
 	const padMs = int64(60 * 1000)
 	fromMs, toMs := minMs-padMs, maxMs+padMs
 	if minMs <= 0 || maxMs <= 0 {
 		fromMs, toMs = req.Timestamp.From, req.Timestamp.To
+	}
+	if fromMs <= 0 && toMs <= 0 {
+		logger.Warn("V4TransactionsSearch: no timestamp bound for payload hydration, returning narrow rows")
+		return rows
 	}
 
 	protoType := req.Filter.ProtoType
