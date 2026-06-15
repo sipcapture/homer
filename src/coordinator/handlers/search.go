@@ -79,6 +79,12 @@ type SearchHandler struct {
 	// lakeChunkSec is the stream-strategy time-window width in seconds (<=0 =>
 	// 1h default). Mirrors storage.ducklake.search.lake_chunk_sec.
 	lakeChunkSec int
+	// lazyPayloadHydration runs transaction searches in two phases: a narrow
+	// search/sort that omits the wide blob columns (payload, data_extra),
+	// followed by a bounded point-lookup that re-attaches those columns by
+	// uuid. This keeps memory flat on large LIMITs over wide SIP rows. Mirrors
+	// storage.ducklake.search.lazy_payload (default on).
+	lazyPayloadHydration bool
 }
 
 // NewSearchHandler creates a new search handler.
@@ -107,7 +113,14 @@ func NewSearchHandler(fs *services.FlightService, aliasSvc *services.AliasServic
 		mappingService:          mappingSvc,
 		lakeTopNStrategyCfg:     lakeTopNStrategy,
 		lakeChunkSec:            lakeChunkSec,
+		lazyPayloadHydration:    true,
 	}
+}
+
+// SetLazyPayloadHydration toggles the two-phase (narrow search + by-uuid
+// hydration) execution of transaction searches. Defaults to enabled.
+func (h *SearchHandler) SetLazyPayloadHydration(enabled bool) {
+	h.lazyPayloadHydration = enabled
 }
 
 // SetCorrelator attaches (or clears) the Lua-based correlation engine used

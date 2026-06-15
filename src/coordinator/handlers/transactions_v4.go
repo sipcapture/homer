@@ -677,22 +677,48 @@ func transactionSearchTopNShape(req *SearchObjectV4) bool {
 func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL string, req *SearchObjectV4, virtualRules map[string]services.VirtualFieldRule) ([]map[string]interface{}, error) {
 	strategy := h.lakeTopNStrategy()
 
+	// lazy: run the search/sort over a narrow projection (no payload/data_extra)
+	// and re-attach those wide columns by uuid afterwards. Keeps memory flat on
+	// large LIMITs over wide SIP rows while preserving the full-row response.
+	lazy := h.lazyPayloadEligible(req)
+
+	rows, err := h.runTransactionSearch(ctx, fullSQL, req, virtualRules, strategy, lazy)
+	if err != nil {
+		return nil, err
+	}
+	if lazy {
+		rows = h.hydrateHeavyColumns(ctx, req, rows)
+	}
+	return rows, nil
+}
+
+// runTransactionSearch executes the search/sort phase for the configured
+// strategy. When narrow is true the wide blob columns are dropped from the
+// projection (the caller re-attaches them by uuid).
+func (h *SearchHandler) runTransactionSearch(ctx context.Context, fullSQL string, req *SearchObjectV4, virtualRules map[string]services.VirtualFieldRule, strategy string, narrow bool) ([]map[string]interface{}, error) {
 	// full, or shapes we cannot safely rewrite (aggregations, custom projection
 	// or non-default ordering must see the whole range at once): single query.
 	if strategy == topNFull || !transactionSearchTopNShape(req) {
-		return h.flightService.Query(ctx, fullSQL)
+		if !narrow {
+			return h.flightService.Query(ctx, fullSQL)
+		}
+		sql, err := buildSearchSQLV4WithOpts(h.flightService.LakeName(), req, virtualRules, searchSQLOpts{narrowNoHeavy: true})
+		if err != nil {
+			return nil, err
+		}
+		return h.flightService.Query(ctx, sql)
 	}
 
 	// stream: a single query over the whole range, ORDER BY dropped, re-sorted
 	// in Go. No chunking.
 	if strategy == topNStream {
 		limit := effectiveSearchLimit(req.Param.Limit)
-		streamSQL, err := buildSearchSQLV4WithOpts(h.flightService.LakeName(), req, virtualRules, searchSQLOpts{noOrderBy: true})
+		streamSQL, err := buildSearchSQLV4WithOpts(h.flightService.LakeName(), req, virtualRules, searchSQLOpts{noOrderBy: true, narrowNoHeavy: narrow})
 		if err != nil {
 			return nil, err
 		}
 		logger.Info("V4TransactionsSearch: stream execution (single query)", "limit", limit,
-			"from", req.Timestamp.From, "to", req.Timestamp.To)
+			"narrow", narrow, "from", req.Timestamp.From, "to", req.Timestamp.To)
 		rows, err := h.flightService.Query(ctx, streamSQL)
 		if err != nil {
 			return nil, err
@@ -706,7 +732,7 @@ func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL stri
 	chunks := splitSearchTimeRange(req.Timestamp.From, req.Timestamp.To, h.outerChunkMs())
 	limit := effectiveSearchLimit(req.Param.Limit)
 	logger.Info("V4TransactionsSearch: chunked execution",
-		"strategy", strategy, "chunks", len(chunks), "limit", limit,
+		"strategy", strategy, "chunks", len(chunks), "limit", limit, "narrow", narrow,
 		"from", req.Timestamp.From, "to", req.Timestamp.To)
 
 	results := make([]map[string]interface{}, 0, limit)
@@ -718,7 +744,7 @@ func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL stri
 		chunkReq.Timestamp.From = chunk.FromMs
 		chunkReq.Timestamp.To = chunk.ToMs
 		sql, err := buildSearchSQLV4WithOpts(h.flightService.LakeName(), &chunkReq, virtualRules,
-			searchSQLOpts{toExclusive: !chunk.ToInclusive})
+			searchSQLOpts{toExclusive: !chunk.ToInclusive, narrowNoHeavy: narrow})
 		if err != nil {
 			return nil, err
 		}
@@ -737,6 +763,135 @@ func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL stri
 		results = results[:limit]
 	}
 	return results, nil
+}
+
+// lazyPayloadEligible reports whether a request can use the two-phase
+// (narrow search + by-uuid hydration) path. It requires the default full-row
+// projection (no custom select / group by) on a HEP proto table — OTLP and LP
+// tables have a different column layout with no uuid / payload pair.
+func (h *SearchHandler) lazyPayloadEligible(req *SearchObjectV4) bool {
+	if !h.lazyPayloadHydration {
+		return false
+	}
+	if strings.TrimSpace(req.Param.Select) != "" || strings.TrimSpace(req.Param.GroupBy) != "" {
+		return false
+	}
+	protoType := req.Filter.ProtoType
+	if protoType == 0 {
+		protoType = 1
+	}
+	if isOTLPProtoType(protoType) || isLPProtoType(protoType) {
+		return false
+	}
+	return true
+}
+
+// hydrateHeavyColumns re-attaches the wide blob columns (payload, data_extra)
+// to a narrow result set with a single bounded point-lookup keyed by uuid.
+// Because the lookup is filtered to the exact matched uuids (and pruned to the
+// timestamp span of those rows), DuckDB only decompresses the heavy columns for
+// the <=LIMIT rows we actually return — never the whole scanned range. Any
+// failure degrades gracefully: the narrow rows are returned unchanged.
+func (h *SearchHandler) hydrateHeavyColumns(ctx context.Context, req *SearchObjectV4, rows []map[string]interface{}) []map[string]interface{} {
+	if len(rows) == 0 {
+		return rows
+	}
+
+	uuids := make([]string, 0, len(rows))
+	seen := make(map[string]struct{}, len(rows))
+	var minMs, maxMs int64
+	for _, r := range rows {
+		u := rowStringValue(r["uuid"])
+		if u == "" {
+			continue
+		}
+		if _, dup := seen[u]; !dup {
+			seen[u] = struct{}{}
+			uuids = append(uuids, u)
+		}
+		if ns := rowTimestampSortKey(r); ns > 0 {
+			ms := ns / int64(time.Millisecond)
+			if minMs == 0 || ms < minMs {
+				minMs = ms
+			}
+			if ms > maxMs {
+				maxMs = ms
+			}
+		}
+	}
+	if len(uuids) == 0 {
+		// No uuid column (unexpected for HEP tables) — nothing to hydrate.
+		return rows
+	}
+
+	// Prune the lookup to the timestamp span of the matched rows (padded for
+	// sub-ms rounding). The uuid IN filter is what guarantees correctness, so
+	// these bounds only narrow the files scanned. Fall back to the request
+	// range if no row timestamps parsed.
+	const padMs = int64(60 * 1000)
+	fromMs, toMs := minMs-padMs, maxMs+padMs
+	if minMs <= 0 || maxMs <= 0 {
+		fromMs, toMs = req.Timestamp.From, req.Timestamp.To
+	}
+
+	protoType := req.Filter.ProtoType
+	if protoType == 0 {
+		protoType = 1
+	}
+	tableName := getTableName(h.flightService.LakeName(), protoType, req.Filter.EventType)
+
+	conditions := timestampRangeConditions("timestamp", fromMs, toMs, false)
+	escaped := make([]string, len(uuids))
+	for i, u := range uuids {
+		escaped[i] = "'" + sqlvalidator.SafeString(u) + "'"
+	}
+	conditions = append(conditions, "uuid IN ("+strings.Join(escaped, ",")+")")
+	sql := fmt.Sprintf("SELECT uuid, %s FROM %s WHERE %s", heavyProjectionExpr, tableName, strings.Join(conditions, " AND "))
+
+	logger.Info("V4TransactionsSearch: hydrating payload by uuid", "uuids", len(uuids),
+		"from", fromMs, "to", toMs)
+	heavyRows, err := h.flightService.Query(ctx, sql)
+	if err != nil {
+		// Degrade gracefully: return the narrow rows so the search still
+		// succeeds (payload simply absent). This also covers tables that have
+		// neither heavy column (COLUMNS lambda matches nothing).
+		logger.Warn("V4TransactionsSearch: payload hydration failed, returning narrow rows",
+			"error", err)
+		return rows
+	}
+
+	byUUID := make(map[string]map[string]interface{}, len(heavyRows))
+	for _, r := range heavyRows {
+		if u := rowStringValue(r["uuid"]); u != "" {
+			byUUID[u] = r
+		}
+	}
+
+	for _, r := range rows {
+		u := rowStringValue(r["uuid"])
+		hv := byUUID[u]
+		for _, col := range heavyColumns {
+			if v, ok := hv[col]; ok {
+				r[col] = v
+			} else if _, exists := r[col]; !exists {
+				// Keep response keys uniform even when a row had no match.
+				r[col] = nil
+			}
+		}
+	}
+	return rows
+}
+
+// rowStringValue coerces a result-set cell to a string, handling the string /
+// []byte shapes the Flight result decoder may produce.
+func rowStringValue(v interface{}) string {
+	switch s := v.(type) {
+	case string:
+		return s
+	case []byte:
+		return string(s)
+	}
+	return ""
 }
 
 func (h *SearchHandler) V4TransactionsSearch(c echo.Context) error {
@@ -2369,7 +2524,28 @@ type searchSQLOpts struct {
 	// range. The caller is expected to re-sort the rows in Go. Only honored for
 	// the default timestamp-DESC ordering (custom order_by still emits ORDER BY).
 	noOrderBy bool
+	// narrowNoHeavy replaces a default "SELECT *" with a projection that drops
+	// the wide blob columns (payload, data_extra). This keeps the search/sort
+	// phase memory-flat — the heavy columns are re-attached afterwards by uuid
+	// in a bounded point-lookup (see hydrateHeavyColumns). Ignored when a
+	// custom select is supplied.
+	narrowNoHeavy bool
 }
+
+// heavyColumns are the wide blob columns excluded from the search/sort phase
+// and re-fetched by uuid afterwards. payload is the dominant memory cost on
+// SIP rows; data_extra is a JSON blob that can also be large.
+var heavyColumns = []string{"payload", "data_extra"}
+
+// narrowProjectionExpr is a "SELECT *"-style projection that omits the heavy
+// blob columns. The COLUMNS(lambda) form is schema-agnostic and does not error
+// when a table lacks one of the columns (unlike "* EXCLUDE (...)").
+const narrowProjectionExpr = "COLUMNS(c -> c NOT IN ('payload', 'data_extra'))"
+
+// heavyProjectionExpr selects only the heavy blob columns that exist on a
+// table. Used by the phase-2 hydration query. Errors if a table has none of
+// them, which the caller treats as "nothing to hydrate".
+const heavyProjectionExpr = "COLUMNS(c -> c IN ('payload', 'data_extra'))"
 
 // timestampRangeConditions renders WHERE bounds for a [fromMs, toMs] window
 // in epoch milliseconds. Zero values omit the corresponding bound.
@@ -2554,6 +2730,10 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 			return "", fmt.Errorf("invalid select: %w", err)
 		}
 		selectClause = strings.TrimSpace(req.Param.Select)
+	} else if opts.narrowNoHeavy {
+		// Drop the wide blob columns for the search/sort phase; they are
+		// re-attached by uuid afterwards (hydrateHeavyColumns).
+		selectClause = narrowProjectionExpr
 	}
 
 	sql := fmt.Sprintf("SELECT %s FROM %s", selectClause, tableName)
