@@ -128,7 +128,7 @@ func newTestSearchHandler(t *testing.T, rowsPerCall [][]map[string]interface{}, 
 	_ = fs.ConnectAll()
 	fs.SetLakeName("homer_lake")
 
-	h := NewSearchHandler(fs, nil, &config.MCPConfig{}, nil, nil, 0, nil)
+	h := NewSearchHandler(fs, nil, &config.MCPConfig{}, nil, nil, 0, nil, "", 0)
 
 	return h, func() {
 		srv.Close()

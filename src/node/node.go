@@ -705,11 +705,12 @@ func (n *Node) runLakeSplitByTime(
 	return merged, mcols, chunks, nil
 }
 
-func sqlSplitSafeForTimestampTopN(sql, baseSQL, orderByClause, limitClause string) bool {
+// sqlSplitSafeShape reports whether a query is a `SELECT * ... LIMIT N` with no
+// aggregation/grouping/distinct — the shape we can safely execute as
+// independent time windows (with or without ORDER BY). Ordering is checked
+// separately by the callers.
+func sqlSplitSafeShape(baseSQL, limitClause string) bool {
 	if strings.TrimSpace(limitClause) == "" {
-		return false
-	}
-	if normalizeSQLWhitespace(orderByClause) != "order by timestamp desc" {
 		return false
 	}
 	upper := strings.ToUpper(baseSQL)
@@ -723,6 +724,13 @@ func sqlSplitSafeForTimestampTopN(sql, baseSQL, orderByClause, limitClause strin
 	}
 	selectList := strings.TrimSpace(baseSQL[selectIdx+len("SELECT") : fromIdx])
 	return strings.HasPrefix(selectList, "*")
+}
+
+func sqlSplitSafeForTimestampTopN(sql, baseSQL, orderByClause, limitClause string) bool {
+	if normalizeSQLWhitespace(orderByClause) != "order by timestamp desc" {
+		return false
+	}
+	return sqlSplitSafeShape(baseSQL, limitClause)
 }
 
 func (n *Node) buildMemoryUnionQueries(sql string) memoryUnionQueries {
@@ -790,9 +798,43 @@ func (n *Node) buildMemoryUnionQueries(sql string) memoryUnionQueries {
 	return out
 }
 
+// sqlHasNonTimestampFilter reports whether the WHERE clause carries predicates
+// beyond the two timestamp range bounds (e.g. session_id/cid/method LIKE/=/IN).
+//
+// Time-slicing only helps the "fat" top-N case: an unfiltered `SELECT *` over a
+// long range materialises huge wide result sets, so slicing + early exit bounds
+// memory and stays fast. A *filtered* query is the opposite — it returns few
+// rows (no memory risk) but a non-prunable filter (LIKE '%…%') forces a full
+// scan, and slicing it into N tiny per-window scans multiplies the catalog/
+// Parquet open overhead and runs them serially, which times out. Such queries
+// must run as a single efficient scan per window instead.
+func sqlHasNonTimestampFilter(baseSQL string) bool {
+	lower := strings.ToLower(baseSQL)
+	wi := strings.Index(lower, " where ")
+	if wi == -1 {
+		return false
+	}
+	where := baseSQL[wi+len(" where "):]
+	where = sqlTimestampFromRegexp.ReplaceAllString(where, " ")
+	where = sqlTimestampToRegexp.ReplaceAllString(where, " ")
+	where = strings.NewReplacer("(", " ", ")", " ").Replace(where)
+	for _, tok := range strings.Fields(where) {
+		switch strings.ToLower(tok) {
+		case "and", "or":
+			continue
+		default:
+			return true // a real predicate beyond the timestamp bounds
+		}
+	}
+	return false
+}
+
 func shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause string) bool {
 	if !sqlSplitSafeForTimestampTopN(sql, baseSQL, orderByClause, limitClause) {
 		return false
+	}
+	if sqlHasNonTimestampFilter(baseSQL) {
+		return false // filtered: run a single efficient scan, do not slice
 	}
 	rangeMs, ok := memorySplitRangeMs(sql)
 	return ok && rangeMs > memorySplitThresholdMs

@@ -568,19 +568,145 @@ func transactionSearchChunkable(req *SearchObjectV4) bool {
 		strings.EqualFold(orderBy, "time desc")
 }
 
+// Lake top-N execution strategies (mirrors storage.ducklake.search.lake_topn_strategy).
+const (
+	topNStream  = "stream"  // drop ORDER BY, single streaming LIMIT, Go-side sort
+	topNChunked = "chunked" // newest-first time slices with early exit
+	topNFull    = "full"    // single ORDER BY query over the whole range
+)
+
+// rowTimestampSortKey extracts a comparable newest-first key from a result
+// row's "timestamp" field, tolerating the representations FlightSQL/Arrow can
+// hand back (time.Time, string, []byte, epoch numbers).
+func rowTimestampSortKey(m map[string]interface{}) int64 {
+	v, ok := m["timestamp"]
+	if !ok || v == nil {
+		return 0
+	}
+	switch t := v.(type) {
+	case time.Time:
+		return t.UnixNano()
+	case string:
+		return parseTimestampKey(t)
+	case []byte:
+		return parseTimestampKey(string(t))
+	case int64:
+		return t
+	case int:
+		return int64(t)
+	case float64:
+		return int64(t)
+	}
+	return 0
+}
+
+func parseTimestampKey(s string) int64 {
+	for _, layout := range []string{
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+		time.RFC3339Nano,
+		time.RFC3339,
+	} {
+		if ts, err := time.Parse(layout, s); err == nil {
+			return ts.UnixNano()
+		}
+	}
+	return 0
+}
+
+// sortRowsByTimestampDescLimit orders rows newest-first and trims to limit.
+// Used to restore ordering after the "stream" strategy drops ORDER BY at the
+// database to keep memory flat.
+func sortRowsByTimestampDescLimit(rows []map[string]interface{}, limit int) []map[string]interface{} {
+	sort.SliceStable(rows, func(i, j int) bool {
+		return rowTimestampSortKey(rows[i]) > rowTimestampSortKey(rows[j])
+	})
+	if limit > 0 && len(rows) > limit {
+		rows = rows[:limit]
+	}
+	return rows
+}
+
+// lakeTopNStrategy returns the configured strategy for long-range timestamp-DESC
+// top-N searches, defaulting to "stream".
+func (h *SearchHandler) lakeTopNStrategy() string {
+	switch h.lakeTopNStrategyCfg {
+	case topNChunked:
+		return topNChunked
+	case topNFull:
+		return topNFull
+	default:
+		return topNStream
+	}
+}
+
+// outerChunkMs is the coordinator's OUTER window width for the chunked strategy,
+// defaulting to 24h (transactionSearchChunkMs). The node sub-slices each window
+// to 1h for memory safety, so this only governs coordinator round-trips.
+func (h *SearchHandler) outerChunkMs() int64 {
+	if h.lakeChunkSec <= 0 {
+		return transactionSearchChunkMs
+	}
+	return int64(h.lakeChunkSec) * 1000
+}
+
+// transactionSearchTopNShape reports whether the request is a plain
+// timestamp-DESC top-N (no aggregation, custom projection or non-default
+// ordering) — the only shape for which the stream/chunked strategies are
+// correct. Unlike transactionSearchChunkable it does not require the range to
+// exceed a chunk, because a streaming LIMIT helps at any range.
+func transactionSearchTopNShape(req *SearchObjectV4) bool {
+	if strings.TrimSpace(req.Param.Select) != "" || strings.TrimSpace(req.Param.GroupBy) != "" {
+		return false
+	}
+	orderBy := strings.TrimSpace(req.Param.OrderBy)
+	return orderBy == "" ||
+		strings.EqualFold(orderBy, "timestamp desc") ||
+		strings.EqualFold(orderBy, "time desc")
+}
+
 // queryTransactionSearch executes a v4 transaction search. fullSQL is the
-// already-validated query for the whole time range; chunkable requests are
-// instead executed as newest-first time slices that stop as soon as the row
-// limit is collected (see transactionSearchChunkMs).
+// already-validated query for the whole time range. The lake_topn_strategy
+// config selects how a long-range timestamp-DESC top-N is run:
+//   - stream (default): one query over the WHOLE range with ORDER BY dropped
+//     (the DB streams a flat LIMIT and stops after N rows); the rows are
+//     re-sorted newest-first in Go. No time-slicing — fastest, simplest.
+//   - chunked: newest-first 24h time slices, each ORDER BY timestamp DESC, with
+//     early exit; the node further sub-splits each window to 1h for memory.
+//   - full: a single ORDER BY query over the whole range.
 func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL string, req *SearchObjectV4, virtualRules map[string]services.VirtualFieldRule) ([]map[string]interface{}, error) {
-	if !transactionSearchChunkable(req) {
+	strategy := h.lakeTopNStrategy()
+
+	// full, or shapes we cannot safely rewrite (aggregations, custom projection
+	// or non-default ordering must see the whole range at once): single query.
+	if strategy == topNFull || !transactionSearchTopNShape(req) {
 		return h.flightService.Query(ctx, fullSQL)
 	}
 
-	chunks := splitSearchTimeRange(req.Timestamp.From, req.Timestamp.To, transactionSearchChunkMs)
+	// stream: a single query over the whole range, ORDER BY dropped, re-sorted
+	// in Go. No chunking.
+	if strategy == topNStream {
+		limit := effectiveSearchLimit(req.Param.Limit)
+		streamSQL, err := buildSearchSQLV4WithOpts(h.flightService.LakeName(), req, virtualRules, searchSQLOpts{noOrderBy: true})
+		if err != nil {
+			return nil, err
+		}
+		logger.Info("V4TransactionsSearch: stream execution (single query)", "limit", limit,
+			"from", req.Timestamp.From, "to", req.Timestamp.To)
+		rows, err := h.flightService.Query(ctx, streamSQL)
+		if err != nil {
+			return nil, err
+		}
+		return sortRowsByTimestampDescLimit(rows, limit), nil
+	}
+
+	// chunked: newest-first time slices with early exit. Each window keeps
+	// ORDER BY timestamp DESC, so the node sub-splits it into 1h windows for
+	// memory; the concatenation is already globally newest-first.
+	chunks := splitSearchTimeRange(req.Timestamp.From, req.Timestamp.To, h.outerChunkMs())
 	limit := effectiveSearchLimit(req.Param.Limit)
 	logger.Info("V4TransactionsSearch: chunked execution",
-		"chunks", len(chunks), "limit", limit,
+		"strategy", strategy, "chunks", len(chunks), "limit", limit,
 		"from", req.Timestamp.From, "to", req.Timestamp.To)
 
 	results := make([]map[string]interface{}, 0, limit)
@@ -591,7 +717,8 @@ func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL stri
 		chunkReq := *req
 		chunkReq.Timestamp.From = chunk.FromMs
 		chunkReq.Timestamp.To = chunk.ToMs
-		sql, err := buildSearchSQLV4WithOpts(h.flightService.LakeName(), &chunkReq, virtualRules, searchSQLOpts{toExclusive: !chunk.ToInclusive})
+		sql, err := buildSearchSQLV4WithOpts(h.flightService.LakeName(), &chunkReq, virtualRules,
+			searchSQLOpts{toExclusive: !chunk.ToInclusive})
 		if err != nil {
 			return nil, err
 		}
@@ -603,8 +730,11 @@ func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL stri
 		if len(results) >= limit {
 			logger.Info("V4TransactionsSearch: chunked early exit",
 				"chunks_done", i+1, "chunks_total", len(chunks), "rows", len(results))
-			return results[:limit], nil
+			break
 		}
+	}
+	if len(results) > limit {
+		results = results[:limit]
 	}
 	return results, nil
 }
@@ -2234,6 +2364,11 @@ type searchSQLOpts struct {
 	// interior slices of a chunked search neither lose nor duplicate rows
 	// on chunk boundaries (timestamps can carry sub-millisecond precision).
 	toExclusive bool
+	// noOrderBy omits the ORDER BY clause so DuckDB executes a plain streaming
+	// LIMIT (stops after N rows, flat memory) instead of a Top-N over the whole
+	// range. The caller is expected to re-sort the rows in Go. Only honored for
+	// the default timestamp-DESC ordering (custom order_by still emits ORDER BY).
+	noOrderBy bool
 }
 
 // timestampRangeConditions renders WHERE bounds for a [fromMs, toMs] window
@@ -2440,7 +2575,9 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 			return "", fmt.Errorf("invalid order_by: %w", err)
 		}
 		sql += " ORDER BY " + strings.TrimSpace(req.Param.OrderBy)
-	} else {
+	} else if !opts.noOrderBy {
+		// noOrderBy drops the default timestamp-DESC sort so the query streams
+		// (the caller re-sorts in Go). A custom order_by is always honored.
 		sql += " ORDER BY timestamp DESC"
 	}
 

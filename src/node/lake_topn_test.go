@@ -77,6 +77,26 @@ func TestLakeTopNStrategy(t *testing.T) {
 	}
 }
 
+func TestSqlHasNonTimestampFilter(t *testing.T) {
+	tsOnly := "SELECT *, 'homer_lake' AS storage_lake FROM t WHERE timestamp >= (to_timestamp(1 / 1000.0) AT TIME ZONE 'UTC') AND timestamp <= (to_timestamp(2 / 1000.0) AT TIME ZONE 'UTC')"
+	if sqlHasNonTimestampFilter(tsOnly) {
+		t.Error("timestamp-only WHERE should not be a filter")
+	}
+	filtered := tsOnly + " AND (session_id LIKE '%x%' OR cid LIKE '%x%')"
+	if !sqlHasNonTimestampFilter(filtered) {
+		t.Error("session_id LIKE should be detected as a filter")
+	}
+	if sqlHasNonTimestampFilter("SELECT * FROM t") {
+		t.Error("no WHERE should not be a filter")
+	}
+
+	// A filtered long-range query must NOT be split (single efficient scan).
+	ob, lim, base := extractOrderLimit(filtered + " ORDER BY timestamp DESC LIMIT 50")
+	if shouldSplitLakeAndMem(filtered, base, ob, lim) {
+		t.Error("filtered query should not be split (top-N path)")
+	}
+}
+
 func TestLakeChunkMs(t *testing.T) {
 	if got := (&Node{}).lakeChunkMs(); got != defaultLakeTimeChunkMs {
 		t.Errorf("nil config: got %d want %d", got, defaultLakeTimeChunkMs)
