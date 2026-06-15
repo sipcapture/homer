@@ -660,16 +660,19 @@ type SearchConfig struct {
 	// lake query is executed (it only applies when the split planner already
 	// decided the query is a timestamp-DESC top-N over a range wider than one
 	// hour):
-	//   "chunked" (default) — scan descending time windows (LakeChunkSec wide),
-	//        newest first, stopping once N rows are gathered. Preserves
-	//        newest-first ordering while bounding peak memory to one window.
-	//        Avoids the OOM the whole-range scan hits on wide SIP rows.
-	//   "stream"  — drop the ORDER BY and use a plain streaming LIMIT. DuckDB
-	//        stops after N rows so memory stays tiny and it is the fastest, but
-	//        the rows are in scan order, NOT guaranteed to be the newest N.
+	//   "stream" (default) — drop the ORDER BY and use a plain streaming LIMIT
+	//        so DuckDB stops after N rows and memory stays flat (the lowest-memory,
+	//        fastest option), then re-sort the N rows newest-first in Go before
+	//        returning. Caveat: the N rows are an arbitrary scan-order sample of
+	//        the range, so they are ordered correctly but not guaranteed to be the
+	//        globally newest N. Use "chunked" when exact newest-N is required.
+	//   "chunked" — scan descending time windows (LakeChunkSec wide), newest
+	//        first, stopping once N rows are gathered. Exact newest-first result
+	//        while bounding peak memory to one window. Avoids the OOM the
+	//        whole-range scan hits on wide SIP rows.
 	//   "full"    — original single ORDER BY scan over the whole range (can OOM
 	//        on wide data under a small memory_limit).
-	LakeTopNStrategy string `json:"lake_topn_strategy" mapstructure:"lake_topn_strategy" default:"chunked"`
+	LakeTopNStrategy string `json:"lake_topn_strategy" mapstructure:"lake_topn_strategy" default:"stream"`
 	// LakeChunkSec is the time-window width (seconds) for the "chunked" strategy.
 	// Smaller windows bound memory tighter at the cost of more sub-queries when
 	// data is sparse. Default 3600 (1 hour).

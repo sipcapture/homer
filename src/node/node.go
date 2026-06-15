@@ -597,19 +597,32 @@ const (
 const defaultLakeTimeChunkMs = int64(time.Hour / time.Millisecond)
 
 // lakeTopNStrategy returns the configured lake top-N execution strategy,
-// defaulting to "chunked".
+// defaulting to "stream" (lowest memory; Go re-sorts the result newest-first).
 func (n *Node) lakeTopNStrategy() string {
 	if n.config == nil {
-		return lakeTopNChunked
+		return lakeTopNStream
 	}
 	switch n.config.DuckLake.Search.LakeTopNStrategy {
-	case lakeTopNStream:
-		return lakeTopNStream
+	case lakeTopNChunked:
+		return lakeTopNChunked
 	case lakeTopNFull:
 		return lakeTopNFull
-	default:
-		return lakeTopNChunked
+	default: // "" and any unknown value
+		return lakeTopNStream
 	}
+}
+
+// sortRowsByTimestampDescLimit orders rows newest-first by their timestamp and
+// trims to limit. Used to restore ordering after the "stream" strategy drops
+// ORDER BY at the database to keep memory flat.
+func sortRowsByTimestampDescLimit(rows []map[string]interface{}, limit int) []map[string]interface{} {
+	sort.Slice(rows, func(i, j int) bool {
+		return rowTimestampSortKey(rows[i]) > rowTimestampSortKey(rows[j])
+	})
+	if limit > 0 && len(rows) > limit {
+		rows = rows[:limit]
+	}
+	return rows
 }
 
 // lakeChunkMs returns the configured chunk width (ms) for the "chunked"
@@ -813,18 +826,24 @@ func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, 
 		case lakeTopNFull:
 			plan.mode = "split_lake_and_mem:full"
 			lakeData, lakeCols, err = runSelectQuery(ctx, db, mq.lakeSQL)
-		case lakeTopNStream:
-			plan.mode = "split_lake_and_mem:stream"
-			streamSQL := stripOrderByForStream(mq.lakeSQL)
-			plan.lakeSQL = streamSQL
-			lakeData, lakeCols, err = runSelectQuery(ctx, db, streamSQL)
-		default: // lakeTopNChunked
+		case lakeTopNChunked:
 			plan.mode = "split_lake_and_mem:chunked"
 			if fromMs, toMs, ok := memorySplitBoundsMs(mq.lakeSQL); ok {
 				lakeData, lakeCols, plan.lakeChunks, err = n.runLakeSplitByTime(
 					ctx, db, mq.lakeSQL, fromMs, toMs, n.lakeChunkMs(), limitN)
 			} else {
 				lakeData, lakeCols, err = runSelectQuery(ctx, db, mq.lakeSQL)
+			}
+		default: // lakeTopNStream (default)
+			plan.mode = "split_lake_and_mem:stream"
+			streamSQL := stripOrderByForStream(mq.lakeSQL)
+			plan.lakeSQL = streamSQL
+			lakeData, lakeCols, err = runSelectQuery(ctx, db, streamSQL)
+			if err == nil {
+				// We dropped ORDER BY to keep DuckDB memory flat, so the rows come
+				// back in arbitrary scan order. Re-sort newest-first in Go before
+				// returning so the result ordering still matches the request.
+				lakeData = sortRowsByTimestampDescLimit(lakeData, limitN)
 			}
 		}
 		if err != nil {

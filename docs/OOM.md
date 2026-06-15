@@ -133,16 +133,16 @@ one hour):
 
 | Strategy  | Memory | Ordering | Notes |
 |-----------|--------|----------|-------|
-| `chunked` (default) | bounded to one window | newest-first, exact | Scans descending time windows (`lake_chunk_sec` wide), newest first, stops once N rows are collected. Recommended. |
-| `stream`  | minimal | scan order, **not** guaranteed newest-N | Drops `ORDER BY` and uses a plain streaming `LIMIT`; fastest and lowest memory, but may not return the strictly newest rows. |
+| `stream` (default) | minimal | newest-first (Go-sorted), **sample** | Drops `ORDER BY` so DuckDB stops after N rows (flat memory, fastest), then Homer re-sorts the N rows newest-first in Go before returning. The N rows are an arbitrary scan-order sample of the range, so they are correctly ordered but not guaranteed to be the globally newest N. |
+| `chunked` | bounded to one window | newest-first, **exact** | Scans descending time windows (`lake_chunk_sec` wide), newest first, stops once N rows are collected. Use when exact newest-N is required. |
 | `full`    | unbounded | newest-first, exact | Original single ORDER BY scan over the whole range — can OOM on wide data. |
 
 ```jsonc
 "storage": {
   "ducklake": {
     "search": {
-      "lake_topn_strategy": "chunked", // chunked | stream | full
-      "lake_chunk_sec": 3600            // window width for "chunked"
+      "lake_topn_strategy": "stream", // stream (default) | chunked | full
+      "lake_chunk_sec": 3600           // window width for "chunked"
     }
   }
 }
