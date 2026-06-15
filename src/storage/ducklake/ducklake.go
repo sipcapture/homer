@@ -93,6 +93,14 @@ type Config struct {
 	TuningThreads       int
 	TuningMemoryLimit   string
 	TuningTempDirectory string
+
+	// ExclusiveLock, when true, makes the writer take an exclusive OS file lock
+	// (flock) on the SQLite catalog before attaching. A second writer process on
+	// the same catalog then refuses to start instead of corrupting it (two
+	// concurrent DuckLake writers on SQLite duplicate snapshot/table ids — see
+	// "Corrupt DuckLake - multiple snapshots returned"). Set only on writer
+	// paths; readers and CLI maintenance leave it false.
+	ExclusiveLock bool
 }
 
 // isS3Path checks if path is an S3 URL
@@ -189,6 +197,11 @@ type MultiTableWriter struct {
 	flushInterval time.Duration
 	lakeName      string
 	searchBuffer  bool // include memory tables in read queries
+
+	// writerLock holds the exclusive flock on the SQLite catalog (when
+	// config.ExclusiveLock is set). Kept open for the writer's lifetime; closing
+	// it (on Stop) releases the lock. The OS also releases it on process exit.
+	writerLock *os.File
 
 	// Centralized single-writer flush queue. When non-nil, all DuckLake INSERT
 	// operations go through a single goroutine, eliminating catalog contention.
@@ -305,6 +318,18 @@ const writerPoolConns = 4
 
 // connect establishes connection to DuckDB and attaches DuckLake
 func (mtw *MultiTableWriter) connect() error {
+	// Guard against a second writer attaching the same SQLite catalog (two
+	// concurrent DuckLake writers corrupt it — duplicate snapshot/table ids).
+	if mtw.config.ExclusiveLock && mtw.config.CatalogPath != "" &&
+		(mtw.config.CatalogType == CatalogSQLite || mtw.config.CatalogType == "") {
+		lock, err := acquireCatalogWriterLock(mtw.config.CatalogPath)
+		if err != nil {
+			return err
+		}
+		mtw.writerLock = lock
+		logger.Info(fmt.Sprintf("DuckLake writer holds exclusive catalog lock: %s.lock", mtw.config.CatalogPath))
+	}
+
 	// SET s3_* is session-scoped: replay it on every new pooled connection.
 	// Without this, the pool can hand out a fresh connection without those
 	// settings → intermittent S3 404 / NoSuchBucket on flush.
@@ -580,6 +605,12 @@ func (mtw *MultiTableWriter) Stop() error {
 
 		if mtw.db != nil {
 			closeErr = mtw.db.Close()
+		}
+
+		// Release the exclusive catalog lock last, after the DB is closed.
+		if mtw.writerLock != nil {
+			releaseCatalogWriterLock(mtw.writerLock)
+			mtw.writerLock = nil
 		}
 	})
 	return closeErr

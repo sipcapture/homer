@@ -98,6 +98,8 @@ func NewManagerFromConfig() (*Manager, error) {
 	if config.FlushInterval <= 0 {
 		config.FlushInterval = 30 * time.Second
 	}
+	// Legacy writer/ingest path: guard against a second writer on the catalog.
+	config.ExclusiveLock = true
 
 	return NewManager(config)
 }
