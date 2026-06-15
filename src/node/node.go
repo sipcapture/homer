@@ -549,6 +549,7 @@ type sharedQueryPlanLog struct {
 	lakeSQL     string
 	memSQL      string
 	combinedSQL string
+	lakeChunks  int // number of time chunks the lake sub-query was split into
 }
 
 func normalizeSQLWhitespace(s string) string {
@@ -556,20 +557,139 @@ func normalizeSQLWhitespace(s string) string {
 }
 
 func memorySplitRangeMs(sql string) (int64, bool) {
-	fromM := sqlTimestampFromRegexp.FindStringSubmatch(sql)
-	toM := sqlTimestampToRegexp.FindStringSubmatch(sql)
-	if len(fromM) < 2 || len(toM) < 2 {
-		return 0, false
-	}
-	fromMs, err := strconv.ParseInt(fromM[1], 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	toMs, err := strconv.ParseInt(toM[1], 10, 64)
-	if err != nil || toMs <= fromMs {
+	fromMs, toMs, ok := memorySplitBoundsMs(sql)
+	if !ok {
 		return 0, false
 	}
 	return toMs - fromMs, true
+}
+
+// memorySplitBoundsMs extracts the [from, to) epoch-millisecond bounds of the
+// `timestamp >= ... AND timestamp < ...` predicate the UI builds for a search.
+func memorySplitBoundsMs(sql string) (int64, int64, bool) {
+	fromM := sqlTimestampFromRegexp.FindStringSubmatch(sql)
+	toM := sqlTimestampToRegexp.FindStringSubmatch(sql)
+	if len(fromM) < 2 || len(toM) < 2 {
+		return 0, 0, false
+	}
+	fromMs, err := strconv.ParseInt(fromM[1], 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	toMs, err := strconv.ParseInt(toM[1], 10, 64)
+	if err != nil || toMs <= fromMs {
+		return 0, 0, false
+	}
+	return fromMs, toMs, true
+}
+
+// Lake top-N execution strategies (storage.ducklake.search.lake_topn_strategy).
+const (
+	lakeTopNChunked = "chunked" // descending time windows, newest first, early stop
+	lakeTopNStream  = "stream"  // drop ORDER BY, plain streaming LIMIT (scan order)
+	lakeTopNFull    = "full"    // original single ORDER BY scan over the whole range
+)
+
+// defaultLakeTimeChunkMs is the fallback chunk width when search.lake_chunk_sec
+// is unset. One hour keeps the per-chunk scan (wide SELECT * over payload-heavy
+// SIP rows) well within a small memory_limit, where scanning the whole range at
+// once OOMs.
+const defaultLakeTimeChunkMs = int64(time.Hour / time.Millisecond)
+
+// lakeTopNStrategy returns the configured lake top-N execution strategy,
+// defaulting to "chunked".
+func (n *Node) lakeTopNStrategy() string {
+	if n.config == nil {
+		return lakeTopNChunked
+	}
+	switch n.config.DuckLake.Search.LakeTopNStrategy {
+	case lakeTopNStream:
+		return lakeTopNStream
+	case lakeTopNFull:
+		return lakeTopNFull
+	default:
+		return lakeTopNChunked
+	}
+}
+
+// lakeChunkMs returns the configured chunk width (ms) for the "chunked"
+// strategy, defaulting to one hour.
+func (n *Node) lakeChunkMs() int64 {
+	if n.config == nil || n.config.DuckLake.Search.LakeChunkSec <= 0 {
+		return defaultLakeTimeChunkMs
+	}
+	return int64(n.config.DuckLake.Search.LakeChunkSec) * 1000
+}
+
+// stripOrderByForStream rewrites a `... ORDER BY timestamp DESC LIMIT N` query
+// into `... LIMIT N` (no ORDER BY). DuckDB then stops scanning after N rows, so
+// memory stays tiny — at the cost of returning rows in scan order rather than
+// strictly newest-first.
+func stripOrderByForStream(sql string) string {
+	orderByClause, limitClause, base := extractOrderLimit(sql)
+	if orderByClause == "" {
+		return sql
+	}
+	out := strings.TrimSpace(base)
+	if limitClause != "" {
+		out += " " + limitClause
+	}
+	return out
+}
+
+// rewriteTimestampBoundsMs replaces the timestamp range predicate in a search
+// SQL with new [from, to) epoch-millisecond bounds, preserving the exact shape
+// DuckDB/DuckLake expect.
+func rewriteTimestampBoundsMs(sql string, fromMs, toMs int64) string {
+	sql = sqlTimestampFromRegexp.ReplaceAllString(sql,
+		fmt.Sprintf("timestamp >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", fromMs))
+	sql = sqlTimestampToRegexp.ReplaceAllString(sql,
+		fmt.Sprintf("timestamp < (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')", toMs))
+	return sql
+}
+
+// runLakeSplitByTime executes a timestamp-DESC top-N lake query in descending
+// time chunks (newest first), stopping as soon as it has gathered `limit` rows.
+// Because the chunks are disjoint and processed newest→oldest, once `limit` rows
+// are collected no older chunk can contribute to the top-N, so the scan stops
+// early. Each chunk scans at most lakeTimeChunkMs of data, bounding peak memory
+// regardless of the overall range (the whole-range scan OOMs on wide SIP rows).
+func (n *Node) runLakeSplitByTime(
+	ctx context.Context, db *sql.DB, lakeSQL string, fromMs, toMs, chunkMs int64, limit int,
+) ([]map[string]interface{}, []string, int, error) {
+	if chunkMs <= 0 {
+		chunkMs = defaultLakeTimeChunkMs
+	}
+	var all []map[string]interface{}
+	var cols []string
+	chunks := 0
+	for hi := toMs; hi > fromMs; hi -= chunkMs {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, chunks, err
+		}
+		lo := hi - chunkMs
+		if lo < fromMs {
+			lo = fromMs
+		}
+		chunkSQL := rewriteTimestampBoundsMs(lakeSQL, lo, hi)
+		data, c, err := runSelectQuery(ctx, db, chunkSQL)
+		if err != nil {
+			return nil, nil, chunks, err
+		}
+		chunks++
+		if len(c) > 0 {
+			cols = c
+		}
+		all = append(all, data...)
+		if limit > 0 && len(all) >= limit {
+			break
+		}
+	}
+	// Chunks arrive newest-first and each is already DESC, but normalise the
+	// concatenation (sort DESC, dedup, apply limit) so the contract matches a
+	// single ORDER BY timestamp DESC LIMIT query.
+	merged, mcols := mergeSelectResults(all, nil, cols, nil, limit)
+	return merged, mcols, chunks, nil
 }
 
 func sqlSplitSafeForTimestampTopN(sql, baseSQL, orderByClause, limitClause string) bool {
@@ -682,7 +802,31 @@ func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, 
 		plan.lakeSQL = mq.lakeSQL
 		plan.memSQL = mq.memSQL
 		plan.combinedSQL = ""
-		lakeData, lakeCols, err := runSelectQuery(ctx, db, mq.lakeSQL)
+		limitN := extractSQLLimit(sql)
+		// The lake sub-query (SELECT * ORDER BY timestamp DESC LIMIT N over a long
+		// range) is what OOMs on payload-heavy SIP rows under a small memory_limit.
+		// search.lake_topn_strategy picks how to run it.
+		var lakeData []map[string]interface{}
+		var lakeCols []string
+		var err error
+		switch n.lakeTopNStrategy() {
+		case lakeTopNFull:
+			plan.mode = "split_lake_and_mem:full"
+			lakeData, lakeCols, err = runSelectQuery(ctx, db, mq.lakeSQL)
+		case lakeTopNStream:
+			plan.mode = "split_lake_and_mem:stream"
+			streamSQL := stripOrderByForStream(mq.lakeSQL)
+			plan.lakeSQL = streamSQL
+			lakeData, lakeCols, err = runSelectQuery(ctx, db, streamSQL)
+		default: // lakeTopNChunked
+			plan.mode = "split_lake_and_mem:chunked"
+			if fromMs, toMs, ok := memorySplitBoundsMs(mq.lakeSQL); ok {
+				lakeData, lakeCols, plan.lakeChunks, err = n.runLakeSplitByTime(
+					ctx, db, mq.lakeSQL, fromMs, toMs, n.lakeChunkMs(), limitN)
+			} else {
+				lakeData, lakeCols, err = runSelectQuery(ctx, db, mq.lakeSQL)
+			}
+		}
 		if err != nil {
 			return nil, nil, plan, fmt.Errorf("lake query: %w", err)
 		}
@@ -690,8 +834,7 @@ func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, 
 		if err != nil {
 			return nil, nil, plan, fmt.Errorf("memory query: %w", err)
 		}
-		limit := extractSQLLimit(sql)
-		merged, cols := mergeSelectResults(lakeData, memData, lakeCols, memCols, limit)
+		merged, cols := mergeSelectResults(lakeData, memData, lakeCols, memCols, limitN)
 		return merged, cols, plan, nil
 	}
 	plan.mode = "single_union"
@@ -787,7 +930,7 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sharedResults, sharedCols, sharedPlan, err := n.runSharedSelectWithMemoryPolicy(r.Context(), db, rewrittenSQL)
-	logger.Info("Node: handleQuery execution plan", "mode", sharedPlan.mode)
+	logger.Info("Node: handleQuery execution plan", "mode", sharedPlan.mode, "lake_chunks", sharedPlan.lakeChunks)
 	logger.Debug("Node: handleQuery execution plan",
 		"mode", sharedPlan.mode,
 		"lake_sql", sharedPlan.lakeSQL,

@@ -646,6 +646,29 @@ type DuckLakeConfig struct {
 	Compaction           CompactionConfig    `json:"compaction" mapstructure:"compaction"`
 	StoragePolicy        StoragePolicyConfig `json:"storage_policy" mapstructure:"storage_policy"`
 	Volumes              []VolumeConfig      `json:"volumes" mapstructure:"volumes"` // Direct volumes config (alternative to storage_policy for read-only nodes)
+	Search               SearchConfig        `json:"search" mapstructure:"search"`
+}
+
+// SearchConfig tunes how the read/query path executes long-range searches.
+type SearchConfig struct {
+	// LakeTopNStrategy selects how a long-range `ORDER BY timestamp DESC LIMIT N`
+	// lake query is executed (it only applies when the split planner already
+	// decided the query is a timestamp-DESC top-N over a range wider than one
+	// hour):
+	//   "chunked" (default) — scan descending time windows (LakeChunkSec wide),
+	//        newest first, stopping once N rows are gathered. Preserves
+	//        newest-first ordering while bounding peak memory to one window.
+	//        Avoids the OOM the whole-range scan hits on wide SIP rows.
+	//   "stream"  — drop the ORDER BY and use a plain streaming LIMIT. DuckDB
+	//        stops after N rows so memory stays tiny and it is the fastest, but
+	//        the rows are in scan order, NOT guaranteed to be the newest N.
+	//   "full"    — original single ORDER BY scan over the whole range (can OOM
+	//        on wide data under a small memory_limit).
+	LakeTopNStrategy string `json:"lake_topn_strategy" mapstructure:"lake_topn_strategy" default:"chunked"`
+	// LakeChunkSec is the time-window width (seconds) for the "chunked" strategy.
+	// Smaller windows bound memory tighter at the cost of more sub-queries when
+	// data is sparse. Default 3600 (1 hour).
+	LakeChunkSec int `json:"lake_chunk_sec" mapstructure:"lake_chunk_sec" default:"3600"`
 }
 
 // StoragePolicyConfig configures tiered storage with hot and cold volumes
