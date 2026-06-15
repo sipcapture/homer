@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -86,6 +87,8 @@ type SystemFlags struct {
 	CompactionRetentionDays   int
 	CompactionMergeList       bool
 	CompactionMergeListLimit  int
+	RebuildCatalog            bool
+	RebuildCleanupOrphans     bool
 	InstallExtensions         bool
 	Reload                    bool
 	PidFile                   string
@@ -104,6 +107,8 @@ type systemFlagRefs struct {
 	CompactionRetentionDays   *int
 	CompactionMergeList       *bool
 	CompactionMergeListLimit  *int
+	RebuildCatalog            *bool
+	RebuildCleanupOrphans     *bool
 	InstallExtensions         *bool
 	Reload                    *bool
 	PidFile                   *string
@@ -126,6 +131,8 @@ func RegisterSystemFlags() (*flag.FlagSet, *systemFlagRefs) {
 	refs.CompactionRetentionDays = fs.Int("compaction-retention-days", 0, "delete data older than N days and exit")
 	refs.CompactionMergeList = fs.Bool("compaction-merge-list", false, "list smallest DuckLake files before/after merge")
 	refs.CompactionMergeListLimit = fs.Int("compaction-merge-list-limit", 50, "limit for compaction-merge-list output")
+	refs.RebuildCatalog = fs.Bool("rebuild-catalog", false, "fix a corrupt catalog: back up the existing catalog and fully rebuild it from the parquet files on disk, then exit")
+	refs.RebuildCleanupOrphans = fs.Bool("rebuild-cleanup-orphans", false, "with --rebuild-catalog: after a successful rebuild, delete the now-orphaned original parquet files to reclaim space")
 	refs.InstallExtensions = fs.Bool("install-extensions", false, "install DuckDB extensions (ducklake, sqlite) and exit")
 	refs.Reload = fs.Bool("reload", false, "send SIGHUP to running homer-core process to reload config")
 	refs.PidFile = fs.String("pid-file", "/var/run/homer-core.pid", "path to PID file (used with --reload)")
@@ -148,6 +155,8 @@ func ParseSystemFlags(refs *systemFlagRefs) SystemFlags {
 		CompactionRetentionDays:   *refs.CompactionRetentionDays,
 		CompactionMergeList:       *refs.CompactionMergeList,
 		CompactionMergeListLimit:  *refs.CompactionMergeListLimit,
+		RebuildCatalog:            *refs.RebuildCatalog,
+		RebuildCleanupOrphans:     *refs.RebuildCleanupOrphans,
 		InstallExtensions:         *refs.InstallExtensions,
 		Reload:                    *refs.Reload,
 		PidFile:                   *refs.PidFile,
@@ -178,6 +187,12 @@ func RunSystemCmd(f SystemFlags) error {
 
 	if f.Reload {
 		return handleReloadCommand(f.PidFile)
+	}
+
+	// Catalog rebuild -- needs config, must run with its own fresh ATTACH
+	// (cannot reuse the corrupt catalog the way runCompaction does).
+	if f.RebuildCatalog {
+		return rebuildCatalog(f)
 	}
 
 	// Compaction commands -- need config
@@ -513,6 +528,226 @@ func recoverCatalog(db *sql.DB, lakeName, dataPath string) (int, error) {
 	}
 
 	return recovered, nil
+}
+
+// rebuildCatalog fixes a corrupt DuckLake catalog by discarding it and
+// rebuilding a clean one entirely from the parquet files on disk.
+//
+// Unlike --compaction-recover (which re-ingests into the *existing* catalog and
+// therefore cannot help when the catalog itself is unreadable, e.g. "Corrupt
+// DuckLake - multiple snapshots returned from database"), this:
+//
+//  1. backs up the existing catalog file (+ -wal/-shm) to *.corrupt.<ts>,
+//  2. ATTACHes a brand-new empty catalog at the same path (DuckLake creates the
+//     known HEP tables automatically),
+//  3. re-ingests every on-disk parquet table through DuckLake, so all snapshot
+//     and file ids are allocated by DuckLake itself (never out-of-band) and the
+//     resulting catalog is internally consistent,
+//  4. optionally deletes the now-orphaned original parquet files.
+//
+// Limitations: rows that were only ever stored inline in the old catalog (never
+// written to parquet) cannot be recovered. Run this with the writer stopped.
+func rebuildCatalog(f SystemFlags) error {
+	cfg, err := config.Load(f.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	logger.InitLoggerSimple("info", true, false)
+
+	duckCfg := duckLakeConfigFromModular(cfg)
+	dataPath := duckCfg.DataPath
+	catalogPath := duckCfg.CatalogPath
+
+	if ducklake.IsRemoteLakeDataPath(dataPath) {
+		return fmt.Errorf("rebuild-catalog requires a local data_path; got %q", dataPath)
+	}
+	if strings.TrimSpace(catalogPath) == "" {
+		return fmt.Errorf("rebuild-catalog requires a sqlite catalog_path in the config")
+	}
+	if _, err := os.Stat(filepath.Join(dataPath, "main")); err != nil {
+		return fmt.Errorf("rebuild-catalog: data directory %q not found: %w",
+			filepath.Join(dataPath, "main"), err)
+	}
+
+	logger.Warn("rebuild-catalog: this discards the current catalog and rebuilds it "+
+		"from parquet on disk; make sure the homer writer is STOPPED before continuing",
+		"catalog_path", catalogPath, "data_path", dataPath)
+
+	// 1) Back up the corrupt catalog out of the way so ATTACH creates a fresh one.
+	backup, err := backupCatalogFiles(catalogPath)
+	if err != nil {
+		return fmt.Errorf("rebuild-catalog: failed to back up existing catalog: %w", err)
+	}
+	if backup != "" {
+		logger.Info("rebuild-catalog: backed up existing catalog", "backup", backup)
+	} else {
+		logger.Info("rebuild-catalog: no existing catalog found, building a new one", "catalog_path", catalogPath)
+	}
+
+	// 2) Fresh ATTACH. NewManager creates the known HEP tables automatically.
+	manager, err := ducklake.NewManager(duckCfg)
+	if err != nil {
+		return fmt.Errorf("rebuild-catalog: failed to attach fresh catalog (original preserved at %q): %w", backup, err)
+	}
+	defer manager.Stop()
+
+	db := manager.GetDB()
+	lakeName := manager.GetLakeName()
+
+	// 3) Discover on-disk tables and re-ingest each through DuckLake.
+	tables, err := listOnDiskTables(dataPath)
+	if err != nil {
+		return fmt.Errorf("rebuild-catalog: failed to list data directory: %w", err)
+	}
+	if len(tables) == 0 {
+		logger.Warn("rebuild-catalog: no table directories found under data_path/main", "data_path", dataPath)
+		return nil
+	}
+
+	var rebuilt, skipped int
+	var totalRows int64
+	var failed []string
+	for _, table := range tables {
+		if !tableHasParquet(db, dataPath, table) {
+			logger.Info("rebuild-catalog: no data parquet files, skipping", "table", table)
+			skipped++
+			continue
+		}
+
+		rows, err := reingestTable(db, lakeName, dataPath, table)
+		if err != nil {
+			logger.Error("rebuild-catalog: failed to rebuild table", "table", table, "error", err)
+			failed = append(failed, table)
+			continue
+		}
+		logger.Info("rebuild-catalog: rebuilt table", "table", table, "rows", rows)
+		totalRows += rows
+		rebuilt++
+	}
+
+	logger.Info("rebuild-catalog: rebuild complete",
+		"tables_rebuilt", rebuilt, "tables_skipped", skipped, "tables_failed", len(failed), "total_rows", totalRows)
+
+	if len(failed) > 0 {
+		return fmt.Errorf("rebuild-catalog: %d table(s) failed: %s (original catalog preserved at %q)",
+			len(failed), strings.Join(failed, ", "), backup)
+	}
+
+	// 4) The originals are now orphaned (DuckLake wrote fresh files during
+	//    re-ingest). Only delete them on explicit request and only after a
+	//    fully successful rebuild.
+	if f.RebuildCleanupOrphans {
+		orphanSQL := fmt.Sprintf("CALL ducklake_delete_orphaned_files('%s', cleanup_all => true)", lakeName)
+		if _, err := db.Exec(orphanSQL); err != nil {
+			logger.Warn("rebuild-catalog: orphaned-file cleanup failed (not critical)", "error", err)
+		} else {
+			logger.Info("rebuild-catalog: deleted orphaned original parquet files")
+		}
+	} else {
+		logger.Info("rebuild-catalog: original parquet files are now orphaned; verify queries, then run " +
+			"'homer system --compaction-force' or re-run with --rebuild-cleanup-orphans to reclaim space")
+	}
+
+	logger.Info("rebuild-catalog: done — verify with a query, then restart the homer writer")
+	return nil
+}
+
+// backupCatalogFiles renames the catalog file and its -wal/-shm sidecars to
+// "<path>.corrupt.<timestamp>" so a fresh catalog can be created at the original
+// path. Returns the backup path of the main catalog file ("" if none existed).
+func backupCatalogFiles(catalogPath string) (string, error) {
+	suffix := ".corrupt." + time.Now().Format("20060102-150405")
+	mainBackup := ""
+	for _, ext := range []string{"", "-wal", "-shm"} {
+		src := catalogPath + ext
+		if _, err := os.Stat(src); err != nil {
+			continue // sidecar may not exist
+		}
+		dst := catalogPath + suffix + ext
+		if err := os.Rename(src, dst); err != nil {
+			return mainBackup, fmt.Errorf("rename %s -> %s: %w", src, dst, err)
+		}
+		if ext == "" {
+			mainBackup = dst
+		}
+	}
+	return mainBackup, nil
+}
+
+// listOnDiskTables returns the table directory names under {dataPath}/main.
+func listOnDiskTables(dataPath string) ([]string, error) {
+	entries, err := os.ReadDir(filepath.Join(dataPath, "main"))
+	if err != nil {
+		return nil, err
+	}
+	var tables []string
+	for _, e := range entries {
+		if e.IsDir() {
+			tables = append(tables, e.Name())
+		}
+	}
+	sort.Strings(tables)
+	return tables, nil
+}
+
+// tableHasParquet reports whether the table has at least one hive-partitioned
+// data parquet file (date=…/), ignoring *-delete.parquet tombstones.
+func tableHasParquet(db *sql.DB, dataPath, table string) bool {
+	pattern := parquetDataGlobPattern(dataPath, table)
+	var n int
+	if err := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM glob('%s')", pattern)).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
+// duckLakeTableExists reports whether a table already exists in the catalog
+// (the known HEP tables are auto-created by NewManager).
+func duckLakeTableExists(db *sql.DB, lakeName, table string) bool {
+	q := fmt.Sprintf(`SELECT COUNT(*) FROM information_schema.tables
+		WHERE table_catalog = '%s' AND table_schema = 'main' AND table_name = '%s'`,
+		lakeName, table)
+	var n int
+	if err := db.QueryRow(q).Scan(&n); err != nil {
+		return false
+	}
+	return n > 0
+}
+
+// reingestTable reads all of a table's on-disk parquet files and inserts them
+// into the (fresh) DuckLake table, creating the table first if it is not one of
+// the auto-created HEP tables. DuckLake allocates all snapshot/file ids, so the
+// rebuilt catalog is consistent. Returns the number of rows ingested.
+func reingestTable(db *sql.DB, lakeName, dataPath, table string) (int64, error) {
+	pattern := parquetDataGlobPattern(dataPath, table)
+	readExpr := fmt.Sprintf("read_parquet('%s', union_by_name=true, hive_partitioning=true)", pattern)
+	fqn := fmt.Sprintf("%s.main.%s", lakeName, table)
+
+	if !duckLakeTableExists(db, lakeName, table) {
+		// Unknown/custom table (e.g. otlp_*, lp_*): create it from the parquet
+		// schema, partition/sort like the HEP tables (best-effort), then ingest.
+		createSQL := fmt.Sprintf("CREATE TABLE %s AS SELECT * FROM %s WHERE 1=0", fqn, readExpr)
+		if _, err := db.Exec(createSQL); err != nil {
+			return 0, fmt.Errorf("create table: %w", err)
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s SET PARTITIONED BY (date)", fqn)); err != nil {
+			logger.Info("rebuild-catalog: table not partitioned by date (ok)", "table", table, "reason", err.Error())
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s SET SORTED BY (timestamp ASC)", fqn)); err != nil {
+			logger.Info("rebuild-catalog: table not sorted by timestamp (ok)", "table", table, "reason", err.Error())
+		}
+	}
+
+	// BY NAME so partition/added columns line up with the table definition
+	// regardless of parquet column order.
+	insertSQL := fmt.Sprintf("INSERT INTO %s BY NAME SELECT * FROM %s", fqn, readExpr)
+	result, err := db.Exec(insertSQL)
+	if err != nil {
+		return 0, fmt.Errorf("insert: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	return rows, nil
 }
 
 func logDuckLakeSmallFiles(db *sql.DB, lakeName string, stage string, limit int) {

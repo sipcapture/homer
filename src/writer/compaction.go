@@ -622,16 +622,21 @@ func (c *CompactionService) runMerge(tables []string) error {
 	return nil
 }
 
-// useNativeEngine reports whether the native compactor should run. Native is
-// the default (empty engine == native), but it requires local storage and a
-// SQLite catalog; otherwise the caller falls back to the DuckDB path.
+// useNativeEngine reports whether the native compactor should run. The native
+// engine is OPT-IN and UNSAFE: the default (empty engine) and "duckdb" both use
+// the DuckLake merge. Native writes the SQLite catalog out-of-band, which
+// corrupts the catalog when the DuckLake writer is concurrently flushing (it
+// reuses snapshot ids cached in DuckDB memory → duplicate ducklake_snapshot
+// rows). It also requires local storage and a SQLite catalog.
 func (c *CompactionService) useNativeEngine() bool {
-	switch c.config.Engine {
-	case EngineNativeGo, "":
-		// native (default)
-	default:
-		return false // explicit "duckdb" or unknown
+	if c.config.Engine != EngineNativeGo {
+		// empty/default and "duckdb" → DuckLake merge (safe).
+		return false
 	}
+	logger.Warn("CompactionService: native compaction engine is EXPERIMENTAL and can corrupt "+
+		"the DuckLake catalog when the writer flushes concurrently (duplicate snapshot ids); "+
+		"prefer engine=duckdb unless the writer is quiescent",
+		"lake", c.lakeName)
 	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
 		return false
 	}

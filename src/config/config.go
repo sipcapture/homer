@@ -703,16 +703,17 @@ type CompactionConfig struct {
 	// working set within memory_limit on memory-capped writers.
 	MaxCompactedFiles int `json:"max_compacted_files" mapstructure:"max_compacted_files" default:"0"`
 	// Engine selects the compaction implementation:
-	//   "native" — DuckDB-free Go compactor (default). Concatenates a
-	//              partition's parquet row groups into files up to
-	//              TargetFileSizeBytes and writes the SQLite catalog directly.
-	//              Bounds peak memory to a single row group, avoiding the
-	//              whole-partition OOM the DuckDB merge hits on wide SIP data.
-	//              Used only for local data_path + SQLite catalog on
-	//              append-only tables; otherwise the writer falls back to
-	//              "duckdb" automatically.
-	//   "duckdb" — DuckLake's ducklake_merge_adjacent_files.
-	Engine string `json:"engine" mapstructure:"engine" default:"native"`
+	//   "duckdb" — DuckLake's ducklake_merge_adjacent_files (default, safe).
+	//   "native" — EXPERIMENTAL / UNSAFE. DuckDB-free Go compactor that writes
+	//              the SQLite catalog directly. It bounds peak memory to a
+	//              single parquet row group, but it allocates snapshot ids
+	//              out-of-band (MAX(snapshot_id)+1) while the DuckLake writer
+	//              keeps its own snapshot/id counters cached in memory. A
+	//              concurrent flush then reuses the same snapshot id, producing
+	//              duplicate rows in ducklake_snapshot and corrupting the
+	//              catalog ("Corrupt DuckLake - multiple snapshots returned").
+	//              Do NOT enable unless the writer is fully quiescent.
+	Engine string `json:"engine" mapstructure:"engine" default:"duckdb"`
 	// TargetFileSizeBytes caps each merged output file for the native engine.
 	// 0 = engine default (512MB).
 	TargetFileSizeBytes int64 `json:"target_file_size_bytes" mapstructure:"target_file_size_bytes" default:"0"`
