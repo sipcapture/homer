@@ -142,7 +142,8 @@ one hour):
   "ducklake": {
     "search": {
       "lake_topn_strategy": "stream", // stream (default) | chunked | full
-      "lake_chunk_sec": 3600           // window width for "chunked"
+      "lake_chunk_sec": 3600,          // window width for "chunked"
+      "lazy_payload": true             // narrow search + by-uuid payload hydration (default true)
     }
   }
 }
@@ -184,6 +185,31 @@ runs each window as a single efficient scan instead of slicing it into 1h
 windows. Such queries return few rows (no memory risk), and slicing a
 non-prunable full-scan filter into many tiny per-window scans multiplies the
 catalog/Parquet open overhead and serialises them — which previously timed out.
+
+### Lazy payload hydration (`search.lazy_payload`, default on)
+
+The dominant memory cost of a wide-row search is decompressing the `payload`
+(and `data_extra`) columns. DuckDB only does late materialization for small
+`Top-N`; for large `LIMIT`s it falls back to a full `ORDER BY` and eagerly
+decompresses the wide columns for **every scanned row** — so even a query that
+returns 0 rows can OOM (`LIMIT 50` is fine, `LIMIT 50000` is not).
+
+With `lazy_payload` enabled (default), a transaction search runs in two phases:
+
+1. **Search/sort over a narrow projection** — every column *except*
+   `payload` / `data_extra`. This is what does the filtering, ordering and
+   `LIMIT`, and it stays memory-flat because the wide blobs are never read.
+2. **By-uuid hydration** — a single bounded point-lookup
+   (`SELECT uuid, payload, data_extra … WHERE uuid IN (…)`, pruned to the
+   timestamp span of the matched rows) re-attaches the wide columns for *only*
+   the `<= LIMIT` rows actually returned.
+
+Net effect: the heavy `payload` column is decompressed for at most `LIMIT`
+rows, never for the whole scanned range. The API response is unchanged
+(full rows including `payload`). Disable with
+`storage.ducklake.search.lazy_payload: false` (e.g. for debugging). Applies to
+default full-row searches only — custom `select` / `group_by` and OTLP/LP
+tables bypass it. Log: `V4TransactionsSearch: hydrating payload by uuid`.
 
 ## 6) Native Go Compaction Engine
 

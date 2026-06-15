@@ -203,6 +203,7 @@ func (c *Coordinator) setupRoutes() {
 	authTokenSvc := services.NewAuthTokenService(c.settingsDB)
 	mapSvc := services.NewMappingService(c.settingsDB)
 	searchHandler := handlers.NewSearchHandler(c.flightService, aliasSvc, &c.config.MCP, shareExportSvc, viewTokenSvc, c.config.TransactionViewMaxOpens, mapSvc, c.config.LakeTopNStrategy, c.config.LakeChunkSec)
+	searchHandler.SetLazyPayloadHydration(c.config.LazyPayload)
 	if c.correlation != nil {
 		searchHandler.SetCorrelator(correlatorAdapter{engine: c.correlation})
 	}

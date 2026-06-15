@@ -593,6 +593,12 @@ func runServer() {
 			// NB: coordinator.lake_chunk_sec is the OUTER window (default 24h) and
 			// is intentionally NOT taken from the node's search.lake_chunk_sec
 			// (the node's 1h INNER sub-split); they are different layers.
+			// Propagate the lazy-payload (narrow search + by-uuid hydration)
+			// toggle so the coordinator search path honours the same knob.
+			cfg.Coordinator.LazyPayload = cfg.Storage.DuckLake.Search.LazyPayload
+			if cfg.Node.Enable {
+				cfg.Coordinator.LazyPayload = cfg.Node.DuckLake.Search.LazyPayload
+			}
 			cfg.Coordinator.MCP = cfg.MCP
 			if HasEmbeddedUI() {
 				coordinator.WebAssets = &WebAssets

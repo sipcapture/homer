@@ -389,6 +389,13 @@ type CoordinatorConfig struct {
 	// single query over the whole range.
 	LakeChunkSec int `json:"lake_chunk_sec" mapstructure:"lake_chunk_sec" default:"86400"`
 
+	// LazyPayload runs transaction searches in two phases: a narrow search/sort
+	// that omits the wide blob columns (payload, data_extra), then a bounded
+	// by-uuid point-lookup that re-attaches them. Keeps memory flat on large
+	// LIMITs over wide SIP rows while preserving the full-row response.
+	// Auto-populated from storage.ducklake.search.lazy_payload at startup.
+	LazyPayload bool `json:"lazy_payload" mapstructure:"lazy_payload" default:"true"`
+
 	// IPAliasCacheTTLSec is how long the in-memory IP→alias LPM table is reused between
 	// ListActive rebuilds (search/QoS/message enrichment). CRUD on aliases still invalidates
 	// immediately. Default 30, min 5, max 86400 (24h). Zero means use the default.
@@ -693,6 +700,13 @@ type SearchConfig struct {
 	// Smaller windows bound memory tighter at the cost of more sub-queries when
 	// data is sparse. Default 3600 (1 hour).
 	LakeChunkSec int `json:"lake_chunk_sec" mapstructure:"lake_chunk_sec" default:"3600"`
+	// LazyPayload runs transaction searches in two phases: a narrow search/sort
+	// over all columns except the wide blobs (payload, data_extra), then a
+	// bounded by-uuid point-lookup that re-attaches them. This avoids
+	// decompressing the wide payload column for the whole scanned range — only
+	// the <=LIMIT returned rows pay that cost — so large LIMITs stay memory-safe
+	// without sacrificing the full-row response. Default true.
+	LazyPayload bool `json:"lazy_payload" mapstructure:"lazy_payload" default:"true"`
 }
 
 // StoragePolicyConfig configures tiered storage with hot and cold volumes
