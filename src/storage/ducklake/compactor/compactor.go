@@ -29,6 +29,12 @@ type Options struct {
 	// Both may be nil (e.g. in tests) for no locking.
 	Lock   func()
 	Unlock func()
+	// Invalidate drops the DuckLake writer's in-memory snapshot/stats cache so
+	// its next flush re-reads the catalog. It is called right after each
+	// out-of-band commit while the catalog lock is still held, so the DuckDB
+	// writer never reuses a snapshot id this compactor just allocated. May be
+	// nil (tests / no live writer).
+	Invalidate func()
 }
 
 func (o Options) lock() {
@@ -40,6 +46,12 @@ func (o Options) lock() {
 func (o Options) unlock() {
 	if o.Unlock != nil {
 		o.Unlock()
+	}
+}
+
+func (o Options) invalidate() {
+	if o.Invalidate != nil {
+		o.Invalidate()
 	}
 }
 
@@ -286,6 +298,12 @@ func compactPartition(
 				"partition", partVal, "files_deleted", reaped, "snapshots_pruned", pruned)
 		}
 	}
+
+	// Drop the DuckLake writer's cached snapshot/file-id counters while still
+	// holding the catalog lock, so the next flush re-reads this just-committed
+	// snapshot instead of reusing its id (which would corrupt the catalog).
+	opts.invalidate()
+
 	return pr, nil
 }
 

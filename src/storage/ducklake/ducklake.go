@@ -430,10 +430,7 @@ func (mtw *MultiTableWriter) connect() error {
 	}
 
 	// Build attach statement (SQLite catalog only)
-	attachSQL := fmt.Sprintf(
-		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE);",
-		mtw.config.CatalogPath, mtw.config.LakeName, mtw.config.DataPath,
-	)
+	attachSQL := mtw.buildAttachSQL()
 
 	if _, err := db.Exec(attachSQL); err != nil {
 		return fmt.Errorf("failed to attach ducklake: %w", err)
@@ -456,6 +453,44 @@ func (mtw *MultiTableWriter) connect() error {
 		}
 	}
 
+	return nil
+}
+
+// buildAttachSQL returns the ATTACH statement for this writer's DuckLake catalog.
+func (mtw *MultiTableWriter) buildAttachSQL() string {
+	return fmt.Sprintf(
+		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE);",
+		mtw.config.CatalogPath, mtw.config.LakeName, mtw.config.DataPath,
+	)
+}
+
+// refreshCatalogCache drops DuckLake's in-memory snapshot/stats cache by
+// detaching and re-attaching the catalog, so the next flush re-reads the latest
+// snapshot_id / next_file_id from the SQLite catalog.
+//
+// This is required after the native compactor commits a snapshot out-of-band
+// (through a separate SQLite connection): without it, the DuckDB writer keeps
+// allocating ids from its stale cached counter and collides with the
+// compactor's snapshot ("Corrupt DuckLake - multiple snapshots returned").
+//
+// The caller MUST hold the catalog lock (CatalogLock) so no flush runs during
+// the DETACH/ATTACH. Best-effort: on failure the catalog is left as-is and the
+// error is returned so the caller can log it.
+func (mtw *MultiTableWriter) refreshCatalogCache() error {
+	if mtw.db == nil {
+		return nil
+	}
+	if _, err := mtw.db.Exec(fmt.Sprintf("DETACH %s;", mtw.config.LakeName)); err != nil {
+		return fmt.Errorf("detach %s: %w", mtw.config.LakeName, err)
+	}
+	if _, err := mtw.db.Exec(mtw.buildAttachSQL()); err != nil {
+		return fmt.Errorf("re-attach %s: %w", mtw.config.LakeName, err)
+	}
+	if mtw.config.DataInliningRowLimit >= 0 {
+		_, _ = mtw.db.Exec(fmt.Sprintf(
+			"CALL %s.set_option('DATA_INLINING_ROW_LIMIT', %d);",
+			mtw.config.LakeName, mtw.config.DataInliningRowLimit))
+	}
 	return nil
 }
 

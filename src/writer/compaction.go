@@ -140,6 +140,15 @@ type CatalogLocker interface {
 	CatalogUnlock()
 }
 
+// CatalogRefresher drops the DuckLake writer's in-memory snapshot/stats cache so
+// its next flush re-reads the catalog. The native compactor calls it right after
+// each out-of-band commit (while holding the catalog lock) so the live DuckDB
+// writer never reuses a snapshot id the compactor allocated. Implemented by the
+// DuckLake Manager.
+type CatalogRefresher interface {
+	RefreshCatalogCache() error
+}
+
 // CompactionS3Client holds DuckDB httpfs S3 settings for maintenance calls that
 // read s3:// objects (ducklake_cleanup_old_files / ducklake_delete_orphaned_files).
 // Some DuckLake versions appear to evaluate read_blob without inheriting prior
@@ -623,24 +632,35 @@ func (c *CompactionService) runMerge(tables []string) error {
 }
 
 // useNativeEngine reports whether the native compactor should run. The native
-// engine is OPT-IN and UNSAFE: the default (empty engine) and "duckdb" both use
-// the DuckLake merge. Native writes the SQLite catalog out-of-band, which
-// corrupts the catalog when the DuckLake writer is concurrently flushing (it
-// reuses snapshot ids cached in DuckDB memory → duplicate ducklake_snapshot
-// rows). It also requires local storage and a SQLite catalog.
+// engine is OPT-IN (the default empty engine and "duckdb" both use the DuckLake
+// merge). It writes the SQLite catalog out-of-band, but it is safe to run
+// alongside the live DuckDB writer because: (1) each commit/reap runs under the
+// CatalogLock, so it never overlaps a flush's catalog INSERT, and (2) right
+// after every commit it refreshes the writer's DuckLake metadata cache (see
+// CatalogRefresher), so the writer re-reads the latest snapshot and never reuses
+// a snapshot id the compactor allocated. It requires local storage and a SQLite
+// catalog; otherwise the caller falls back to the DuckDB merge.
 func (c *CompactionService) useNativeEngine() bool {
 	if c.config.Engine != EngineNativeGo {
-		// empty/default and "duckdb" → DuckLake merge (safe).
+		// empty/default and "duckdb" → DuckLake merge.
 		return false
 	}
-	logger.Warn("CompactionService: native compaction engine is EXPERIMENTAL and can corrupt "+
-		"the DuckLake catalog when the writer flushes concurrently (duplicate snapshot ids); "+
-		"prefer engine=duckdb unless the writer is quiescent",
-		"lake", c.lakeName)
 	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
 		return false
 	}
-	return strings.TrimSpace(c.catalogPath) != ""
+	if strings.TrimSpace(c.catalogPath) == "" {
+		return false
+	}
+	if _, ok := c.catalogLocker.(CatalogRefresher); !ok {
+		// Without a way to refresh the writer's cache after a commit, the native
+		// engine could race the live writer's snapshot-id allocation. Fall back
+		// to the DuckDB merge rather than risk catalog corruption.
+		logger.Warn("CompactionService: native engine selected but the catalog locker cannot "+
+			"refresh the writer cache; falling back to the DuckDB merge",
+			"lake", c.lakeName)
+		return false
+	}
+	return true
 }
 
 // runNativeMerge compacts every table with the DuckDB-free Go compactor. Each
@@ -669,6 +689,22 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 		unlockFn = c.catalogLocker.CatalogUnlock
 	}
 
+	// invalidateFn lets the native compactor drop the live DuckDB writer's
+	// DuckLake metadata cache right after each commit (still under the catalog
+	// lock), so the writer's next flush re-reads the catalog and never reuses a
+	// snapshot id the compactor just allocated. This is what makes the native
+	// engine safe to run alongside the live DuckDB writer.
+	var invalidateFn func()
+	if r, ok := c.catalogLocker.(CatalogRefresher); ok {
+		invalidateFn = func() {
+			if err := r.RefreshCatalogCache(); err != nil {
+				logger.Warn("CompactionService: catalog cache refresh after native commit failed; "+
+					"next flush may briefly retry on a snapshot conflict",
+					"lake", c.lakeName, "error", err)
+			}
+		}
+	}
+
 	retention := time.Duration(c.config.SnapshotExpireIntervalSec) * time.Second
 	for _, table := range tables {
 		tableName := tableNameFromFQN(table)
@@ -684,6 +720,7 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			SnapshotRetention:   retention,
 			Lock:                lockFn,
 			Unlock:              unlockFn,
+			Invalidate:          invalidateFn,
 		}, tableName)
 		if err != nil {
 			logger.Warn("CompactionService: native merge failed", "table", tableName, "error", err)

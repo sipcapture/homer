@@ -141,3 +141,18 @@ func (sw *ShardedWriter) CatalogUnlock() {
 		sw.shards[i].CatalogUnlock()
 	}
 }
+
+// RefreshCatalogCache drops the DuckLake metadata cache on every shard so the
+// next flush re-reads the catalog. It must be called while holding CatalogLock
+// (the native compactor invokes it right after committing a snapshot, so the
+// DuckDB writer never reuses a snapshot id the compactor allocated). Returns
+// the first shard error, if any.
+func (sw *ShardedWriter) RefreshCatalogCache() error {
+	var firstErr error
+	for _, s := range sw.shards {
+		if err := s.refreshCatalogCache(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}

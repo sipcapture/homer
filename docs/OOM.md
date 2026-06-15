@@ -119,24 +119,28 @@ Why this helps:
 3. Reduce query range temporarily (narrower time window).
 4. Re-enable compaction only after search is stable.
 
-## 6) Native Go Compaction Engine (EXPERIMENTAL / UNSAFE)
+## 6) Native Go Compaction Engine
 
-> ⚠️ **Do not enable `engine: native` on a live writer.** It corrupts the
-> DuckLake catalog. The DuckLake writer keeps its snapshot/id counters cached in
-> DuckDB process memory and allocates new snapshot ids by incrementing that
-> cache — it does **not** re-read the SQLite catalog before each commit. The
-> native engine allocates snapshot ids out-of-band as `MAX(snapshot_id)+1` in
-> SQLite, so the next flush reuses the same id and writes a **duplicate**
-> `ducklake_snapshot` row. The search node then fails with:
+> ℹ️ **The native engine is safe to run alongside the live DuckDB writer as of
+> 11.0.260.** Earlier builds corrupted the catalog because the native engine
+> allocates snapshot ids out-of-band as `MAX(snapshot_id)+1` in SQLite, while the
+> DuckLake writer kept its snapshot/id counter cached in DuckDB memory and reused
+> the same id on its next flush — producing a **duplicate** `ducklake_snapshot`
+> row and:
 >
 > ```
 > Invalid Input Error: Corrupt DuckLake - multiple snapshots returned from database
 > ```
 >
-> The `CatalogLock` does not prevent this: it serializes the *writes*, but
-> DuckLake's id counter lives in memory and is oblivious to out-of-band SQLite
-> writes. As of 11.0.257 the engine is **opt-in** and the default is `duckdb`.
-> See "Recovering a corrupted catalog" below if you already hit this.
+> This is now prevented by a two-part protocol: (1) every native commit/reap runs
+> under the `CatalogLock`, so it never overlaps a flush's catalog `INSERT`; and
+> (2) right after each commit, **while still holding the lock**, the compactor
+> refreshes the writer's DuckLake metadata cache (`DETACH`/`ATTACH`), so the
+> writer's next flush re-reads the latest snapshot from SQLite and never reuses an
+> id the compactor allocated. The engine remains **opt-in** (default `duckdb`).
+> Note: this protects against the *compactor*; running **two writer processes**
+> on the same catalog still corrupts it — homer takes an exclusive writer lock
+> (`<catalog>.lock`) to prevent that. See "Recovering a corrupted catalog" below.
 
 The default DuckDB merge (`ducklake_merge_adjacent_files`) loads a whole
 partition into memory to sort/rewrite it. On wide SIP data (large `payload`
@@ -162,8 +166,9 @@ DuckDB for compaction. Instead it:
 
 ### Configuration
 
-The default is `duckdb`. The native engine is **opt-in** and unsafe with a live
-writer (see the warning above); only enable it if the writer is fully quiescent:
+The default is `duckdb`. The native engine is **opt-in** and safe to enable on a
+live writer (see the note above); it is the recommended choice when the DuckDB
+merge OOMs on wide SIP data:
 
 ```json
 {
@@ -241,8 +246,9 @@ of the catalog from before the native run, restoring it is the safest recovery.
 
 Requirements and behavior:
 
-- **Live-writer hazard** — see the warning at the top of this section. Only run
-  native compaction when no flush can land concurrently.
+- **Safe with a live writer** — each commit/reap holds the `CatalogLock` and then
+  refreshes the writer's DuckLake cache, so the writer never reuses a snapshot id
+  the compactor allocated (see the note at the top of this section).
 - **Local storage + SQLite catalog** — for remote (`s3://`) `data_path` or a
   missing `catalog_path`, the writer **automatically falls back to the `duckdb`
   engine**, so compaction always runs.
