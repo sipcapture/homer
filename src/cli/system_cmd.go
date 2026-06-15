@@ -508,8 +508,8 @@ func recoverCatalog(db *sql.DB, lakeName, dataPath string) (int, error) {
 
 		globPattern := tableDir + "/date=*/**/*.parquet"
 		insertSQL := fmt.Sprintf(
-			`INSERT INTO %s SELECT * FROM read_parquet('%s', union_by_name=true, hive_partitioning=true)`,
-			fqn, globPattern,
+			`INSERT INTO %s BY NAME SELECT %s FROM read_parquet('%s', union_by_name=true, hive_partitioning=true)`,
+			fqn, duckLakeUserColumnsProjection, globPattern,
 		)
 		result, err := db.Exec(insertSQL)
 		if err != nil {
@@ -715,6 +715,16 @@ func duckLakeTableExists(db *sql.DB, lakeName, table string) bool {
 	return n > 0
 }
 
+// duckLakeUserColumnsProjection is a SELECT projection that returns every
+// column EXCEPT DuckLake's internal lineage columns (_ducklake_internal_row_id,
+// _ducklake_internal_snapshot_id, …). Newer DuckLake versions persist these
+// inside the data parquet files; a plain `SELECT *` during re-ingest would
+// either hit "Column name ... is reserved by DuckLake for internal use" on
+// CREATE TABLE or "Table ... does not have a column ..." on INSERT BY NAME.
+// The COLUMNS(lambda) expression drops them dynamically, so files written by
+// any DuckLake version (with or without lineage columns) re-ingest cleanly.
+const duckLakeUserColumnsProjection = `COLUMNS(c -> NOT regexp_matches(c, '^_ducklake_internal'))`
+
 // reingestTable reads all of a table's on-disk parquet files and inserts them
 // into the (fresh) DuckLake table, creating the table first if it is not one of
 // the auto-created HEP tables. DuckLake allocates all snapshot/file ids, so the
@@ -726,8 +736,9 @@ func reingestTable(db *sql.DB, lakeName, dataPath, table string) (int64, error) 
 
 	if !duckLakeTableExists(db, lakeName, table) {
 		// Unknown/custom table (e.g. otlp_*, lp_*): create it from the parquet
-		// schema, partition/sort like the HEP tables (best-effort), then ingest.
-		createSQL := fmt.Sprintf("CREATE TABLE %s AS SELECT * FROM %s WHERE 1=0", fqn, readExpr)
+		// schema (minus DuckLake's reserved lineage columns), partition/sort like
+		// the HEP tables (best-effort), then ingest.
+		createSQL := fmt.Sprintf("CREATE TABLE %s AS SELECT %s FROM %s WHERE 1=0", fqn, duckLakeUserColumnsProjection, readExpr)
 		if _, err := db.Exec(createSQL); err != nil {
 			return 0, fmt.Errorf("create table: %w", err)
 		}
@@ -740,8 +751,9 @@ func reingestTable(db *sql.DB, lakeName, dataPath, table string) (int64, error) 
 	}
 
 	// BY NAME so partition/added columns line up with the table definition
-	// regardless of parquet column order.
-	insertSQL := fmt.Sprintf("INSERT INTO %s BY NAME SELECT * FROM %s", fqn, readExpr)
+	// regardless of parquet column order; the projection strips DuckLake's
+	// internal lineage columns that would otherwise have no target column.
+	insertSQL := fmt.Sprintf("INSERT INTO %s BY NAME SELECT %s FROM %s", fqn, duckLakeUserColumnsProjection, readExpr)
 	result, err := db.Exec(insertSQL)
 	if err != nil {
 		return 0, fmt.Errorf("insert: %w", err)
