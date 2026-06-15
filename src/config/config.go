@@ -626,6 +626,11 @@ type DuckLakeConfig struct {
 	SearchBuffer  bool   `json:"search_buffer" mapstructure:"search_buffer" default:"false"`
 	ShardCount    int    `json:"shard_count" mapstructure:"shard_count" default:"1"`
 	FlushQueue    *bool  `json:"flush_queue" mapstructure:"flush_queue"` // nil = auto (true for SQLite), explicit true/false overrides
+	// AutoRepairCatalog runs a startup catalog autofix that removes duplicate
+	// snapshot/table metadata rows causing "Corrupt DuckLake - multiple
+	// snapshots returned from database". Lossless for data. nil = enabled
+	// (default); set false to disable.
+	AutoRepairCatalog *bool `json:"auto_repair_catalog" mapstructure:"auto_repair_catalog"`
 	// DataInliningRowLimit controls the DuckLake data inlining threshold (DuckLake v1.0).
 	// Writes of ≤N rows are stored directly in the catalog database instead of creating
 	// small Parquet files.

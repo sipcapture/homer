@@ -101,6 +101,12 @@ type Config struct {
 	// "Corrupt DuckLake - multiple snapshots returned"). Set only on writer
 	// paths; readers and CLI maintenance leave it false.
 	ExclusiveLock bool
+
+	// AutoRepairCatalog, when true, runs RepairCatalogSnapshots on startup
+	// (before ATTACH) to remove duplicate snapshot/table metadata rows that
+	// cause "Corrupt DuckLake - multiple snapshots returned from database".
+	// Lossless for data; only conflicting duplicate metadata rows are dropped.
+	AutoRepairCatalog bool
 }
 
 // isS3Path checks if path is an S3 URL
@@ -414,6 +420,23 @@ func (mtw *MultiTableWriter) connect() error {
 		logger.Warn("DuckLake inline GC failed (non-fatal)", "err", err)
 	} else if n > 0 {
 		logger.Info("DuckLake inline GC: dropped empty ducklake_inlined_data_* tables (upstream #1065)", "dropped", n)
+	}
+
+	// Autofix the "Corrupt DuckLake - multiple snapshots returned" corruption
+	// before ATTACH, while we still have exclusive access to the sqlite file.
+	// Lossless: only duplicate snapshot/table metadata rows are collapsed.
+	if mtw.config.AutoRepairCatalog &&
+		(mtw.config.CatalogType == CatalogSQLite || mtw.config.CatalogType == "") {
+		if res, err := RepairCatalogSnapshots(mtw.config.CatalogPath); err != nil {
+			logger.Warn("DuckLake catalog auto-repair failed (non-fatal); "+
+				"run `homer system --rebuild-catalog` if queries still error", "err", err)
+		} else if res.Changed() {
+			logger.Warn("DuckLake catalog auto-repair: removed duplicate metadata rows "+
+				"(fixed 'Corrupt DuckLake - multiple snapshots returned')",
+				"duplicate_snapshots", res.DuplicateSnapshots,
+				"duplicate_tables", res.DuplicateTables,
+				"catalog", mtw.config.CatalogPath)
+		}
 	}
 
 	// SET s3_* is applied per pooled connection by the connector init above.

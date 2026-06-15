@@ -226,7 +226,21 @@ recommended, catalog-safe path.
 If you already see `Corrupt DuckLake - multiple snapshots returned from
 database`, the SQLite catalog has duplicate `snapshot_id` rows.
 
-**Preferred: rebuild the catalog from disk.** Stop the Homer writer, then run:
+**Automatic (default).** On startup the writer runs a lossless autofix
+(`storage.ducklake.auto_repair_catalog`, default enabled) that collapses
+duplicate `ducklake_snapshot` / `ducklake_table` rows — keeping the most
+recently written row, which still references the same Parquet files. It runs
+before the catalog is attached, while the writer holds the exclusive lock, so it
+fixes the corruption on the next restart with no data loss and no manual step.
+The repair logs a warning listing how many duplicate rows it removed. Disable
+with:
+
+```jsonc
+"storage": { "ducklake": { "auto_repair_catalog": false } }
+```
+
+**If the autofix cannot recover it** (e.g. corruption beyond duplicate metadata
+rows), rebuild the catalog from disk. Stop the Homer writer, then run:
 
 ```bash
 homer system --config-path /etc/homer/config.json --rebuild-catalog

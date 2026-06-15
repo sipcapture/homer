@@ -262,6 +262,9 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 		// (e.g. a duplicate container) refuses to start instead of corrupting
 		// the SQLite catalog.
 		ExclusiveLock: true,
+		// Autofix duplicate snapshot/table rows on startup (default on).
+		AutoRepairCatalog: storageCfg.DuckLake.AutoRepairCatalog == nil ||
+			*storageCfg.DuckLake.AutoRepairCatalog,
 	}
 
 	// S3 config
