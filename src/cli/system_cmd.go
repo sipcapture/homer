@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -508,8 +509,8 @@ func recoverCatalog(db *sql.DB, lakeName, dataPath string) (int, error) {
 
 		globPattern := tableDir + "/date=*/**/*.parquet"
 		insertSQL := fmt.Sprintf(
-			`INSERT INTO %s SELECT * FROM read_parquet('%s', union_by_name=true, hive_partitioning=true)`,
-			fqn, globPattern,
+			`INSERT INTO %s BY NAME SELECT %s FROM read_parquet('%s', union_by_name=true, hive_partitioning=true)`,
+			fqn, duckLakeUserColumnsProjection, globPattern,
 		)
 		result, err := db.Exec(insertSQL)
 		if err != nil {
@@ -594,6 +595,28 @@ func rebuildCatalog(f SystemFlags) error {
 
 	db := manager.GetDB()
 	lakeName := manager.GetLakeName()
+
+	// Force a low-memory DuckDB session for the re-ingest: parallel decompression
+	// of wide SIP rows (payload) across threads multiplies peak memory and OOMs
+	// even on a single ~450 MB file under a 2 GB limit. Rebuild is offline, so we
+	// trade speed for safety: single-threaded, no insertion-order buffering.
+	// SET GLOBAL (not plain SET) is required because db is a database/sql pool —
+	// a session-local SET would not apply to the connection that runs the INSERT.
+	if _, err := db.Exec("SET GLOBAL threads=1"); err != nil {
+		logger.Warn("rebuild-catalog: could not set threads=1 (continuing)", "error", err)
+	} else {
+		logger.Info("rebuild-catalog: re-ingest runs single-threaded to bound memory")
+	}
+	if _, err := db.Exec("SET GLOBAL preserve_insertion_order=false"); err != nil {
+		logger.Warn("rebuild-catalog: could not disable preserve_insertion_order (continuing)", "error", err)
+	}
+	if memLimit := rebuildMemoryLimit(); memLimit != "" {
+		if _, err := db.Exec(fmt.Sprintf("SET GLOBAL memory_limit='%s'", memLimit)); err != nil {
+			logger.Warn("rebuild-catalog: could not raise memory_limit (continuing)", "error", err)
+		} else {
+			logger.Info("rebuild-catalog: raised memory_limit for offline re-ingest", "memory_limit", memLimit)
+		}
+	}
 
 	// 3) Discover on-disk tables and re-ingest each through DuckLake.
 	tables, err := listOnDiskTables(dataPath)
@@ -715,19 +738,35 @@ func duckLakeTableExists(db *sql.DB, lakeName, table string) bool {
 	return n > 0
 }
 
+// duckLakeUserColumnsProjection is a SELECT projection that returns every
+// column EXCEPT DuckLake's internal lineage columns (_ducklake_internal_row_id,
+// _ducklake_internal_snapshot_id, …). Newer DuckLake versions persist these
+// inside the data parquet files; a plain `SELECT *` during re-ingest would
+// either hit "Column name ... is reserved by DuckLake for internal use" on
+// CREATE TABLE or "Table ... does not have a column ..." on INSERT BY NAME.
+// The COLUMNS(lambda) expression drops them dynamically, so files written by
+// any DuckLake version (with or without lineage columns) re-ingest cleanly.
+const duckLakeUserColumnsProjection = `COLUMNS(c -> NOT regexp_matches(c, '^_ducklake_internal'))`
+
 // reingestTable reads all of a table's on-disk parquet files and inserts them
 // into the (fresh) DuckLake table, creating the table first if it is not one of
 // the auto-created HEP tables. DuckLake allocates all snapshot/file ids, so the
 // rebuilt catalog is consistent. Returns the number of rows ingested.
+//
+// Files are ingested ONE AT A TIME rather than as a single glob insert: a
+// single `INSERT ... SELECT FROM read_parquet('<all files>')` buffers many
+// files' row groups at once and OOMs on large tables under a small
+// memory_limit. Per-file inserts cap peak memory at one (~128 MB) parquet file.
 func reingestTable(db *sql.DB, lakeName, dataPath, table string) (int64, error) {
 	pattern := parquetDataGlobPattern(dataPath, table)
-	readExpr := fmt.Sprintf("read_parquet('%s', union_by_name=true, hive_partitioning=true)", pattern)
+	globReadExpr := fmt.Sprintf("read_parquet('%s', union_by_name=true, hive_partitioning=true)", pattern)
 	fqn := fmt.Sprintf("%s.main.%s", lakeName, table)
 
 	if !duckLakeTableExists(db, lakeName, table) {
 		// Unknown/custom table (e.g. otlp_*, lp_*): create it from the parquet
-		// schema, partition/sort like the HEP tables (best-effort), then ingest.
-		createSQL := fmt.Sprintf("CREATE TABLE %s AS SELECT * FROM %s WHERE 1=0", fqn, readExpr)
+		// schema (minus DuckLake's reserved lineage columns), partition/sort like
+		// the HEP tables (best-effort), then ingest.
+		createSQL := fmt.Sprintf("CREATE TABLE %s AS SELECT %s FROM %s WHERE 1=0", fqn, duckLakeUserColumnsProjection, globReadExpr)
 		if _, err := db.Exec(createSQL); err != nil {
 			return 0, fmt.Errorf("create table: %w", err)
 		}
@@ -739,15 +778,104 @@ func reingestTable(db *sql.DB, lakeName, dataPath, table string) (int64, error) 
 		}
 	}
 
-	// BY NAME so partition/added columns line up with the table definition
-	// regardless of parquet column order.
-	insertSQL := fmt.Sprintf("INSERT INTO %s BY NAME SELECT * FROM %s", fqn, readExpr)
-	result, err := db.Exec(insertSQL)
+	files, err := listTableParquetFiles(db, pattern)
 	if err != nil {
-		return 0, fmt.Errorf("insert: %w", err)
+		return 0, fmt.Errorf("list files: %w", err)
 	}
-	rows, _ := result.RowsAffected()
-	return rows, nil
+	if len(files) == 0 {
+		return 0, nil
+	}
+
+	var total int64
+	for i, file := range files {
+		// hive_partitioning=true still extracts the date=… value from the single
+		// file's path; BY NAME lines columns up with the table definition; the
+		// projection strips DuckLake's internal lineage columns.
+		fileRead := fmt.Sprintf("read_parquet('%s', union_by_name=true, hive_partitioning=true)", escapeSQLLiteral(file))
+		insertSQL := fmt.Sprintf("INSERT INTO %s BY NAME SELECT %s FROM %s", fqn, duckLakeUserColumnsProjection, fileRead)
+		result, err := db.Exec(insertSQL)
+		if err != nil {
+			return total, fmt.Errorf("insert file %d/%d (%s): %w", i+1, len(files), file, err)
+		}
+		if rows, errRows := result.RowsAffected(); errRows == nil {
+			total += rows
+		}
+		if len(files) > 20 && (i+1)%20 == 0 {
+			logger.Info("rebuild-catalog: re-ingest progress", "table", table, "files_done", i+1, "files_total", len(files), "rows", total)
+		}
+	}
+	return total, nil
+}
+
+// rebuildMemoryLimit returns a generous DuckDB memory_limit for the OFFLINE
+// re-ingest (writer is stopped, so the conservative live 2 GB cap does not
+// apply). Writing a sorted parquet for wide SIP rows buffers the whole file, so
+// a small cap OOMs. We use ~70% of host RAM, clamped to [4 GB, 32 GB]. Returns
+// "" if total RAM cannot be determined (keep the existing limit).
+func rebuildMemoryLimit() string {
+	total := systemTotalRAMBytes()
+	if total == 0 {
+		return ""
+	}
+	limit := total * 70 / 100
+	const minLimit = 4 << 30  // 4 GB
+	const maxLimit = 32 << 30 // 32 GB
+	if limit < minLimit {
+		limit = minLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+	return fmt.Sprintf("%dGB", limit>>30)
+}
+
+// systemTotalRAMBytes reads MemTotal from /proc/meminfo (Linux). Returns 0 if
+// unavailable.
+func systemTotalRAMBytes() uint64 {
+	data, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(line, "MemTotal:") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			return 0
+		}
+		kb, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			return 0
+		}
+		return kb * 1024
+	}
+	return 0
+}
+
+// listTableParquetFiles returns the on-disk data parquet files matching pattern,
+// sorted so partitions are ingested in a stable order.
+func listTableParquetFiles(db *sql.DB, pattern string) ([]string, error) {
+	rows, err := db.Query(fmt.Sprintf("SELECT file FROM glob('%s') ORDER BY file", pattern))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var files []string
+	for rows.Next() {
+		var f string
+		if err := rows.Scan(&f); err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, rows.Err()
+}
+
+// escapeSQLLiteral escapes single quotes for safe interpolation into a SQL
+// single-quoted string literal (file paths from glob()).
+func escapeSQLLiteral(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
 }
 
 func logDuckLakeSmallFiles(db *sql.DB, lakeName string, stage string, limit int) {

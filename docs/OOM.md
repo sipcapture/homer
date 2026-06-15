@@ -260,6 +260,23 @@ recommended, catalog-safe path.
 If you already see `Corrupt DuckLake - multiple snapshots returned from
 database`, the SQLite catalog has duplicate `snapshot_id` rows.
 
+There are two independent recovery mechanisms — they complement each other, you
+do **not** have to choose one over the other:
+
+| | Startup auto-repair | `--rebuild-catalog` (CLI) |
+|---|---|---|
+| Trigger | automatic, on every restart | manual, operator-run |
+| Data | **lossless** — only drops duplicate metadata rows | discards the catalog, re-ingests from parquet; **inline-only rows are lost** |
+| Downtime | none (runs before attach, under the writer lock) | yes — writer must be **stopped** |
+| Scope | duplicate `ducklake_snapshot`/`ducklake_table` rows (the common case) | catalog unreadable / desynced beyond duplicate rows |
+| Cost | negligible | heavy (rewrites every table, re-allocates all ids) |
+
+Rule of thumb: **auto-repair is the first line of defence** — it self-heals the
+common "multiple snapshots" corruption on the next restart with no data loss and
+no manual step. Reach for `--rebuild-catalog` only when the catalog is so broken
+that auto-repair cannot attach it at all (or files and catalog have diverged).
+Keep auto-repair enabled even though the CLI exists.
+
 **Automatic (default).** On startup the writer runs a lossless autofix
 (`storage.ducklake.auto_repair_catalog`, default enabled) that collapses
 duplicate `ducklake_snapshot` / `ducklake_table` rows — keeping the most
