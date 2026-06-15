@@ -583,6 +583,16 @@ func runServer() {
 					cfg.Coordinator.LakeName = cfg.Node.DuckLake.LakeName
 				}
 			}
+			// Propagate the lake top-N search strategy so the coordinator's
+			// transaction search honours the same knob as the node split path.
+			if s := strings.TrimSpace(cfg.Node.DuckLake.Search.LakeTopNStrategy); s != "" {
+				cfg.Coordinator.LakeTopNStrategy = s
+			} else if s := strings.TrimSpace(cfg.Storage.DuckLake.Search.LakeTopNStrategy); s != "" {
+				cfg.Coordinator.LakeTopNStrategy = s
+			}
+			// NB: coordinator.lake_chunk_sec is the OUTER window (default 24h) and
+			// is intentionally NOT taken from the node's search.lake_chunk_sec
+			// (the node's 1h INNER sub-split); they are different layers.
 			cfg.Coordinator.MCP = cfg.MCP
 			if HasEmbeddedUI() {
 				coordinator.WebAssets = &WebAssets

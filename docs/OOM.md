@@ -151,6 +151,40 @@ one hour):
 The chosen strategy is reflected in the execution-plan log line
 (`mode=split_lake_and_mem:chunked|stream|full`, plus `lake_chunks` for chunked).
 
+The **coordinator transaction search** (`V4TransactionsSearch`, the path the UI
+uses for the transactions table) honours the same strategy — it is propagated to
+`coordinator.lake_topn_strategy` from `storage.ducklake.search.lake_topn_strategy`
+at startup.
+
+Both `stream` and `chunked` execute the range as **newest-first 24h time slices
+with early exit**, because a single `SELECT *` over 30 days of wide SIP rows
+OOMs at the node regardless of `LIMIT` — the parallel Parquet decompression
+alone exceeds a ~2 GB `memory_limit`, so capping the per-window scan breadth is
+what actually prevents the OOM (dropping `ORDER BY` is not enough on its own).
+They differ only in how each window is read:
+
+- `stream` (default) — **one query over the whole range** with `ORDER BY`
+  dropped, so DuckDB streams a flat `LIMIT` and stops after N rows; the rows are
+  re-sorted newest-first in Go. No time-slicing — simplest and fastest. Log:
+  `V4TransactionsSearch: stream execution (single query)`.
+- `chunked` — newest-first 24h windows (`coordinator.lake_chunk_sec`, default
+  86400) with early exit; each window keeps `ORDER BY timestamp DESC`, so the
+  node sub-splits it into 1h inner windows (`storage.ducklake.search.lake_chunk_sec`,
+  default 3600) for memory safety. Originally added for sipcapture/homer#785.
+  Log: `strategy=chunked`.
+- `full` — a single `ORDER BY` query over the whole range (can OOM).
+
+Note: a single unfiltered `SELECT *` over very long ranges can still pressure
+memory at the node even with a flat `LIMIT` (parallel Parquet decompression of
+wide rows). If `stream` OOMs on your data, switch to `chunked`.
+
+**Filtered searches are never node-sub-sliced.** When the query carries a
+predicate beyond the timestamp range (e.g. `session_id LIKE '%…%'`), the node
+runs each window as a single efficient scan instead of slicing it into 1h
+windows. Such queries return few rows (no memory risk), and slicing a
+non-prunable full-scan filter into many tiny per-window scans multiplies the
+catalog/Parquet open overhead and serialises them — which previously timed out.
+
 ## 6) Native Go Compaction Engine
 
 > ℹ️ **The native engine is safe to run alongside the live DuckDB writer as of

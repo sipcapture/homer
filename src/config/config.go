@@ -373,6 +373,22 @@ type CoordinatorConfig struct {
 	// before it is exhausted (TTL via expires_at still applies). Default 3, min 1, max 1000.
 	TransactionViewMaxOpens int `json:"transaction_view_max_opens" mapstructure:"transaction_view_max_opens" default:"3"`
 
+	// LakeTopNStrategy selects how long-range timestamp-DESC top-N transaction
+	// searches run: "stream" (default — newest-first time slices without ORDER BY,
+	// re-sorted in Go, lowest memory), "chunked" (newest-first time slices with
+	// per-window ORDER BY) or "full" (single ORDER BY over the whole range).
+	// Auto-populated from storage.ducklake.search.lake_topn_strategy at startup.
+	LakeTopNStrategy string `json:"lake_topn_strategy" mapstructure:"lake_topn_strategy" default:"stream"`
+
+	// LakeChunkSec is the OUTER time-window width (seconds) the coordinator uses
+	// to slice a long-range transaction search for the "chunked" strategy,
+	// newest-first with early exit. Each window is sent to the node as one query
+	// (the node further sub-slices it for memory safety, search.lake_chunk_sec
+	// = 1h), so this knob controls coordinator round-trips, not peak memory.
+	// Default 86400 (24h). Not used by the "stream" strategy, which runs a
+	// single query over the whole range.
+	LakeChunkSec int `json:"lake_chunk_sec" mapstructure:"lake_chunk_sec" default:"86400"`
+
 	// IPAliasCacheTTLSec is how long the in-memory IP→alias LPM table is reused between
 	// ListActive rebuilds (search/QoS/message enrichment). CRUD on aliases still invalidates
 	// immediately. Default 30, min 5, max 86400 (24h). Zero means use the default.

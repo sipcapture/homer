@@ -72,11 +72,18 @@ type SearchHandler struct {
 	correlation Correlator
 	// mappingService loads mapping_schema rows for fields_mapping virtual filters (optional).
 	mappingService *services.MappingService
+	// lakeTopNStrategyCfg selects how long-range timestamp-DESC top-N searches
+	// run (stream | chunked | full). Empty defaults to stream. Mirrors
+	// storage.ducklake.search.lake_topn_strategy.
+	lakeTopNStrategyCfg string
+	// lakeChunkSec is the stream-strategy time-window width in seconds (<=0 =>
+	// 1h default). Mirrors storage.ducklake.search.lake_chunk_sec.
+	lakeChunkSec int
 }
 
 // NewSearchHandler creates a new search handler.
 // aliasSvc may be nil; transaction rows will not get aliasSrc/aliasDst in that case.
-func NewSearchHandler(fs *services.FlightService, aliasSvc *services.AliasService, mcpCfg *config.MCPConfig, share *services.ShareExportService, viewTok *services.TransactionViewTokenService, transactionViewMaxOpens int, mappingSvc *services.MappingService) *SearchHandler {
+func NewSearchHandler(fs *services.FlightService, aliasSvc *services.AliasService, mcpCfg *config.MCPConfig, share *services.ShareExportService, viewTok *services.TransactionViewTokenService, transactionViewMaxOpens int, mappingSvc *services.MappingService, lakeTopNStrategy string, lakeChunkSec int) *SearchHandler {
 	if transactionViewMaxOpens <= 0 {
 		transactionViewMaxOpens = 3
 	}
@@ -98,6 +105,8 @@ func NewSearchHandler(fs *services.FlightService, aliasSvc *services.AliasServic
 		viewTokens:              viewTok,
 		transactionViewMaxOpens: transactionViewMaxOpens,
 		mappingService:          mappingSvc,
+		lakeTopNStrategyCfg:     lakeTopNStrategy,
+		lakeChunkSec:            lakeChunkSec,
 	}
 }
 
