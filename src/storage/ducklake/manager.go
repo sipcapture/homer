@@ -242,6 +242,12 @@ func (m *Manager) CatalogUnlock() {
 	m.sharded.CatalogUnlock()
 }
 
+// RefreshCatalogCache drops the DuckLake metadata cache on every shard so the
+// next flush re-reads the catalog. Must be called while holding CatalogLock.
+func (m *Manager) RefreshCatalogCache() error {
+	return m.sharded.RefreshCatalogCache()
+}
+
 // GetDB returns the primary shard's DuckDB connection (for compaction/maintenance)
 func (m *Manager) GetDB() *sql.DB {
 	return m.sharded.Primary().GetDB()

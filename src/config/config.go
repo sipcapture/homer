@@ -703,16 +703,18 @@ type CompactionConfig struct {
 	// working set within memory_limit on memory-capped writers.
 	MaxCompactedFiles int `json:"max_compacted_files" mapstructure:"max_compacted_files" default:"0"`
 	// Engine selects the compaction implementation:
-	//   "duckdb" — DuckLake's ducklake_merge_adjacent_files (default, safe).
-	//   "native" — EXPERIMENTAL / UNSAFE. DuckDB-free Go compactor that writes
-	//              the SQLite catalog directly. It bounds peak memory to a
-	//              single parquet row group, but it allocates snapshot ids
-	//              out-of-band (MAX(snapshot_id)+1) while the DuckLake writer
-	//              keeps its own snapshot/id counters cached in memory. A
-	//              concurrent flush then reuses the same snapshot id, producing
-	//              duplicate rows in ducklake_snapshot and corrupting the
-	//              catalog ("Corrupt DuckLake - multiple snapshots returned").
-	//              Do NOT enable unless the writer is fully quiescent.
+	//   "duckdb" — DuckLake's ducklake_merge_adjacent_files (default). Loads a
+	//              whole partition into memory, which can OOM on wide SIP data.
+	//   "native" — DuckDB-free Go compactor that concatenates a partition's
+	//              parquet row groups (peak memory ≈ one row group) and writes
+	//              the SQLite catalog directly. Safe to run alongside the live
+	//              DuckDB writer: every commit/reap runs under the catalog lock
+	//              and, while still holding it, the compactor refreshes the
+	//              writer's DuckLake metadata cache (DETACH/ATTACH) so the
+	//              writer re-reads the latest snapshot and never reuses a
+	//              snapshot id the compactor allocated. Requires a local
+	//              data_path and a SQLite catalog; otherwise it falls back to
+	//              the DuckDB merge automatically.
 	Engine string `json:"engine" mapstructure:"engine" default:"duckdb"`
 	// TargetFileSizeBytes caps each merged output file for the native engine.
 	// 0 = engine default (512MB).

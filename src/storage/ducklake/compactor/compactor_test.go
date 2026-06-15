@@ -360,3 +360,16 @@ func TestReapRemovesSupersededFiles(t *testing.T) {
 }
 
 func strptr(s string) *string { return &s }
+
+func TestOptionsInvalidate(t *testing.T) {
+	// nil Invalidate is a no-op (must not panic).
+	(Options{}).invalidate()
+
+	calls := 0
+	opts := Options{Invalidate: func() { calls++ }}
+	opts.invalidate()
+	opts.invalidate()
+	if calls != 2 {
+		t.Fatalf("invalidate() called callback %d times, want 2", calls)
+	}
+}
