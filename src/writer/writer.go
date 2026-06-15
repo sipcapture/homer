@@ -258,6 +258,10 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 		TuningThreads:        storageCfg.DuckLake.Tuning.Threads,
 		TuningMemoryLimit:    storageCfg.DuckLake.Tuning.MemoryLimit,
 		TuningTempDirectory:  storageCfg.DuckLake.Tuning.TempDirectory,
+		// Writer path: take an exclusive catalog lock so a second writer process
+		// (e.g. a duplicate container) refuses to start instead of corrupting
+		// the SQLite catalog.
+		ExclusiveLock: true,
 	}
 
 	// S3 config
