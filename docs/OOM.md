@@ -119,6 +119,38 @@ Why this helps:
 3. Reduce query range temporarily (narrower time window).
 4. Re-enable compaction only after search is stable.
 
+## 5b) Read-Path OOM: Long-Range `ORDER BY timestamp DESC LIMIT N`
+
+A `SELECT * ... WHERE timestamp >= A AND timestamp < B ORDER BY timestamp DESC
+LIMIT N` over a wide range (e.g. 24h) can OOM even with `split_lake_and_mem`
+active: the lake sub-query still has to feed DuckDB's Top-N operator from a
+full-range scan, and for payload-heavy SIP rows the operator buffers more than a
+small `memory_limit` allows.
+
+`storage.ducklake.search.lake_topn_strategy` controls how that lake sub-query is
+executed (it only applies to timestamp-DESC top-N queries over a range wider than
+one hour):
+
+| Strategy  | Memory | Ordering | Notes |
+|-----------|--------|----------|-------|
+| `chunked` (default) | bounded to one window | newest-first, exact | Scans descending time windows (`lake_chunk_sec` wide), newest first, stops once N rows are collected. Recommended. |
+| `stream`  | minimal | scan order, **not** guaranteed newest-N | Drops `ORDER BY` and uses a plain streaming `LIMIT`; fastest and lowest memory, but may not return the strictly newest rows. |
+| `full`    | unbounded | newest-first, exact | Original single ORDER BY scan over the whole range — can OOM on wide data. |
+
+```jsonc
+"storage": {
+  "ducklake": {
+    "search": {
+      "lake_topn_strategy": "chunked", // chunked | stream | full
+      "lake_chunk_sec": 3600            // window width for "chunked"
+    }
+  }
+}
+```
+
+The chosen strategy is reflected in the execution-plan log line
+(`mode=split_lake_and_mem:chunked|stream|full`, plus `lake_chunks` for chunked).
+
 ## 6) Native Go Compaction Engine
 
 > ℹ️ **The native engine is safe to run alongside the live DuckDB writer as of
