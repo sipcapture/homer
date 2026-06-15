@@ -427,14 +427,49 @@ func (mtw *MultiTableWriter) connect() error {
 	// Lossless: only duplicate snapshot/table metadata rows are collapsed.
 	if mtw.config.AutoRepairCatalog &&
 		(mtw.config.CatalogType == CatalogSQLite || mtw.config.CatalogType == "") {
-		if res, err := RepairCatalogSnapshots(mtw.config.CatalogPath); err != nil {
+		res, err := RepairCatalogSnapshots(mtw.config.CatalogPath)
+		switch {
+		case err != nil && res.Malformed:
+			logger.Error("DuckLake catalog file is physically malformed; row-level "+
+				"auto-repair cannot recover it. Salvage with "+
+				"`sqlite3 CATALOG .dump | sqlite3 CATALOG.fixed` then swap the file, "+
+				"or run `homer system --rebuild-catalog` to rebuild from parquet.",
+				"err", err, "catalog", mtw.config.CatalogPath)
+		case err != nil:
 			logger.Warn("DuckLake catalog auto-repair failed (non-fatal); "+
 				"run `homer system --rebuild-catalog` if queries still error", "err", err)
-		} else if res.Changed() {
+		case res.Changed():
 			logger.Warn("DuckLake catalog auto-repair: removed duplicate metadata rows "+
 				"(fixed 'Corrupt DuckLake - multiple snapshots returned')",
 				"duplicate_snapshots", res.DuplicateSnapshots,
+				"duplicate_snapshot_changes", res.DuplicateSnapshotChanges,
 				"duplicate_tables", res.DuplicateTables,
+				"latest_snapshot_rows", res.LatestSnapshotRows,
+				"catalog", mtw.config.CatalogPath)
+		default:
+			logger.Debug("DuckLake catalog auto-repair: catalog healthy, nothing to fix",
+				"latest_snapshot_rows", res.LatestSnapshotRows,
+				"catalog", mtw.config.CatalogPath)
+		}
+		// Even after a (no-op or successful) repair the latest-snapshot probe may
+		// still return >1 row — e.g. corruption the lightweight dedup can't reach.
+		// Surface this loudly so the operator runs the heavyweight rebuild instead
+		// of chasing silent 500s.
+		if err == nil && !res.Healthy() {
+			logger.Error("DuckLake catalog still reports multiple latest snapshots after "+
+				"auto-repair; queries will fail with 'Corrupt DuckLake - multiple snapshots "+
+				"returned'. Run `homer system --rebuild-catalog` to rebuild from parquet.",
+				"latest_snapshot_rows", res.LatestSnapshotRows,
+				"catalog", mtw.config.CatalogPath)
+		}
+		// Duplicate table registrations (same table_name, different table_id) are
+		// the deeper corruption from two concurrent writers (sipcapture/homer#809).
+		// We don't auto-delete them (it can orphan data files), so warn explicitly.
+		if err == nil && res.DuplicateTableNames > 0 {
+			logger.Warn("DuckLake catalog has duplicate table registrations (same name, "+
+				"different ids) from a concurrent-writer event; per-table queries may fail. "+
+				"Run `homer system --rebuild-catalog` to rebuild the catalog from parquet.",
+				"duplicate_table_names", res.DuplicateTableNames,
 				"catalog", mtw.config.CatalogPath)
 		}
 	}

@@ -24,7 +24,7 @@ import (
 // Version information for homer-core
 var (
 	// VERSION_APPLICATION is the application version
-	VERSION_APPLICATION = "11.0.269"
+	VERSION_APPLICATION = "11.0.270"
 
 	// BuildDate is the build date
 	BuildDate = ""
