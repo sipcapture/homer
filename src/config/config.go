@@ -1173,6 +1173,13 @@ func Load(configPath string) (*Config, error) {
 	// homer.json via ENV in docker-compose.
 	applySliceEnvOverrides(v)
 
+	// Pre-scan ENV for indexed slices of primitives
+	// (HOMER_INGEST_SIP_ALEG_IDS_<idx>, HOMER_INGEST_SIP_CUSTOM_HEADERS_<idx>,
+	// HOMER_LOG_OUTPUT_<idx>, ...). The documented docker-compose convention
+	// uses this indexed form, which viper's AutomaticEnv() does not handle for
+	// []string fields on its own.
+	applyPrimitiveSliceEnvOverrides(v)
+
 	// Pre-populate the struct from `default:"..."` struct tags BEFORE
 	// Unmarshal. mapstructure's default decoder runs with ZeroFields=false,
 	// so it will only override fields that are explicitly present in the
