@@ -324,14 +324,19 @@ homer system --config-path /etc/homer/config.json --rebuild-catalog
 ```
 
 This backs up the existing catalog to `*.corrupt.<timestamp>`, attaches a fresh
-empty catalog, and re-ingests every on-disk parquet table through DuckLake (so
-all snapshot/file ids are allocated by DuckLake and the result is consistent).
-After verifying queries work, reclaim the old files with either:
+empty catalog, and **registers every on-disk parquet file in place** via
+`ducklake_add_data_files` (so all snapshot/file ids are allocated by DuckLake and
+the result is consistent). The files are not read, decompressed or rewritten, so
+the rebuild is fast, needs almost no memory, and — crucially — **keeps the
+original parquet files** instead of replacing them with fresh copies. There are
+therefore no orphaned originals to reclaim afterwards.
+
+The `--rebuild-cleanup-orphans` flag now only sweeps genuinely unreferenced
+leftover files (e.g. half-written files); the registered originals are always
+kept:
 
 ```bash
 homer system --config-path /etc/homer/config.json --rebuild-catalog --rebuild-cleanup-orphans
-# or, later:
-homer system --config-path /etc/homer/config.json --compaction-force
 ```
 
 Notes:
