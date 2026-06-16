@@ -1,0 +1,155 @@
+// Copyright (C) 2026 Homer Server Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+package ducklake
+
+import (
+	"database/sql"
+	"strings"
+	"testing"
+
+	_ "github.com/duckdb/duckdb-go/v2"
+)
+
+// secretProvider executes the CREATE SECRET produced by buildS3SecretSQL on a
+// real DuckDB and returns the provider recorded in duckdb_secrets(). It skips
+// (rather than fails) when the required DuckDB extensions are unavailable —
+// matching the convention in repair_e2e_test.go so CI without network/extension
+// access stays green. needAWS loads the aws extension required by the
+// credential_chain provider.
+func secretProvider(t *testing.T, accessKey, secretKey, region, endpoint string, useSSL, needAWS bool) string {
+	t.Helper()
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Skipf("duckdb unavailable: %v", err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+
+	// TYPE S3 secrets are provided by httpfs; credential_chain needs aws.
+	// LOAD only (extensions must be pre-installed); skip if unavailable.
+	if _, err := db.Exec("LOAD httpfs;"); err != nil {
+		t.Skipf("httpfs extension unavailable: %v", err)
+	}
+	if needAWS {
+		if _, err := db.Exec("LOAD aws;"); err != nil {
+			t.Skipf("aws extension unavailable: %v", err)
+		}
+	}
+
+	if _, err := db.Exec(buildS3SecretSQL("s3_secret_test", accessKey, secretKey, region, endpoint, useSSL)); err != nil {
+		t.Skipf("CREATE SECRET unavailable (extension/version): %v", err)
+	}
+
+	var name, stype, provider string
+	row := db.QueryRow("SELECT name, type, provider FROM duckdb_secrets() WHERE name = 's3_secret_test'")
+	if err := row.Scan(&name, &stype, &provider); err != nil {
+		t.Skipf("duckdb_secrets() query unavailable: %v", err)
+	}
+	if stype != "s3" {
+		t.Errorf("secret type = %q, want s3", stype)
+	}
+	return provider
+}
+
+// TestCreateSecret_CredentialChain: no static key + no custom endpoint (native
+// AWS S3) → the secret uses PROVIDER credential_chain.
+func TestCreateSecret_CredentialChain(t *testing.T) {
+	if got := secretProvider(t, "", "", "us-east-1", "", true, true); got != "credential_chain" {
+		t.Errorf("provider = %q, want credential_chain", got)
+	}
+}
+
+// TestCreateSecret_StaticKeys: explicit access keys → provider config (not
+// credential_chain), preserving prior behaviour.
+func TestCreateSecret_StaticKeys(t *testing.T) {
+	if got := secretProvider(t, "AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "us-east-1", "", true, false); got != "config" {
+		t.Errorf("provider = %q, want config", got)
+	}
+}
+
+// TestCreateSecret_CustomEndpoint: empty key but a custom endpoint (MinIO/R2)
+// → explicit-credential path, never credential_chain.
+func TestCreateSecret_CustomEndpoint(t *testing.T) {
+	if got := secretProvider(t, "", "", "us-east-1", "minio.local:9000", false, false); got == "credential_chain" {
+		t.Errorf("custom endpoint should not use credential_chain, got provider=%q", got)
+	}
+}
+
+// TestBuildS3SecretSQL_Branches is a pure unit test of the three-way switch in
+// buildS3SecretSQL — no DuckDB required, so it always runs.
+func TestBuildS3SecretSQL_Branches(t *testing.T) {
+	cases := []struct {
+		name       string
+		accessKey  string
+		endpoint   string
+		region     string
+		wantSubstr string
+		denySubstr string
+	}{
+		{
+			name:       "empty key + no endpoint -> credential_chain",
+			accessKey:  "",
+			endpoint:   "",
+			region:     "us-east-1",
+			wantSubstr: "PROVIDER credential_chain",
+			denySubstr: "KEY_ID",
+		},
+		{
+			name:       "empty key + empty region -> credential_chain defaults region",
+			accessKey:  "",
+			endpoint:   "",
+			region:     "",
+			wantSubstr: "REGION 'us-east-1'",
+			denySubstr: "REGION ''",
+		},
+		{
+			name:       "whitespace key + no endpoint -> credential_chain",
+			accessKey:  "   ",
+			endpoint:   "",
+			region:     "us-east-1",
+			wantSubstr: "PROVIDER credential_chain",
+			denySubstr: "KEY_ID",
+		},
+		{
+			name:       "static key + no endpoint -> explicit keys",
+			accessKey:  "AKIA...",
+			endpoint:   "",
+			region:     "us-east-1",
+			wantSubstr: "KEY_ID",
+			denySubstr: "credential_chain",
+		},
+		{
+			name:       "empty key + custom endpoint -> explicit keys (MinIO path)",
+			accessKey:  "",
+			endpoint:   "minio.local:9000",
+			region:     "us-east-1",
+			wantSubstr: "KEY_ID",
+			denySubstr: "credential_chain",
+		},
+		{
+			name:       "static key + custom endpoint -> explicit keys",
+			accessKey:  "AKIA...",
+			endpoint:   "minio.local:9000",
+			region:     "us-east-1",
+			wantSubstr: "KEY_ID",
+			denySubstr: "credential_chain",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sql := buildS3SecretSQL("test_secret", tc.accessKey, "secret", tc.region, tc.endpoint, true)
+			if !strings.Contains(sql, tc.wantSubstr) {
+				t.Errorf("SQL should contain %q:\n%s", tc.wantSubstr, sql)
+			}
+			if tc.denySubstr != "" && strings.Contains(sql, tc.denySubstr) {
+				t.Errorf("SQL should not contain %q:\n%s", tc.denySubstr, sql)
+			}
+		})
+	}
+}

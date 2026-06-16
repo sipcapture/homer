@@ -27,7 +27,9 @@ mkdir -p "${ext_dir}"
 
 echo "Downloading DuckDB ${DUCKDB_VERSION} extensions for ${EXT_PLATFORM}..."
 
-for ext in ducklake; do
+# httpfs + aws are required for S3 secrets using PROVIDER credential_chain
+# (IAM-role / instance-profile credentials); aws depends on httpfs.
+for ext in ducklake httpfs aws; do
   url="https://extensions.duckdb.org/${DUCKDB_VERSION}/${EXT_PLATFORM}/${ext}.duckdb_extension.gz"
   dest="${ext_dir}/${ext}.duckdb_extension"
   echo "  ${url} -> ${dest}"

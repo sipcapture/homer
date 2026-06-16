@@ -134,6 +134,15 @@ func (tsm *TieredStorageManager) Start() error {
 		return fmt.Errorf("failed to load sqlite extension: %w", err)
 	}
 
+	// Load the AWS extension so S3 secrets can use PROVIDER credential_chain
+	// (resolves IAM-role / instance-profile / env credentials via the AWS SDK).
+	// Must be pre-installed (run homer-core --install-extensions, or bundled
+	// offline). Best-effort: static-key or local-only setups do not need it,
+	// so a load failure must not block startup.
+	if _, err := db.Exec("LOAD aws;"); err != nil {
+		logger.Warn("TieredStorageManager: failed to load aws extension (credential_chain unavailable; run --install-extensions)", "error", err)
+	}
+
 	// Attach each volume as a separate DuckLake
 	for _, vol := range tsm.volumes {
 		if err := tsm.attachVolume(vol); err != nil {
@@ -173,30 +182,7 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 			region = "us-east-1"
 		}
 
-		// Create secret with S3 credentials
-		var createSecret string
-		if endpoint != "" {
-			createSecret = fmt.Sprintf(`
-				CREATE SECRET %s (
-					TYPE S3,
-					KEY_ID '%s',
-					SECRET '%s',
-					REGION '%s',
-					ENDPOINT '%s',
-					URL_STYLE 'path',
-					USE_SSL %t
-				);
-			`, secretName, vol.S3AccessKey, vol.S3SecretKey, region, endpoint, vol.S3UseSSL)
-		} else {
-			createSecret = fmt.Sprintf(`
-				CREATE SECRET %s (
-					TYPE S3,
-					KEY_ID '%s',
-					SECRET '%s',
-					REGION '%s'
-				);
-			`, secretName, vol.S3AccessKey, vol.S3SecretKey, region)
-		}
+		createSecret := buildS3SecretSQL(secretName, vol.S3AccessKey, vol.S3SecretKey, region, endpoint, vol.S3UseSSL)
 
 		logger.Info("TieredStorageManager: Creating S3 secret",
 			"volume", vol.Name,
@@ -582,6 +568,51 @@ func sortResultsByTimestamp(results []map[string]interface{}) {
 		tj, _ := results[j]["timestamp"].(time.Time)
 		return ti.After(tj) // DESC
 	})
+}
+
+// buildS3SecretSQL returns the CREATE SECRET SQL for an S3 volume.
+// When accessKey is empty and endpoint is empty (native AWS S3), the secret
+// uses PROVIDER credential_chain so DuckDB resolves credentials through the
+// AWS SDK default chain (env, container/Pod Identity, instance profile).
+// Static keys and custom endpoints (MinIO / R2) use explicit KEY_ID/SECRET.
+func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string, useSSL bool) string {
+	switch {
+	case strings.TrimSpace(accessKey) == "" && endpoint == "":
+		// Default region for native AWS S3 so the secret signs correctly even
+		// when no s3_region is set (the SDK can also resolve it from the
+		// environment / instance metadata, but an explicit value is safer).
+		if strings.TrimSpace(region) == "" {
+			region = "us-east-1"
+		}
+		return fmt.Sprintf(`
+			CREATE SECRET %s (
+				TYPE S3,
+				PROVIDER credential_chain,
+				REGION '%s'
+			);
+		`, secretName, region)
+	case endpoint != "":
+		return fmt.Sprintf(`
+			CREATE SECRET %s (
+				TYPE S3,
+				KEY_ID '%s',
+				SECRET '%s',
+				REGION '%s',
+				ENDPOINT '%s',
+				URL_STYLE 'path',
+				USE_SSL %t
+			);
+		`, secretName, accessKey, secretKey, region, endpoint, useSSL)
+	default:
+		return fmt.Sprintf(`
+			CREATE SECRET %s (
+				TYPE S3,
+				KEY_ID '%s',
+				SECRET '%s',
+				REGION '%s'
+			);
+		`, secretName, accessKey, secretKey, region)
+	}
 }
 
 // fileExists checks if a file exists at the given path
