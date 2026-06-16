@@ -501,9 +501,12 @@ func TestLoad_Precedence_NoFileDefaultsThenEnv(t *testing.T) {
 }
 
 // TestLoad_EnvSlice_LogOutput is the simplest case: a slice of strings
-// (log.output). docker-compose convention: HOMER_LOG_OUTPUT_0=stdout.
+// (log.output). docker-compose convention: HOMER_LOG_OUTPUT_0=...
+// Uses non-default values so it actually exercises the indexed primitive
+// slice path (log.output defaults to ["stdout"], which would mask a no-op).
 func TestLoad_EnvSlice_LogOutput(t *testing.T) {
-	t.Setenv("HOMER_LOG_OUTPUT_0", "stdout")
+	t.Setenv("HOMER_LOG_OUTPUT_0", "file")
+	t.Setenv("HOMER_LOG_OUTPUT_1", "syslog")
 
 	path := writeTmpConfig(t, `{}`)
 	cfg, err := Load(path)
@@ -511,8 +514,37 @@ func TestLoad_EnvSlice_LogOutput(t *testing.T) {
 		t.Fatalf("Load failed: %v", err)
 	}
 
-	if len(cfg.Log.Output) != 1 || cfg.Log.Output[0] != "stdout" {
-		t.Errorf("log.output: want [stdout], got %v", cfg.Log.Output)
+	if len(cfg.Log.Output) != 2 || cfg.Log.Output[0] != "file" || cfg.Log.Output[1] != "syslog" {
+		t.Errorf("log.output: want [file syslog], got %v", cfg.Log.Output)
+	}
+}
+
+// TestLoad_EnvSlice_SIPAlegCustomHeaders covers issue #728: the indexed
+// docker-compose form for SIP custom-header extraction must reach
+// ingest.sip.aleg_ids / custom_headers (otherwise XCallID/cid correlation
+// and data_extra.custom_headers stay empty even with a correct parser).
+func TestLoad_EnvSlice_SIPAlegCustomHeaders(t *testing.T) {
+	t.Setenv("HOMER_INGEST_SIP_FORCE_ALEG_ID", "true")
+	t.Setenv("HOMER_INGEST_SIP_ALEG_IDS_0", "X-Session")
+	t.Setenv("HOMER_INGEST_SIP_CUSTOM_HEADERS_0", "X-Session")
+	t.Setenv("HOMER_INGEST_SIP_CUSTOM_HEADERS_1", "X-CID")
+
+	path := writeTmpConfig(t, `{}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if !cfg.Ingest.SIP.ForceALegID {
+		t.Errorf("ingest.sip.force_aleg_id: want true, got false")
+	}
+	if len(cfg.Ingest.SIP.AlegIDs) != 1 || cfg.Ingest.SIP.AlegIDs[0] != "X-Session" {
+		t.Errorf("ingest.sip.aleg_ids: want [X-Session], got %#v", cfg.Ingest.SIP.AlegIDs)
+	}
+	if len(cfg.Ingest.SIP.CustomHeaders) != 2 ||
+		cfg.Ingest.SIP.CustomHeaders[0] != "X-Session" ||
+		cfg.Ingest.SIP.CustomHeaders[1] != "X-CID" {
+		t.Errorf("ingest.sip.custom_headers: want [X-Session X-CID], got %#v", cfg.Ingest.SIP.CustomHeaders)
 	}
 }
 

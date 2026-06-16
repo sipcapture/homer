@@ -140,6 +140,93 @@ func applySliceEnvOverrides(v *viper.Viper) {
 	})
 }
 
+// applyPrimitiveSliceEnvOverrides finds every slice-of-primitive field
+// reachable from Config{} (e.g. ingest.sip.aleg_ids, ingest.sip.custom_headers,
+// log.output) and converts indexed HOMER_<PATH>_<idx> ENV variables into an
+// ordered slice written to viper via v.Set().
+//
+// This complements bindAllEnvs, which only binds the non-indexed HOMER_<PATH>
+// form for primitive slices. The docker-compose convention documented for
+// these fields uses the indexed form (HOMER_INGEST_SIP_ALEG_IDS_0=X-Session),
+// which viper's AutomaticEnv() does not understand on its own.
+//
+// Behaviour:
+//   - sparse indices (0, 2, 5) are allowed — gaps are filled with empty
+//     strings, final length = max(idx)+1;
+//   - the suffix after the prefix must be a pure integer, which keeps this
+//     from colliding with slice-of-struct overrides (HOMER_<PATH>_<idx>_<field>)
+//     handled by applySliceEnvOverrides;
+//   - values are kept as strings, mapstructure performs type coercion.
+func applyPrimitiveSliceEnvOverrides(v *viper.Viper) {
+	walkSliceOfPrimitive(reflect.TypeOf(Config{}), nil, func(path []string) {
+		prefix := "HOMER_" + strings.ToUpper(strings.Join(path, "_")) + "_"
+		entries := map[int]string{}
+		for _, env := range os.Environ() {
+			if !strings.HasPrefix(env, prefix) {
+				continue
+			}
+			eq := strings.IndexByte(env, '=')
+			if eq < 0 {
+				continue
+			}
+			idx, err := strconv.Atoi(env[len(prefix):eq])
+			if err != nil || idx < 0 {
+				continue
+			}
+			entries[idx] = env[eq+1:]
+		}
+		if len(entries) == 0 {
+			return
+		}
+		maxIdx := 0
+		for i := range entries {
+			if i > maxIdx {
+				maxIdx = i
+			}
+		}
+		slice := make([]string, maxIdx+1)
+		for i, val := range entries {
+			slice[i] = val
+		}
+		v.Set(strings.Join(path, "."), slice)
+	})
+}
+
+// walkSliceOfPrimitive recursively walks a struct type and calls visit on
+// every slice-of-primitive field, passing the accumulated mapstructure path.
+func walkSliceOfPrimitive(t reflect.Type, path []string, visit func([]string)) {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		tag := mapstructureName(f)
+		if tag == "" {
+			continue
+		}
+		full := append(append([]string(nil), path...), tag)
+		ft := f.Type
+		if ft.Kind() == reflect.Ptr {
+			ft = ft.Elem()
+		}
+		switch ft.Kind() {
+		case reflect.Struct:
+			walkSliceOfPrimitive(ft, full, visit)
+		case reflect.Slice:
+			elem := ft.Elem()
+			if elem.Kind() == reflect.Ptr {
+				elem = elem.Elem()
+			}
+			if elem.Kind() != reflect.Struct {
+				visit(full)
+			}
+		}
+	}
+}
+
 // walkSliceOfStruct recursively walks a struct type and calls visit on
 // every slice-of-struct field, passing the accumulated mapstructure path.
 func walkSliceOfStruct(t reflect.Type, path []string, visit func([]string, reflect.Type)) {
