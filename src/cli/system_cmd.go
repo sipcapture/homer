@@ -133,7 +133,7 @@ func RegisterSystemFlags() (*flag.FlagSet, *systemFlagRefs) {
 	refs.CompactionMergeListLimit = fs.Int("compaction-merge-list-limit", 50, "limit for compaction-merge-list output")
 	refs.RebuildCatalog = fs.Bool("rebuild-catalog", false, "fix a corrupt catalog: back up the existing catalog and rebuild it by registering the on-disk parquet files in place (no rewrite), then exit")
 	refs.RebuildCleanupOrphans = fs.Bool("rebuild-cleanup-orphans", false, "with --rebuild-catalog: after a successful rebuild, sweep genuinely unreferenced leftover files (registered originals are kept)")
-	refs.InstallExtensions = fs.Bool("install-extensions", false, "install DuckDB extensions (ducklake, sqlite) and exit")
+	refs.InstallExtensions = fs.Bool("install-extensions", false, "install DuckDB extensions (ducklake, sqlite, httpfs, aws) and exit")
 	refs.Reload = fs.Bool("reload", false, "send SIGHUP to running homer-core process to reload config")
 	refs.PidFile = fs.String("pid-file", "/var/run/homer-core.pid", "path to PID file (used with --reload)")
 	refs.DuckDBVersion = fs.Bool("duckdb-version", false, "show DuckDB version and exit")
@@ -912,7 +912,7 @@ func installDuckDBExtensions() error {
 	}
 	defer db.Close()
 
-	extensions := []string{"ducklake", "sqlite"}
+	extensions := []string{"ducklake", "sqlite", "httpfs", "aws"}
 
 	for _, ext := range extensions {
 		fmt.Printf("Installing %s extension...\n", ext)
