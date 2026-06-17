@@ -224,7 +224,7 @@ func (a *MultiTableAdapter) buildSIPCallValues(hep *decoder.HEP, uid string, dat
 	if hep.SIP != nil {
 		sessionID = hep.SIP.CallID
 		caller = hep.SIP.FromUser
-		callee = hep.SIP.ToUser
+		callee = hep.SIP.CalleeUser()
 		method = hep.SIP.FirstMethod
 		responseCode = hep.SIP.FirstResp
 		cseqMethod = hep.SIP.CseqMethod
@@ -446,7 +446,7 @@ func (a *HEPAdapter) convertHEP(hep *decoder.HEP) HEPRecord {
 	if hep.SIP != nil {
 		record.SessionID = hep.SIP.CallID
 		record.Caller = hep.SIP.FromUser
-		record.Callee = hep.SIP.ToUser
+		record.Callee = hep.SIP.CalleeUser()
 		record.Event = hep.SIP.FirstMethod
 		record.DataExtra = buildExtraJSON(hep)
 	} else {

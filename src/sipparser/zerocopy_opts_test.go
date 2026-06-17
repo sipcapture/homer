@@ -108,6 +108,25 @@ func TestParseMsgZeroCopyLegacy(t *testing.T) {
 	}
 }
 
+func TestParseMsgZeroCopy_TelToUser(t *testing.T) {
+	raw := []byte("INVITE tel:+15551234567 SIP/2.0\r\n" +
+		"From: <sip:alice@example.com>\r\n" +
+		"To: <tel:+15551234567>\r\n" +
+		"Call-ID: cid-tel@host\r\n" +
+		"CSeq: 1 INVITE\r\n\r\n")
+	s := ParseMsgZeroCopy(raw, nil)
+	if s.Error != nil {
+		t.Fatalf("parse: %v", s.Error)
+	}
+	if s.ToUser != "+15551234567" {
+		t.Fatalf("ToUser: want +15551234567, got %q", s.ToUser)
+	}
+	legacy := ParseMsg(string(raw), nil, nil)
+	if legacy.ToUser != s.ToUser {
+		t.Fatalf("legacy ToUser %q != zero-copy ToUser %q", legacy.ToUser, s.ToUser)
+	}
+}
+
 func TestParseMsgZeroCopy_XRTPStatPlusCustom(t *testing.T) {
 	raw := minimalSIP("X-RTP-Stat: stats\r\nX-Extra: e")
 	opts := &ZeroCopyOpts{CustomHeaders: []string{"X-Extra"}}

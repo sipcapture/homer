@@ -475,6 +475,7 @@ func zcParsePAIUser(val []byte, s *SipMsg) {
 // zcExtractUserHost extracts user and host from a SIP URI.
 func zcExtractUserHost(uri []byte) (user, host string) {
 	raw := uri
+	isTel := false
 
 	// Strip scheme: sip:, sips:, tel:
 	if len(raw) > 4 {
@@ -484,6 +485,7 @@ func zcExtractUserHost(uri []byte) (user, host string) {
 		} else if raw[3] == ':' &&
 			(raw[0]|0x20) == 't' && (raw[1]|0x20) == 'e' && (raw[2]|0x20) == 'l' {
 			raw = raw[4:]
+			isTel = true
 		} else if len(raw) > 5 && raw[4] == ':' &&
 			(raw[0]|0x20) == 's' && (raw[1]|0x20) == 'i' &&
 			(raw[2]|0x20) == 'p' && (raw[3]|0x20) == 's' {
@@ -523,6 +525,10 @@ func zcExtractUserHost(uri []byte) (user, host string) {
 			host = btos(hostPart[:colon])
 		} else {
 			host = btos(hostPart)
+		}
+		// tel: URIs without @ carry the dial string as the user part (legacy parser behavior).
+		if isTel && host != "" {
+			user = host
 		}
 	}
 	return
