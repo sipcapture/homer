@@ -253,7 +253,9 @@ func zcParseHeaderLine(line []byte, s *SipMsg) {
 		return
 	}
 
-	if nameLen == 2 {
+	// RFC 3261 compact form for To is only "t" / "T" (1 char). Full "To" is 2 chars.
+	// Do not treat every 2-char header name as To (e.g. vendor "TH:" must not overwrite To).
+	if nameLen == 2 && zcEqCI2(name, 't', 'o') {
 		zcParseFromTo(val, s, 't')
 		return
 	}
@@ -302,10 +304,6 @@ func zcParseHeaderLine(line []byte, s *SipMsg) {
 	case 's':
 		if nameLen == 6 && zcEqCI(name, []byte("server")) {
 			s.Server = btos(zcTrimWS(val))
-		}
-	case 't':
-		if nameLen == 2 {
-			zcParseFromTo(val, s, 't')
 		}
 	case 'm':
 		if nameLen == 12 && zcEqCI(name, []byte("max-forwards")) {
@@ -475,6 +473,7 @@ func zcParsePAIUser(val []byte, s *SipMsg) {
 // zcExtractUserHost extracts user and host from a SIP URI.
 func zcExtractUserHost(uri []byte) (user, host string) {
 	raw := uri
+	isTel := false
 
 	// Strip scheme: sip:, sips:, tel:
 	if len(raw) > 4 {
@@ -484,6 +483,7 @@ func zcExtractUserHost(uri []byte) (user, host string) {
 		} else if raw[3] == ':' &&
 			(raw[0]|0x20) == 't' && (raw[1]|0x20) == 'e' && (raw[2]|0x20) == 'l' {
 			raw = raw[4:]
+			isTel = true
 		} else if len(raw) > 5 && raw[4] == ':' &&
 			(raw[0]|0x20) == 's' && (raw[1]|0x20) == 'i' &&
 			(raw[2]|0x20) == 'p' && (raw[3]|0x20) == 's' {
@@ -523,6 +523,10 @@ func zcExtractUserHost(uri []byte) (user, host string) {
 			host = btos(hostPart[:colon])
 		} else {
 			host = btos(hostPart)
+		}
+		// tel: URIs without @ carry the dial string as the user part (legacy parser behavior).
+		if isTel && host != "" {
+			user = host
 		}
 	}
 	return
@@ -596,6 +600,13 @@ func zcEqCI(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+// Specialized 2-byte case-insensitive comparison (inlineable).
+func zcEqCI2(a []byte, b0, b1 byte) bool {
+	return len(a) == 2 &&
+		(a[0]|0x20) == b0 &&
+		(a[1]|0x20) == b1
 }
 
 // Specialized 3-byte and 4-byte case-insensitive comparisons (inlineable).

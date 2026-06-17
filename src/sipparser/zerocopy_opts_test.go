@@ -108,6 +108,48 @@ func TestParseMsgZeroCopyLegacy(t *testing.T) {
 	}
 }
 
+func TestParseMsgZeroCopy_THHeaderDoesNotOverwriteTo(t *testing.T) {
+	raw := []byte("INVITE sip:CALLEE@pbx-proxy.example.com SIP/2.0\r\n" +
+		"Via: SIP/2.0/UDP 192.168.1.104:5061;TH=div;branch=z9hG4bK3446998277\r\n" +
+		"From: <sip:CALLER@pbx-proxy.example.com>;tag=1786784267\r\n" +
+		"To: <sip:CALLEE@pbx-proxy.example.com>\r\n" +
+		"TH: dih\r\n" +
+		"Call-ID: cid-th@host\r\n" +
+		"CSeq: 2 INVITE\r\n\r\n")
+	s := ParseMsgZeroCopy(raw, nil)
+	if s.Error != nil {
+		t.Fatalf("parse: %v", s.Error)
+	}
+	if s.ToUser != "CALLEE" {
+		t.Fatalf("ToUser: want CALLEE, got %q (TH header must not overwrite To)", s.ToUser)
+	}
+	if s.ToHost != "pbx-proxy.example.com" {
+		t.Fatalf("ToHost: want pbx-proxy.example.com, got %q", s.ToHost)
+	}
+	if got := s.CalleeUser(); got != "CALLEE" {
+		t.Fatalf("CalleeUser: want CALLEE, got %q", got)
+	}
+}
+
+func TestParseMsgZeroCopy_TelToUser(t *testing.T) {
+	raw := []byte("INVITE tel:+15551234567 SIP/2.0\r\n" +
+		"From: <sip:alice@example.com>\r\n" +
+		"To: <tel:+15551234567>\r\n" +
+		"Call-ID: cid-tel@host\r\n" +
+		"CSeq: 1 INVITE\r\n\r\n")
+	s := ParseMsgZeroCopy(raw, nil)
+	if s.Error != nil {
+		t.Fatalf("parse: %v", s.Error)
+	}
+	if s.ToUser != "+15551234567" {
+		t.Fatalf("ToUser: want +15551234567, got %q", s.ToUser)
+	}
+	legacy := ParseMsg(string(raw), nil, nil)
+	if legacy.ToUser != s.ToUser {
+		t.Fatalf("legacy ToUser %q != zero-copy ToUser %q", legacy.ToUser, s.ToUser)
+	}
+}
+
 func TestParseMsgZeroCopy_XRTPStatPlusCustom(t *testing.T) {
 	raw := minimalSIP("X-RTP-Stat: stats\r\nX-Extra: e")
 	opts := &ZeroCopyOpts{CustomHeaders: []string{"X-Extra"}}
