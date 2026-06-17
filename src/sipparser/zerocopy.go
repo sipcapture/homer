@@ -253,7 +253,9 @@ func zcParseHeaderLine(line []byte, s *SipMsg) {
 		return
 	}
 
-	if nameLen == 2 {
+	// RFC 3261 compact form for To is only "t" / "T" (1 char). Full "To" is 2 chars.
+	// Do not treat every 2-char header name as To (e.g. vendor "TH:" must not overwrite To).
+	if nameLen == 2 && zcEqCI2(name, 't', 'o') {
 		zcParseFromTo(val, s, 't')
 		return
 	}
@@ -302,10 +304,6 @@ func zcParseHeaderLine(line []byte, s *SipMsg) {
 	case 's':
 		if nameLen == 6 && zcEqCI(name, []byte("server")) {
 			s.Server = btos(zcTrimWS(val))
-		}
-	case 't':
-		if nameLen == 2 {
-			zcParseFromTo(val, s, 't')
 		}
 	case 'm':
 		if nameLen == 12 && zcEqCI(name, []byte("max-forwards")) {
@@ -602,6 +600,13 @@ func zcEqCI(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+// Specialized 2-byte case-insensitive comparison (inlineable).
+func zcEqCI2(a []byte, b0, b1 byte) bool {
+	return len(a) == 2 &&
+		(a[0]|0x20) == b0 &&
+		(a[1]|0x20) == b1
 }
 
 // Specialized 3-byte and 4-byte case-insensitive comparisons (inlineable).
