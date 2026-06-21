@@ -89,7 +89,17 @@ export function FloatingWindow({
 
   const bringToFront = useCallback(() => {
     setZ(++topZ)
-  }, [])
+    useWindowRegistry.getState().focus(resolvedId)
+  }, [resolvedId])
+
+  useEffect(() => {
+    if (!open) return
+    useWindowRegistry.getState().register({
+      id: resolvedId,
+      onClose,
+      bringToFront,
+    })
+  }, [open, resolvedId, onClose, bringToFront])
 
   /** After drag/resize, assign a fresh stacking value so order stays coherent without leaving a huge gap. */
   const settleOnTop = useCallback(() => {
@@ -206,10 +216,13 @@ export function FloatingWindow({
     useWindowRegistry.getState().minimize({
       id: resolvedId,
       title,
-      onRestore: () => setIsMinimized(false),
+      onRestore: () => {
+        setIsMinimized(false)
+        bringToFront()
+      },
       onClose,
     })
-  }, [resolvedId, title, onClose])
+  }, [resolvedId, title, onClose, bringToFront])
 
   if (!open) return null
   if (isMinimized) return null
