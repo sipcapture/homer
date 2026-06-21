@@ -66,6 +66,8 @@
   "overrides": {
     "express-rate-limit": "8.5.1",
     "ip-address": "10.2.0",
-    "hono": "4.12.23"
+    "hono": "4.12.26",
+    "js-yaml": "4.2.0",
+    "@babel/core": "7.29.6"
   }
 }
