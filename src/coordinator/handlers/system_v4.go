@@ -19,10 +19,15 @@ type ModulesHandler struct {
 	lokiEnabled     bool
 	lokiTemplate    string
 	lokiExternalURL string
+	widgetControl   map[string]bool
 }
 
 func NewModulesHandler() *ModulesHandler {
 	return &ModulesHandler{}
+}
+
+func (h *ModulesHandler) SetWidgetControl(control map[string]bool) {
+	h.widgetControl = control
 }
 
 type ModulesStatusResponseV4 struct {
@@ -32,6 +37,9 @@ type ModulesStatusResponseV4 struct {
 			Template    string `json:"template,omitempty"`
 			ExternalURL string `json:"external_url,omitempty"`
 		} `json:"loki"`
+		Widgets struct {
+			Control map[string]bool `json:"control"`
+		} `json:"widgets"`
 	} `json:"data"`
 	Meta Meta `json:"meta"`
 }
@@ -41,6 +49,7 @@ func (h *ModulesHandler) V4ModulesStatus(c echo.Context) error {
 	resp.Data.Loki.Enable = h.lokiEnabled
 	resp.Data.Loki.Template = h.lokiTemplate
 	resp.Data.Loki.ExternalURL = h.lokiExternalURL
+	resp.Data.Widgets.Control = h.widgetControl
 	resp.Meta = buildMeta(c, "")
 	return c.JSON(http.StatusOK, resp)
 }

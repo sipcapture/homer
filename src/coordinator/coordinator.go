@@ -226,7 +226,10 @@ func (c *Coordinator) setupRoutes() {
 	)
 	usersHandler := handlers.NewUsersHandler(userService)
 	userSettingsHandler := handlers.NewUserSettingsHandler(userSettingsService, userMappingService)
-	dashboardsHandler := handlers.NewDashboardsHandler(services.NewDashboardService(c.settingsDB))
+	widgetControl := config.NormalizeWidgetControl(c.config.Widgets.Control)
+	dashboardsHandler := handlers.NewDashboardsHandler(
+		services.NewDashboardService(c.settingsDB, widgetControl),
+	)
 	mappingsHandler := handlers.NewMappingsHandler(mapSvc, userMappingService)
 	hepsubsHandler := handlers.NewHepsubsHandler(services.NewHepsubService(c.settingsDB))
 	aliasesHandler := handlers.NewAliasesHandler(aliasSvc)
@@ -239,6 +242,7 @@ func (c *Coordinator) setupRoutes() {
 	scriptsHandler := handlers.NewScriptsHandler(services.NewScriptsService(c.settingsDB))
 	alertsHandler := handlers.NewAlertsHandler(services.NewAlertsService(c.settingsDB))
 	modulesHandler := handlers.NewModulesHandler()
+	modulesHandler.SetWidgetControl(widgetControl)
 	statisticsHandler := handlers.NewStatisticsHandler(c.flightService)
 	// LineProtoHandler exposes read-only discovery for the dynamic LP
 	// tables created by the line-protocol receiver. The receiver and
@@ -254,8 +258,10 @@ func (c *Coordinator) setupRoutes() {
 	// reconnect and re-pair. Always wired (no separate config knob)
 	// because it costs nothing when nobody is playing.
 	gamesHandler := handlers.NewGamesHandler()
-	gamesHandler.SetNetrisHub(netris.NewHub(netris.Config{}))
-	gamesHandler.SetNetChessHub(netchess.NewHub(netchess.Config{}))
+	if config.WidgetCategoryEnabled(widgetControl, "games") {
+		gamesHandler.SetNetrisHub(netris.NewHub(netris.Config{}))
+		gamesHandler.SetNetChessHub(netchess.NewHub(netchess.Config{}))
+	}
 	// Reuse the same LLM client that powers MCP. NewLLMClient returns
 	// nil when llm.enable=false, in which case the Chess widget will
 	// hide the LLM toggle (V4ChessLLMStatus reports enabled=false).
@@ -577,9 +583,11 @@ func (c *Coordinator) setupStaticRoutes() {
 	// gamedata_dir and intentionally kept out of the embedded UI bundle so
 	// they never inflate the binary. Registered before the SPA handlers so
 	// /gamedata/* never falls through to index.html.
-	if dir := c.config.HTTPServer.GamedataDir; dir != "" {
-		logger.Info("Coordinator: Serving game data from filesystem", "path", dir)
-		c.echo.Static("/gamedata", dir)
+	if config.WidgetCategoryEnabled(c.config.Widgets.Control, "games") {
+		if dir := c.config.HTTPServer.GamedataDir; dir != "" {
+			logger.Info("Coordinator: Serving game data from filesystem", "path", dir)
+			c.echo.Static("/gamedata", dir)
+		}
 	}
 
 	// Serve from filesystem if static_path is configured

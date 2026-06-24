@@ -12,6 +12,8 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
+
+	"github.com/sipcapture/homer-core/src/config"
 )
 
 // TestResetDashboards_SeedsDefaultsIncludingGames pins the set of dashboards
@@ -30,7 +32,7 @@ func TestResetDashboards_SeedsDefaultsIncludingGames(t *testing.T) {
 		t.Fatalf("EnsureSettingsSchema: %v", err)
 	}
 
-	svc := NewDashboardService(db)
+	svc := NewDashboardService(db, config.DefaultWidgetControl())
 	ctx := context.Background()
 	const user = "alice"
 
@@ -88,6 +90,49 @@ func TestResetDashboards_SeedsDefaultsIncludingGames(t *testing.T) {
 	}
 }
 
+func TestResetDashboards_SkipsGamesWhenDisabled(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenSettingsDB(filepath.Join(dir, "settings.duckdb"))
+	if err != nil {
+		t.Fatalf("OpenSettingsDB: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := EnsureSettingsSchema(db); err != nil {
+		t.Fatalf("EnsureSettingsSchema: %v", err)
+	}
+
+	control := config.NormalizeWidgetControl(map[string]bool{"games": false})
+	svc := NewDashboardService(db, control)
+	ctx := context.Background()
+
+	if err := svc.ResetDashboards(ctx, "carol"); err != nil {
+		t.Fatalf("ResetDashboards: %v", err)
+	}
+
+	settings, err := svc.ListDashboards(ctx, "carol")
+	if err != nil {
+		t.Fatalf("ListDashboards: %v", err)
+	}
+
+	byParam := make(map[string]json.RawMessage, len(settings))
+	for _, s := range settings {
+		byParam[s.Param] = s.Data
+	}
+
+	expected := []string{"home", "smartsearch"}
+	for _, p := range expected {
+		if _, ok := byParam[p]; !ok {
+			t.Fatalf("dashboard %q missing; got %v", p, keys(byParam))
+		}
+	}
+	if _, ok := byParam["games"]; ok {
+		t.Fatal("games dashboard should not be seeded when disabled")
+	}
+	if _, ok := byParam["netgames"]; ok {
+		t.Fatal("netgames dashboard should not be seeded when disabled")
+	}
+}
+
 // TestResetDashboards_IsIdempotent confirms a second call replaces the
 // dashboards in place rather than duplicating them — the API handler calls
 // Reset whenever ListDashboards returns nothing, so a partially-deleted user
@@ -103,7 +148,7 @@ func TestResetDashboards_IsIdempotent(t *testing.T) {
 		t.Fatalf("EnsureSettingsSchema: %v", err)
 	}
 
-	svc := NewDashboardService(db)
+	svc := NewDashboardService(db, config.DefaultWidgetControl())
 	ctx := context.Background()
 
 	if err := svc.ResetDashboards(ctx, "bob"); err != nil {
