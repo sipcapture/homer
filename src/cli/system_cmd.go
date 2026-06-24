@@ -231,10 +231,11 @@ func runCompaction(f SystemFlags) error {
 			return fmt.Errorf("failed to discover DuckLake tables: %w", err)
 		}
 
-		cutoff := time.Now().AddDate(0, 0, -f.CompactionRetentionDays).UnixNano()
+		cutoff := time.Now().AddDate(0, 0, -f.CompactionRetentionDays)
+		cutoffStr := cutoff.UTC().Format("2006-01-02 15:04:05")
 		var totalRowsDeleted int64
 		for _, table := range tables {
-			query := fmt.Sprintf("DELETE FROM %s WHERE timestamp < %d", table, cutoff)
+			query := fmt.Sprintf("DELETE FROM %s WHERE timestamp < TIMESTAMP '%s'", table, cutoffStr)
 			result, err := db.Exec(query)
 			if err != nil {
 				logger.Error(fmt.Sprintf("Retention failed for %s: %v", table, err))
