@@ -13,15 +13,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/sipcapture/homer-core/src/config"
 )
 
 // DashboardService provides dashboard operations backed by dashboard_settings.
 type DashboardService struct {
-	db *sql.DB
+	db            *sql.DB
+	widgetControl map[string]bool
 }
 
-func NewDashboardService(db *sql.DB) *DashboardService {
-	return &DashboardService{db: db}
+func NewDashboardService(db *sql.DB, widgetControl map[string]bool) *DashboardService {
+	return &DashboardService{db: db, widgetControl: widgetControl}
 }
 
 func (s *DashboardService) ListDashboards(ctx context.Context, username string) ([]UserSetting, error) {
@@ -219,40 +222,42 @@ func (s *DashboardService) ResetDashboards(ctx context.Context, username string)
 		return err
 	}
 
-	// Default "Games" dashboard with all single-player game widgets pre-laid out
-	// on the 12-col grid. Players land here and try every game without having
-	// to use the Add Widget dialog.
-	gamesData, _ := json.Marshal(map[string]interface{}{
-		"name": "Games", "param": "games", "shared": false, "type": 2, "weight": 30,
-		"config": map[string]interface{}{"columns": 12, "grid_type": "fit", "locked": false},
-		"widgets": []map[string]interface{}{
-			{"id": "packet-defender-1", "type": "packet_defender", "x": 0, "y": 0, "w": 6, "h": 10, "title": "Packet Defender"},
-			{"id": "sip-dialog-master-1", "type": "sip_dialog_master", "x": 6, "y": 0, "w": 6, "h": 10, "title": "SIP Dialog Master"},
-			{"id": "jitter-buffer-hero-1", "type": "jitter_buffer_hero", "x": 0, "y": 10, "w": 6, "h": 10, "title": "Jitter Buffer Hero"},
-			{"id": "sipetris-1", "type": "sipetris", "x": 6, "y": 10, "w": 6, "h": 12, "title": "SIPetris"},
-			{"id": "chess-1", "type": "chess", "x": 0, "y": 22, "w": 8, "h": 12, "title": "Chess"},
-		},
-	})
-	if _, err := s.CreateDashboard(ctx, username, "games", gamesData); err != nil {
-		return err
-	}
+	if config.WidgetCategoryEnabled(s.widgetControl, "games") {
+		// Default "Games" dashboard with all single-player game widgets pre-laid out
+		// on the 12-col grid. Players land here and try every game without having
+		// to use the Add Widget dialog.
+		gamesData, _ := json.Marshal(map[string]interface{}{
+			"name": "Games", "param": "games", "shared": false, "type": 2, "weight": 30,
+			"config": map[string]interface{}{"columns": 12, "grid_type": "fit", "locked": false},
+			"widgets": []map[string]interface{}{
+				{"id": "packet-defender-1", "type": "packet_defender", "x": 0, "y": 0, "w": 6, "h": 10, "title": "Packet Defender"},
+				{"id": "sip-dialog-master-1", "type": "sip_dialog_master", "x": 6, "y": 0, "w": 6, "h": 10, "title": "SIP Dialog Master"},
+				{"id": "jitter-buffer-hero-1", "type": "jitter_buffer_hero", "x": 0, "y": 10, "w": 6, "h": 10, "title": "Jitter Buffer Hero"},
+				{"id": "sipetris-1", "type": "sipetris", "x": 6, "y": 10, "w": 6, "h": 12, "title": "SIPetris"},
+				{"id": "chess-1", "type": "chess", "x": 0, "y": 22, "w": 8, "h": 12, "title": "Chess"},
+			},
+		})
+		if _, err := s.CreateDashboard(ctx, username, "games", gamesData); err != nil {
+			return err
+		}
 
-	// Default "NetGames" dashboard with the multiplayer game widgets. They
-	// require coordinator hubs (netris, netchess), so we surface them in a
-	// dedicated tab to avoid surprising single-user installs. Both widgets
-	// share an 8x12 footprint — their boards are very different shapes
-	// (10x20 vs 8x8) but both fit comfortably in that area thanks to the
-	// per-widget useArenaCellSize auto-fit.
-	netGamesData, _ := json.Marshal(map[string]interface{}{
-		"name": "NetGames", "param": "netgames", "shared": false, "type": 3, "weight": 40,
-		"config": map[string]interface{}{"columns": 12, "grid_type": "fit", "locked": false},
-		"widgets": []map[string]interface{}{
-			{"id": "netris-1", "type": "netris", "x": 0, "y": 0, "w": 8, "h": 12, "title": "Netris"},
-			{"id": "netchess-1", "type": "netchess", "x": 0, "y": 12, "w": 8, "h": 12, "title": "NetChess"},
-		},
-	})
-	if _, err := s.CreateDashboard(ctx, username, "netgames", netGamesData); err != nil {
-		return err
+		// Default "NetGames" dashboard with the multiplayer game widgets. They
+		// require coordinator hubs (netris, netchess), so we surface them in a
+		// dedicated tab to avoid surprising single-user installs. Both widgets
+		// share an 8x12 footprint — their boards are very different shapes
+		// (10x20 vs 8x8) but both fit comfortably in that area thanks to the
+		// per-widget useArenaCellSize auto-fit.
+		netGamesData, _ := json.Marshal(map[string]interface{}{
+			"name": "NetGames", "param": "netgames", "shared": false, "type": 3, "weight": 40,
+			"config": map[string]interface{}{"columns": 12, "grid_type": "fit", "locked": false},
+			"widgets": []map[string]interface{}{
+				{"id": "netris-1", "type": "netris", "x": 0, "y": 0, "w": 8, "h": 12, "title": "Netris"},
+				{"id": "netchess-1", "type": "netchess", "x": 0, "y": 12, "w": 8, "h": 12, "title": "NetChess"},
+			},
+		})
+		if _, err := s.CreateDashboard(ctx, username, "netgames", netGamesData); err != nil {
+			return err
+		}
 	}
 	return nil
 }

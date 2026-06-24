@@ -11,7 +11,34 @@ On first login (or after a `Reset` from `DashboardSettingsDialog`) the coordinat
 3. **Games** — Packet Defender, SIP Dialog Master, Jitter Buffer Hero, SIPetris, Chess. Single-player only — no coordinator hubs required.
 4. **NetGames** — Netris, NetChess. Multiplayer over WebSocket; both widgets show a connection error until the corresponding hub is reachable, so we keep them on a separate tab.
 
+Items 3–4 are omitted when `coordinator.widgets.control.games` is `false` (see below).
+
 Users can rename, reorder, or delete any of these dashboards at runtime; the seed only runs when `ListDashboards` returns an empty set.
+
+### Disabling games in production
+
+To hide Games / NetGames from the widget picker and skip seeding those default dashboards, set:
+
+```json
+"coordinator": {
+  "widgets": {
+    "control": {
+      "games": false
+    }
+  }
+}
+```
+
+When `games` is `false`:
+
+- The **Games** category is hidden in Add Widget.
+- Default **Games** and **NetGames** tabs are not created on reset / first login.
+- Multiplayer hubs (`/api/v4/games/netris`, `/api/v4/games/netchess`) are not started (endpoints return 503).
+- The `/gamedata/` static route (Doom IWAD) is not registered.
+
+Existing dashboards that already contain game widgets may remain until removed manually; those widgets show a short “category disabled” message instead of loading the game UI.
+
+Other picker categories (`search`, `visualize`, `external`, `utility`) can be set to `false` the same way; today that only hides them in Add Widget (no extra backend gates yet).
 
 ---
 

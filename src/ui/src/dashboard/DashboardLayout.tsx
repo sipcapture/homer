@@ -10,7 +10,8 @@ import PanelChrome from './components/PanelChrome'
 import AddWidgetDialog from './components/AddWidgetDialog'
 import DashboardSettingsDialog from './components/DashboardSettingsDialog'
 import SearchWidgetSettings from './components/SearchWidgetSettings'
-import { getWidgetMeta } from './widgets/registry'
+import { getWidgetMeta, isWidgetCategoryEnabled } from './widgets/registry'
+import { useModules } from '@/hooks/useModules'
 import { GRID_ROW_HEIGHT, GRID_MARGIN, computeAvailableRows, fitWidgetHeight } from './utils/grid-utils'
 import { resolveTimeRange, type CalendarPreset } from './utils/resolveTimeRange'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,7 @@ function DashboardGrid() {
   const [containerHeight, setContainerHeight] = useState(0)
   const widgetsRef = useRef(widgets)
   const skipLayoutChangeRef = useRef(false)
+  const { widgetControl } = useModules()
 
   useEffect(() => { widgetsRef.current = widgets }, [widgets])
 
@@ -343,6 +345,9 @@ function DashboardGrid() {
             {widgets.map((widget) => {
               const meta = getWidgetMeta(widget.type)
               const WidgetComponent = meta?.component
+              const categoryDisabled =
+                meta?.category != null &&
+                !isWidgetCategoryEnabled(widgetControl, meta.category)
               return (
                 <div key={widget.id}>
                   <PanelChrome
@@ -365,7 +370,11 @@ function DashboardGrid() {
                         </div>
                       }
                     >
-                      {WidgetComponent ? (
+                      {categoryDisabled ? (
+                        <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                          This widget category is disabled on this server ({meta?.category}).
+                        </div>
+                      ) : WidgetComponent ? (
                         <WidgetComponent
                           widgetId={widget.id}
                           config={widget.config || {}}
@@ -385,7 +394,13 @@ function DashboardGrid() {
         )}
       </div>
 
-      {addOpen && <AddWidgetDialog onAdd={handleAddWidget} onClose={() => setAddOpen(false)} />}
+      {addOpen && (
+        <AddWidgetDialog
+          onAdd={handleAddWidget}
+          onClose={() => setAddOpen(false)}
+          widgetControl={widgetControl}
+        />
+      )}
       {settingsOpen && activeDash && (
         <DashboardSettingsDialog
           dashboard={activeDash}

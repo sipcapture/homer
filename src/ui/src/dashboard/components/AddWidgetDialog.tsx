@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import { widgetRegistry, widgetCategories } from '../widgets/registry'
+import {
+  isWidgetCategoryEnabled,
+  widgetCategories,
+  widgetRegistry,
+} from '../widgets/registry'
 import { PanelIcon } from './PanelChrome'
 
 /**
@@ -28,8 +32,28 @@ interface PickerEntry {
   defaultConfig: Record<string, unknown>
 }
 
-export default function AddWidgetDialog({ onAdd, onClose }) {
-  const [activeCategory, setActiveCategory] = useState('Search')
+interface AddWidgetDialogProps {
+  onAdd: (widget: {
+    id: string
+    type: string
+    x: number
+    y: number
+    w: number
+    h: number
+    title: string
+    config: Record<string, unknown>
+  }) => void
+  onClose: () => void
+  widgetControl?: Record<string, boolean>
+}
+
+export default function AddWidgetDialog({ onAdd, onClose, widgetControl }: AddWidgetDialogProps) {
+  const visibleCategories = useMemo(
+    () =>
+      widgetCategories.filter((cat) => isWidgetCategoryEnabled(widgetControl, cat)),
+    [widgetControl],
+  )
+  const [activeCategory, setActiveCategory] = useState(visibleCategories[0] ?? 'Search')
 
   const handleAdd = (entry: PickerEntry) => {
     onAdd({
@@ -53,13 +77,13 @@ export default function AddWidgetDialog({ onAdd, onClose }) {
         </DialogHeader>
         <Tabs value={activeCategory} onValueChange={setActiveCategory}>
           <TabsList className="w-full">
-            {widgetCategories.map((cat) => (
+            {visibleCategories.map((cat) => (
               <TabsTrigger key={cat} value={cat}>
                 {cat}
               </TabsTrigger>
             ))}
           </TabsList>
-          {widgetCategories.map((cat) => {
+          {visibleCategories.map((cat) => {
             const entries: PickerEntry[] = []
             Object.entries(widgetRegistry).forEach(([type, meta]) => {
               if (meta.category !== cat || meta.hidden) return

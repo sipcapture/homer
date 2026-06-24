@@ -426,6 +426,9 @@ type CoordinatorConfig struct {
 	// governs what the coordinator itself is willing to forward to the UI.
 	HepStream CoordinatorHepStreamConfig `json:"hep_stream" mapstructure:"hep_stream"`
 
+	// Widgets configures dashboard widget picker categories (see widgets.control).
+	Widgets WidgetsConfig `json:"widgets" mapstructure:"widgets"`
+
 	// FlightSQLServer exposes Arrow FlightSQL on the coordinator and proxies SQL
 	// to node flightsql_port endpoints (Grafana single entrypoint).
 	FlightSQLServer FlightSQLServerConfig `json:"flightsql_server" mapstructure:"flightsql_server"`
@@ -1458,6 +1461,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("coordinator.hep_stream.allow_payload", false)
 	v.SetDefault("coordinator.hep_stream.fan_out_timeout_ms", 2000)
 	v.SetDefault("coordinator.hep_stream.history_limit", 200)
+	for _, cat := range WidgetControlCategories {
+		v.SetDefault("coordinator.widgets.control."+cat, true)
+	}
 
 	// MCP defaults
 	v.SetDefault("mcp.enable", false)

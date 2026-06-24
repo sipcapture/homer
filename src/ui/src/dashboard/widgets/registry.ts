@@ -331,6 +331,29 @@ export const widgetRegistry: Record<string, WidgetMeta> = {
 
 export const widgetCategories = ['Search', 'Visualize', 'External', 'Utility', 'Games']
 
+export function categoryConfigKey(category: string): string {
+  return category.toLowerCase()
+}
+
+export const DEFAULT_WIDGET_CONTROL: Record<string, boolean> = {
+  search: true,
+  visualize: true,
+  external: true,
+  utility: true,
+  games: true,
+}
+
+export function isWidgetCategoryEnabled(
+  control: Record<string, boolean> | undefined,
+  category: string,
+): boolean {
+  if (!control) return true
+  const key = categoryConfigKey(category)
+  const v = control[key]
+  if (v === undefined) return true
+  return v
+}
+
 export function getWidgetMeta(type) {
   return widgetRegistry[type] || null
 }
