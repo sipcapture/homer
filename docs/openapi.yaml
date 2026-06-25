@@ -1831,6 +1831,11 @@ paths:
     post:
       tags: [Statistics]
       summary: Statistics query
+      description: |
+        Executes a read-only SQL query for Grafana-style statistics panels.
+        Each `rawquery` in the request body is validated before execution (same
+        rules as `POST /api/v4/query`): allowed statement types include SELECT,
+        WITH, SHOW, DESCRIBE, EXPLAIN, PRAGMA; semicolons and DML/DDL are rejected.
       operationId: statisticsQuery
       requestBody:
         required: true
@@ -2460,7 +2465,8 @@ components:
           example: admin
         password:
           type: string
-          example: sipcapture
+          description: User password (not the default bootstrap password unless configured explicitly)
+          example: your-password
     LoginResponse:
       type: object
       properties:

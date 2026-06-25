@@ -76,7 +76,7 @@ API clients and SPAs should **exchange** the query `token` for the JWT and then 
   - **Browser UI (recommended):** HttpOnly cookie — automatic on same-origin `/api/v4` with `credentials: include`; not readable from JS (mitigates XSS token theft).
   - **Scripts / API clients:** `Authorization: Bearer <jwt>` (unchanged).
   - **WebSocket:** cookie on the handshake when using the UI; otherwise `?access_token=<jwt>` (browsers cannot set `Authorization` on WS upgrade).
-- **Lifetime:** `coordinator.jwt.expire_hours` (default 24) and `coordinator.jwt.secret`.
+- **Lifetime:** `coordinator.jwt.expire_hours` (default 24) and `coordinator.jwt.secret`. If `secret` is empty in config, Homer generates and persists **`/.homer_jwt_secret`** beside `settings_db_path` at startup ([SECURITY.md](./SECURITY.md)).
 - **Cookie settings** (`coordinator.jwt`): `cookie_enable` (default true), `cookie_name` (default `homer_session`), `cookie_same_site` (`Lax` | `Strict` | `None`), `cookie_secure` (optional; auto from TLS / `X-Forwarded-Proto`).
 - **CSRF:** Cookie-authenticated **POST/PUT/PATCH/DELETE** requests validate `Origin` / `Referer` against the request host (defense in depth with `SameSite=Lax`).
 - **Logout / revocation:** JWT **`jti`** is the session id. **`DELETE /api/v4/auth/sessions/current`** revokes the caller’s session and clears the cookie (bundled UI logout). **`DELETE /api/v4/auth/sessions/{sessionId}`** revokes a specific `jti` when it matches the Bearer/cookie session.
