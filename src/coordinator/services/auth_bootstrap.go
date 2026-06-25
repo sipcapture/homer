@@ -6,20 +6,39 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"strings"
 
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 )
+
+func generateBootstrapPassword() (plain string, hash string, err error) {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", fmt.Errorf("generate bootstrap password: %w", err)
+	}
+	plain = base64.RawURLEncoding.EncodeToString(b)
+	hash, err = passwordhash.Hash(plain)
+	if err != nil {
+		return "", "", fmt.Errorf("hash bootstrap password: %w", err)
+	}
+	return plain, hash, nil
+}
 
 // EnsureBootstrapAdminUser inserts the admin user once when coordinator.auth
 // is the JSON string "internal" and no row exists for username. If a row
 // already exists but password_hash is NULL or empty (broken / legacy state),
 // it is updated to passwordHash so internal login can succeed.
-func EnsureBootstrapAdminUser(ctx context.Context, db *sql.DB, username, passwordHash string) error {
+//
+// When passwordHash is empty, a random password is generated and its bcrypt hash
+// is stored. The cleartext password is returned so the caller can log it once.
+func EnsureBootstrapAdminUser(ctx context.Context, db *sql.DB, username, passwordHash string) (bootstrapPassword string, err error) {
 	if db == nil {
-		return fmt.Errorf("settings db not available")
+		return "", fmt.Errorf("settings db not available")
 	}
 	username = strings.TrimSpace(username)
 	if username == "" {
@@ -27,22 +46,25 @@ func EnsureBootstrapAdminUser(ctx context.Context, db *sql.DB, username, passwor
 	}
 	passwordHash = strings.TrimSpace(passwordHash)
 	if passwordHash == "" {
-		return fmt.Errorf("bootstrap password hash is empty")
+		bootstrapPassword, passwordHash, err = generateBootstrapPassword()
+		if err != nil {
+			return "", err
+		}
 	}
 
 	u := sqlvalidator.SafeString(username)
 	const selByName = `SELECT id FROM users WHERE lower(trim(username)) = lower(trim(?)) LIMIT 1`
 	var id int64
-	err := db.QueryRowContext(ctx, selByName, username).Scan(&id)
+	err = db.QueryRowContext(ctx, selByName, username).Scan(&id)
 	if err == nil {
 		var ph sql.NullString
 		qHash := fmt.Sprintf(`SELECT password_hash FROM users WHERE id = %d`, id)
 		if err := db.QueryRowContext(ctx, qHash).Scan(&ph); err != nil {
-			return fmt.Errorf("read admin password_hash: %w", err)
+			return "", fmt.Errorf("read admin password_hash: %w", err)
 		}
 		hashMissing := !ph.Valid || strings.TrimSpace(ph.String) == ""
 		if !hashMissing {
-			return nil
+			return "", nil
 		}
 		h := sqlvalidator.SafeString(passwordHash)
 		upd := fmt.Sprintf(
@@ -50,12 +72,12 @@ func EnsureBootstrapAdminUser(ctx context.Context, db *sql.DB, username, passwor
 			h, id,
 		)
 		if _, err := db.ExecContext(ctx, upd); err != nil {
-			return fmt.Errorf("repair empty admin password_hash: %w", err)
+			return "", fmt.Errorf("repair empty admin password_hash: %w", err)
 		}
-		return nil
+		return bootstrapPassword, nil
 	}
 	if err != sql.ErrNoRows {
-		return fmt.Errorf("check existing admin user: %w", err)
+		return "", fmt.Errorf("check existing admin user: %w", err)
 	}
 
 	h := sqlvalidator.SafeString(passwordHash)
@@ -65,9 +87,9 @@ func EnsureBootstrapAdminUser(ctx context.Context, db *sql.DB, username, passwor
 		u, h,
 	)
 	if _, err := db.ExecContext(ctx, insert); err != nil {
-		return fmt.Errorf("insert bootstrap admin: %w", err)
+		return "", fmt.Errorf("insert bootstrap admin: %w", err)
 	}
-	return nil
+	return bootstrapPassword, nil
 }
 
 // ResetOrInsertAdminPassword sets password_hash for username from config, or

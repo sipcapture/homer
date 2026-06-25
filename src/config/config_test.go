@@ -681,7 +681,7 @@ func TestLoad_CoordinatorAuthOmittedDefaultsToInternal(t *testing.T) {
 	if !a.AuthFromInternalString {
 		t.Fatal("AuthFromInternalString: want true when auth omitted")
 	}
-	if a.AdminUser != "admin" || a.AdminPasswordHash != DefaultInternalAuthPasswordHash {
+	if a.AdminUser != "admin" || a.AdminPasswordHash != "" {
 		t.Fatalf("auth: %+v", a)
 	}
 }
@@ -705,7 +705,7 @@ func TestLoad_CoordinatorAuthInternalString(t *testing.T) {
 	if a.AdminUser != "admin" {
 		t.Fatalf("AdminUser: got %q", a.AdminUser)
 	}
-	if a.AdminPasswordHash != DefaultInternalAuthPasswordHash {
+	if a.AdminPasswordHash != "" {
 		t.Fatalf("AdminPasswordHash: got %q", a.AdminPasswordHash)
 	}
 	if a.Type != "internal" {
@@ -735,7 +735,7 @@ func TestLoad_CoordinatorAuthObjectTypeInternal(t *testing.T) {
 	if a.AdminUser != "admin" {
 		t.Fatalf("AdminUser: got %q", a.AdminUser)
 	}
-	if a.AdminPasswordHash != DefaultInternalAuthPasswordHash {
+	if a.AdminPasswordHash != "" {
 		t.Fatalf("AdminPasswordHash: got %q", a.AdminPasswordHash)
 	}
 }
@@ -860,13 +860,13 @@ func TestAuthConfigMarshalJSON_Internal(t *testing.T) {
 		AuthFromInternalString: true,
 		Type:                   "internal",
 		AdminUser:              "admin",
-		AdminPasswordHash:      DefaultInternalAuthPasswordHash,
+		AdminPasswordHash:      LegacySHA256SipcaptureHash,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(b) != `{"type":"internal"}` {
-		t.Fatalf("marshal: want {\"type\":\"internal\"}, got %s", b)
+	if string(b) != `{"type":"internal","admin_password_hash":"883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"}` {
+		t.Fatalf("marshal: got %s", b)
 	}
 }
 
@@ -875,12 +875,12 @@ func TestAuthConfigMarshalJSON_InternalCustomAdmin(t *testing.T) {
 		AuthFromInternalString: true,
 		Type:                   "internal",
 		AdminUser:              "root",
-		AdminPasswordHash:      DefaultInternalAuthPasswordHash,
+		AdminPasswordHash:      LegacySHA256SipcaptureHash,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(b) != `{"type":"internal","admin_user":"root"}` {
+	if string(b) != `{"type":"internal","admin_user":"root","admin_password_hash":"883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"}` {
 		t.Fatalf("marshal: got %s", b)
 	}
 }
@@ -890,13 +890,13 @@ func TestAuthConfigMarshalJSON_InternalWithFallback(t *testing.T) {
 		AuthFromInternalString: true,
 		Type:                   "internal",
 		AdminUser:              "admin",
-		AdminPasswordHash:      DefaultInternalAuthPasswordHash,
+		AdminPasswordHash:      LegacySHA256SipcaptureHash,
 		FallbackAuthType:       "ldap",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(b) != `{"type":"internal","fallback_auth_type":"ldap"}` {
+	if string(b) != `{"type":"internal","admin_password_hash":"883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90","fallback_auth_type":"ldap"}` {
 		t.Fatalf("marshal: got %s", b)
 	}
 }
