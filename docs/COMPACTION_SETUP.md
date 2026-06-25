@@ -1,5 +1,11 @@
 # Compaction & Metadata Store Setup
 
+!!! note "Homer 11 modular stack"
+    This page describes the **legacy Homer Server** (`arrow_settings`) compaction model.
+    For **Homer 11** DuckLake retention, merge, and snapshot tuning, use
+    **[Data retention](RETENTION.md)** and [`storage.ducklake.compaction`](../examples/homer.json)
+    in `homer.json` instead.
+
 This guide explains how to enable and configure automatic file compaction and metadata indexing in Homer Server.
 
 ## Overview

@@ -354,7 +354,7 @@ Simply enable `storage_policy` in your config and restart. The system handles th
 
 ## Best Practices
 
-1. **Start with longer retention on hot storage**: Begin with 30 days and reduce as needed
+1. **Start with longer retention on hot storage**: Begin with 30 days and reduce as needed — configure TTL via [`retention_days`](RETENTION.md#data-ttl-retention_days), not mapping schema alone.
 2. **Use compaction before tiering**: Ensure compaction runs before tiering to minimize small files in cold storage
 3. **Monitor S3 costs**: Object storage egress can be expensive for frequently queried data
 4. **Test restore procedures**: Periodically verify you can query data from cold storage

@@ -366,8 +366,8 @@ ORDER BY avg_v DESC;
   three tables is a manual `ALTER TABLE`. The receiver does not
   auto-extend the OTLP schemas (unlike Line Protocol, which does).
 - **Capacity planning**. Each signal table is partitioned by `date`,
-  so retention is set with the standard DuckLake compaction/retention
-  policies on `homer_lake.otlp_*` (see [`STORAGE_POLICIES.md`](./STORAGE_POLICIES.md)).
+  so retention is set with the standard DuckLake compaction TTL
+  on `homer_lake.otlp_*` (see [Data retention](RETENTION.md)).
 - **Testing**. End-to-end tests live in `src/otlpreceiver/{http,grpc}_test.go`
   and exercise both transports against an in-process server.
 

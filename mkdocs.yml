@@ -87,6 +87,7 @@ nav:
       - Ingest performance: INGEST_PERFORMANCE.md
       - HEP ingest (MPPS): HEP_INGEST_MPPS.md
       - DuckDB tuning: DUCKDB_TUNING.md
+      - Data retention: RETENTION.md
       - Compaction: COMPACTION_SETUP.md
   - Protocols & integrations:
       - OTLP: OTLP.md

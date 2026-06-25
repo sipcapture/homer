@@ -20,7 +20,7 @@ ingest, DuckLake storage, Node (FlightSQL), and Coordinator (REST API).
 | Dashboard search & mappings | [URL search](SEARCH_URL.md) · [External app Call-ID links](SEARCH_URL.md#external-apps) · [Mappings & fields](SEARCH_MAPPINGS_AND_FIELDS.md) |
 | REST API | [Coordinator](COORDINATOR.md) · [OpenAPI (Swagger)](swagger/index.html) |
 | Authentication & security | [Security hardening](SECURITY.md) · [LDAP & OAuth](AUTH_LDAP_AND_OAUTH.md) · [UI tokens](UI_COORDINATOR_AUTH_AND_TOKENS.md) |
-| Storage | [Architecture](STORAGE_ARCHITECTURE.md) · [Policies](STORAGE_POLICIES.md) |
+| Storage | [Architecture](STORAGE_ARCHITECTURE.md) · [Policies](STORAGE_POLICIES.md) · [Retention](RETENTION.md) |
 | Performance | [Ingest tuning](INGEST_PERFORMANCE.md) · [DuckDB tuning](DUCKDB_TUNING.md) · [OOM troubleshooting](OOM.md) |
 | MCP / LLM | [MCP server](MCP.md) · [MCP UI guide](MCP_UI_GUIDE.md) |
 

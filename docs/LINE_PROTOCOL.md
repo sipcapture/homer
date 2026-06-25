@@ -416,8 +416,8 @@ curl -i -XPOST 'http://homer-node:8086/api/v2/write?bucket=apps&precision=s' \
   optionally require mTLS). Per-token auth can be layered in front via
   an ingress proxy.
 - **Retention.** Each Line Protocol table is a normal DuckLake table — apply
-  retention with the standard policy primitives (see
-  [`STORAGE_POLICIES.md`](./STORAGE_POLICIES.md)).
+  retention with the standard DuckLake TTL (see
+  [Data retention](RETENTION.md)).
 - **Testing.** End-to-end coverage lives in
   `src/lineprotoreceiver/{parser,ingest,http}_test.go`. The ingest
   tests use an in-memory DuckDB so they run in normal `go test ./...`
@@ -427,5 +427,6 @@ curl -i -XPOST 'http://homer-node:8086/api/v2/write?bucket=apps&precision=s' \
 
 - [OTLP.md](./OTLP.md) — sister OpenTelemetry Protocol receiver.
 - [STORAGE_LAYOUT.md](./STORAGE_LAYOUT.md) — DuckLake on-disk layout.
-- [STORAGE_POLICIES.md](./STORAGE_POLICIES.md) — compaction / retention.
+- [RETENTION.md](./RETENTION.md) — data TTL and compaction retention.
+- [STORAGE_POLICIES.md](./STORAGE_POLICIES.md) — hot/cold tiering.
 - [FLIGHTSQL.md](./FLIGHTSQL.md) — the FlightSQL transport used by the discovery and statistics endpoints.

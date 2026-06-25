@@ -228,7 +228,7 @@ Recommended baseline for ~10k packets/sec on local disk:
 - `ducklake.flush_interval_sec`: 15-30 (controls latency and file size)
 - `ducklake.compaction.check_interval_sec`: 900-1800
 - `ducklake.compaction.snapshot_expire_interval_sec`: 3600-7200
-- `ducklake.compaction.retention_days`: set to policy (e.g. 7/30)
+- `ducklake.compaction.retention_days`: set to policy (e.g. 7/30) — see [Data retention](RETENTION.md)
 
 Goal: fewer small files, predictable compaction cycles, stable write latency.
 Adjust `batch_size` and `flush_interval_sec` together to hit desired file size.
