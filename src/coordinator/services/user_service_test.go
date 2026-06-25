@@ -27,7 +27,7 @@ func TestAuthenticate_IsActiveNullMeansActive(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h := config.DefaultInternalAuthPasswordHash
+	h := config.LegacySHA256SipcaptureHash
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('legacy', '`+h+`', '', '', true, NULL, current_timestamp, current_timestamp)`)
@@ -56,7 +56,7 @@ func TestAuthenticate_IsActiveFalseRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h := config.DefaultInternalAuthPasswordHash
+	h := config.LegacySHA256SipcaptureHash
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('blocked', '`+h+`', '', '', true, false, current_timestamp, current_timestamp)`)
@@ -82,7 +82,7 @@ func TestAuthenticate_PasswordHashHexCaseInsensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h := strings.ToUpper(config.DefaultInternalAuthPasswordHash)
+	h := strings.ToUpper(config.LegacySHA256SipcaptureHash)
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('mixedcase', '`+h+`', '', '', true, true, current_timestamp, current_timestamp)`)
@@ -111,7 +111,7 @@ func TestAuthenticate_TrimsUsernameAndPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h := config.DefaultInternalAuthPasswordHash
+	h := config.LegacySHA256SipcaptureHash
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('admin', '`+h+`', '', '', true, true, current_timestamp, current_timestamp)`)
@@ -140,7 +140,7 @@ func TestGetUserByUsername_CaseInsensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h := config.DefaultInternalAuthPasswordHash
+	h := config.LegacySHA256SipcaptureHash
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('ADMIN', '`+h+`', '', '', true, true, current_timestamp, current_timestamp)`)
