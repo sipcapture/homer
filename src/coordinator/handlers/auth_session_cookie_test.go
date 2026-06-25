@@ -128,3 +128,22 @@ func TestV4LogoutCurrentSession_ClearsCookie(t *testing.T) {
 		t.Fatalf("expected cleared cookie, got %q", setCookie)
 	}
 }
+
+func TestJWTMiddlewareV4_RejectsWhenSecretEmpty(t *testing.T) {
+	h := &AuthHandler{jwtSecret: ""}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/api/v4/me", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	mw := h.JWTMiddlewareV4()
+	handler := mw(func(c echo.Context) error {
+		return c.NoContent(http.StatusNoContent)
+	})
+	if err := handler(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status: got %d want 500", rec.Code)
+	}
+}
