@@ -95,6 +95,7 @@ nav:
       - Grafana integration: GRAFANA_INTEGRATION.md
       - Lua correlation: LUA_CORRELATION.md
   - Authentication:
+      - Security hardening: SECURITY.md
       - LDAP & OAuth: AUTH_LDAP_AND_OAUTH.md
       - OAuth reference: AUTH_OAUTH.md
       - UI tokens: UI_COORDINATOR_AUTH_AND_TOKENS.md
