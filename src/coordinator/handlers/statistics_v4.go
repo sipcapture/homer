@@ -14,6 +14,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 )
 
 type StatisticsHandler struct {
@@ -84,15 +85,19 @@ func (h *StatisticsHandler) V4StatisticsQuery(c echo.Context) error {
 	results := make([]StatisticQueryResultV4, 0, len(req.Param.Query))
 	total := 0
 	for _, query := range req.Param.Query {
-		if strings.TrimSpace(query.RawQuery) == "" {
+		raw := strings.TrimSpace(query.RawQuery)
+		if raw == "" {
 			return writeError(c, http.StatusBadRequest, "Bad Request", "rawquery is required")
 		}
-		items, err := h.flightService.Query(c.Request().Context(), query.RawQuery)
+		if err := sqlvalidator.ValidateRawSQL(raw); err != nil {
+			return writeError(c, http.StatusBadRequest, "Bad Request", fmt.Sprintf("SQL validation failed: %v", err))
+		}
+		items, err := h.flightService.Query(c.Request().Context(), raw)
 		if err != nil {
 			return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to execute query")
 		}
 		results = append(results, StatisticQueryResultV4{
-			Query: query.RawQuery,
+			Query: raw,
 			Items: items,
 		})
 		total += len(items)
