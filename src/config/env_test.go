@@ -775,8 +775,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 		{"Coordinator.JWT.Secret", cfg.Coordinator.JWT.Secret, "change-this-to-a-secure-random-string-in-production"},
 		{"Coordinator.JWT.ExpireHours", cfg.Coordinator.JWT.ExpireHours, 24},
 		{"Coordinator.Auth.AdminUser", cfg.Coordinator.Auth.AdminUser, "admin"},
-		{"Coordinator.Auth.AdminPasswordHash", cfg.Coordinator.Auth.AdminPasswordHash,
-			"883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"},
+		{"Coordinator.Auth.AdminPasswordHash", cfg.Coordinator.Auth.AdminPasswordHash, "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"},
 		{"Coordinator.Auth.Type", cfg.Coordinator.Auth.Type, "internal"},
 
 		// log + prometheus

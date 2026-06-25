@@ -855,10 +855,10 @@ type JWTConfig struct {
 	CookieSecure *bool `json:"cookie_secure,omitempty" mapstructure:"cookie_secure"`
 }
 
-// DefaultInternalAuthPasswordHash is the SHA-256 hex digest of the default
-// bootstrap password when coordinator.auth is the JSON string "internal",
-// or {"type":"internal"} without admin_password_hash (cleartext: sipcapture).
-const DefaultInternalAuthPasswordHash = "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
+// LegacySHA256SipcaptureHash is the SHA-256 hex digest of the historical
+// default password "sipcapture". Used only in tests and legacy hash migration;
+// production bootstrap no longer applies this value automatically.
+const LegacySHA256SipcaptureHash = "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
 
 // AuthConfig configures authentication
 type AuthConfig struct {
@@ -894,7 +894,7 @@ func (a AuthConfig) MarshalJSON() ([]byte, error) {
 		if u := strings.TrimSpace(a.AdminUser); u != "" && u != "admin" {
 			o.AdminUser = a.AdminUser
 		}
-		if h := strings.TrimSpace(a.AdminPasswordHash); h != "" && h != DefaultInternalAuthPasswordHash {
+		if h := strings.TrimSpace(a.AdminPasswordHash); h != "" {
 			o.AdminPasswordHash = a.AdminPasswordHash
 		}
 		if fb := strings.TrimSpace(a.FallbackAuthType); fb != "" {
@@ -942,7 +942,6 @@ func decodeCoordinatorAuthHook(from reflect.Type, to reflect.Type, data any) (an
 		return AuthConfig{
 			Type:                   "internal",
 			AdminUser:              "admin",
-			AdminPasswordHash:      DefaultInternalAuthPasswordHash,
 			AuthFromInternalString: true,
 		}, nil
 	}
@@ -964,9 +963,6 @@ func normalizeCoordinatorAuth(cfg *CoordinatorConfig) error {
 		auth.AuthFromInternalString = true
 		if strings.TrimSpace(auth.AdminUser) == "" {
 			auth.AdminUser = "admin"
-		}
-		if strings.TrimSpace(auth.AdminPasswordHash) == "" {
-			auth.AdminPasswordHash = DefaultInternalAuthPasswordHash
 		}
 	case "ldap", "oauth":
 		auth.AuthFromInternalString = false
