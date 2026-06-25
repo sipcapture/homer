@@ -178,7 +178,7 @@ func (h *AuthHandler) JWTMiddlewareV4() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if h.jwtSecret == "" {
-				return next(c)
+				return writeError(c, http.StatusInternalServerError, "Internal Server Error", "JWT authentication is not configured")
 			}
 			if h.authenticateWithAuthTokenHeader(c) {
 				return next(c)

@@ -298,9 +298,10 @@ func (h *AuthHandler) GetProfile(c echo.Context) error {
 func (h *AuthHandler) JWTMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			// Skip if no secret configured
 			if h.jwtSecret == "" {
-				return next(c)
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+					"error": "JWT authentication is not configured",
+				})
 			}
 
 			if h.authenticateWithAuthTokenHeader(c) {
