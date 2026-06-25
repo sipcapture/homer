@@ -284,9 +284,7 @@ The Statistics API also works out of the box for the same tables:
 - `GET /api/v4/statistics/databases` → schemas (catalogs)
 - `GET /api/v4/statistics/measurements?db=<schema>` → table names
 - `GET /api/v4/statistics/metrics?db=<schema>` → column names
-- `POST /api/v4/statistics/query` with a `rawquery` ⇒ free-form SQL
-  (`SELECT ... FROM cpu WHERE host = 'node-1'`) for Grafana-style
-  panels.
+- `POST /api/v4/statistics/query` with a `rawquery` ⇒ read-only SQL for Grafana-style panels (`SELECT …`). Since 11.0.282+ each `rawquery` is validated (same rules as `POST /api/v4/query`); DML/DDL and multi-statement SQL are rejected.
 
 ## Auto-published mapping_schema rows (11.0.123+)
 

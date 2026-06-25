@@ -341,7 +341,7 @@ The deprecated **`oauth2_providers`** array is still accepted at startup and mig
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v4/statistics/query` | Execute statistics query |
+| POST | `/api/v4/statistics/query` | Execute statistics query (`rawquery` validated; read-only SQL only) |
 | GET | `/api/v4/statistics/databases` | List databases |
 | GET | `/api/v4/statistics/measurements` | List measurements |
 | GET | `/api/v4/statistics/metrics` | List metrics |
@@ -455,8 +455,9 @@ See examples in the `examples/` directory:
 
 ## Security Considerations
 
-1. **JWT Secret** - Use a strong, random secret (minimum 32 characters)
-2. **Admin Password** - Store as SHA256 hash, never plain text
-3. **TLS** - Enable `use_tls` for node connections in production
-4. **Network** - Restrict coordinator access via firewall/reverse proxy
-5. **OAuth2** - Use HTTPS callback URLs in production
+1. **JWT secret** — Set `coordinator.jwt.secret` (or `HOMER_COORDINATOR_JWT_SECRET`) to a strong random value in production. If omitted, Homer persists **`/.homer_jwt_secret`** beside `settings_db_path` and always enforces JWT on protected routes ([SECURITY.md](./SECURITY.md)).
+2. **Admin password** — Prefer bcrypt via Users API or wizard; explicit `admin_password_hash` (SHA-256 hex) for bootstrap and `--reset-admin-password`. No default cleartext password is injected when hash is omitted.
+3. **Statistics SQL** — `POST /api/v4/statistics/query` validates `rawquery` (same rules as `/api/v4/query`).
+4. **TLS** — Enable `use_tls` for node connections in production
+5. **Network** — Restrict coordinator access via firewall/reverse proxy
+6. **OAuth2** — Use HTTPS callback URLs in production
