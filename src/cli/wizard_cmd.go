@@ -731,7 +731,6 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 	adminPass := m.inputs[wfAdminPass].Value()
 	if adminPass == "" {
 		adminPass = randomHex(24)
-		m.generatedAdminPassword = adminPass
 	}
 	adminHash := passwordhash.MustHash(adminPass)
 
