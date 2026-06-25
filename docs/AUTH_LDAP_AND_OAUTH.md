@@ -17,11 +17,11 @@ Password login with **`type`** omitted or **`internal`** on `POST /api/v4/auth/s
 | Format | When used | Verification |
 |--------|-----------|--------------|
 | **bcrypt** (`$2a$…`, `$2b$…`, `$2y$…`) | New or updated passwords via Users API / `PATCH /me` | `bcrypt.CompareHashAndPassword` |
-| **SHA-256 hex** (64 chars) | Default bootstrap admin (`sipcapture`), migrated homer-app rows, `--reset-admin-password` | Legacy compare (hex digest of password) |
+| **SHA-256 hex** (64 chars) | Explicit bootstrap hash in config, migrated homer-app rows, `--reset-admin-password` | Legacy compare (hex digest of password) |
 
 The coordinator accepts **either** format at login. Prefer letting the API create bcrypt hashes for new users instead of hand-editing SHA-256 in DuckDB.
 
-If **`coordinator.auth` is omitted** entirely (no `auth` key), the loader behaves like **`{"type":"internal"}`**: default admin `admin`, default bootstrap hash for **`sipcapture`**, and the same startup insert into **`users`** when missing.
+If **`coordinator.auth` is omitted** entirely (no `auth` key), the loader behaves like **`{"type":"internal"}`**: default admin name **`admin`**, internal bootstrap on startup when no `users` row exists. If **`admin_password_hash`** is also omitted, the coordinator generates a **random** bootstrap password and logs it once (see [SECURITY.md](./SECURITY.md#bootstrap-admin-password-coordinatorauth)).
 
 ### Password login fallback (`fallback_auth_type`)
 
@@ -65,10 +65,12 @@ Other **`type`** values (no internal bootstrap; LDAP/OAuth still follow their ow
 
 Meaning (string or `{"type":"internal"}` without custom hash):
 
-- The loader treats **`"internal"`** (case-insensitive) or **`{"type":"internal"}`** as **built-in local auth** with default admin name **`admin`** and a **fixed bootstrap password hash** (SHA-256 hex of **`sipcapture`**):  
-  `883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90`.
-- On coordinator startup, if there is **no** row in `users` whose **`username`** equals the configured admin name (default `admin`), the coordinator **inserts** that admin once (`is_admin` / `is_active` true) with that hash. If a row for that username **already** exists, nothing is inserted automatically (empty `password_hash` may still be repaired on startup in recent builds).
+- The loader treats **`"internal"`** (case-insensitive) or **`{"type":"internal"}`** as **built-in local auth** with default admin name **`admin`**.
+- On coordinator startup, if there is **no** row in `users` whose **`username`** equals the configured admin name (default `admin`), the coordinator **inserts** that admin once (`is_admin` / `is_active` true). If **`admin_password_hash`** is set (config or env), that hash is used; if empty, a **random password** is generated, stored as bcrypt, and logged once at startup.
+- If a row for that username **already** exists with a non-empty `password_hash`, bootstrap does not change the password (upgrade-safe). Empty `password_hash` on an existing row may be repaired from config hash or a new random password when hash is omitted.
 - After first login, operators should **change the password** (Settings → Users, or `PATCH /me`). Updates store a **bcrypt** hash. Further logins use the stored hash only.
+
+**Docker / explicit bootstrap:** `examples/docker/docker-compose.yaml` sets `HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH` to the SHA-256 hex of **`sipcapture`** — that path is unchanged and still yields first login **`admin` / `sipcapture`** on fresh installs using those examples.
 
 ### Legacy object: only `admin_user` / `admin_password_hash` (no `type`)
 
@@ -81,7 +83,7 @@ You may still use an object **without** `type` (for environment overrides, confi
 }
 ```
 
-- If **`admin_user`** is unset or **`admin`** and **`admin_password_hash`** is empty or equals the default sipcapture hash, the loader treats this as **`internal`** (same bootstrap as `{"type":"internal"}`). Any other combination is legacy credentials-only: provision **`users`** via API / SQL, or set **`{"type":"internal"}`** explicitly.
+- If **`admin_user`** is unset or **`admin`** and **`admin_password_hash`** is empty, the loader treats this as **`internal`** with random bootstrap password when no `users` row exists. If **`admin_password_hash`** is set (including the legacy sipcapture SHA-256 hex from docker examples), bootstrap uses that hash.
 - For **`--reset-admin-password`**, the config field **`admin_password_hash`** remains **SHA-256 hex** (see [Reset admin password](#reset-admin-password)). User records created or updated through the API use **bcrypt** instead.
 
 ### Reset admin password
@@ -109,7 +111,7 @@ The homer-core CLI flag **`--reset-admin-password`** (together with **`--config-
 }
 ```
 
-If you only set **`"auth": "internal"`** (string) or **`{"type":"internal"}`** without an explicit `admin_password_hash`, config normalization still supplies the **default** hash for cleartext **`sipcapture`**. In that case **`--reset-admin-password` will write that default hash** into `users` (useful to “reset” the account to the well-known bootstrap password).
+If you set **`"auth": "internal"`** or **`{"type":"internal"}`** **without** an explicit `admin_password_hash`, **`--reset-admin-password` fails** because `admin_password_hash` must be non-empty in the effective config. Set the hash in JSON or `HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH` before running the command.
 
 **Environment overrides:** you can set **`HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`** (and optionally **`HOMER_COORDINATOR_AUTH_ADMIN_USER`**) instead of embedding the hash in JSON — see `config/env.go` / `env_test` in this repo.
 
@@ -421,6 +423,7 @@ Combined Azure-only + no auto-provision:
 
 ## JWT sessions and logout
 
+- **`coordinator.jwt.secret`** must be non-empty for signing tokens. If omitted in config, Homer auto-generates a secret and persists **`/.homer_jwt_secret`** beside `settings_db_path` (see [SECURITY.md](./SECURITY.md#jwt-secret-coordinatorjwtsecret)). Protected API routes always require authentication.
 - Session id is JWT **`jti`**.
 - `DELETE /api/v4/auth/sessions/{sessionId}` revokes the current `jti` for the remaining token lifetime (in-memory store).
 

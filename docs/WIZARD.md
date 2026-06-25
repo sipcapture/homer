@@ -92,8 +92,8 @@ Choose a profile to pre-fill module settings. Selecting `all-in-one` enables all
 
 - API HTTP port (default: 8080)
 - Node host and port to query (default: 127.0.0.1:50051)
-- JWT secret (auto-generated if empty)
-- Admin username and password (password is SHA-256 hashed in the config)
+- JWT secret (auto-generated in TUI if empty; always stored in config when using wizard)
+- Admin username and password (empty password → auto-generated; stored as bcrypt in config)
 - Settings DB path
 
 **Step 6 -- System Settings**
@@ -162,8 +162,9 @@ Disabled modules have `"enable": false` but retain their default settings, so th
 
 ## Security Notes
 
-- **Admin bootstrap** uses **`"coordinator.auth": "internal"`** in the generated file (default first login: **`admin` / `sipcapture`** until changed). The wizard embeds the default **SHA-256 hex** bootstrap hash for `sipcapture`; if you set a **custom** admin password in the TUI, the generated config stores a **bcrypt** hash instead. Passwords are never written in plaintext in JSON.
-- **JWT secret** is auto-generated using `crypto/rand` if left empty (64 hex characters).
+- **Admin bootstrap** uses **`"coordinator.auth": {"type":"internal"}`** in the generated file. If you leave **Admin Password** empty in the TUI, the wizard generates a random password, stores its **bcrypt** hash in JSON, and displays the cleartext **once** after save. If you enter a password, that value is bcrypt-hashed in the config. Passwords are never written in plaintext in JSON.
+- On coordinator startup **without** wizard (empty `admin_password_hash`), a random bootstrap password is logged once — see [SECURITY.md](./SECURITY.md).
+- **JWT secret** in the TUI: if left empty, a random value is generated and embedded in the saved `homer.json`. Coordinator startup with empty JWT in a hand-edited config instead persists **`/.homer_jwt_secret`** beside the settings DB.
 - The generated config file is written with `0644` permissions. Restrict access if it contains sensitive tokens.
 
 ## Post-Generation
