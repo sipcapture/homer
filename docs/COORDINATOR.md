@@ -218,13 +218,13 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 
 | Form | Description |
 |------|-------------|
-| **`{"type":"internal"}`** (recommended) | Same bootstrap and defaults as the string `"internal"` (admin `admin`, default hash for **`sipcapture`**). On startup, if no `users` row exists for that admin username, the coordinator inserts it once. Login checks **`users`** only. |
+| **`{"type":"internal"}`** (recommended) | Same bootstrap and defaults as the string `"internal"` (admin `admin`). On startup, if no `users` row exists for that admin username, the coordinator inserts it once. If **`admin_password_hash`** is omitted, a **random password** is generated and logged once at startup. Login checks **`users`** only. |
 | **String** `"internal"` | Backward compatible; same semantics as `{"type":"internal"}`. |
 | **`{"type":"ldap"}`** / **`{"type":"oauth"}`** | Declares preferred password-auth mode metadata; does **not** enable LDAP/OAuth by itself (`coordinator.ldap`, `oauth2_provider` still apply). No internal bootstrap. |
-| **Omitted** (`coordinator` without `auth`) | Same as **`{"type":"internal"}`** (default admin + sipcapture bootstrap). |
-| **Object** without `type` (or empty `type`) | Same as **`{"type":"internal"}`**: internal bootstrap applies; unset `admin_user` / `admin_password_hash` get defaults, or your explicit values are used. |
+| **Omitted** (`coordinator` without `auth`) | Same as **`{"type":"internal"}`** (default admin bootstrap with random password when hash omitted). |
+| **Object** without `type` (or empty `type`) | Same as **`{"type":"internal"}`**: internal bootstrap applies; unset `admin_user` defaults to `admin`; empty `admin_password_hash` triggers a one-time random password in logs. |
 
-**First login (`type` internal or string `"internal"`):** username `admin`, password `sipcapture` until changed in Settings → Users or in DuckDB.
+**First login (`type` internal or string `"internal"`):** username `admin`. Password is either from **`admin_password_hash`** (SHA-256 hex for `--reset-admin-password`, or bcrypt from the setup wizard), or the **random bootstrap password** printed in coordinator logs on first startup when no hash is configured.
 
 **Reset admin password** — set `coordinator.auth.admin_password_hash` (and optional `admin_user`) in modular `homer.json` or via **`HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`**, then run:
 
@@ -250,7 +250,7 @@ echo -n "your-password" | sha256sum | cut -d' ' -f1
 |-----------|------|---------|-------------|
 | `type` | string | *(see table above)* | `internal`, `ldap`, or `oauth`. If the whole `auth` section is omitted, or `type` is omitted / empty on the object, the effective type is **`internal`**. |
 | `admin_user` | string | "admin" | Admin username when **`type`** is **`internal`** (including when `type` is omitted and normalized to internal). |
-| `admin_password_hash` | string | "" | **SHA-256 hex** for bootstrap / **`--reset-admin-password`**. For **`type` internal** (or omitted auth normalized to internal), empty means the default **`sipcapture`** hash after load. API user password changes use bcrypt separately. |
+| `admin_password_hash` | string | "" | **SHA-256 hex** for bootstrap / **`--reset-admin-password`**, or **bcrypt** when set by the setup wizard. When empty on first bootstrap, the coordinator generates a random admin password and logs it once. API user password changes use bcrypt separately. |
 | `fallback_auth_type` | string | "" | If set to **`internal`** or **`ldap`**, password login tries this backend **after** the client-selected `type` fails (wrong password or backend unavailable). Must not be **`oauth`**. Empty disables the second attempt. |
 | `disable_password_login` | bool | false | If **`true`**, hide internal/LDAP from **`GET /auth/providers`** and return **403** on **`POST /auth/sessions`**. Use with OAuth2 for IdP-only login. Env: **`HOMER_COORDINATOR_AUTH_DISABLE_PASSWORD_LOGIN`**. |
 

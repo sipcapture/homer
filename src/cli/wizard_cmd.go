@@ -203,7 +203,6 @@ func baseConfig() config.Config {
 				Type:                   "internal",
 				AuthFromInternalString: true,
 				AdminUser:              "admin",
-				AdminPasswordHash:      config.DefaultInternalAuthPasswordHash,
 			},
 		},
 		Log: config.LogConfig{
@@ -279,14 +278,15 @@ const (
 )
 
 type wizardModel struct {
-	inputs   []textinput.Model
-	step     int
-	focused  int // focused field within current step
-	done     bool
-	saved    bool
-	savedMsg string
-	errMsg   string
-	output   string // output file path
+	inputs               []textinput.Model
+	step                 int
+	focused              int // focused field within current step
+	done                 bool
+	saved                bool
+	savedMsg             string
+	errMsg               string
+	output               string // output file path
+	generatedAdminPassword string
 }
 
 // stepFields maps each step to its field indices.
@@ -417,8 +417,8 @@ func newWizardModel(outputPath string) wizardModel {
 	inputs[wfAdminUser].SetValue("admin")
 
 	inputs[wfAdminPass].Prompt = "Admin Password:  "
-	inputs[wfAdminPass].Placeholder = "sipcapture"
-	inputs[wfAdminPass].SetValue("sipcapture")
+	inputs[wfAdminPass].Placeholder = "(auto-generated if empty)"
+	inputs[wfAdminPass].SetValue("")
 	inputs[wfAdminPass].EchoMode = textinput.EchoPassword
 
 	inputs[wfSettingsDB].Prompt = "Settings DB:     "
@@ -542,6 +542,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// On review step, generate and save
 			if m.step == wizStepReview {
+				m.generatedAdminPassword = ""
 				cfg := m.buildConfigFromInputs()
 				outPath := m.inputs[wfOutputPath].Value()
 				if outPath == "" {
@@ -554,6 +555,9 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.saved = true
 				m.done = true
 				m.savedMsg = fmt.Sprintf("Config saved to %s", outPath)
+				if m.generatedAdminPassword != "" {
+					m.savedMsg += fmt.Sprintf("\nGenerated admin password (change after first login): %s", m.generatedAdminPassword)
+				}
 				return m, nil
 			}
 
@@ -726,12 +730,9 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 	}
 	adminPass := m.inputs[wfAdminPass].Value()
 	if adminPass == "" {
-		adminPass = "sipcapture"
+		adminPass = randomHex(24)
 	}
-	adminHash := config.DefaultInternalAuthPasswordHash
-	if adminPass != "sipcapture" {
-		adminHash = passwordhash.MustHash(adminPass)
-	}
+	adminHash := passwordhash.MustHash(adminPass)
 
 	settingsDB := m.inputs[wfSettingsDB].Value()
 	if settingsDB == "" {

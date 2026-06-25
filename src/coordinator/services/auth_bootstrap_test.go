@@ -26,11 +26,11 @@ func TestEnsureBootstrapAdminUser_Idempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	hash := config.DefaultInternalAuthPasswordHash
-	if err := EnsureBootstrapAdminUser(ctx, db, "admin", hash); err != nil {
+	hash := config.LegacySHA256SipcaptureHash
+	if _, err := EnsureBootstrapAdminUser(ctx, db, "admin", hash); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	if err := EnsureBootstrapAdminUser(ctx, db, "admin", hash); err != nil {
+	if _, err := EnsureBootstrapAdminUser(ctx, db, "admin", hash); err != nil {
 		t.Fatalf("second: %v", err)
 	}
 	var n int64
@@ -39,6 +39,38 @@ func TestEnsureBootstrapAdminUser_Idempotent(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("count: want 1, got %d", n)
+	}
+}
+
+func TestEnsureBootstrapAdminUser_GeneratesPasswordWhenHashEmpty(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.duckdb")
+	db, err := OpenSettingsDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := EnsureSettingsSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	pwd, err := EnsureBootstrapAdminUser(ctx, db, "admin", "")
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	if pwd == "" {
+		t.Fatal("expected generated bootstrap password")
+	}
+	svc := NewUserService(db)
+	u, err := svc.Authenticate(ctx, "admin", pwd)
+	if err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+	if u == nil || u.Username != "admin" {
+		t.Fatalf("user %+v", u)
+	}
+	if _, err := EnsureBootstrapAdminUser(ctx, db, "admin", ""); err != nil {
+		t.Fatalf("second bootstrap: %v", err)
 	}
 }
 
@@ -54,8 +86,8 @@ func TestResetOrInsertAdminPassword_UpdateThenInsert(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h1 := config.DefaultInternalAuthPasswordHash
-	if err := EnsureBootstrapAdminUser(ctx, db, "admin", h1); err != nil {
+	h1 := config.LegacySHA256SipcaptureHash
+	if _, err := EnsureBootstrapAdminUser(ctx, db, "admin", h1); err != nil {
 		t.Fatal(err)
 	}
 	h2 := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -93,14 +125,14 @@ func TestEnsureBootstrapAdminUser_RepairsEmptyPasswordHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	hash := config.DefaultInternalAuthPasswordHash
+	hash := config.LegacySHA256SipcaptureHash
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('admin', NULL, '', '', true, true, current_timestamp, current_timestamp)`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := EnsureBootstrapAdminUser(ctx, db, "admin", hash); err != nil {
+	if _, err := EnsureBootstrapAdminUser(ctx, db, "admin", hash); err != nil {
 		t.Fatalf("bootstrap repair: %v", err)
 	}
 	var got string

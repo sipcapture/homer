@@ -111,7 +111,7 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 	}
 	// Always log how coordinator.auth was interpreted (no secrets). If
 	// auth_internal_string_form is false, JSON "internal" was not used
-	// and bootstrap admin user for default sipcapture is skipped.
+	// and bootstrap admin user is skipped.
 	logger.Info("coordinator: auth settings snapshot",
 		"auth_type", cfg.Auth.Type,
 		"auth_internal_bootstrap", cfg.Auth.AuthFromInternalString,
@@ -119,10 +119,16 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 		"admin_password_hash_configured", strings.TrimSpace(cfg.Auth.AdminPasswordHash) != "",
 		"settings_db_path", cfg.SettingsDBPath)
 	if cfg.Auth.AuthFromInternalString {
-		if err := services.EnsureBootstrapAdminUser(context.Background(), settingsDB,
-			cfg.Auth.AdminUser, cfg.Auth.AdminPasswordHash); err != nil {
+		bootstrapPassword, err := services.EnsureBootstrapAdminUser(context.Background(), settingsDB,
+			cfg.Auth.AdminUser, cfg.Auth.AdminPasswordHash)
+		if err != nil {
 			_ = settingsDB.Close()
 			return nil, fmt.Errorf("internal auth bootstrap: %w", err)
+		}
+		if bootstrapPassword != "" {
+			logger.Warn("coordinator: generated one-time bootstrap admin password — change after first login",
+				"admin_user", cfg.Auth.AdminUser,
+				"bootstrap_password", bootstrapPassword)
 		}
 		logger.Info("coordinator: internal authentication enabled",
 			"settings_db_path", cfg.SettingsDBPath,

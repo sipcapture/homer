@@ -28,7 +28,7 @@ func newCookieAuthHandler(t *testing.T) *AuthHandler {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h := config.DefaultInternalAuthPasswordHash
+	h := config.LegacySHA256SipcaptureHash
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('admin', '`+h+`', 'admin@example.com', 'Admin', true, true, current_timestamp, current_timestamp)`)
