@@ -209,7 +209,7 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `secret` | string | - | JWT signing secret (min 32 characters recommended) |
+| `secret` | string | "" | JWT signing secret (min 32 characters recommended). When empty at startup, Homer generates a random secret, persists it as `.homer_jwt_secret` beside `settings_db_path`, and always enforces JWT on protected routes. Set explicitly in config for multi-host deployments. |
 | `expire_hours` | int | 24 | Token expiration time in hours |
 
 ### auth
