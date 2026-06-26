@@ -38,6 +38,10 @@ Example request body:
 
 For full setup and configuration details, see [MCP UI Guide](MCP_UI_GUIDE.md).
 
+## Timeouts
+
+Dashboard and API search default to **~30 seconds** (coordinator node query + HTTP server timeouts). For large time ranges, increase `coordinator.query_timeout_sec` and matching `http_server.read_timeout` / `write_timeout` — see **[TROUBLESHOOTING.md](TROUBLESHOOTING.md#search-timeouts-30-seconds)**.
+
 ## Dashboard URL search
 
 Bookmarkable dashboard links (`?from_user=…#dashboard`), **external Call-ID drill-down** from other apps, per-protocol examples, and how to add new protocols: **[SEARCH_URL.md](SEARCH_URL.md)** (including [external integrations](SEARCH_URL.md#external-apps)).

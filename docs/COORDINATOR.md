@@ -189,8 +189,8 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 | `enable` | bool | true | Enable HTTP server |
 | `host` | string | "0.0.0.0" | Listen address |
 | `port` | int | 8080 | HTTP server port |
-| `read_timeout` | int | 30 | Read timeout in seconds |
-| `write_timeout` | int | 30 | Write timeout in seconds |
+| `read_timeout` | int | 30 | Read timeout in seconds (raise for long searches — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#search-timeouts-30-seconds)) |
+| `write_timeout` | int | 30 | Write timeout in seconds (raise for long searches — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#search-timeouts-30-seconds)) |
 | `static_path` | string | "" | Path to UI static files (optional) |
 | `gamedata_dir` | string | "/usr/local/homer-core/gamedata" | On-disk directory served read-only at `/gamedata/` for large game assets (Doom widget IWAD). A missing directory yields 404s; empty string disables the route. See `docs/VOIPGames.md`. |
 
@@ -204,6 +204,12 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 | `use_tls` | bool | false | Use TLS for connection |
 | `token` | string | "" | Authentication token for node |
 | `priority` | int | 1 | Query routing priority (lower = higher priority) |
+
+### query_timeout_sec
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `query_timeout_sec` | int | 30 | Per-query timeout (seconds) for coordinator → node `POST /query`. Raise for long transaction searches — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#search-timeouts-30-seconds). Env: `HOMER_COORDINATOR_QUERY_TIMEOUT_SEC`. |
 
 ### jwt
 

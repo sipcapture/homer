@@ -28,3 +28,4 @@ Field names follow the `mapstructure` tags on [`Config` in `src/config/config.go
 - Tiered storage fields: [`docs/STORAGE_POLICIES.md`](STORAGE_POLICIES.md) (conceptual); same paths appear under `storage.ducklake.storage_policy` and `node.ducklake` in JSON — mirror them as `HOMER_*` as above.
 - Example with variables declared inline in Compose: [`examples/docker/docker-compose.yml`](../examples/docker/docker-compose.yml) (`homer.environment`).
 - **Data retention (TTL):** [`RETENTION.md`](RETENTION.md) — `HOMER_STORAGE_DUCKLAKE_COMPACTION_RETENTION_DAYS` and related compaction env vars.
+- **Search timeouts:** [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) — `HOMER_COORDINATOR_QUERY_TIMEOUT_SEC`, `HOMER_COORDINATOR_HTTP_SERVER_READ_TIMEOUT`, `HOMER_COORDINATOR_HTTP_SERVER_WRITE_TIMEOUT`.

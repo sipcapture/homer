@@ -111,6 +111,8 @@ nav:
       - Benchmarks: BENCHMARKS.md
       - Benchmark guide: BENCHMARK_README.md
   - Other:
+      - Troubleshooting: TROUBLESHOOTING.md
+      - OOM (search memory): OOM.md
       - VoIP games: VOIPGames.md
   - Migration (draft):
       - Homer 7 → 11: untested/MIGRATION_HOMER7.md

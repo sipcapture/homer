@@ -1,5 +1,7 @@
 # OOM Troubleshooting (DuckLake Search and Compaction)
 
+> **Search stops at ~30s without OOM errors?** That is usually a **timeout**, not memory — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#search-timeouts-30-seconds).
+
 This guide is for Homer deployments that fail with DuckDB errors like:
 
 - `Out of Memory Error: failed to allocate ...`
