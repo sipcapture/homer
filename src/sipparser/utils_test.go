@@ -42,6 +42,14 @@ func TestCleanBrack(t *testing.T) {
 	}
 }
 
+func TestGetBracks(t *testing.T) {
+	s := "\"na<baz@me>\" <sip:foo@bar.com>"
+	left, right, chk := getBracks(s)
+	if left != 13 || right != 29 || !chk {
+		t.Errorf("[TestGetBracks] Error getting start position from getBracks for: %s: [%d]<->[%d]", s, left, right)
+	}
+}
+
 func TestGetName(t *testing.T) {
 	s := "\"name\" <sip:foo@bar.com>"
 	name, _ := getName(s)

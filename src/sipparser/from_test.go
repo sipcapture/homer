@@ -18,24 +18,27 @@ package sipparser
 
 // Imports from the go standard library
 import (
+	"fmt"
 	"testing"
 )
 
 func TestFrom(t *testing.T) {
 	sm := &SipMsg{}
-	str := "\"Unknown\" <sip:5554441000@0.0.0.0;user=phone;noa=national>;tag=dd737a8-co7387-INS002"
+	dn := "Unknown<blub@bla>"
+	un := "5554441000"
+	str := fmt.Sprintf("\"%s\" <sip:%s@0.0.0.0;user=phone;noa=national>;tag=dd737a8-co7387-INS002", dn, un)
 	sm.parseFrom(str)
 	if sm.Error != nil {
-		t.Errorf("[TestFrom] Error parsing from hdr: \"Unknown\" <sip:5554441000@0.0.0.0;user=phone;noa=national>;tag=dd737a8-co7387-INS002. Received err: %v", sm.Error)
+		t.Errorf("[TestFrom] Error parsing from hdr: %s. Received err: %v", str, sm.Error)
 	}
-	if sm.From.Name != "Unknown" {
-		t.Errorf("[TestFrom] Error parsing from hdr: \"Unknown\" <sip:5554441000@0.0.0.0;user=phone;noa=national>;tag=dd737a8-co7387-INS002. Name field should be \"Unknown\".")
+	if sm.From.Name != dn {
+		t.Errorf("[TestFrom] Error parsing from hdr: %s. Name field should be \"%s\".", str, dn)
 	}
-	if sm.From.URI.User != "5554441000" {
-		t.Errorf("[TestFrom] Error parsing from hdr: \"Unknown\" <sip:5554441000@0.0.0.0;user=phone;noa=national>;tag=dd737a8-co7387-INS002. URI.User field should be \"5554441000\".")
+	if sm.From.URI.User != un {
+		t.Errorf("[TestFrom] Error parsing from hdr: %s. URI.User field should be \"%s\": \"%s\".", str, un, sm.From.URI.User)
 	}
 	if sm.From.Tag != "dd737a8-co7387-INS002" {
-		t.Errorf("[TestFrom] Error parsing from hdr: \"Unknown\" <sip:5554441000@0.0.0.0;user=phone;noa=national>;tag=dd737a8-co7387-INS002. sm.From.Tag should be \"dd737a8-co7387-INS002\".")
+		t.Errorf("[TestFrom] Error parsing from hdr: %s. sm.From.Tag should be \"dd737a8-co7387-INS002\".", str)
 	}
 	str = "<sip:5554441000@0.0.0.0;user=phone;noa=national>;tag=dd737a8-co7387-INS002"
 	sm.parseFrom(str)
