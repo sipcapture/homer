@@ -414,6 +414,33 @@ func TestBuildSearchSQLV4_VirtualDataExtraEquals(t *testing.T) {
 	}
 }
 
+func TestBuildSearchSQLV4_VirtualDataExtraCustomHeader(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.Virtual = map[string]string{"x_icc_uuid": "uuid-123"}
+
+	rules := map[string]services.VirtualFieldRule{
+		"x_icc_uuid": {
+			Kind:  services.VirtualKindDataExtraJSON,
+			Path:  "custom_headers.X-icc_uuid",
+			Match: services.VirtualMatchEquals,
+		},
+	}
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `json_extract(data_extra, '$.custom_headers."X-icc_uuid"')`
+	if !strings.Contains(sql, want) {
+		t.Fatalf("expected %q in SQL, got:\n%s", want, sql)
+	}
+	if !strings.Contains(sql, "= 'uuid-123'") {
+		t.Fatalf("expected filter value in SQL, got:\n%s", sql)
+	}
+}
+
 func TestBuildSearchSQLV4_VirtualAbsentToTag(t *testing.T) {
 	req := SearchObjectV4{}
 	req.Filter.ProtoType = 1

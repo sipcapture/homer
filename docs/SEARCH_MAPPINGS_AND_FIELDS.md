@@ -204,7 +204,7 @@ Virtual fields search inside the DuckLake **`data_extra`** JSON column instead o
 | Property | Values | Meaning |
 |----------|--------|---------|
 | `kind` | `data_extra_json` | Only supported kind today ([`fields_virtual.go`](../src/coordinator/services/fields_virtual.go)). |
-| `path` | dotted path, e.g. `to_tag`, `foo.bar` | JSON path under `data_extra` (segments: `[a-zA-Z_][a-zA-Z0-9_]*`). |
+| `path` | dotted path, e.g. `to_tag`, `custom_headers.X-icc_uuid` | JSON path under `data_extra`. Segments: letters, digits, `_`, `-` (hyphenated SIP header keys are quoted in DuckDB JSONPath). |
 | `match` | `like` (default), `equals`, `absent`, `present` | How the value is applied in SQL. |
 
 ### `match` modes
@@ -232,6 +232,26 @@ Example absent/present pair (SIP seed):
   "virtual": { "kind": "data_extra_json", "path": "to_tag", "match": "present" }
 }
 ```
+
+### Custom SIP headers (`ingest.sip.custom_headers`)
+
+When `ingest.sip.custom_headers` lists a header (e.g. `X-icc_uuid`), values land in `data_extra.custom_headers` with the **exact header name** as the JSON key. Use a virtual field with a dotted path; hyphens in the key are supported (Homer 11.0.284+):
+
+```json
+{
+  "id": "x_icc_uuid",
+  "name": "X-icc_uuid",
+  "type": "string",
+  "form_type": "input",
+  "virtual": {
+    "kind": "data_extra_json",
+    "path": "custom_headers.X-icc_uuid",
+    "match": "equals"
+  }
+}
+```
+
+`path` must match the stored key (`X-icc_uuid`, not `x_icc_uuid`). Requires `ingest.sip.custom_headers` in `homer.json` and a coordinator restart after mapping changes.
 
 Virtual rules are loaded for the active `hepid` + `profile` on each search. OTLP (`200`–`202`) and Line Protocol (`300`) skip virtual handling.
 

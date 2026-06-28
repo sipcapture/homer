@@ -26,7 +26,10 @@ const (
 	VirtualMatchPresent = "present"
 )
 
-var virtualPathSegmentRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+var virtualPathSegmentRe = regexp.MustCompile(`^[a-zA-Z0-9_][a-zA-Z0-9_-]*$`)
+
+// simpleJSONPathSegmentRe matches keys that DuckDB accepts without quoting.
+var simpleJSONPathSegmentRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 // VirtualFieldRule is a validated rule derived from fields_mapping[].virtual.
 type VirtualFieldRule struct {
@@ -115,7 +118,9 @@ func validateVirtualJSONPath(path string) error {
 	return nil
 }
 
-// DuckJSONPath returns a DuckDB JSON path literal like '$.to_tag' or '$.a.b'.
+// DuckJSONPath returns a DuckDB JSON path literal like '$.to_tag' or
+// '$.custom_headers."X-icc_uuid"' when a segment contains hyphens or other
+// characters that require JSONPath quoting.
 func DuckJSONPath(logicalPath string) string {
 	parts := strings.Split(logicalPath, ".")
 	escaped := make([]string, 0, len(parts))
@@ -124,7 +129,26 @@ func DuckJSONPath(logicalPath string) string {
 		if p == "" {
 			continue
 		}
-		escaped = append(escaped, p)
+		escaped = append(escaped, duckJSONPathSegment(p))
 	}
 	return "$." + strings.Join(escaped, ".")
+}
+
+func duckJSONPathSegment(segment string) string {
+	if simpleJSONPathSegmentRe.MatchString(segment) {
+		return segment
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range segment {
+		switch r {
+		case '\\', '"':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }
