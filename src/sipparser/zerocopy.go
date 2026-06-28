@@ -350,19 +350,24 @@ func zcParseHeaderLine(line []byte, s *SipMsg) {
 	zcApplyAlegCustomHeaders(name, val, s)
 }
 
+func zcFindURIBrackets(val []byte) (lbrack, rbrack int) {
+	one, two, ok := findURIBrackets(val)
+	if !ok {
+		return -1, -1
+	}
+	return one, two
+}
+
 // zcParseFromTo extracts user, host, tag from From/To header value.
 func zcParseFromTo(val []byte, s *SipMsg, target byte) {
 	val = zcTrimWS(val)
 
 	tag := zcExtractParam(val, []byte("tag="))
 
-	lbrack := findByte(val, '<')
+	lbrack, rbrack := zcFindURIBrackets(val)
 	var uriBytes []byte
-	if lbrack != -1 {
-		rbrack := findByte(val[lbrack:], '>')
-		if rbrack != -1 {
-			uriBytes = val[lbrack+1 : lbrack+rbrack]
-		}
+	if lbrack != -1 && rbrack != -1 {
+		uriBytes = val[lbrack+1 : rbrack]
 	}
 	if uriBytes == nil {
 		semi := findByte(val, ';')
@@ -390,13 +395,10 @@ func zcParseFromTo(val []byte, s *SipMsg, target byte) {
 // zcParseContact extracts user, host from Contact header.
 func zcParseContact(val []byte, s *SipMsg) {
 	val = zcTrimWS(val)
-	lbrack := findByte(val, '<')
+	lbrack, rbrack := zcFindURIBrackets(val)
 	var uriBytes []byte
-	if lbrack != -1 {
-		rbrack := findByte(val[lbrack:], '>')
-		if rbrack != -1 {
-			uriBytes = val[lbrack+1 : lbrack+rbrack]
-		}
+	if lbrack != -1 && rbrack != -1 {
+		uriBytes = val[lbrack+1 : rbrack]
 	}
 	if uriBytes == nil {
 		semi := findByte(val, ';')
@@ -456,13 +458,10 @@ func zcParseAuthUser(val []byte, s *SipMsg) {
 // zcParsePAIUser extracts user from P-Asserted-Identity.
 func zcParsePAIUser(val []byte, s *SipMsg) {
 	val = zcTrimWS(val)
-	lbrack := findByte(val, '<')
+	lbrack, rbrack := zcFindURIBrackets(val)
 	var uriBytes []byte
-	if lbrack != -1 {
-		rbrack := findByte(val[lbrack:], '>')
-		if rbrack != -1 {
-			uriBytes = val[lbrack+1 : lbrack+rbrack]
-		}
+	if lbrack != -1 && rbrack != -1 {
+		uriBytes = val[lbrack+1 : rbrack]
 	}
 	if uriBytes == nil {
 		uriBytes = val

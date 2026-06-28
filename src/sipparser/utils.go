@@ -92,18 +92,67 @@ func getQuoteChars(s string) (one int, two int, chk bool) {
 }
 
 func getBracks(s string) (one int, two int, chk bool) {
-	one = strings.IndexRune(s, '<')
-	if one == -1 {
-		return 0, 0, false
-	}
-	two = strings.IndexRune(s, '>')
-	if two == -1 {
-		return 0, 0, false
-	}
-	if two < one {
+	one, two, ok := findURIBrackets([]byte(s))
+	if !ok {
 		return 0, 0, false
 	}
 	return one, two, true
+}
+
+// findURIBrackets locates the SIP URI angle brackets in a From/To/Contact-style
+// header value. Angle brackets inside a leading quoted display-name are ignored;
+// otherwise the last '<...>' pair is used (display-names may contain '<' unquoted).
+func findURIBrackets(val []byte) (one int, two int, ok bool) {
+	searchFrom := 0
+	if _, q2, found := quoteSpan(val); found {
+		searchFrom = q2 + 1
+	}
+	sub := val[searchFrom:]
+	lrel := -1
+	for i := len(sub) - 1; i >= 0; i-- {
+		if sub[i] == '<' {
+			lrel = i
+			break
+		}
+	}
+	if lrel == -1 {
+		return 0, 0, false
+	}
+	one = searchFrom + lrel
+	rrel := indexByte(val[one+1:], '>')
+	if rrel == -1 {
+		return 0, 0, false
+	}
+	two = one + 1 + rrel
+	return one, two, true
+}
+
+func quoteSpan(val []byte) (one int, two int, ok bool) {
+	ct := 0
+	for i := range val {
+		if val[i] == '"' {
+			switch ct {
+			case 0:
+				one = i
+				ct = 1
+			case 1:
+				two = i
+				return one, two, true
+			default:
+				return 0, 0, false
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+func indexByte(data []byte, b byte) int {
+	for i := range data {
+		if data[i] == b {
+			return i
+		}
+	}
+	return -1
 }
 
 func getName(s string) (name string, end int) {
