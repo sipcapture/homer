@@ -164,3 +164,23 @@ func TestParseMsgZeroCopy_XRTPStatPlusCustom(t *testing.T) {
 		t.Fatalf("CustomHeader: %#v", s.CustomHeader)
 	}
 }
+
+func TestParseMsgZeroCopy_FromDisplayNameWithBrackets(t *testing.T) {
+	raw := []byte("INVITE sip:a@b SIP/2.0\r\n" +
+		"Via: SIP/2.0/UDP 10.0.0.1;branch=z9hG4bK1\r\n" +
+		`From: "a <b@c>" <sip:foo@bar>;tag=ft` + "\r\n" +
+		"To: <sip:c@d>\r\n" +
+		"Call-ID: cid-one@host\r\n" +
+		"CSeq: 1 INVITE\r\n" +
+		"\r\n")
+	s := ParseMsgZeroCopy(raw, nil)
+	if s.Error != nil {
+		t.Fatalf("parse: %v", s.Error)
+	}
+	if s.FromUser != "foo" {
+		t.Fatalf("FromUser: want foo, got %q", s.FromUser)
+	}
+	if s.FromHost != "bar" {
+		t.Fatalf("FromHost: want bar, got %q", s.FromHost)
+	}
+}
