@@ -39,6 +39,39 @@ func stripB2BSuffix(sid string) string {
 	return b2bSuffixRe.ReplaceAllString(sid, "")
 }
 
+// sqlFormMatchClause builds a dashboard/form string filter: exact equality by
+// default; SQL LIKE only when rawValue contains '%' (user-supplied wildcards).
+func sqlFormMatchClause(columnExpr, rawValue string) string {
+	esc := sqlvalidator.SafeString(rawValue)
+	if strings.Contains(rawValue, "%") {
+		return fmt.Sprintf("%s LIKE '%s'", columnExpr, esc)
+	}
+	return fmt.Sprintf("%s = '%s'", columnExpr, esc)
+}
+
+// sqlFormMatchClauseOr applies sqlFormMatchClause across two columns (OR).
+func sqlFormMatchClauseOr(leftExpr, rightExpr, rawValue string) string {
+	esc := sqlvalidator.SafeString(rawValue)
+	if strings.Contains(rawValue, "%") {
+		return fmt.Sprintf("(%s LIKE '%s' OR %s LIKE '%s')", leftExpr, esc, rightExpr, esc)
+	}
+	return fmt.Sprintf("(%s = '%s' OR %s = '%s')", leftExpr, esc, rightExpr, esc)
+}
+
+// sqlFormMatchClauseAny ORs the same value across multiple column expressions.
+func sqlFormMatchClauseAny(columnExprs []string, rawValue string) string {
+	esc := sqlvalidator.SafeString(rawValue)
+	op := "="
+	if strings.Contains(rawValue, "%") {
+		op = "LIKE"
+	}
+	parts := make([]string, len(columnExprs))
+	for i, col := range columnExprs {
+		parts[i] = fmt.Sprintf("%s %s '%s'", col, op, esc)
+	}
+	return "(" + strings.Join(parts, " OR ") + ")"
+}
+
 // sipFilterMethodValues merges filter.method (including comma-separated tokens),
 // filter.methods, trims and dedupes. Matches Homer UI multi-select + custom SIP methods.
 func sipFilterMethodValues(method string, methods []string) []string {
@@ -677,9 +710,7 @@ func transactionSearchTopNShape(req *SearchObjectV4) bool {
 func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL string, req *SearchObjectV4, virtualRules map[string]services.VirtualFieldRule) ([]map[string]interface{}, error) {
 	strategy := h.lakeTopNStrategy()
 
-	// lazy: run the search/sort over a narrow projection (no payload/data_extra)
-	// and re-attach those wide columns by uuid afterwards. Keeps memory flat on
-	// large LIMITs over wide SIP rows while preserving the full-row response.
+	// lazy: phase 1 is SELECT uuid, timestamp; full rows loaded by uuid after.
 	lazy := h.lazyPayloadEligible(req)
 
 	rows, err := h.runTransactionSearch(ctx, fullSQL, req, virtualRules, strategy, lazy)
@@ -786,12 +817,11 @@ func (h *SearchHandler) lazyPayloadEligible(req *SearchObjectV4) bool {
 	return true
 }
 
-// hydrateHeavyColumns re-attaches the wide blob columns (payload, data_extra)
-// to a narrow result set with a single bounded point-lookup keyed by uuid.
-// Because the lookup is filtered to the exact matched uuids (and pruned to the
-// timestamp span of those rows), DuckDB only decompresses the heavy columns for
-// the <=LIMIT rows we actually return — never the whole scanned range. Any
-// failure degrades gracefully: the narrow rows are returned unchanged.
+// hydrateHeavyColumns loads full rows for a uuid+timestamp-only search phase.
+// Phase 1 filters/sorts/LIMITs over SELECT uuid, timestamp; this phase issues a
+// bounded point-lookup (SELECT * … WHERE uuid IN (…) AND timestamp range) so
+// wide columns (payload, data_extra, caller, …) are decompressed only for the
+// <=LIMIT rows returned. Any failure degrades gracefully: narrow rows are kept.
 func (h *SearchHandler) hydrateHeavyColumns(ctx context.Context, req *SearchObjectV4, rows []map[string]interface{}) []map[string]interface{} {
 	if len(rows) == 0 {
 		return rows
@@ -853,40 +883,34 @@ func (h *SearchHandler) hydrateHeavyColumns(ctx context.Context, req *SearchObje
 		escaped[i] = "'" + sqlvalidator.SafeString(u) + "'"
 	}
 	conditions = append(conditions, "uuid IN ("+strings.Join(escaped, ",")+")")
-	sql := fmt.Sprintf("SELECT uuid, %s FROM %s WHERE %s", heavyProjectionExpr, tableName, strings.Join(conditions, " AND "))
+	sql := fmt.Sprintf("SELECT * FROM %s WHERE %s", tableName, strings.Join(conditions, " AND "))
 
-	logger.Info("V4TransactionsSearch: hydrating payload by uuid", "uuids", len(uuids),
+	logger.Info("V4TransactionsSearch: hydrating full rows by uuid", "uuids", len(uuids),
 		"from", fromMs, "to", toMs)
-	heavyRows, err := h.flightService.Query(ctx, sql)
+	fullRows, err := h.flightService.Query(ctx, sql)
 	if err != nil {
-		// Degrade gracefully: return the narrow rows so the search still
-		// succeeds (payload simply absent). This also covers tables that have
-		// neither heavy column (COLUMNS lambda matches nothing).
-		logger.Warn("V4TransactionsSearch: payload hydration failed, returning narrow rows",
+		logger.Warn("V4TransactionsSearch: row hydration failed, returning narrow rows",
 			"error", err)
 		return rows
 	}
 
-	byUUID := make(map[string]map[string]interface{}, len(heavyRows))
-	for _, r := range heavyRows {
+	byUUID := make(map[string]map[string]interface{}, len(fullRows))
+	for _, r := range fullRows {
 		if u := rowStringValue(r["uuid"]); u != "" {
 			byUUID[u] = r
 		}
 	}
 
-	for _, r := range rows {
-		u := rowStringValue(r["uuid"])
-		hv := byUUID[u]
-		for _, col := range heavyColumns {
-			if v, ok := hv[col]; ok {
-				r[col] = v
-			} else if _, exists := r[col]; !exists {
-				// Keep response keys uniform even when a row had no match.
-				r[col] = nil
-			}
+	out := make([]map[string]interface{}, 0, len(rows))
+	for _, narrow := range rows {
+		u := rowStringValue(narrow["uuid"])
+		if full, ok := byUUID[u]; ok {
+			out = append(out, full)
+			continue
 		}
+		out = append(out, narrow)
 	}
-	return rows
+	return out
 }
 
 // rowStringValue coerces a result-set cell to a string, handling the string /
@@ -2362,14 +2386,13 @@ func buildMCPRawSQL(lakeName string, req *SearchObjectV4) string {
 		conditions = append(conditions, "response_code IN ("+strings.Join(escaped, ",")+")")
 	}
 	if req.Filter.CallID != "" {
-		escaped := sqlvalidator.SafeString(req.Filter.CallID)
-		conditions = append(conditions, fmt.Sprintf("(session_id LIKE '%%%s%%' OR cid LIKE '%%%s%%')", escaped, escaped))
+		conditions = append(conditions, sqlFormMatchClauseOr("session_id", "cid", req.Filter.CallID))
 	}
 	if req.Filter.FromUser != "" {
-		conditions = append(conditions, fmt.Sprintf("caller LIKE '%%%s%%'", sqlvalidator.SafeString(req.Filter.FromUser)))
+		conditions = append(conditions, sqlFormMatchClause("caller", req.Filter.FromUser))
 	}
 	if req.Filter.ToUser != "" {
-		conditions = append(conditions, fmt.Sprintf("callee LIKE '%%%s%%'", sqlvalidator.SafeString(req.Filter.ToUser)))
+		conditions = append(conditions, sqlFormMatchClause("callee", req.Filter.ToUser))
 	}
 	if req.Filter.SrcIP != "" {
 		conditions = append(conditions, fmt.Sprintf("src_ip = '%s'", sqlvalidator.SafeString(req.Filter.SrcIP)))
@@ -2384,7 +2407,7 @@ func buildMCPRawSQL(lakeName string, req *SearchObjectV4) string {
 			capStr, capStr, capStr))
 	}
 	if req.Filter.Payload != "" {
-		conditions = append(conditions, fmt.Sprintf("payload LIKE '%%%s%%'", sqlvalidator.SafeString(req.Filter.Payload)))
+		conditions = append(conditions, sqlFormMatchClause("payload", req.Filter.Payload))
 	}
 
 	sql := "SELECT * FROM " + lakeName + ".main.hep_proto_1_call"
@@ -2430,14 +2453,7 @@ func appendVirtualValueConditions(conditions []string, values map[string]string,
 			continue
 		}
 		jp := services.DuckJSONPath(rule.Path)
-		esc := sqlvalidator.SafeString(raw)
-		var clause string
-		switch rule.Match {
-		case services.VirtualMatchEquals:
-			clause = fmt.Sprintf("CAST(json_extract(data_extra, '%s') AS VARCHAR) = '%s'", jp, esc)
-		default:
-			clause = fmt.Sprintf("CAST(json_extract(data_extra, '%s') AS VARCHAR) LIKE '%%%s%%'", jp, esc)
-		}
+		clause := sqlFormMatchClause(fmt.Sprintf("CAST(json_extract(data_extra, '%s') AS VARCHAR)", jp), raw)
 		conditions = append(conditions, clause)
 	}
 	return conditions
@@ -2531,28 +2547,15 @@ type searchSQLOpts struct {
 	// range. The caller is expected to re-sort the rows in Go. Only honored for
 	// the default timestamp-DESC ordering (custom order_by still emits ORDER BY).
 	noOrderBy bool
-	// narrowNoHeavy replaces a default "SELECT *" with a projection that drops
-	// the wide blob columns (payload, data_extra). This keeps the search/sort
-	// phase memory-flat — the heavy columns are re-attached afterwards by uuid
-	// in a bounded point-lookup (see hydrateHeavyColumns). Ignored when a
-	// custom select is supplied.
+	// narrowNoHeavy replaces a default "SELECT *" with uuid+timestamp only for
+	// the filter/sort/LIMIT phase. Full rows are loaded afterwards by uuid
+	// (see hydrateHeavyColumns). Ignored when a custom select is supplied.
 	narrowNoHeavy bool
 }
 
-// heavyColumns are the wide blob columns excluded from the search/sort phase
-// and re-fetched by uuid afterwards. payload is the dominant memory cost on
-// SIP rows; data_extra is a JSON blob that can also be large.
-var heavyColumns = []string{"payload", "data_extra"}
-
-// narrowProjectionExpr is a "SELECT *"-style projection that omits the heavy
-// blob columns. The COLUMNS(lambda) form is schema-agnostic and does not error
-// when a table lacks one of the columns (unlike "* EXCLUDE (...)").
-const narrowProjectionExpr = "COLUMNS(c -> c NOT IN ('payload', 'data_extra'))"
-
-// heavyProjectionExpr selects only the heavy blob columns that exist on a
-// table. Used by the phase-2 hydration query. Errors if a table has none of
-// them, which the caller treats as "nothing to hydrate".
-const heavyProjectionExpr = "COLUMNS(c -> c IN ('payload', 'data_extra'))"
+// narrowProjectionExpr is the phase-1 projection for lazy transaction search:
+// only the correlation key and sort key — everything else is hydrated by uuid.
+const narrowProjectionExpr = "uuid, timestamp"
 
 // timestampRangeConditions renders WHERE bounds for a [fromMs, toMs] window
 // in epoch milliseconds. Zero values omit the corresponding bound.
@@ -2613,26 +2616,22 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 	// session_id / call_id / correlation: column layout depends on proto (see ducklake.TableSchema).
 	sessionFilter := firstNonEmpty(req.Filter.CallID, req.Filter.SessionID)
 	if sessionFilter != "" {
-		escaped := sqlvalidator.SafeString(sessionFilter)
 		switch protoType {
 		case 53:
-			// DNS table has no session_id / cid — search payload only.
-			conditions = append(conditions, fmt.Sprintf("payload LIKE '%%%s%%'", escaped))
+			conditions = append(conditions, sqlFormMatchClause("payload", sessionFilter))
 		case 100:
-			conditions = append(conditions, fmt.Sprintf("session_id LIKE '%%%s%%'", escaped))
+			conditions = append(conditions, sqlFormMatchClause("session_id", sessionFilter))
 		default:
-			conditions = append(conditions, fmt.Sprintf("(session_id LIKE '%%%s%%' OR cid LIKE '%%%s%%')", escaped, escaped))
+			conditions = append(conditions, sqlFormMatchClauseOr("session_id", "cid", sessionFilter))
 		}
 	} else if req.Filter.CID != "" {
-		escaped := sqlvalidator.SafeString(req.Filter.CID)
 		switch protoType {
 		case 53:
-			conditions = append(conditions, fmt.Sprintf("payload LIKE '%%%s%%'", escaped))
+			conditions = append(conditions, sqlFormMatchClause("payload", req.Filter.CID))
 		case 100:
-			// LOG table has session_id (from HEP CID) but no cid column.
-			conditions = append(conditions, fmt.Sprintf("session_id LIKE '%%%s%%'", escaped))
+			conditions = append(conditions, sqlFormMatchClause("session_id", req.Filter.CID))
 		default:
-			conditions = append(conditions, fmt.Sprintf("cid LIKE '%%%s%%'", escaped))
+			conditions = append(conditions, sqlFormMatchClause("cid", req.Filter.CID))
 		}
 	}
 	// Party / identity filters — column layout depends on SIP profile (ducklake.TableSchema).
@@ -2642,29 +2641,29 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		switch txType {
 		case "call":
 			if callerFilter != "" {
-				conditions = append(conditions, fmt.Sprintf("caller LIKE '%%%s%%'", sqlvalidator.SafeString(callerFilter)))
+				conditions = append(conditions, sqlFormMatchClause("caller", callerFilter))
 			}
 			if calleeFilter != "" {
-				conditions = append(conditions, fmt.Sprintf("callee LIKE '%%%s%%'", sqlvalidator.SafeString(calleeFilter)))
+				conditions = append(conditions, sqlFormMatchClause("callee", calleeFilter))
 			}
 		case "registration":
 			aorFilter := firstNonEmpty(req.Filter.Aor, callerFilter)
 			if aorFilter != "" {
-				conditions = append(conditions, fmt.Sprintf("aor LIKE '%%%s%%'", sqlvalidator.SafeString(aorFilter)))
+				conditions = append(conditions, sqlFormMatchClause("aor", aorFilter))
 			}
 			contactFilter := firstNonEmpty(req.Filter.Contact, calleeFilter)
 			if contactFilter != "" {
-				conditions = append(conditions, fmt.Sprintf("contact LIKE '%%%s%%'", sqlvalidator.SafeString(contactFilter)))
+				conditions = append(conditions, sqlFormMatchClause("contact", contactFilter))
 			}
 			if ex := strings.TrimSpace(req.Filter.Expires); ex != "" {
-				conditions = append(conditions, fmt.Sprintf("expires LIKE '%%%s%%'", sqlvalidator.SafeString(ex)))
+				conditions = append(conditions, sqlFormMatchClause("expires", ex))
 			}
 		case "default":
 			if callerFilter != "" {
-				conditions = append(conditions, fmt.Sprintf("CAST(json_extract(data_extra, '$.from_host') AS VARCHAR) LIKE '%%%s%%'", sqlvalidator.SafeString(callerFilter)))
+				conditions = append(conditions, sqlFormMatchClause("CAST(json_extract(data_extra, '$.from_host') AS VARCHAR)", callerFilter))
 			}
 			if calleeFilter != "" {
-				conditions = append(conditions, fmt.Sprintf("CAST(json_extract(data_extra, '$.to_host') AS VARCHAR) LIKE '%%%s%%'", sqlvalidator.SafeString(calleeFilter)))
+				conditions = append(conditions, sqlFormMatchClause("CAST(json_extract(data_extra, '$.to_host') AS VARCHAR)", calleeFilter))
 			}
 		}
 	}
@@ -2715,18 +2714,17 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		conditions = append(conditions, fmt.Sprintf("node_id = '%s'", sqlvalidator.SafeString(nodeFilter)))
 	}
 	if ua := strings.TrimSpace(req.Filter.UserAgent); ua != "" {
-		esc := sqlvalidator.SafeString(ua)
 		if protoType == 1 && txType == "registration" {
-			conditions = append(conditions, fmt.Sprintf("user_agent LIKE '%%%s%%'", esc))
+			conditions = append(conditions, sqlFormMatchClause("user_agent", ua))
 		} else {
-			conditions = append(conditions, fmt.Sprintf("CAST(json_extract(data_extra, '$.user_agent') AS VARCHAR) LIKE '%%%s%%'", esc))
+			conditions = append(conditions, sqlFormMatchClause("CAST(json_extract(data_extra, '$.user_agent') AS VARCHAR)", ua))
 		}
 	}
 	if ru := strings.TrimSpace(req.Filter.RuriUser); ru != "" {
-		conditions = append(conditions, fmt.Sprintf("CAST(json_extract(data_extra, '$.request_uri') AS VARCHAR) LIKE '%%%s%%'", sqlvalidator.SafeString(ru)))
+		conditions = append(conditions, sqlFormMatchClause("CAST(json_extract(data_extra, '$.request_uri') AS VARCHAR)", ru))
 	}
 	if req.Filter.Payload != "" {
-		conditions = append(conditions, fmt.Sprintf("payload LIKE '%%%s%%'", sqlvalidator.SafeString(req.Filter.Payload)))
+		conditions = append(conditions, sqlFormMatchClause("payload", req.Filter.Payload))
 	}
 	conditions = appendVirtualDataExtraConditions(conditions, req, virtualRules)
 
@@ -2738,8 +2736,7 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		}
 		selectClause = strings.TrimSpace(req.Param.Select)
 	} else if opts.narrowNoHeavy {
-		// Drop the wide blob columns for the search/sort phase; they are
-		// re-attached by uuid afterwards (hydrateHeavyColumns).
+		// Phase 1: uuid+timestamp only; hydrateHeavyColumns loads full rows.
 		selectClause = narrowProjectionExpr
 	}
 
@@ -2793,8 +2790,7 @@ func buildOTLPSearchSQLV4(tableName string, protoType int, req *SearchObjectV4, 
 		} else {
 			traceFilter := firstNonEmpty(req.Filter.CallID, req.Filter.SessionID, req.Filter.CID)
 			if traceFilter != "" {
-				esc := sqlvalidator.SafeString(traceFilter)
-				conditions = append(conditions, fmt.Sprintf("name LIKE '%%%s%%'", esc))
+				conditions = append(conditions, sqlFormMatchClause("name", traceFilter))
 			}
 		}
 	} else {
@@ -2835,25 +2831,21 @@ func buildOTLPSearchSQLV4(tableName string, protoType int, req *SearchObjectV4, 
 	// maps onto the body / span name, with raw JSON as a fallback. For
 	// metrics it filters by metric name.
 	if p := strings.TrimSpace(req.Filter.Payload); p != "" {
-		esc := sqlvalidator.SafeString(p)
 		switch protoType {
 		case otlpHepIDLogs:
-			conditions = append(conditions,
-				fmt.Sprintf("(body LIKE '%%%s%%' OR CAST(raw AS VARCHAR) LIKE '%%%s%%')", esc, esc))
+			conditions = append(conditions, sqlFormMatchClauseAny([]string{"body", "CAST(raw AS VARCHAR)"}, p))
 		case otlpHepIDMetrics:
-			conditions = append(conditions,
-				fmt.Sprintf("(name LIKE '%%%s%%' OR CAST(raw AS VARCHAR) LIKE '%%%s%%')", esc, esc))
+			conditions = append(conditions, sqlFormMatchClauseAny([]string{"name", "CAST(raw AS VARCHAR)"}, p))
 		default:
-			conditions = append(conditions,
-				fmt.Sprintf("(name LIKE '%%%s%%' OR CAST(raw AS VARCHAR) LIKE '%%%s%%')", esc, esc))
+			conditions = append(conditions, sqlFormMatchClauseAny([]string{"name", "CAST(raw AS VARCHAR)"}, p))
 		}
 	}
 	// service_name: dedicated field for OTLP (mapping id service_name) or
 	// legacy UserAgent slot used as service substring search.
 	if sn := strings.TrimSpace(req.Filter.ServiceName); sn != "" {
-		conditions = append(conditions, fmt.Sprintf("service_name LIKE '%%%s%%'", sqlvalidator.SafeString(sn)))
+		conditions = append(conditions, sqlFormMatchClause("service_name", sn))
 	} else if ua := strings.TrimSpace(req.Filter.UserAgent); ua != "" {
-		conditions = append(conditions, fmt.Sprintf("service_name LIKE '%%%s%%'", sqlvalidator.SafeString(ua)))
+		conditions = append(conditions, sqlFormMatchClause("service_name", ua))
 	}
 
 	selectClause := "*"
@@ -2908,9 +2900,7 @@ func buildLPSearchSQLV4(tableName string, req *SearchObjectV4, opts searchSQLOpt
 	// tables, but correct, and only kicks in when the operator
 	// actually types something.
 	if p := strings.TrimSpace(req.Filter.Payload); p != "" {
-		esc := sqlvalidator.SafeString(p)
-		conditions = append(conditions,
-			fmt.Sprintf("CAST(ROW(*) AS VARCHAR) LIKE '%%%s%%'", esc))
+		conditions = append(conditions, sqlFormMatchClause("CAST(ROW(*) AS VARCHAR)", p))
 	}
 
 	selectClause := "*"
