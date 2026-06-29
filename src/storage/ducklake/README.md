@@ -33,9 +33,9 @@ SIP messages are further split by method type:
 
 | Table Name | Methods | Description |
 |------------|---------|-------------|
-| `hep_proto_1_call` | INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO | Call-related messages |
+| `hep_proto_1_call` | INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO, REFER | Call-related messages |
 | `hep_proto_1_registration` | REGISTER | Registration messages |
-| `hep_proto_1_default` | OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE, REFER | Other SIP messages |
+| `hep_proto_1_default` | OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE | Other SIP messages |
 
 **Important**: For SIP responses (e.g., "200 OK"), routing is based on `CSeq` method, not the response line.
 

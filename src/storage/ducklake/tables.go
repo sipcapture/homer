@@ -39,9 +39,9 @@ const (
 
 // SIPType constants for SIP message categories
 const (
-	SIPTypeCall         = "call"         // INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO
+	SIPTypeCall         = "call"         // INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO, REFER
 	SIPTypeRegistration = "registration" // REGISTER
-	SIPTypeDefault      = "default"      // OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE, REFER
+	SIPTypeDefault      = "default"      // OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE
 	SIPTypeSiprec       = "siprec"       // SIPREC SRS signaling captured in Homer
 )
 
@@ -84,12 +84,12 @@ func GetSIPMethod(firstMethod, cseqMethod, firstResp string) string {
 // GetSIPType returns the SIP sub-type based on method
 func GetSIPType(method string) string {
 	switch method {
-	case "INVITE", "ACK", "PRACK", "UPDATE", "BYE", "CANCEL", "INFO":
+	case "INVITE", "ACK", "PRACK", "UPDATE", "BYE", "CANCEL", "INFO", "REFER":
 		return SIPTypeCall
 	case "REGISTER":
 		return SIPTypeRegistration
 	default:
-		// OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE, REFER, etc.
+		// OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE, etc.
 		return SIPTypeDefault
 	}
 }
@@ -97,7 +97,7 @@ func GetSIPType(method string) string {
 // GetTableSchemas returns schemas for all supported table types
 func GetTableSchemas() map[TableKey]*TableSchema {
 	return map[TableKey]*TableSchema{
-		// SIP Call - INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO
+		// SIP Call - INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO, REFER
 		{ProtoType: ProtoTypeSIP, SubType: SIPTypeCall}: {
 			ProtoType:   ProtoTypeSIP,
 			SubType:     SIPTypeCall,
@@ -209,7 +209,7 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
 		},
 
-		// SIP Default - OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE, REFER
+		// SIP Default - OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE
 		{ProtoType: ProtoTypeSIP, SubType: SIPTypeDefault}: {
 			ProtoType:   ProtoTypeSIP,
 			SubType:     SIPTypeDefault,
