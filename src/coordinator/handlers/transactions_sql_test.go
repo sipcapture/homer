@@ -53,8 +53,8 @@ func TestBuildSearchSQLV4_SIPRegistrationUsesAOR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(sql, "aor LIKE") {
-		t.Fatalf("expected aor LIKE, got:\n%s", sql)
+	if !strings.Contains(sql, "aor = 'bob@'") {
+		t.Fatalf("expected aor =, got:\n%s", sql)
 	}
 }
 
@@ -68,8 +68,8 @@ func TestBuildSearchSQLV4_UserAgentRegistrationColumn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(sql, "user_agent LIKE") {
-		t.Fatalf("expected top-level user_agent filter for registration, got:\n%s", sql)
+	if !strings.Contains(sql, "user_agent = 'Polycom'") {
+		t.Fatalf("expected top-level user_agent = for registration, got:\n%s", sql)
 	}
 }
 
@@ -232,10 +232,10 @@ func TestBuildSearchSQLV4_OTLPLogsBodyAndService(t *testing.T) {
 	if !strings.Contains(sql, "FROM homer_lake.otlp_logs") {
 		t.Fatalf("expected SELECT from otlp_logs, got:\n%s", sql)
 	}
-	if !strings.Contains(sql, "body LIKE '%panic%'") {
-		t.Fatalf("expected body LIKE clause for OTLP logs payload, got:\n%s", sql)
+	if !strings.Contains(sql, "body = 'panic'") {
+		t.Fatalf("expected body = clause for OTLP logs payload, got:\n%s", sql)
 	}
-	if !strings.Contains(sql, "service_name LIKE '%checkout-svc%'") {
+	if !strings.Contains(sql, "service_name = 'checkout-svc'") {
 		t.Fatalf("expected service_name filter sourced from UserAgent, got:\n%s", sql)
 	}
 	if strings.Contains(sql, "node_id") || strings.Contains(sql, "src_port") {
@@ -255,8 +255,8 @@ func TestBuildSearchSQLV4_OTLPMetricsByName(t *testing.T) {
 	if !strings.Contains(sql, "FROM homer_lake.otlp_metrics") {
 		t.Fatalf("expected SELECT from otlp_metrics, got:\n%s", sql)
 	}
-	if !strings.Contains(sql, "name LIKE '%http.server.duration%'") {
-		t.Fatalf("expected metric name LIKE clause from session/call id, got:\n%s", sql)
+	if !strings.Contains(sql, "name = 'http.server.duration'") {
+		t.Fatalf("expected metric name = clause from session/call id, got:\n%s", sql)
 	}
 }
 
@@ -292,7 +292,7 @@ func TestBuildSearchSQLV4_OTLPMetricsTypeInAndServiceName(t *testing.T) {
 	if !strings.Contains(sql, `"type" IN ('gauge','sum')`) {
 		t.Fatalf("expected quoted type IN clause, got:\n%s", sql)
 	}
-	if !strings.Contains(sql, "service_name LIKE '%checkout%'") {
+	if !strings.Contains(sql, "service_name = 'checkout'") {
 		t.Fatalf("expected service_name from filter.service_name, got:\n%s", sql)
 	}
 }
@@ -383,8 +383,38 @@ func TestBuildSearchSQLV4_VirtualDataExtra(t *testing.T) {
 	if !strings.Contains(sql, "json_extract(data_extra, '$.to_tag')") {
 		t.Fatalf("expected virtual to_tag extract, got:\n%s", sql)
 	}
-	if !strings.Contains(sql, "abc7") {
-		t.Fatalf("expected filter value in SQL, got:\n%s", sql)
+	if !strings.Contains(sql, "= 'abc7'") {
+		t.Fatalf("expected exact match for virtual like mapping, got:\n%s", sql)
+	}
+	if strings.Contains(sql, "LIKE '%abc7%'") {
+		t.Fatalf("virtual field without %% must not use substring LIKE, got:\n%s", sql)
+	}
+}
+
+func TestBuildSearchSQLV4_FormExactMatchUnlessPercent(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.FromUser = "alice"
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "caller = 'alice'") {
+		t.Fatalf("expected caller = for plain value, got:\n%s", sql)
+	}
+	if strings.Contains(sql, "caller LIKE") {
+		t.Fatalf("plain value must not use LIKE, got:\n%s", sql)
+	}
+
+	req.Filter.FromUser = "ali%"
+	sql2, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql2, "caller LIKE 'ali%'") {
+		t.Fatalf("expected caller LIKE when value contains %%, got:\n%s", sql2)
 	}
 }
 
