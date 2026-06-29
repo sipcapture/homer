@@ -45,7 +45,7 @@ func TestLazyPayloadEligibleOTLPAndLP(t *testing.T) {
 	}
 }
 
-func TestNarrowProjectionDropsHeavyColumns(t *testing.T) {
+func TestNarrowProjectionUUIDTimestampOnly(t *testing.T) {
 	req := &SearchObjectV4{}
 	req.Filter.ProtoType = 1
 	req.Timestamp.From = 1_700_000_000_000
@@ -56,11 +56,12 @@ func TestNarrowProjectionDropsHeavyColumns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
-	if !strings.Contains(sql, narrowProjectionExpr) {
-		t.Errorf("narrow SQL missing projection %q: %s", narrowProjectionExpr, sql)
+	wantProj := "SELECT " + narrowProjectionExpr + " FROM"
+	if !strings.Contains(sql, wantProj) {
+		t.Errorf("narrow SQL missing %q: %s", wantProj, sql)
 	}
-	if strings.Contains(sql, "SELECT * FROM") {
-		t.Errorf("narrow SQL should not select *: %s", sql)
+	if strings.Contains(sql, "caller") || strings.Contains(sql, "session_id") {
+		t.Errorf("narrow SQL must not project light columns: %s", sql)
 	}
 
 	// Without the opt the default SELECT * is preserved.

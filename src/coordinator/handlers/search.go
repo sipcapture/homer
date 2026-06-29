@@ -79,11 +79,9 @@ type SearchHandler struct {
 	// lakeChunkSec is the stream-strategy time-window width in seconds (<=0 =>
 	// 1h default). Mirrors storage.ducklake.search.lake_chunk_sec.
 	lakeChunkSec int
-	// lazyPayloadHydration runs transaction searches in two phases: a narrow
-	// search/sort that omits the wide blob columns (payload, data_extra),
-	// followed by a bounded point-lookup that re-attaches those columns by
-	// uuid. This keeps memory flat on large LIMITs over wide SIP rows. Mirrors
-	// storage.ducklake.search.lazy_payload (default on).
+	// lazyPayloadHydration runs transaction searches in two phases: phase 1
+	// SELECT uuid, timestamp (filter/sort/LIMIT), then a bounded SELECT * by
+	// uuid IN (…). Mirrors storage.ducklake.search.lazy_payload (default on).
 	lazyPayloadHydration bool
 }
 
@@ -213,14 +211,13 @@ func (h *SearchHandler) buildSimpleSearchSQL(req *SimpleSearchRequest) (string, 
 
 	// Field filters
 	if req.CallID != "" {
-		escaped := sqlvalidator.SafeString(req.CallID)
-		conditions = append(conditions, fmt.Sprintf("(session_id LIKE '%%%s%%' OR cid LIKE '%%%s%%')", escaped, escaped))
+		conditions = append(conditions, sqlFormMatchClauseOr("session_id", "cid", req.CallID))
 	}
 	if req.FromUser != "" {
-		conditions = append(conditions, fmt.Sprintf("caller LIKE '%%%s%%'", sqlvalidator.SafeString(req.FromUser)))
+		conditions = append(conditions, sqlFormMatchClause("caller", req.FromUser))
 	}
 	if req.ToUser != "" {
-		conditions = append(conditions, fmt.Sprintf("callee LIKE '%%%s%%'", sqlvalidator.SafeString(req.ToUser)))
+		conditions = append(conditions, sqlFormMatchClause("callee", req.ToUser))
 	}
 	if req.Method != "" {
 		conditions = append(conditions, fmt.Sprintf("method = '%s'", sqlvalidator.SafeString(req.Method)))
