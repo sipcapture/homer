@@ -14,8 +14,8 @@ GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS := -s -w -X main.VERSION_APPLICATION=$(VERSION) -X main.BuildDate=$(BUILD_DATE) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)
 
 # DuckDB extension bundle for deb/rpm — must match embedded DuckDB in src/go.mod
-# (github.com/duckdb/duckdb-go-bindings v0.10503.x → v1.5.3).
-DUCKDB_VERSION ?= v1.5.3
+# (github.com/duckdb/duckdb-go-bindings v0.10504.x → v1.5.4).
+DUCKDB_VERSION ?= v1.5.4
 
 # Used only by target glibc-polyfill (plain make release/all does not patch).
 # Example: make glibc-polyfill GLIBC_TARGET=2.28

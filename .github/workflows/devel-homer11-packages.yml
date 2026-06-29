@@ -186,7 +186,7 @@ jobs:
           set -euo pipefail
           export VERSION="${VERSION#v}"
           if [ "${{ matrix.goarch }}" = "amd64" ]; then export EXT_PLATFORM=linux_amd64; else export EXT_PLATFORM=linux_arm64; fi
-          export DUCKDB_VERSION=v1.5.3
+          export DUCKDB_VERSION=v1.5.4
           ./scripts/download_duckdb_extensions.sh "$EXT_PLATFORM"
           sed -i 's/^name: "homer-core"/name: "homer-core-devel"/' homer-core_workflow.yaml
           sed -i 's/^arch: ".*"/arch: "${{ matrix.goarch }}"/' homer-core_workflow.yaml
