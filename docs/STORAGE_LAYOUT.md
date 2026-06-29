@@ -77,9 +77,9 @@ SIP messages are split into three tables by transaction type:
 
 | Table | Methods | Description |
 |-------|---------|-------------|
-| `hep_proto_1_call` | INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO | Call messages |
+| `hep_proto_1_call` | INVITE, ACK, PRACK, UPDATE, BYE, CANCEL, INFO, REFER | Call messages |
 | `hep_proto_1_registration` | REGISTER | Registrations |
-| `hep_proto_1_default` | OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE, REFER | Other |
+| `hep_proto_1_default` | OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE | Other |
 | `hep_proto_1_siprec` | SIPREC SRS signaling (in-process receiver) | Recording metadata + SIP |
 
 **Important**: SIP responses (200 OK, 180 Ringing) are routed by the method from `CSeq` header.
