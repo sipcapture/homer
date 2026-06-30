@@ -275,6 +275,7 @@ type HomerServerSettings struct {
 			SecretAccessKey string `json:"secret_access_key" mapstructure:"secret_access_key" default:""`
 			Endpoint        string `json:"endpoint" mapstructure:"endpoint" default:""`
 			UseSSL          bool   `json:"use_ssl" mapstructure:"use_ssl" default:"true"`
+			URLStyle        string `json:"url_style" mapstructure:"url_style" default:""`
 		} `json:"s3" mapstructure:"s3"`
 	} `json:"ducklake_settings" mapstructure:"ducklake_settings"`
 }

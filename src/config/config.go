@@ -737,6 +737,7 @@ type VolumeConfig struct {
 	S3SecretKey    string `json:"s3_secret_access_key" mapstructure:"s3_secret_access_key" default:""`
 	S3Endpoint     string `json:"s3_endpoint" mapstructure:"s3_endpoint" default:""` // For S3-compatible (R2, MinIO)
 	S3UseSSL       bool   `json:"s3_use_ssl" mapstructure:"s3_use_ssl" default:"true"`
+	S3URLStyle     string `json:"s3_url_style" mapstructure:"s3_url_style" default:""` // Empty = path, set "vhost" for virtual-hosted-style
 	// OverrideDataPath passes OVERRIDE_DATA_PATH TRUE to DuckLake ATTACH when the path
 	// in config intentionally differs from DATA_PATH stored in an existing catalog
 	// (e.g. bucket rename, or node path typo vs writer). Prefer matching paths first.
@@ -792,6 +793,7 @@ type S3Config struct {
 	SecretAccessKey string `json:"secret_access_key" mapstructure:"secret_access_key" default:""`
 	Endpoint        string `json:"endpoint" mapstructure:"endpoint" default:""`
 	UseSSL          bool   `json:"use_ssl" mapstructure:"use_ssl" default:"true"`
+	URLStyle        string `json:"url_style" mapstructure:"url_style" default:""` // Empty = path, set "vhost" for virtual-hosted-style
 }
 
 // HEPConfig configures HEP protocol processing

@@ -41,7 +41,7 @@ func secretProvider(t *testing.T, accessKey, secretKey, region, endpoint string,
 		}
 	}
 
-	if _, err := db.Exec(buildS3SecretSQL("s3_secret_test", accessKey, secretKey, region, endpoint, useSSL)); err != nil {
+	if _, err := db.Exec(buildS3SecretSQL("s3_secret_test", accessKey, secretKey, region, endpoint, useSSL, "")); err != nil {
 		t.Skipf("CREATE SECRET unavailable (extension/version): %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestBuildS3SecretSQL_Branches(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			sql := buildS3SecretSQL("test_secret", tc.accessKey, "secret", tc.region, tc.endpoint, true)
+			sql := buildS3SecretSQL("test_secret", tc.accessKey, "secret", tc.region, tc.endpoint, true, "")
 			if !strings.Contains(sql, tc.wantSubstr) {
 				t.Errorf("SQL should contain %q:\n%s", tc.wantSubstr, sql)
 			}
@@ -151,5 +151,12 @@ func TestBuildS3SecretSQL_Branches(t *testing.T) {
 				t.Errorf("SQL should not contain %q:\n%s", tc.denySubstr, sql)
 			}
 		})
+	}
+}
+
+func TestBuildS3SecretSQL_CustomEndpointURLStyle(t *testing.T) {
+	sql := buildS3SecretSQL("test_secret", "AKIA...", "secret", "cn-hangzhou", "oss-cn-hangzhou.aliyuncs.com", true, "vhost")
+	if !strings.Contains(sql, "URL_STYLE 'vhost'") {
+		t.Fatalf("SQL should contain vhost URL_STYLE:\n%s", sql)
 	}
 }

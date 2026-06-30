@@ -157,6 +157,7 @@ type CatalogRefresher interface {
 type CompactionS3Client struct {
 	Region, AccessKeyID, SecretAccessKey, Endpoint string
 	UseSSL                                           bool
+	URLStyle                                         string
 }
 
 // CompactionService handles periodic compaction and retention
@@ -207,7 +208,7 @@ func (c *CompactionService) ensureS3ClientSettings() {
 		return
 	}
 	s := c.s3Client
-	if err := ducklake.ApplyDuckDBS3ClientSettings(c.db, s.Region, s.AccessKeyID, s.SecretAccessKey, s.Endpoint, s.UseSSL); err != nil {
+	if err := ducklake.ApplyDuckDBS3ClientSettings(c.db, s.Region, s.AccessKeyID, s.SecretAccessKey, s.Endpoint, s.UseSSL, s.URLStyle); err != nil {
 		logger.Warn("CompactionService: ApplyDuckDBS3ClientSettings failed", "error", err)
 	}
 }
