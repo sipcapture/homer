@@ -274,6 +274,7 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 		duckCfg.S3SecretAccessKey = storageCfg.DuckLake.S3.SecretAccessKey
 		duckCfg.S3Endpoint = storageCfg.DuckLake.S3.Endpoint
 		duckCfg.S3UseSSL = storageCfg.DuckLake.S3.UseSSL
+		duckCfg.S3URLStyle = storageCfg.DuckLake.S3.URLStyle
 	}
 
 	duckMgr, err := ducklake.NewManager(duckCfg)
@@ -368,6 +369,7 @@ func (w *Writer) Start() error {
 					SecretAccessKey: s.SecretAccessKey,
 					Endpoint:        s.Endpoint,
 					UseSSL:          s.UseSSL,
+					URLStyle:        s.URLStyle,
 				}
 			}
 		}
@@ -937,6 +939,7 @@ func (w *Writer) startTieringService() error {
 			S3SecretKey:      vol.S3SecretKey,
 			S3Endpoint:       vol.S3Endpoint,
 			S3UseSSL:         vol.S3UseSSL,
+			S3URLStyle:       vol.S3URLStyle,
 			OverrideDataPath: vol.OverrideDataPath,
 		}
 	}

@@ -86,6 +86,7 @@ type Config struct {
 	S3SecretAccessKey string
 	S3Endpoint        string
 	S3UseSSL          bool
+	S3URLStyle        string
 
 	// DuckDB engine tuning. Empty / zero values mean "leave DuckDB's
 	// own default" — these knobs are opt-in. See ApplyDuckDBTuning
@@ -345,6 +346,7 @@ func (mtw *MultiTableWriter) connect() error {
 		mtw.config.S3SecretAccessKey,
 		mtw.config.S3Endpoint,
 		mtw.config.S3UseSSL,
+		mtw.config.S3URLStyle,
 	)
 	connector, err := duckdb.NewConnector("", func(execer driver.ExecerContext) error {
 		for _, stmt := range s3Stmts {
@@ -482,6 +484,7 @@ func (mtw *MultiTableWriter) connect() error {
 			mtw.config.S3SecretAccessKey,
 			mtw.config.S3Endpoint,
 			mtw.config.S3UseSSL,
+			mtw.config.S3URLStyle,
 		); err != nil {
 			return fmt.Errorf("failed to configure S3 secret for DuckLake: %w", err)
 		}

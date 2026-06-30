@@ -110,6 +110,7 @@ func duckLakeConfigFromModular(cfg *config.Config) ducklake.Config {
 		base.S3SecretAccessKey = source.S3.SecretAccessKey
 		base.S3Endpoint = source.S3.Endpoint
 		base.S3UseSSL = source.S3.UseSSL
+		base.S3URLStyle = source.S3.URLStyle
 	}
 
 	return base
@@ -124,14 +125,14 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 	}
 
 	if err := ducklake.ApplyDuckDBS3ClientSettings(db,
-		cfg.S3Region, cfg.S3AccessKeyID, cfg.S3SecretAccessKey, cfg.S3Endpoint, cfg.S3UseSSL,
+		cfg.S3Region, cfg.S3AccessKeyID, cfg.S3SecretAccessKey, cfg.S3Endpoint, cfg.S3UseSSL, cfg.S3URLStyle,
 	); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to configure S3: %w", err)
 	}
 	if ducklake.IsRemoteLakeDataPath(cfg.DataPath) {
 		if err := ducklake.EnsureWriterS3Secret(db,
-			cfg.S3Region, cfg.S3AccessKeyID, cfg.S3SecretAccessKey, cfg.S3Endpoint, cfg.S3UseSSL,
+			cfg.S3Region, cfg.S3AccessKeyID, cfg.S3SecretAccessKey, cfg.S3Endpoint, cfg.S3UseSSL, cfg.S3URLStyle,
 		); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("failed to configure S3 secret: %w", err)

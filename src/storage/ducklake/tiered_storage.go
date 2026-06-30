@@ -45,6 +45,7 @@ type Volume struct {
 	S3SecretKey string
 	S3Endpoint  string
 	S3UseSSL    bool
+	S3URLStyle  string
 
 	// OverrideDataPath passes OVERRIDE_DATA_PATH TRUE to DuckLake ATTACH; see config.VolumeConfig.
 	OverrideDataPath bool
@@ -182,7 +183,7 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 			region = "us-east-1"
 		}
 
-		createSecret := buildS3SecretSQL(secretName, vol.S3AccessKey, vol.S3SecretKey, region, endpoint, vol.S3UseSSL)
+		createSecret := buildS3SecretSQL(secretName, vol.S3AccessKey, vol.S3SecretKey, region, endpoint, vol.S3UseSSL, vol.S3URLStyle)
 
 		logger.Info("TieredStorageManager: Creating S3 secret",
 			"volume", vol.Name,
@@ -575,7 +576,7 @@ func sortResultsByTimestamp(results []map[string]interface{}) {
 // uses PROVIDER credential_chain so DuckDB resolves credentials through the
 // AWS SDK default chain (env, container/Pod Identity, instance profile).
 // Static keys and custom endpoints (MinIO / R2) use explicit KEY_ID/SECRET.
-func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string, useSSL bool) string {
+func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string, useSSL bool, urlStyle string) string {
 	switch {
 	case strings.TrimSpace(accessKey) == "" && endpoint == "":
 		// Default region for native AWS S3 so the secret signs correctly even
@@ -599,10 +600,10 @@ func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string,
 				SECRET '%s',
 				REGION '%s',
 				ENDPOINT '%s',
-				URL_STYLE 'path',
+				URL_STYLE '%s',
 				USE_SSL %t
 			);
-		`, secretName, accessKey, secretKey, region, endpoint, useSSL)
+		`, secretName, accessKey, secretKey, region, endpoint, strings.ReplaceAll(NormalizeS3URLStyle(urlStyle), "'", "''"), useSSL)
 	default:
 		return fmt.Sprintf(`
 			CREATE SECRET %s (

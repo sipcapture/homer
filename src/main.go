@@ -353,6 +353,7 @@ func ducklakeConfigFromModular(cfg *config.Config) ducklake.Config {
 		base.S3SecretAccessKey = source.S3.SecretAccessKey
 		base.S3Endpoint = source.S3.Endpoint
 		base.S3UseSSL = source.S3.UseSSL
+		base.S3URLStyle = source.S3.URLStyle
 	}
 
 	return base

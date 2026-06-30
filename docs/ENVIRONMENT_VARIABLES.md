@@ -19,6 +19,9 @@ Field names follow the `mapstructure` tags on [`Config` in `src/config/config.go
 
 - `storage.ducklake.storage_policy.volumes[1].s3_endpoint`  
   → `HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_S3_ENDPOINT`
+- `storage.ducklake.s3.url_style` → `HOMER_STORAGE_DUCKLAKE_S3_URL_STYLE` (`path` by default; set `vhost` for S3 virtual-hosted-style endpoints)
+- `node.ducklake.volumes[0].s3_url_style` → `HOMER_NODE_DUCKLAKE_VOLUMES_0_S3_URL_STYLE`
+- `storage.ducklake.storage_policy.volumes[1].s3_url_style` → `HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_S3_URL_STYLE`
 
 ## References
 
