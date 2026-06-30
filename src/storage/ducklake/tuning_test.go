@@ -132,7 +132,7 @@ func TestEnsureWriterS3Secret_MinIOStyle(t *testing.T) {
 	}
 	defer db.Close()
 
-	if err := EnsureWriterS3Secret(db, "us-east-1", "k", "s", "http://127.0.0.1:9000", false); err != nil {
+	if err := EnsureWriterS3Secret(db, "us-east-1", "k", "s", "http://127.0.0.1:9000", false, ""); err != nil {
 		t.Fatalf("EnsureWriterS3Secret: %v", err)
 	}
 	if _, err := db.Exec("SELECT 1"); err != nil {
@@ -147,11 +147,19 @@ func TestApplyDuckDBS3ClientSettings_MinIOStyleEndpoint(t *testing.T) {
 	}
 	defer db.Close()
 
-	if err := ApplyDuckDBS3ClientSettings(db, "us-east-1", "testkey", "testsecret", "http://127.0.0.1:9000", false); err != nil {
+	if err := ApplyDuckDBS3ClientSettings(db, "us-east-1", "testkey", "testsecret", "http://127.0.0.1:9000", false, ""); err != nil {
 		t.Fatalf("ApplyDuckDBS3ClientSettings: %v", err)
 	}
 	if got := getSetting(t, db, "s3_url_style"); got != "path" {
 		t.Fatalf("s3_url_style = %q, want path", got)
+	}
+}
+
+func TestS3ClientSettingsSQL_CustomURLStyle(t *testing.T) {
+	stmts := S3ClientSettingsSQL("cn-hangzhou", "testkey", "testsecret", "https://oss-cn-hangzhou.aliyuncs.com", true, "vhost")
+	joined := strings.Join(stmts, "\n")
+	if !strings.Contains(joined, "SET s3_url_style = 'vhost';") {
+		t.Fatalf("S3ClientSettingsSQL should set vhost URL style:\n%s", joined)
 	}
 }
 

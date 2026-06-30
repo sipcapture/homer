@@ -26,11 +26,11 @@ import (
 // If accessKeyID is empty, returns nil (nothing to apply).
 //
 // When endpoint is non-empty, the scheme is stripped (DuckDB expects host:port)
-// and s3_url_style is set to path — required for most S3-compatible stores
+// and s3_url_style defaults to path — required for most S3-compatible stores
 // (MinIO, RustFS) and aligned with per-volume CREATE SECRET in attachVolume.
 // If region is empty but a custom endpoint is set, region defaults to us-east-1
 // (signing requires a non-empty region for many S3-compatible backends).
-func S3ClientSettingsSQL(region, accessKeyID, secretAccessKey, endpoint string, useSSL bool) []string {
+func S3ClientSettingsSQL(region, accessKeyID, secretAccessKey, endpoint string, useSSL bool, urlStyle string) []string {
 	if strings.TrimSpace(accessKeyID) == "" {
 		return nil
 	}
@@ -51,13 +51,23 @@ func S3ClientSettingsSQL(region, accessKeyID, secretAccessKey, endpoint string, 
 		ep := strings.TrimPrefix(strings.TrimPrefix(epRaw, "http://"), "https://")
 		stmts = append(stmts,
 			fmt.Sprintf("SET s3_endpoint = '%s';", quote(ep)),
-			"SET s3_url_style = 'path';",
+			fmt.Sprintf("SET s3_url_style = '%s';", quote(NormalizeS3URLStyle(urlStyle))),
 		)
 	}
 	if !useSSL {
 		stmts = append(stmts, "SET s3_use_ssl = false;")
 	}
 	return stmts
+}
+
+// NormalizeS3URLStyle returns the DuckDB S3 URL style used for custom
+// endpoints. Empty keeps the historical Homer behaviour: path-style URLs.
+func NormalizeS3URLStyle(urlStyle string) string {
+	style := strings.ToLower(strings.TrimSpace(urlStyle))
+	if style == "" {
+		return "path"
+	}
+	return style
 }
 
 // s3SettingName extracts the setting identifier from a "SET name = ..."
@@ -75,11 +85,11 @@ func s3SettingName(stmt string) string {
 // writer MultiTableWriter, node global prefix (configureDuckLake), CLI helpers.
 // Note: SET s3_* is session-scoped — this only reliably covers pools with
 // MaxOpenConns(1); pooled writers replay S3ClientSettingsSQL per connection.
-func ApplyDuckDBS3ClientSettings(db *sql.DB, region, accessKeyID, secretAccessKey, endpoint string, useSSL bool) error {
+func ApplyDuckDBS3ClientSettings(db *sql.DB, region, accessKeyID, secretAccessKey, endpoint string, useSSL bool, urlStyle string) error {
 	if db == nil {
 		return nil
 	}
-	for _, stmt := range S3ClientSettingsSQL(region, accessKeyID, secretAccessKey, endpoint, useSSL) {
+	for _, stmt := range S3ClientSettingsSQL(region, accessKeyID, secretAccessKey, endpoint, useSSL, urlStyle) {
 		if _, err := db.Exec(stmt); err != nil {
 			return fmt.Errorf("duckdb SET %s: %w", s3SettingName(stmt), err)
 		}
@@ -96,7 +106,7 @@ const writerLakeS3Secret = "homer_writer_s3"
 // EnsureWriterS3Secret creates a session-scoped DuckDB TYPE S3 secret so DuckLake
 // internals hit the same endpoint as ApplyDuckDBS3ClientSettings. Call after
 // ApplyDuckDBS3ClientSettings and before ATTACH ducklake. No-op if accessKeyID is empty.
-func EnsureWriterS3Secret(db *sql.DB, region, accessKeyID, secretAccessKey, endpoint string, useSSL bool) error {
+func EnsureWriterS3Secret(db *sql.DB, region, accessKeyID, secretAccessKey, endpoint string, useSSL bool, urlStyle string) error {
 	if db == nil || strings.TrimSpace(accessKeyID) == "" {
 		return nil
 	}
@@ -107,6 +117,7 @@ func EnsureWriterS3Secret(db *sql.DB, region, accessKeyID, secretAccessKey, endp
 	}
 	sqlQuote := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
 	epHost := strings.TrimPrefix(strings.TrimPrefix(epRaw, "http://"), "https://")
+	style := NormalizeS3URLStyle(urlStyle)
 
 	drop := fmt.Sprintf("DROP SECRET IF EXISTS %s;", writerLakeS3Secret)
 	if _, err := db.Exec(drop); err != nil {
@@ -121,9 +132,9 @@ CREATE SECRET %s (
 	SECRET '%s',
 	REGION '%s',
 	ENDPOINT '%s',
-	URL_STYLE 'path',
+	URL_STYLE '%s',
 	USE_SSL %t
-);`, writerLakeS3Secret, sqlQuote(accessKeyID), sqlQuote(secretAccessKey), sqlQuote(reg), sqlQuote(epHost), useSSL)
+);`, writerLakeS3Secret, sqlQuote(accessKeyID), sqlQuote(secretAccessKey), sqlQuote(reg), sqlQuote(epHost), sqlQuote(style), useSSL)
 	} else {
 		create = fmt.Sprintf(`
 CREATE SECRET %s (

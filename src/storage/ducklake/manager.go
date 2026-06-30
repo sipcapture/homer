@@ -72,6 +72,7 @@ func NewManagerFromConfig() (*Manager, error) {
 		config.S3SecretAccessKey = settings.S3.SecretAccessKey
 		config.S3Endpoint = settings.S3.Endpoint
 		config.S3UseSSL = settings.S3.UseSSL
+		config.S3URLStyle = settings.S3.URLStyle
 	}
 
 	// Apply defaults

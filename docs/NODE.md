@@ -148,6 +148,7 @@ See [FLIGHTSQL.md](FLIGHTSQL.md) for Grafana setup and coordinator proxy (`coord
 | `s3_secret_access_key` | string | - | AWS Secret Access Key |
 | `s3_endpoint` | string | - | Custom S3 endpoint (MinIO, R2) |
 | `s3_use_ssl` | bool | true | Use SSL for S3 connections |
+| `s3_url_style` | string | path | DuckDB S3 URL style for custom endpoints (`path` or `vhost`) |
 | `override_data_path` | bool | false | If true, DuckLake `ATTACH` uses `OVERRIDE_DATA_PATH TRUE` so `path` may differ from the `DATA_PATH` already stored in the catalog (e.g. bucket rename). Prefer keeping `path` identical to the writer volume that created the catalog. |
 
 ### Volume `name` and the DuckDB catalog

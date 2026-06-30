@@ -1507,6 +1507,7 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 		cfg.DuckLake.S3.SecretAccessKey,
 		cfg.DuckLake.S3.Endpoint,
 		cfg.DuckLake.S3.UseSSL,
+		cfg.DuckLake.S3.URLStyle,
 	); err != nil {
 		return nil, fmt.Errorf("failed to configure S3: %w", err)
 	}
@@ -1576,6 +1577,7 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 		if region == "" && endpoint != "" {
 			region = "us-east-1"
 		}
+		urlStyle := strings.ReplaceAll(ducklake.NormalizeS3URLStyle(vol.S3URLStyle), "'", "''")
 
 		// Create secret
 		var createSecret string
@@ -1587,10 +1589,10 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 					SECRET '%s',
 					REGION '%s',
 					ENDPOINT '%s',
-					URL_STYLE 'path',
+					URL_STYLE '%s',
 					USE_SSL %t
 				);
-			`, secretName, vol.S3AccessKeyID, vol.S3SecretKey, region, endpoint, vol.S3UseSSL)
+			`, secretName, vol.S3AccessKeyID, vol.S3SecretKey, region, endpoint, urlStyle, vol.S3UseSSL)
 		} else {
 			createSecret = fmt.Sprintf(`
 				CREATE SECRET %s (

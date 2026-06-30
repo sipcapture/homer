@@ -122,6 +122,7 @@ The `move_factor` parameter works similar to ClickHouse storage policies. It con
 | `s3_secret_access_key` | string | "" | Secret key |
 | `s3_endpoint` | string | "" | Custom endpoint for S3-compatible services (R2, MinIO, RustFS) |
 | `s3_use_ssl` | bool | true | Use HTTPS for S3 connections |
+| `s3_url_style` | string | "path" | DuckDB S3 URL style for custom endpoints (`path` or `vhost`) |
 
 ## Examples
 
