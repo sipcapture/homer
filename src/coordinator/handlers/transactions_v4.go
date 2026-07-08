@@ -2403,7 +2403,7 @@ func buildMCPRawSQL(lakeName string, req *SearchObjectV4) string {
 	if req.Filter.CaptureID > 0 {
 		capStr := sqlvalidator.SafeString(strconv.Itoa(req.Filter.CaptureID))
 		conditions = append(conditions, fmt.Sprintf(
-			"(CAST(node_id AS VARCHAR) = '%s' OR CAST(json_extract(data_extra, '$.capture_id') AS VARCHAR) = '%s' OR CAST(json_extract(data_extra, '$.captureId') AS VARCHAR) = '%s')",
+			"(CAST(node_id AS VARCHAR) = '%s' OR data_extra ->> '$.capture_id' = '%s' OR data_extra ->> '$.captureId' = '%s')",
 			capStr, capStr, capStr))
 	}
 	if req.Filter.Payload != "" {
@@ -2453,7 +2453,7 @@ func appendVirtualValueConditions(conditions []string, values map[string]string,
 			continue
 		}
 		jp := services.DuckJSONPath(rule.Path)
-		clause := sqlFormMatchClause(fmt.Sprintf("CAST(json_extract(data_extra, '%s') AS VARCHAR)", jp), raw)
+		clause := sqlFormMatchClause(fmt.Sprintf("data_extra ->> '%s'", jp), raw)
 		conditions = append(conditions, clause)
 	}
 	return conditions
@@ -2483,8 +2483,8 @@ func appendVirtualAbsentPresentConditions(conditions []string, absentIDs, presen
 			continue
 		}
 		jp := services.DuckJSONPath(rule.Path)
-		inner := fmt.Sprintf("trim(CAST(json_extract(data_extra, '%s') AS VARCHAR))", jp)
-		clause := fmt.Sprintf("(json_extract(data_extra, '%s') IS NULL OR %s = '' OR lower(%s) = 'null')", jp, inner, inner)
+		inner := fmt.Sprintf("trim(data_extra ->> '%s')", jp)
+		clause := fmt.Sprintf("(data_extra ->> '%s' IS NULL OR %s = '' OR lower(%s) = 'null')", jp, inner, inner)
 		conditions = append(conditions, clause)
 	}
 	for _, id := range normalizeIDs(presentIDs) {
@@ -2493,8 +2493,8 @@ func appendVirtualAbsentPresentConditions(conditions []string, absentIDs, presen
 			continue
 		}
 		jp := services.DuckJSONPath(rule.Path)
-		inner := fmt.Sprintf("trim(CAST(json_extract(data_extra, '%s') AS VARCHAR))", jp)
-		clause := fmt.Sprintf("(json_extract(data_extra, '%s') IS NOT NULL AND %s <> '' AND lower(%s) <> 'null')", jp, inner, inner)
+		inner := fmt.Sprintf("trim(data_extra ->> '%s')", jp)
+		clause := fmt.Sprintf("(data_extra ->> '%s' IS NOT NULL AND %s <> '' AND lower(%s) <> 'null')", jp, inner, inner)
 		conditions = append(conditions, clause)
 	}
 	return conditions
@@ -2660,10 +2660,10 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 			}
 		case "default":
 			if callerFilter != "" {
-				conditions = append(conditions, sqlFormMatchClause("CAST(json_extract(data_extra, '$.from_host') AS VARCHAR)", callerFilter))
+				conditions = append(conditions, sqlFormMatchClause("data_extra ->> '$.from_host'", callerFilter))
 			}
 			if calleeFilter != "" {
-				conditions = append(conditions, sqlFormMatchClause("CAST(json_extract(data_extra, '$.to_host') AS VARCHAR)", calleeFilter))
+				conditions = append(conditions, sqlFormMatchClause("data_extra ->> '$.to_host'", calleeFilter))
 			}
 		}
 	}
@@ -2705,7 +2705,7 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		// Classic Homer captureId corresponds to HEP chunk 0x000c (capture agent); we persist it as node_id.
 		// Also match capture_id embedded in data_extra when present (custom ingest).
 		conditions = append(conditions, fmt.Sprintf(
-			"(CAST(node_id AS VARCHAR) = '%s' OR CAST(json_extract(data_extra, '$.capture_id') AS VARCHAR) = '%s' OR CAST(json_extract(data_extra, '$.captureId') AS VARCHAR) = '%s')",
+			"(CAST(node_id AS VARCHAR) = '%s' OR data_extra ->> '$.capture_id' = '%s' OR data_extra ->> '$.captureId' = '%s')",
 			capStr, capStr, capStr))
 	}
 	// node / node_id
@@ -2717,11 +2717,11 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		if protoType == 1 && txType == "registration" {
 			conditions = append(conditions, sqlFormMatchClause("user_agent", ua))
 		} else {
-			conditions = append(conditions, sqlFormMatchClause("CAST(json_extract(data_extra, '$.user_agent') AS VARCHAR)", ua))
+			conditions = append(conditions, sqlFormMatchClause("data_extra ->> '$.user_agent'", ua))
 		}
 	}
 	if ru := strings.TrimSpace(req.Filter.RuriUser); ru != "" {
-		conditions = append(conditions, sqlFormMatchClause("CAST(json_extract(data_extra, '$.request_uri') AS VARCHAR)", ru))
+		conditions = append(conditions, sqlFormMatchClause("data_extra ->> '$.request_uri'", ru))
 	}
 	if req.Filter.Payload != "" {
 		conditions = append(conditions, sqlFormMatchClause("payload", req.Filter.Payload))
