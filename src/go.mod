@@ -39,7 +39,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/valyala/fasthttp v1.68.0
 	go.opentelemetry.io/proto/otlp v1.10.0
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.43.0
 	google.golang.org/grpc v1.80.0
