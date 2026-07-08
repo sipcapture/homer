@@ -20,8 +20,8 @@ func TestBuildSearchSQLV4_CaptureID(t *testing.T) {
 	if !strings.Contains(sql, "node_id") || !strings.Contains(sql, "42") {
 		t.Fatalf("expected node_id and capture value in SQL, got:\n%s", sql)
 	}
-	if !strings.Contains(sql, "json_extract") {
-		t.Fatalf("expected json_extract for data_extra capture_id, got:\n%s", sql)
+	if !strings.Contains(sql, "data_extra ->> '$.capture_id'") {
+		t.Fatalf("expected data_extra ->> for capture_id, got:\n%s", sql)
 	}
 }
 
@@ -380,7 +380,7 @@ func TestBuildSearchSQLV4_VirtualDataExtra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(sql, "json_extract(data_extra, '$.to_tag')") {
+	if !strings.Contains(sql, "data_extra ->> '$.to_tag'") {
 		t.Fatalf("expected virtual to_tag extract, got:\n%s", sql)
 	}
 	if !strings.Contains(sql, "= 'abc7'") {
@@ -436,7 +436,7 @@ func TestBuildSearchSQLV4_VirtualDataExtraEquals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(sql, "json_extract(data_extra, '$.branch')") {
+	if !strings.Contains(sql, "data_extra ->> '$.branch'") {
 		t.Fatalf("expected branch extract, got:\n%s", sql)
 	}
 	if !strings.Contains(sql, "= 'z9hG4bK1'") {
@@ -462,7 +462,7 @@ func TestBuildSearchSQLV4_VirtualDataExtraCustomHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `json_extract(data_extra, '$.custom_headers."X-icc_uuid"')`
+	want := `data_extra ->> '$.custom_headers."X-icc_uuid"'`
 	if !strings.Contains(sql, want) {
 		t.Fatalf("expected %q in SQL, got:\n%s", want, sql)
 	}
@@ -493,7 +493,7 @@ func TestBuildSearchSQLV4_VirtualAbsentToTag(t *testing.T) {
 	if !strings.Contains(sql, "method IN ('INVITE')") {
 		t.Fatalf("expected INVITE filter, got:\n%s", sql)
 	}
-	if !strings.Contains(sql, "json_extract(data_extra, '$.to_tag')") {
+	if !strings.Contains(sql, "data_extra ->> '$.to_tag'") {
 		t.Fatalf("expected to_tag extract for absent, got:\n%s", sql)
 	}
 	if !strings.Contains(sql, "IS NULL") {
