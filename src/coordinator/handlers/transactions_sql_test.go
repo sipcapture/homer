@@ -20,8 +20,8 @@ func TestBuildSearchSQLV4_CaptureID(t *testing.T) {
 	if !strings.Contains(sql, "node_id") || !strings.Contains(sql, "42") {
 		t.Fatalf("expected node_id and capture value in SQL, got:\n%s", sql)
 	}
-	if !strings.Contains(sql, "data_extra ->> '$.capture_id'") {
-		t.Fatalf("expected data_extra ->> for capture_id, got:\n%s", sql)
+	if !strings.Contains(sql, "json_extract_string(data_extra, '$.capture_id')") {
+		t.Fatalf("expected json_extract_string for capture_id, got:\n%s", sql)
 	}
 }
 
@@ -380,7 +380,7 @@ func TestBuildSearchSQLV4_VirtualDataExtra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(sql, "data_extra ->> '$.to_tag'") {
+	if !strings.Contains(sql, "json_extract_string(data_extra, '$.to_tag')") {
 		t.Fatalf("expected virtual to_tag extract, got:\n%s", sql)
 	}
 	if !strings.Contains(sql, "= 'abc7'") {
@@ -436,7 +436,7 @@ func TestBuildSearchSQLV4_VirtualDataExtraEquals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(sql, "data_extra ->> '$.branch'") {
+	if !strings.Contains(sql, "json_extract_string(data_extra, '$.branch')") {
 		t.Fatalf("expected branch extract, got:\n%s", sql)
 	}
 	if !strings.Contains(sql, "= 'z9hG4bK1'") {
@@ -462,12 +462,46 @@ func TestBuildSearchSQLV4_VirtualDataExtraCustomHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `data_extra ->> '$.custom_headers."X-icc_uuid"'`
+	want := `json_extract_string(data_extra, '$.custom_headers."X-icc_uuid"')`
 	if !strings.Contains(sql, want) {
 		t.Fatalf("expected %q in SQL, got:\n%s", want, sql)
 	}
 	if !strings.Contains(sql, "= 'uuid-123'") {
 		t.Fatalf("expected filter value in SQL, got:\n%s", sql)
+	}
+}
+
+// Regression: data_extra value comparisons must use json_extract_string(), not the
+// `->>` operator. `data_extra ->> '$.path'` combined with a timestamp-range filter
+// (which the search UI always sends) triggers a DuckDB planner error at runtime —
+// "Conversion Error: Failed to cast value to numerical" — and 500s the search
+// endpoint. json_extract_string() returns the same unquoted value without the issue.
+// See PR #859 (which introduced `->>`).
+func TestBuildSearchSQLV4_VirtualEqualsUsesJsonExtractStringNotArrowOp(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.Virtual = map[string]string{"x_grp": "GRP-1"}
+	req.Timestamp.From = 1700000000000
+	req.Timestamp.To = 1700003600000
+
+	rules := map[string]services.VirtualFieldRule{
+		"x_grp": {
+			Kind:  services.VirtualKindDataExtraJSON,
+			Path:  "custom_headers.X-Group-Id",
+			Match: services.VirtualMatchEquals,
+		},
+	}
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, `json_extract_string(data_extra, '$.custom_headers."X-Group-Id"')`) {
+		t.Fatalf("virtual equals must use json_extract_string, got:\n%s", sql)
+	}
+	if strings.Contains(sql, "data_extra ->>") {
+		t.Fatalf("virtual field must NOT use the ->> operator (breaks combined with a timestamp filter), got:\n%s", sql)
 	}
 }
 
@@ -493,7 +527,7 @@ func TestBuildSearchSQLV4_VirtualAbsentToTag(t *testing.T) {
 	if !strings.Contains(sql, "method IN ('INVITE')") {
 		t.Fatalf("expected INVITE filter, got:\n%s", sql)
 	}
-	if !strings.Contains(sql, "data_extra ->> '$.to_tag'") {
+	if !strings.Contains(sql, "json_extract_string(data_extra, '$.to_tag')") {
 		t.Fatalf("expected to_tag extract for absent, got:\n%s", sql)
 	}
 	if !strings.Contains(sql, "IS NULL") {
