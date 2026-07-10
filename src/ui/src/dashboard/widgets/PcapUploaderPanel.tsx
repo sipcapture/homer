@@ -3,6 +3,7 @@ import { Upload } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { handleUnauthorized } from '@/api'
 import { useDashboard } from '../context/DashboardContext'
 
 export default function PcapUploaderPanel() {
@@ -31,9 +32,14 @@ export default function PcapUploaderPanel() {
       }
       const res = await fetch(`${apiBase}/imports/pcap`, {
         method: 'POST',
-        headers: { Authorization: authHeader.Authorization },
+        headers: { ...authHeader },
+        credentials: 'include',
         body: formData,
       })
+      if (res.status === 401) {
+        handleUnauthorized()
+        throw new Error('Unauthorized')
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         throw new Error(err?.error?.detail || `Upload failed (${res.status})`)
