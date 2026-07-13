@@ -954,6 +954,7 @@ func (w *Writer) startTieringService() error {
 		MoveOnStartup:      policy.MoveOnStartup,
 		CatalogType:        ducklake.CatalogType(w.storageConfig.DuckLake.CatalogType),
 		CatalogPath:        w.storageConfig.DuckLake.CatalogPath,
+		CatalogLocker:      w.ducklakeManager,
 	}
 
 	tsm, err := ducklake.NewTieredStorageManager(tsmConfig)

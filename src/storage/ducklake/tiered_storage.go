@@ -49,6 +49,9 @@ type Volume struct {
 
 	// OverrideDataPath passes OVERRIDE_DATA_PATH TRUE to DuckLake ATTACH; see config.VolumeConfig.
 	OverrideDataPath bool
+
+	// CatalogPath is the resolved SQLite catalog file path (set during attach).
+	CatalogPath string
 }
 
 // TieredStorageConfig holds configuration for tiered storage
@@ -63,18 +66,22 @@ type TieredStorageConfig struct {
 	// Base config for catalog
 	CatalogType CatalogType
 	CatalogPath string
+
+	// CatalogLocker serializes hot-catalog writes with the writer flush path.
+	CatalogLocker CatalogLocker
 }
 
 // TieredStorageManager manages multiple storage volumes with automatic tiering
 type TieredStorageManager struct {
-	config   TieredStorageConfig
-	db       *sql.DB
-	volumes  []*Volume
-	writers  map[string]*MultiTableWriter // lakeName -> writer
-	mu       sync.RWMutex
-	stopChan chan struct{}
-	wg       sync.WaitGroup
-	stopOnce sync.Once
+	config        TieredStorageConfig
+	db            *sql.DB
+	volumes       []*Volume
+	writers       map[string]*MultiTableWriter // lakeName -> writer
+	catalogLocker CatalogLocker
+	mu            sync.RWMutex
+	stopChan      chan struct{}
+	wg            sync.WaitGroup
+	stopOnce      sync.Once
 
 	// Primary volume for writes (lowest priority number)
 	primaryVolume *Volume
@@ -105,6 +112,7 @@ func NewTieredStorageManager(config TieredStorageConfig) (*TieredStorageManager,
 		config:        config,
 		volumes:       sortedVolumes,
 		writers:       make(map[string]*MultiTableWriter),
+		catalogLocker: config.CatalogLocker,
 		stopChan:      make(chan struct{}),
 		primaryVolume: sortedVolumes[0],
 	}
@@ -148,6 +156,15 @@ func (tsm *TieredStorageManager) Start() error {
 	for _, vol := range tsm.volumes {
 		if err := tsm.attachVolume(vol); err != nil {
 			return fmt.Errorf("failed to attach volume %s: %w", vol.Name, err)
+		}
+	}
+
+	// Enable WAL on the hot catalog to reduce SQLite lock contention with the writer.
+	if tsm.primaryVolume != nil && tsm.primaryVolume.CatalogPath != "" {
+		if err := EnableSQLiteWALMode(tsm.primaryVolume.CatalogPath); err != nil {
+			logger.Warn("TieredStorageManager: failed to enable WAL on hot catalog",
+				"path", tsm.primaryVolume.CatalogPath,
+				"error", err)
 		}
 	}
 
@@ -228,6 +245,8 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 	if _, err := tsm.db.Exec(attachSQL); err != nil {
 		return fmt.Errorf("failed to attach DuckLake for volume %s: %w", vol.Name, err)
 	}
+
+	vol.CatalogPath = catalogPath
 
 	logger.Info("TieredStorageManager: Volume attached",
 		"volume", vol.Name,
@@ -322,9 +341,9 @@ func (tsm *TieredStorageManager) QueryAllVolumes(tableName, whereClause string, 
 	return allResults, nil
 }
 
-// MovePartition moves a partition (date) from source to destination volume
-// Note: DuckDB doesn't support transactions across multiple attached databases,
-// so we execute INSERT and DELETE as separate operations.
+// MovePartition moves a partition (date) from source to destination volume.
+// DuckDB does not support transactions across multiple attached databases, so
+// INSERT and DELETE run as separate operations with idempotency on the destination.
 func (tsm *TieredStorageManager) MovePartition(tableName string, date string, srcVol, dstVol *Volume) error {
 	srcTable := fmt.Sprintf("%s.main.%s", srcVol.LakeName, tableName)
 	dstTable := fmt.Sprintf("%s.main.%s", dstVol.LakeName, tableName)
@@ -335,59 +354,103 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 		"from", srcVol.Name,
 		"to", dstVol.Name)
 
-	// Step 1: Insert into destination (cold storage) with retry for SQLite locks
-	insertSQL := fmt.Sprintf(
-		"INSERT INTO %s SELECT * FROM %s WHERE date = ?",
-		dstTable, srcTable,
-	)
+	hotLocker := tsm.hotCatalogLocker(srcVol)
 
-	var result sql.Result
-	var err error
-	maxRetries := 5
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		result, err = tsm.db.Exec(insertSQL, date)
-		if err == nil {
-			break
-		}
-		// Retry on database lock errors
-		if strings.Contains(err.Error(), "database is locked") ||
-			strings.Contains(err.Error(), "Failed to commit") {
-			backoff := time.Duration(100*(1<<attempt)) * time.Millisecond // 100ms, 200ms, 400ms, 800ms, 1600ms
-			logger.Warn("TieredStorageManager: Database locked, retrying",
-				"table", tableName,
-				"attempt", attempt+1,
-				"backoff", backoff)
-			time.Sleep(backoff)
-			continue
-		}
-		return fmt.Errorf("failed to insert into destination: %w", err)
-	}
+	srcCount, err := tsm.partitionRowCount(srcTable, date)
 	if err != nil {
-		return fmt.Errorf("failed to insert into destination after %d retries: %w", maxRetries, err)
+		return fmt.Errorf("failed to count source partition rows: %w", err)
 	}
 
-	rowsInserted, _ := result.RowsAffected()
+	dstCount, err := tsm.partitionRowCount(dstTable, date)
+	if err != nil {
+		return fmt.Errorf("failed to count destination partition rows: %w", err)
+	}
 
-	// Step 2: Delete from source (hot storage) - only if insert succeeded
-	deleteSQL := fmt.Sprintf(
-		"DELETE FROM %s WHERE date = ?",
-		srcTable,
-	)
-	if _, err := tsm.db.Exec(deleteSQL, date); err != nil {
-		// Log warning but don't fail - data is now in both places (safe)
-		logger.Warn("TieredStorageManager: Failed to delete from source after successful insert",
+	if srcCount == 0 {
+		if dstCount > 0 {
+			logger.Info("TieredStorageManager: Partition already on destination",
+				"table", tableName,
+				"date", date,
+				"rows", dstCount)
+			return nil
+		}
+		return nil
+	}
+
+	if dstCount > 0 {
+		if dstCount != srcCount {
+			logger.Warn("TieredStorageManager: Destination row count differs from source; delete-only retry",
+				"table", tableName,
+				"date", date,
+				"source_rows", srcCount,
+				"destination_rows", dstCount)
+		} else {
+			logger.Info("TieredStorageManager: Destination already has partition; retrying source delete only",
+				"table", tableName,
+				"date", date,
+				"rows", dstCount)
+		}
+	} else {
+		insertSQL := fmt.Sprintf(
+			"INSERT INTO %s SELECT * FROM %s WHERE date = ?",
+			dstTable, srcTable,
+		)
+		if _, err := execWithRetry(
+			tsm.db,
+			tieringMaxRetries,
+			tieringBaseBackoff,
+			hotLocker,
+			insertSQL,
+			date,
+		); err != nil {
+			return fmt.Errorf("failed to insert into destination: %w", err)
+		}
+	}
+
+	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE date = ?", srcTable)
+	if _, err := execWithRetry(
+		tsm.db,
+		tieringMaxRetries,
+		tieringBaseBackoff,
+		hotLocker,
+		deleteSQL,
+		date,
+	); err != nil {
+		rowsCopied := srcCount
+		if dstCount > 0 {
+			rowsCopied = dstCount
+		}
+		logger.Warn("TieredStorageManager: Partition copied, source delete pending",
 			"table", tableName,
 			"date", date,
+			"rows", rowsCopied,
 			"error", err)
-		// Don't return error - data was copied successfully
+		return fmt.Errorf("source delete failed after copy: %w", err)
 	}
 
+	rowsMoved := srcCount
 	logger.Info("TieredStorageManager: Partition moved",
 		"table", tableName,
 		"date", date,
-		"rows", rowsInserted)
+		"rows", rowsMoved)
 
 	return nil
+}
+
+func (tsm *TieredStorageManager) hotCatalogLocker(srcVol *Volume) CatalogLocker {
+	if tsm.primaryVolume != nil && srcVol.LakeName == tsm.primaryVolume.LakeName {
+		return tsm.catalogLocker
+	}
+	return nil
+}
+
+func (tsm *TieredStorageManager) partitionRowCount(tableFQN, date string) (int64, error) {
+	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE date = ?", tableFQN)
+	var count int64
+	if err := tsm.db.QueryRow(query, date).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 // GetPartitionsOlderThan returns distinct partition dates that should be

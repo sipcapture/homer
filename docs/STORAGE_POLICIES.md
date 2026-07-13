@@ -298,7 +298,10 @@ WHERE date = '2026-01-15';
 - This is a **copy + delete** operation, not physical file movement
 - New parquet files are created in cold storage (S3/R2)
 - Original parquet files in hot storage are marked for deletion (GC removes them later)
-- If copy succeeds but delete fails, data exists in both places (safe, no data loss)
+- If copy succeeds but delete fails, data exists in both places temporarily (no data loss)
+- A failed source delete is **not** reported as `Partition moved`; the tiering cycle logs `Partition copied, source delete pending` and does not increment `partitions_moved`
+- On the next tiering cycle, if cold already holds the partition, HOMER performs **delete-only** from hot (no duplicate cold copy)
+- Under high ingest load, use `concurrent_moves=1` to reduce SQLite catalog contention on the shared hot catalog
 - Tables in cold storage are created with `PARTITION BY (date)` for efficient queries
 
 ### Querying Across Volumes
@@ -323,6 +326,21 @@ level=INFO msg="TieringService: Starting tiering cycle"
 level=INFO msg="TieringService: Found old partitions" table=hep_proto_1_call count=3 dates=[2026-01-10 2026-01-11 2026-01-12]
 level=INFO msg="TieredStorageManager: Partition moved" table=hep_proto_1_call date=2026-01-10 rows=150000
 level=INFO msg="TieringService: Tiering cycle completed" duration=45.2s partitions_moved=3
+```
+
+If hot source delete fails after a successful cold copy (for example SQLite `database is locked` under ingest load):
+
+```
+level=WARN msg="TieredStorageManager: Partition copied, source delete pending" table=hep_proto_1_call date=2026-01-10 rows=150000 error="..."
+level=ERROR msg="TieringService: Failed to move partition" table=hep_proto_1_call date=2026-01-10 error="source delete failed after copy: ..."
+level=INFO msg="TieringService: Tiering cycle completed" duration=45.2s partitions_moved=0
+```
+
+The next cycle retries delete-only when cold already contains the partition:
+
+```
+level=INFO msg="TieredStorageManager: Destination already has partition; retrying source delete only" table=hep_proto_1_call date=2026-01-10 rows=150000
+level=INFO msg="TieredStorageManager: Partition moved" table=hep_proto_1_call date=2026-01-10 rows=150000
 ```
 
 ## Migration from Non-Tiered Setup
