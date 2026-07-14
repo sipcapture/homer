@@ -43,7 +43,7 @@ const METHOD_OPTIONS = [
 ]
 
 const EVENT_OPTIONS = [
-  ['call', 'Call'], ['registration', 'Registration'], ['default', 'Default'],
+  ['all', 'All'], ['call', 'Call'], ['registration', 'Registration'], ['default', 'Default'],
 ]
 
 const PROTO_OPTIONS = [
