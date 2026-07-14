@@ -257,6 +257,15 @@ func (h *SearchHandler) buildSimpleSearchSQL(req *SimpleSearchRequest) (string, 
 
 // normalizeSIPTransactionType maps UI / filter event_type to DuckLake SIP sub-type
 // (must stay in sync with getTableName).
+//
+// "all" (see isAllEventType) is NOT resolved here: it addresses every
+// physical event-type table at once and callers that support merging
+// (currently V4TransactionsSearch, see transactionSearchWantsAllEventTypes)
+// must intercept it before reaching this function / getTableName. Any "all"
+// value that does reach here (e.g. aggregation searches, which cannot be
+// merged in Go) falls into the default branch below and resolves to the
+// single "default" table, matching the historical behavior for unknown
+// event_type values.
 func normalizeSIPTransactionType(protoType int, transactionType string) string {
 	if protoType == 0 {
 		protoType = 1
@@ -278,6 +287,19 @@ func normalizeSIPTransactionType(protoType int, transactionType string) string {
 		return "default"
 	}
 	return transactionType
+}
+
+// isAllEventType reports whether a UI/API event_type filter requests a
+// merged view across every physical SIP event-type table (call/registration/
+// default) instead of addressing a single one. See
+// transactionSearchWantsAllEventTypes / queryTransactionSearchAllEventTypes
+// for where this merge is actually performed.
+func isAllEventType(eventType string) bool {
+	switch strings.ToLower(strings.TrimSpace(eventType)) {
+	case "all", "*":
+		return true
+	}
+	return false
 }
 
 // OTLP "virtual" hepid range, mirrored in the seeded mapping_schema rows

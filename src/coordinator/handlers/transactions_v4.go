@@ -698,6 +698,84 @@ func transactionSearchTopNShape(req *SearchObjectV4) bool {
 		strings.EqualFold(orderBy, "time desc")
 }
 
+// sipEventSubTables are the physical hep_proto_1_<x> tables merged by
+// queryTransactionSearchAllEventTypes for a SIP (proto_type 1) search whose
+// event_type filter is "all" (see isAllEventType). siprec is intentionally
+// excluded: it is not exposed as a Form-search event_type option today.
+var sipEventSubTables = []string{"call", "registration", "default"}
+
+// transactionSearchWantsAllEventTypes reports whether a v4 transaction search
+// should merge results across every physical SIP event-type table
+// (hep_proto_1_call / _registration / _default) instead of a single one.
+//
+// Only proto_type 1 (SIP) has this call/registration/default split — OTLP
+// and Line Protocol tables do not. Aggregations (custom select/group_by) and
+// non-default ordering are excluded too: their rows cannot be correctly
+// merged across tables at the Go layer (see
+// queryTransactionSearchAllEventTypes), so those fall back to the single
+// "default" table via normalizeSIPTransactionType's default branch.
+func transactionSearchWantsAllEventTypes(req *SearchObjectV4) bool {
+	protoType := req.Filter.ProtoType
+	if protoType == 0 {
+		protoType = 1
+	}
+	if protoType != 1 {
+		return false
+	}
+	if !isAllEventType(req.Filter.EventType) {
+		return false
+	}
+	return transactionSearchTopNShape(req)
+}
+
+// queryTransactionSearchAllEventTypes runs the normal single-table v4 search
+// pipeline (SQL build + queryTransactionSearch, including lazy payload
+// hydration and the configured lake_topn_strategy) once per physical
+// event-type table, then merges the rows newest-first and re-applies the
+// requested LIMIT.
+//
+// The merge happens in Go, not via a SQL UNION, so each sub-query keeps
+// going through the existing, well-tested single-table hot+cold/tiered-volume
+// query path unchanged (see node.rewriteQueryForVolumes / node.
+// buildMemoryUnionQueries) — those rewrites key off a single table reference
+// per query today, so folding three different tables into one UNION-based
+// query text would silently drop cold/memory-buffer rows for two of the
+// three tables instead of fixing the "Form search misses cold data" class of
+// bug this is meant to address.
+func (h *SearchHandler) queryTransactionSearchAllEventTypes(ctx context.Context, req *SearchObjectV4, virtualRules map[string]services.VirtualFieldRule) ([]map[string]interface{}, error) {
+	limit := effectiveSearchLimit(req.Param.Limit)
+
+	var (
+		all      []map[string]interface{}
+		firstErr error
+		okCount  int
+	)
+	for _, evt := range sipEventSubTables {
+		subReq := *req
+		subReq.Filter.EventType = evt
+
+		sql, err := buildSearchSQLV4(h.flightService.LakeName(), &subReq, virtualRules)
+		if err != nil {
+			return nil, fmt.Errorf("event_type=%s: %w", evt, err)
+		}
+		rows, err := h.queryTransactionSearch(ctx, sql, &subReq, virtualRules)
+		if err != nil {
+			logger.Warn("V4TransactionsSearch: event_type=all sub-query failed",
+				"event_type", evt, "error", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		okCount++
+		all = append(all, rows...)
+	}
+	if okCount == 0 && firstErr != nil {
+		return nil, firstErr
+	}
+	return sortRowsByTimestampDescLimit(all, limit), nil
+}
+
 // queryTransactionSearch executes a v4 transaction search. fullSQL is the
 // already-validated query for the whole time range. The lake_topn_strategy
 // config selects how a long-range timestamp-DESC top-N is run:
@@ -932,16 +1010,28 @@ func (h *SearchHandler) V4TransactionsSearch(c echo.Context) error {
 	}
 
 	virtualRules := h.loadVirtualRulesForReq(c.Request().Context(), &req)
-	sql, err := buildSearchSQLV4(h.flightService.LakeName(), &req, virtualRules)
-	if err != nil {
-		logger.Error(fmt.Sprintf("V4TransactionsSearch: SQL validation failed: %v", err))
-		return writeError(c, http.StatusBadRequest, "Bad Request", fmt.Sprintf("SQL validation failed: %v", err))
-	}
-	logger.Info("V4TransactionsSearch", "proto", req.Filter.ProtoType, "event", req.Filter.EventType, "sql", sql)
-	results, err := h.queryTransactionSearch(c.Request().Context(), sql, &req, virtualRules)
-	if err != nil {
-		logger.Error(fmt.Sprintf("V4TransactionsSearch: query error: %v", err))
-		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
+
+	var results []map[string]interface{}
+	if transactionSearchWantsAllEventTypes(&req) {
+		rows, err := h.queryTransactionSearchAllEventTypes(c.Request().Context(), &req, virtualRules)
+		if err != nil {
+			logger.Error(fmt.Sprintf("V4TransactionsSearch: query error: %v", err))
+			return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
+		}
+		results = rows
+	} else {
+		sql, err := buildSearchSQLV4(h.flightService.LakeName(), &req, virtualRules)
+		if err != nil {
+			logger.Error(fmt.Sprintf("V4TransactionsSearch: SQL validation failed: %v", err))
+			return writeError(c, http.StatusBadRequest, "Bad Request", fmt.Sprintf("SQL validation failed: %v", err))
+		}
+		logger.Info("V4TransactionsSearch", "proto", req.Filter.ProtoType, "event", req.Filter.EventType, "sql", sql)
+		rows, err := h.queryTransactionSearch(c.Request().Context(), sql, &req, virtualRules)
+		if err != nil {
+			logger.Error(fmt.Sprintf("V4TransactionsSearch: query error: %v", err))
+			return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
+		}
+		results = rows
 	}
 	logger.Info("V4TransactionsSearch: got results", "count", len(results))
 
@@ -958,6 +1048,26 @@ func (h *SearchHandler) V4TransactionsSearch(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// resolveSearchTables returns the physical DuckLake tables a v4 lookup
+// (message/transaction detail endpoints) should query for a given
+// proto_type/event_type. For SIP (proto_type 1) with event_type "all" (see
+// isAllEventType) this is every hep_proto_1_<x> table the Form-search merge
+// can return rows from (sipEventSubTables); otherwise it is the single table
+// getTableName would have resolved on its own.
+func resolveSearchTables(lakeName string, protoType int, eventType string) []string {
+	if protoType == 0 {
+		protoType = 1
+	}
+	if protoType == 1 && isAllEventType(eventType) {
+		tables := make([]string, len(sipEventSubTables))
+		for i, evt := range sipEventSubTables {
+			tables[i] = getTableName(lakeName, protoType, evt)
+		}
+		return tables
+	}
+	return []string{getTableName(lakeName, protoType, eventType)}
+}
+
 // queryTransactionMessages loads SIP (or other proto) rows for a transaction session request (same rules as POST /transactions/messages).
 //
 // When a Lua correlation script is registered for (proto_type, event_type) the
@@ -967,6 +1077,11 @@ func (h *SearchHandler) V4TransactionsSearch(c echo.Context) error {
 //     session_ids, reissue the query on the expanded set and return the
 //     merged result. Any script/SQL failure is non-fatal — the handler falls
 //     back to the base rows and logs a warning.
+//
+// event_type "all" (see isAllEventType) queries every physical SIP
+// event-type table and merges the rows; correlation is skipped in that case
+// since a Lua script is registered against a single (proto_type, event_type)
+// pair and the merged view has no single one.
 func (h *SearchHandler) queryTransactionMessages(ctx context.Context, req *TransactionSessionRequestV4) ([]map[string]interface{}, error) {
 	multi := normalizeTransactionSessionIDs(req.SessionIDs)
 	if len(multi) == 0 {
@@ -984,7 +1099,29 @@ func (h *SearchHandler) queryTransactionMessages(ctx context.Context, req *Trans
 	if eventType == "" {
 		eventType = "call"
 	}
-	table := getTableName(h.flightService.LakeName(), protoType, eventType)
+
+	tables := resolveSearchTables(h.flightService.LakeName(), protoType, eventType)
+	if len(tables) > 1 {
+		var merged []map[string]interface{}
+		var firstErr error
+		for _, table := range tables {
+			rows, err := h.executeTransactionMessagesSQL(ctx, table, multi, req.Timestamp.From, req.Timestamp.To)
+			if err != nil {
+				logger.Warn("V4TransactionMessages: event_type=all sub-query failed", "table", table, "error", err)
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			merged = append(merged, rows...)
+		}
+		if merged == nil && firstErr != nil {
+			return nil, firstErr
+		}
+		sortTransactionMessageRowsByTimestampAsc(merged)
+		return merged, nil
+	}
+	table := tables[0]
 
 	baseRows, err := h.executeTransactionMessagesSQL(ctx, table, multi, req.Timestamp.From, req.Timestamp.To)
 	if err != nil {
@@ -1175,14 +1312,12 @@ func (h *SearchHandler) V4MessageGet(c echo.Context) error {
 	if eventType == "" {
 		eventType = "call"
 	}
-	table := getTableName(h.flightService.LakeName(), protoType, eventType)
 	where := fmt.Sprintf("uuid = '%s'", sqlvalidator.SafeString(req.UUID))
 	if req.Timestamp.From > 0 && req.Timestamp.To > 0 {
 		where += fmt.Sprintf(" AND timestamp >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC') AND timestamp <= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')",
 			req.Timestamp.From, req.Timestamp.To)
 	}
-	sql := fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT 1", table, where)
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	results, err := h.queryMessageByUUIDAcrossTables(c.Request().Context(), protoType, eventType, where)
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
@@ -1195,6 +1330,33 @@ func (h *SearchHandler) V4MessageGet(c echo.Context) error {
 		Meta: buildMeta(c, ""),
 	}
 	return c.JSON(http.StatusOK, resp)
+}
+
+// queryMessageByUUIDAcrossTables runs a "SELECT * FROM <table> WHERE <where> LIMIT 1"
+// lookup, trying every table resolveSearchTables returns (more than one only
+// when event_type is "all") until one produces a row. uuid is assigned once
+// per message at ingest, so at most one table is expected to match; trying
+// the rest costs one cheap indexed-column lookup each.
+func (h *SearchHandler) queryMessageByUUIDAcrossTables(ctx context.Context, protoType int, eventType, where string) ([]map[string]interface{}, error) {
+	tables := resolveSearchTables(h.flightService.LakeName(), protoType, eventType)
+	var firstErr error
+	for _, table := range tables {
+		sql := fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT 1", table, where)
+		rows, err := h.flightService.Query(ctx, sql)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if len(rows) > 0 {
+			return rows, nil
+		}
+	}
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return nil, nil
 }
 
 func (h *SearchHandler) V4MessageDecoded(c echo.Context) error {
@@ -1214,14 +1376,12 @@ func (h *SearchHandler) V4MessageDecoded(c echo.Context) error {
 	if eventType == "" {
 		eventType = "call"
 	}
-	table := getTableName(h.flightService.LakeName(), protoType, eventType)
 	where := fmt.Sprintf("uuid = '%s'", sqlvalidator.SafeString(req.UUID))
 	if req.Timestamp.From > 0 && req.Timestamp.To > 0 {
 		where += fmt.Sprintf(" AND timestamp >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC') AND timestamp <= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')",
 			req.Timestamp.From, req.Timestamp.To)
 	}
-	sql := fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT 1", table, where)
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	results, err := h.queryMessageByUUIDAcrossTables(c.Request().Context(), protoType, eventType, where)
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
