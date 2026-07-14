@@ -350,6 +350,36 @@ var (
 
 const memorySplitThresholdMs = int64(time.Hour / time.Millisecond)
 
+// sqlIsAggregateShape reports whether the query carries aggregation, grouping
+// or DISTINCT anywhere. Such results cannot be merged row-wise across DuckDB
+// instances (uuid/timestamp dedup keys collapse aggregate rows), so they need
+// a single-SQL execution over a UNION of the underlying tables instead.
+func sqlIsAggregateShape(sql string) bool {
+	return sqlGroupByRegexp.MatchString(sql) ||
+		sqlDistinctRegexp.MatchString(sql) ||
+		sqlAggregateRegexp.MatchString(sql)
+}
+
+var sqlOrderByTimestampAscRegexp = regexp.MustCompile(`(?is)\bORDER\s+BY\s+timestamp\s+ASC\b`)
+
+// sortMergedRowsForQueryOrder restores the requested row order after
+// mergeSelectResults, which always sorts newest-first. Queries like the QoS
+// RTP/RTCP tabs ask for ORDER BY timestamp ASC and consume the rows as-is,
+// so an ASC request must be re-sorted oldest-first (with LIMIT keeping the
+// oldest N to match single-statement semantics).
+func sortMergedRowsForQueryOrder(rows []map[string]interface{}, originalSQL string, limit int) []map[string]interface{} {
+	if !sqlOrderByTimestampAscRegexp.MatchString(originalSQL) {
+		return rows
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		return rowTimestampSortKey(rows[i]) < rowTimestampSortKey(rows[j])
+	})
+	if limit > 0 && len(rows) > limit {
+		rows = rows[:limit]
+	}
+	return rows
+}
+
 func extractSQLLimit(sql string) int {
 	m := sqlLimitRegexp.FindStringSubmatch(sql)
 	if len(m) < 2 {
@@ -738,8 +768,10 @@ func (n *Node) buildMemoryUnionQueries(sql string) memoryUnionQueries {
 	if n.sharedDB == nil {
 		return out
 	}
-	upper := strings.ToUpper(sql)
-	if !strings.HasPrefix(strings.TrimSpace(upper), "SELECT") {
+	upper := strings.ToUpper(strings.TrimSpace(sql))
+	isSelect := strings.HasPrefix(upper, "SELECT")
+	isCTE := strings.HasPrefix(upper, "WITH")
+	if !isSelect && !isCTE {
 		return out
 	}
 
@@ -771,6 +803,21 @@ func (n *Node) buildMemoryUnionQueries(sql string) memoryUnionQueries {
 	memTableA := "mem_hep_proto_" + tableSuffix + "_a"
 	memTableB := "mem_hep_proto_" + tableSuffix + "_b"
 	lakeTableFQN := sql[lakeStart:suffixEnd]
+
+	// Aggregate/GROUP BY/DISTINCT results cannot be unioned row-wise (each
+	// branch would emit its own aggregate row — e.g. three count(*) rows), and
+	// CTE queries cannot be wrapped as UNION operands. For both, substitute
+	// the table reference in place with a derived UNION of the lake table and
+	// the two memory buffers so the query runs once with correct semantics.
+	if isCTE || sqlIsAggregateShape(sql) {
+		tableName := "hep_proto_" + tableSuffix
+		derived := "(SELECT * FROM " + lakeTableFQN +
+			" UNION ALL SELECT * FROM " + memTableA +
+			" UNION ALL SELECT * FROM " + memTableB + ")"
+		out.combinedSQL = replaceTableWithDerived(sql, lakeTableFQN, derived, tableName)
+		out.ok = true
+		return out
+	}
 
 	orderByClause, limitClause, baseSQL := extractOrderLimit(sql)
 	memSQLA := strings.Replace(baseSQL, lakeTableFQN, memTableA, 1)
@@ -852,7 +899,9 @@ func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, 
 		return data, cols, plan, err
 	}
 	orderByClause, limitClause, baseSQL := extractOrderLimit(sql)
-	if shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause) {
+	// mq.memSQL is empty for the derived-table rewrite (CTE/aggregate
+	// queries); those must run as a single combined statement.
+	if mq.memSQL != "" && shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause) {
 		plan.mode = "split_lake_and_mem"
 		plan.lakeSQL = mq.lakeSQL
 		plan.memSQL = mq.memSQL
@@ -1020,8 +1069,25 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 	if tieredOk && tieredDB != nil && n.sharedDB != nil {
 		tieredResults, tieredCols, terr := runSelectQuery(r.Context(), tieredDB, tieredUnion)
 		if terr == nil {
-			limit := extractSQLLimit(req.SQL)
-			results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, limit)
+			if sqlIsAggregateShape(req.SQL) {
+				// Aggregate rows cannot be merged across DuckDB instances (the
+				// uuid/timestamp dedup keys collapse them). The tiered union
+				// already spans hot+cold with correct aggregate semantics, and
+				// the hot tier shares the writer's catalog, so it covers all
+				// committed data; only unflushed memory-buffer rows are
+				// excluded from aggregates.
+				results, columns = tieredResults, tieredCols
+			} else {
+				limit := extractSQLLimit(req.SQL)
+				if sqlOrderByTimestampAscRegexp.MatchString(req.SQL) {
+					// Merge without the newest-first trim, then restore the
+					// requested ASC order (trim keeps the oldest N).
+					results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, 0)
+					results = sortMergedRowsForQueryOrder(results, req.SQL, limit)
+				} else {
+					results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, limit)
+				}
+			}
 			logger.Info("Node: handleQuery: returning merged results", "rows", len(results), "columns", fmt.Sprintf("%v", columns))
 			writeJSON(w, http.StatusOK, QueryResponse{
 				Success: true,
@@ -1141,33 +1207,33 @@ func tieredTableExists(db *sql.DB, lakeName, tableName string) bool {
 	return count > 0
 }
 
-// tryBuildVolumeUnionSQL builds SELECT ... UNION ALL ... across configured volumes
-// for execution on the TieredStorageManager DuckDB (hot + cold catalogs).
-// Volumes where the table is missing in that DuckDB instance are skipped so a cold
-// lake without a given hep_proto_* table does not break the whole UNION.
+// tryBuildVolumeUnionSQL rewrites a query referencing <baseLake>.main.<table>
+// so it reads from every configured volume: the table reference is replaced
+// in place with a derived table that UNION ALLs the per-volume catalogs,
+// aliased back to the table name so column references keep resolving.
+//
+// Unlike unioning whole queries, this substitution preserves the statement
+// shape: the result still starts with SELECT/WITH (passes the read-only SQL
+// validators), works inside CTEs, and keeps aggregate/GROUP BY/ORDER BY
+// semantics correct because they run once over the combined rows.
+//
+// Volumes where the table is missing in the target DuckDB instance are
+// skipped so a cold lake without a given hep_proto_* table does not break
+// the whole query.
 func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 	if len(n.volumes) <= 1 {
 		return "", false
 	}
 
 	baseLakeName := n.config.DuckLake.LakeName
-	if !strings.Contains(sql, baseLakeName+".main.") {
-		return "", false
-	}
-
-	upperSQL := strings.ToUpper(sql)
-	if !strings.HasPrefix(strings.TrimSpace(upperSQL), "SELECT") {
-		return "", false
-	}
-
-	fromIdx := strings.Index(upperSQL, "FROM")
-	if fromIdx == -1 {
-		return "", false
-	}
-
 	tablePattern := baseLakeName + ".main."
 	tableStart := strings.Index(sql, tablePattern)
 	if tableStart == -1 {
+		return "", false
+	}
+
+	upperSQL := strings.ToUpper(strings.TrimSpace(sql))
+	if !strings.HasPrefix(upperSQL, "SELECT") && !strings.HasPrefix(upperSQL, "WITH") {
 		return "", false
 	}
 
@@ -1183,24 +1249,97 @@ func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 	tableFQN := sql[tableStart:tableEnd]
 	tableName := tableFQN[len(tablePattern):]
 
+	// When the query already carries storage_* labels (a node-side rewrite ran
+	// before us), skip adding them in the branches to avoid duplicate columns.
+	addStorageCols := !strings.Contains(strings.ToLower(sql), "storage_lake")
+
 	presenceDB := n.duckDBForTieredTablePresence()
-	var unionParts []string
+	var branches []string
 	for _, vol := range n.volumes {
 		cat := n.duckLakeCatalogForQuery(vol)
 		if presenceDB != nil && !tieredTableExists(presenceDB, cat, tableName) {
 			continue
 		}
-		volTableFQN := cat + ".main." + tableName
-		rewrittenPart := strings.Replace(sql, tableFQN, volTableFQN, 1)
-		rewrittenPart = addStorageColumnsToQuery(rewrittenPart, cat, vol.Name)
-		unionParts = append(unionParts, "("+rewrittenPart+")")
+		branch := "SELECT *"
+		if addStorageCols {
+			branch += fmt.Sprintf(", %s AS storage_lake, %s AS storage_volume",
+				sqlStringLiteral(cat), sqlStringLiteral(vol.Name))
+		}
+		branch += " FROM " + cat + ".main." + tableName
+		branches = append(branches, branch)
 	}
 
-	if len(unionParts) == 0 {
+	if len(branches) == 0 {
 		return "", false
 	}
 
-	return strings.Join(unionParts, " UNION ALL "), true
+	derived := "(" + strings.Join(branches, " UNION ALL ") + ")"
+	return replaceTableWithDerived(sql, tableFQN, derived, tableName), true
+}
+
+// sqlKeywordsAfterTableRef are keywords that may legally follow a table
+// reference in a FROM clause; anything else there is an explicit alias.
+var sqlKeywordsAfterTableRef = map[string]bool{
+	"AS": false, // handled separately: AS always introduces an alias
+	"WHERE": true, "ORDER": true, "GROUP": true, "LIMIT": true, "OFFSET": true,
+	"UNION": true, "EXCEPT": true, "INTERSECT": true, "HAVING": true,
+	"JOIN": true, "LEFT": true, "RIGHT": true, "INNER": true, "OUTER": true,
+	"FULL": true, "CROSS": true, "NATURAL": true, "ON": true, "USING": true,
+	"QUALIFY": true, "WINDOW": true, "SEMI": true, "ANTI": true, "ASOF": true,
+}
+
+// sqlHasExplicitAliasAfter reports whether the text following a table
+// reference starts with an alias (either "AS name" or a bare identifier that
+// is not a clause keyword).
+func sqlHasExplicitAliasAfter(rest string) bool {
+	i := 0
+	for i < len(rest) && (rest[i] == ' ' || rest[i] == '\t' || rest[i] == '\n') {
+		i++
+	}
+	if i >= len(rest) {
+		return false
+	}
+	ch := rest[i]
+	isIdentStart := ch == '_' || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+	if !isIdentStart {
+		return false
+	}
+	j := i
+	for j < len(rest) {
+		c := rest[j]
+		if c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+			j++
+			continue
+		}
+		break
+	}
+	word := strings.ToUpper(rest[i:j])
+	if word == "AS" {
+		return true
+	}
+	isClauseKeyword, known := sqlKeywordsAfterTableRef[word]
+	return !(known && isClauseKeyword)
+}
+
+// replaceTableWithDerived substitutes every occurrence of tableFQN with the
+// derived-table expression, appending "AS <alias>" only where the original
+// query does not already alias the table reference.
+func replaceTableWithDerived(sql, tableFQN, derived, alias string) string {
+	var b strings.Builder
+	rest := sql
+	for {
+		idx := strings.Index(rest, tableFQN)
+		if idx == -1 {
+			b.WriteString(rest)
+			return b.String()
+		}
+		b.WriteString(rest[:idx])
+		b.WriteString(derived)
+		rest = rest[idx+len(tableFQN):]
+		if !sqlHasExplicitAliasAfter(rest) {
+			b.WriteString(" AS " + alias)
+		}
+	}
 }
 
 // addMemoryUnion rewrites a SELECT query to include unflushed rows from the
