@@ -111,6 +111,9 @@ type CompactionConfig struct {
 	Enable           bool `json:"enable"`
 	CheckIntervalSec int  `json:"check_interval_sec"` // How often to run compaction (default: 3600 = 1 hour)
 	RetentionDays    int  `json:"retention_days"`     // Delete data older than N days (0 = disabled)
+	// RetentionDaysByTable overrides RetentionDays per bare table name
+	// (e.g. "hep_proto_1_registration"). Override 0 disables TTL for that table.
+	RetentionDaysByTable map[string]int `json:"retention_days_by_table"`
 	// SnapshotExpireIntervalSec controls how long to keep DuckLake snapshots (seconds).
 	SnapshotExpireIntervalSec int `json:"snapshot_expire_interval_sec"`
 	// MinAgeSec controls how old data must be before compaction runs.
@@ -249,6 +252,7 @@ func (c *CompactionService) Start() error {
 		"interval", fmt.Sprintf("%ds", c.config.CheckIntervalSec),
 		"min_age_sec", c.config.MinAgeSec,
 		"retention_days", c.config.RetentionDays,
+		"retention_days_by_table", len(c.config.RetentionDaysByTable),
 		"tables", len(c.tables))
 
 	// Always run compaction on startup after a short delay.
@@ -409,15 +413,20 @@ func (c *CompactionService) runCompaction() {
 
 	var totalRowsDeleted int64
 
-	// Run retention per table if configured — lock per table
-	if c.config.RetentionDays > 0 {
+	// Run retention per table when global TTL or any per-table override is set.
+	// Lock per table so flush is not blocked for the whole cycle.
+	if c.retentionEnabled() {
 		for _, table := range c.tables {
+			days := c.retentionDaysForTable(table)
+			if days <= 0 {
+				continue
+			}
 			c.withCatalogLock(func() {
-				deleted, err := c.runRetention(table)
+				deleted, err := c.runRetention(table, days)
 				if err != nil {
-					logger.Error("CompactionService: Retention failed", "table", table, "error", err)
+					logger.Error("CompactionService: Retention failed", "table", table, "retention_days", days, "error", err)
 				} else if deleted > 0 {
-					logger.Info("CompactionService: Retention completed", "table", table, "rows_deleted", deleted)
+					logger.Info("CompactionService: Retention completed", "table", table, "retention_days", days, "rows_deleted", deleted)
 					totalRowsDeleted += deleted
 				}
 			})
@@ -477,11 +486,42 @@ func (c *CompactionService) discoverTables() error {
 	return nil
 }
 
-// runRetention deletes data older than retention period.
+// retentionEnabled reports whether any retention TTL is configured (global or
+// a positive per-table override).
+func (c *CompactionService) retentionEnabled() bool {
+	if c.config.RetentionDays > 0 {
+		return true
+	}
+	for _, days := range c.config.RetentionDaysByTable {
+		if days > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// retentionDaysForTable returns the TTL in days for a catalog table.
+// Bare table names in RetentionDaysByTable win over the global RetentionDays.
+// An explicit override of 0 disables TTL for that table.
+func (c *CompactionService) retentionDaysForTable(table string) int {
+	name := tableNameFromFQN(table)
+	if name == "" {
+		name = table
+	}
+	if days, ok := c.config.RetentionDaysByTable[name]; ok {
+		return days
+	}
+	return c.config.RetentionDays
+}
+
+// runRetention deletes data older than retentionDays for one table.
 // Missing parquet files are silently skipped — they will be cleaned up
 // by ducklake_delete_orphaned_files in the maintenance phase.
-func (c *CompactionService) runRetention(table string) (int64, error) {
-	cutoff := time.Now().AddDate(0, 0, -c.config.RetentionDays)
+func (c *CompactionService) runRetention(table string, retentionDays int) (int64, error) {
+	if retentionDays <= 0 {
+		return 0, nil
+	}
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 	cutoffStr := cutoff.UTC().Format("2006-01-02 15:04:05")
 
 	query := fmt.Sprintf(`DELETE FROM %s WHERE timestamp < TIMESTAMP '%s'`,
@@ -794,13 +834,14 @@ func (c *CompactionService) GetStats() map[string]interface{} {
 	defer c.mu.RUnlock()
 
 	return map[string]interface{}{
-		"enabled":              c.config.Enable,
-		"check_interval_sec":   c.config.CheckIntervalSec,
-		"retention_days":       c.config.RetentionDays,
-		"tables":               len(c.tables),
-		"last_compaction_time": c.lastCompactionTime,
-		"total_compactions":    c.totalCompactions,
-		"total_rows_deleted":   c.totalRowsDeleted,
+		"enabled":                c.config.Enable,
+		"check_interval_sec":     c.config.CheckIntervalSec,
+		"retention_days":         c.config.RetentionDays,
+		"retention_days_by_table": c.config.RetentionDaysByTable,
+		"tables":                 len(c.tables),
+		"last_compaction_time":   c.lastCompactionTime,
+		"total_compactions":      c.totalCompactions,
+		"total_rows_deleted":     c.totalRowsDeleted,
 	}
 }
 

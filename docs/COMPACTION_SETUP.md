@@ -2,7 +2,7 @@
 
 !!! note "Homer 11 modular stack"
     This page describes the **legacy Homer Server** (`arrow_settings`) compaction model.
-    For **Homer 11** DuckLake retention, merge, and snapshot tuning, use
+    For **Homer 11** DuckLake retention (including per-table `retention_days_by_table`), merge, and snapshot tuning, use
     **[Data retention](RETENTION.md)** and [`storage.ducklake.compaction`](../examples/homer.json)
     in `homer.json` instead.
 
