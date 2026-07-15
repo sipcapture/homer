@@ -1066,37 +1066,45 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 	columns := sharedCols
 	tieredUnion, tieredOk := n.tryBuildVolumeUnionSQL(req.SQL)
 	tieredDB := n.tieredQueryDBForRead()
-	if tieredOk && tieredDB != nil && n.sharedDB != nil {
+	if tieredOk && tieredDB != nil {
 		tieredResults, tieredCols, terr := runSelectQuery(r.Context(), tieredDB, tieredUnion)
-		if terr == nil {
-			if sqlIsAggregateShape(req.SQL) {
-				// Aggregate rows cannot be merged across DuckDB instances (the
-				// uuid/timestamp dedup keys collapse them). The tiered union
-				// already spans hot+cold with correct aggregate semantics, and
-				// the hot tier shares the writer's catalog, so it covers all
-				// committed data; only unflushed memory-buffer rows are
-				// excluded from aggregates.
-				results, columns = tieredResults, tieredCols
+		if terr != nil {
+			logger.Warn("Node: cold tiered query failed", "error", terr,
+				"volumes", len(n.volumes), "tieredDB_set", n.tieredQueryDB != nil,
+				"sharedDB_set", n.sharedDB != nil)
+		} else if sqlIsAggregateShape(req.SQL) {
+			// Aggregate rows cannot be merged across DuckDB instances (the
+			// uuid/timestamp dedup keys collapse them). The tiered union
+			// already spans hot+cold with correct aggregate semantics, and
+			// the hot tier shares the writer's catalog, so it covers all
+			// committed data; only unflushed memory-buffer rows are
+			// excluded from aggregates.
+			results, columns = tieredResults, tieredCols
+		} else if len(sharedResults) == 0 {
+			// Shared query returned no rows (e.g. historical range where
+			// the hot catalog is empty). Use the tiered query directly so
+			// that cold data is always included — fixing issue #870 where
+			// Form search returned 0 rows for historical ranges.
+			results, columns = tieredResults, tieredCols
+		} else {
+			// Merge shared (hot+memory) with tiered (hot+cold). Hot data
+			// may appear twice; the limit trim at the end keeps the most
+			// recent rows and drops late duplicates.
+			limit := extractSQLLimit(req.SQL)
+			if sqlOrderByTimestampAscRegexp.MatchString(req.SQL) {
+				results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, 0)
+				results = sortMergedRowsForQueryOrder(results, req.SQL, limit)
 			} else {
-				limit := extractSQLLimit(req.SQL)
-				if sqlOrderByTimestampAscRegexp.MatchString(req.SQL) {
-					// Merge without the newest-first trim, then restore the
-					// requested ASC order (trim keeps the oldest N).
-					results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, 0)
-					results = sortMergedRowsForQueryOrder(results, req.SQL, limit)
-				} else {
-					results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, limit)
-				}
+				results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, limit)
 			}
-			logger.Info("Node: handleQuery: returning merged results", "rows", len(results), "columns", fmt.Sprintf("%v", columns))
-			writeJSON(w, http.StatusOK, QueryResponse{
-				Success: true,
-				Data:    results,
-				Count:   len(results),
-			})
-			return
 		}
-		logger.Warn("Node: merged writer+tiered query failed, falling back to writer-only", "error", terr)
+		logger.Info("Node: handleQuery: returning merged results", "rows", len(results), "columns", fmt.Sprintf("%v", columns))
+		writeJSON(w, http.StatusOK, QueryResponse{
+			Success: true,
+			Data:    results,
+			Count:   len(results),
+		})
+		return
 	}
 
 	logger.Info("Node: handleQuery: returning results", "rows", len(results), "columns", fmt.Sprintf("%v", columns))
