@@ -71,6 +71,9 @@
         "enable": true,
         "check_interval_sec": 1800,
         "retention_days": 30,
+        "retention_days_by_table": {
+          "hep_proto_1_registration": 14
+        },
         "snapshot_expire_interval_sec": 3600,
         "min_age_sec": 3600,
         "min_file_size_bytes": 0,

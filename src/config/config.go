@@ -755,6 +755,11 @@ type CompactionConfig struct {
 	Enable           bool `json:"enable" mapstructure:"enable" default:"true"`
 	CheckIntervalSec int  `json:"check_interval_sec" mapstructure:"check_interval_sec" default:"3600"` // 1 hour
 	RetentionDays    int  `json:"retention_days" mapstructure:"retention_days" default:"0"`            // 0 = disabled
+	// RetentionDaysByTable overrides RetentionDays for specific DuckLake tables
+	// (keys are bare table names, e.g. "hep_proto_1_registration"). An override
+	// of 0 disables TTL for that table. When RetentionDays is 0, positive
+	// overrides still run retention for the listed tables only.
+	RetentionDaysByTable map[string]int `json:"retention_days_by_table" mapstructure:"retention_days_by_table"`
 	// SnapshotExpireIntervalSec controls how long to keep DuckLake snapshots (seconds).
 	SnapshotExpireIntervalSec int `json:"snapshot_expire_interval_sec" mapstructure:"snapshot_expire_interval_sec" default:"3600"`
 	// MinAgeSec controls how old data must be before compaction runs.

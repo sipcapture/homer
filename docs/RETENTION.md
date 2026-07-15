@@ -7,6 +7,7 @@ Homer 11 has **several retention-related settings**. Only one of them actually *
 | What you want | Setting | Where |
 |---------------|---------|--------|
 | **Delete data older than N days** (TTL) | `storage.ducklake.compaction.retention_days` | JSON config, [wizard](WIZARD.md), env, CLI |
+| **Per-table TTL override** | `storage.ducklake.compaction.retention_days_by_table` | JSON config (bare table name → days) |
 | Move old partitions to cold / S3 (keep data) | `storage.ducklake.storage_policy.volumes[].max_data_age_days` | [Storage policies](STORAGE_POLICIES.md) |
 | DuckLake snapshot / file housekeeping | `storage.ducklake.compaction.snapshot_expire_interval_sec` | Compaction cycle (not the same as TTL) |
 | Mapping row `retention` in Settings UI | `mapping_schema.retention` | Legacy Homer 7 field — **does not run TTL in Homer 11** |
@@ -33,6 +34,9 @@ This runs **per DuckLake table** during the periodic compaction cycle (after tab
         "enable": true,
         "check_interval_sec": 1800,
         "retention_days": 30,
+        "retention_days_by_table": {
+          "hep_proto_1_registration": 14
+        },
         "snapshot_expire_interval_sec": 3600
       }
     }
@@ -42,7 +46,8 @@ This runs **per DuckLake table** during the periodic compaction cycle (after tab
 
 | Field | Default | Meaning |
 |-------|---------|---------|
-| `retention_days` | `0` | Delete data older than **N calendar days**. **`0` = disabled** (no TTL deletes). |
+| `retention_days` | `0` | Default TTL for every table. Delete data older than **N calendar days**. **`0` = disabled** (no TTL deletes) unless a positive per-table override is set. |
+| `retention_days_by_table` | _(empty)_ | Optional map of **bare table name → days**. Overrides `retention_days` for matching tables. An override of **`0` disables TTL** for that table. When `retention_days` is `0`, only tables with a positive override are trimmed. |
 | `check_interval_sec` | `3600` | How often the compaction worker runs (retention runs inside this cycle). |
 | `enable` | `true` | Compaction (merge + snapshot maintenance + optional retention) on the writer catalog. |
 
@@ -59,11 +64,13 @@ HOMER_STORAGE_DUCKLAKE_COMPACTION_CHECK_INTERVAL_SEC=1800
 HOMER_STORAGE_DUCKLAKE_COMPACTION_SNAPSHOT_EXPIRE_INTERVAL_SEC=3600
 ```
 
+`retention_days_by_table` is a map — set it in JSON config (or merge JSON over env). There is no single scalar env var for the whole override map.
+
 Example in Compose: [`examples/docker/docker-compose.yaml`](../examples/docker/docker-compose.yaml).
 
 ### Config wizard
 
-Step **Storage** asks for **Retention days** (default **30**, **`0` = unlimited**). It maps to `storage.ducklake.compaction.retention_days`. See [WIZARD.md](WIZARD.md).
+Step **Storage** asks for **Retention days** (default **30**, **`0` = unlimited**). It maps to `storage.ducklake.compaction.retention_days`. Per-table overrides (`retention_days_by_table`) are not prompted in the wizard — edit `homer.json` after generation. See [WIZARD.md](WIZARD.md).
 
 ### One-off CLI
 
@@ -77,17 +84,31 @@ Other compaction flags: `homer-core system --help` (`--compaction-force`, `--com
 
 ### Logs
 
-On each cycle when TTL is enabled:
+On each cycle when TTL is enabled for a table:
 
 ```
-CompactionService: Retention completed  table=hep_proto_1_call  rows_deleted=…
+CompactionService: Retention completed  table=hep_proto_1_call  retention_days=120  rows_deleted=…
 ```
 
 Failures are logged per table; missing Parquet files are skipped and cleaned up in a later orphan-file pass.
 
-### Applies to all lake tables
+### Applies to lake tables
 
-Retention runs on **every table** in the writer DuckLake catalog (HEP `hep_proto_*`, OTLP `otlp_*`, Line Protocol `lp_*`, etc.). There is no per-protocol TTL in config — use separate volumes/tiering or external lifecycle rules on object storage if you need different policies per dataset.
+Retention runs on **every HEP table** discovered in the writer DuckLake catalog (`hep_proto_*`). Use `retention_days_by_table` when different datasets need different windows — for example keep calls longer than REGISTERs:
+
+```json
+"compaction": {
+  "enable": true,
+  "retention_days": 120,
+  "retention_days_by_table": {
+    "hep_proto_1_registration": 30
+  }
+}
+```
+
+Keys must match the **bare** catalog table name (not a fully-qualified `lake.main.*` name). Unknown keys are ignored.
+
+For datasets that are not part of the HEP discovery set, use separate volumes/tiering or external lifecycle rules on object storage.
 
 OTLP and Line Protocol docs point here: [OTLP.md](OTLP.md), [LINE_PROTOCOL.md](LINE_PROTOCOL.md).
 
@@ -131,16 +152,16 @@ Manual maintenance (advanced): [STORAGE_LAYOUT.md](STORAGE_LAYOUT.md#maintenance
 
 The Coordinator stores a **`retention`** integer on each `mapping_schema` row (default **14** in seeds/UI). This value is **carried over from Homer 7** for compatibility and appears in the Mappings panel.
 
-**Homer 11 does not use this field to delete DuckLake rows.** Operational TTL is **`storage.ducklake.compaction.retention_days`** only.
+**Homer 11 does not use this field to delete DuckLake rows.** Operational TTL is **`storage.ducklake.compaction.retention_days`** (and optional **`retention_days_by_table`** overrides).
 
-When migrating from Homer 7/10, align **`retention_days`** in `homer.json` with your compliance window; treat mapping `retention` as documentation unless you have custom tooling that reads it.
+When migrating from Homer 7/10, align **`retention_days`** / **`retention_days_by_table`** in `homer.json` with your compliance window; treat mapping `retention` as documentation unless you have custom tooling that reads it.
 
 ---
 
 ## Recommended starting points
 
 1. **Single-node / all-in-one:** `retention_days: 30`, compaction enabled, `check_interval_sec: 1800`.
-2. **Hot + S3 tiering:** short `max_data_age_days` on hot (e.g. 2–7), longer or zero on cold, plus `retention_days` on the writer if cold must also be trimmed.
-3. **Compliance / legal hold:** set `retention_days: 0` (disabled) and manage expiry outside Homer (bucket lifecycle, offline archive).
-
+2. **Calls longer than REGISTERs:** keep a long default (e.g. `retention_days: 120`) and shorten high-volume tables via `retention_days_by_table` (e.g. `hep_proto_1_registration: 30`). Prefer this over different TTLs on LB backends that shard the same calls.
+3. **Hot + S3 tiering:** short `max_data_age_days` on hot (e.g. 2–7), longer or zero on cold, plus `retention_days` on the writer if cold must also be trimmed.
+4. **Compliance / legal hold:** set `retention_days: 0` (disabled) and manage expiry outside Homer (bucket lifecycle, offline archive). Use a per-table override of `0` only when you need to disable TTL for selected tables while keeping a global default.
 For OOM or runaway file counts, see [OOM.md](OOM.md) and [INGEST_PERFORMANCE.md](INGEST_PERFORMANCE.md).

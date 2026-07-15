@@ -80,7 +80,8 @@ Choose a profile to pre-fill module settings. Selecting `all-in-one` enables all
 - DuckLake catalog — sqlite
 - Catalog path (default: `/data/homer/homer_catalog.sqlite`)
 - Data path for parquet files (default: `/data/homer/parquet`)
-- Retention days (default: 30, 0 = unlimited)
+- Retention days (default: 30, 0 = unlimited) → `storage.ducklake.compaction.retention_days`
+  - Optional per-table TTL overrides (`retention_days_by_table`) are not collected here; edit the generated JSON — see [RETENTION.md](RETENTION.md)
 - Batch size
 
 **Step 4 -- Node Module** (skipped if disabled)
