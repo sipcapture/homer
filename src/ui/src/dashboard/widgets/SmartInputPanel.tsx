@@ -64,7 +64,7 @@ export default function SmartInputPanel({ config, onConfigChange }) {
       useSqlEndpoint: true,
       param: { limit },
       timestamp: timeRange,
-      filter: { proto_type: 1, event_type: 'call' },
+      filter: { proto_type: 1, event_type: 'all' },
     }
     if (targetId) {
       publishSearch(targetId, payload)

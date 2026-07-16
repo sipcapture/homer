@@ -693,7 +693,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     try {
       const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone, {
         proto_type: modal?.protoType || 1,
-        event_type: modal?.eventType || 'call',
+        event_type: modal?.eventType || 'all',
       })
       const data = await apiPost('/transactions/callinfo', body)
       setCallInfoData(data?.data || {})
@@ -750,7 +750,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     const uuid = raw.uuid || raw.id || flowItem.id
     const messageContext = {
       proto_type: 1,
-      event_type: 'call',
+      event_type: 'all',
       timestamp: (() => {
         const ts = resolveTimeRange(timeRange, timeZone)
         return ts ? { from: ts.from, to: ts.to } : undefined
@@ -766,7 +766,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     }
     setMessageModals(prev => [...prev, { modalKey: nestedKey, uuid, loading: true, data: null, error: null, messageContext }])
     try {
-      const body = { uuid, proto_type: 1, event_type: 'call' }
+      const body = { uuid, proto_type: 1, event_type: 'all' }
       if (messageContext.timestamp) body.timestamp = messageContext.timestamp
       const result = await apiPost('/messages', body)
       update({ modalKey: nestedKey, uuid, loading: false, data: result?.data || raw, error: null, messageContext })
@@ -969,7 +969,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
                   items={items}
                   timeRange={timeRange}
                   protoType={modal?.protoType || 1}
-                  eventType={modal?.eventType || 'call'}
+                  eventType={modal?.eventType || 'all'}
                 />
               </TabsContent>
             </Tabs>

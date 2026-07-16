@@ -207,7 +207,9 @@ export function buildSearchPayload(
 ): SearchPayload {
   const filter: Record<string, unknown> = {
     proto_type: spec.proto_type ?? 1,
-    event_type: spec.event_type ?? 'call',
+    // Default to "all" so deep-linked/shared searches span call, registration
+    // and default SIP tables (backend merges them). See issue #870.
+    event_type: spec.event_type ?? 'all',
   }
   if (spec.from_user) filter.from_user = spec.from_user
   if (spec.to_user) filter.to_user = spec.to_user

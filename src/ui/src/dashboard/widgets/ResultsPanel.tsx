@@ -346,7 +346,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
     setSelectedKeys(new Set())
     lastSearchDataRef.current = sd
     const proto = String(sd.filter?.proto_type ?? sd.filter?.proto ?? '1')
-    const event = String(sd.filter?.event_type ?? sd.filter?.event ?? 'call')
+    const event = String(sd.filter?.event_type ?? sd.filter?.event ?? 'all')
     setCurrentProto(proto)
     setCurrentEvent(event)
     setHiddenColumns(loadLS(LS_KEY_HIDDEN(widgetId, proto, event), []))
@@ -657,7 +657,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
     const modalKey = genModalKey()
     const lastSearch = lastSearchDataRef.current
     const protoType = lastSearch?.filter?.proto_type ?? 1
-    const eventType = lastSearch?.filter?.event_type ?? 'call'
+    const eventType = lastSearch?.filter?.event_type ?? 'all'
     const rowMs = pickRowTimestampMs(row)
     const WIN_MS = 300 * 1000
     const messageContext = { proto_type: protoType, event_type: eventType }
@@ -698,7 +698,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
     const modalKey = genModalKey()
     const lastSearch = lastSearchDataRef.current
     const protoType = Number(lastSearch?.filter?.proto_type ?? lastSearch?.filter?.proto ?? 1) || 1
-    const eventType = String(lastSearch?.filter?.event_type ?? lastSearch?.filter?.event ?? 'call')
+    const eventType = String(lastSearch?.filter?.event_type ?? lastSearch?.filter?.event ?? 'all')
     const WIN_MS = 300 * 1000
 
     let sessionIds = []

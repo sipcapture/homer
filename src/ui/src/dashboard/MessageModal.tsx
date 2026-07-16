@@ -213,7 +213,7 @@ export default function MessageModal({ modal, onClose, timeZone }) {
       const body = {
         uuid,
         proto_type: messageContext?.proto_type ?? 1,
-        event_type: messageContext?.event_type ?? 'call',
+        event_type: messageContext?.event_type ?? 'all',
       }
       if (messageContext?.timestamp?.from != null && messageContext?.timestamp?.to != null) {
         body.timestamp = messageContext.timestamp
