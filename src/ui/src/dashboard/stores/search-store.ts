@@ -41,7 +41,7 @@ const DEFAULT_FORM: SearchFormFields = {
   src_ip: '',
   dst_ip: '',
   proto_type: '1',
-  event_type: 'all',
+  event_type: 'call',
   node: '',
   src_port: '',
   dst_port: '',
