@@ -78,7 +78,19 @@ Homer uses a modular architecture with four main components:
   },
   "node": {
     "enable": true,
-    "flight_server": { "port": 50051 }
+    "flight_server": { "port": 50051 },
+    "ducklake": {
+      "lake_name": "homer_lake",
+      "volumes": [
+        {
+          "name": "default",
+          "type": "local",
+          "catalog_type": "sqlite",
+          "catalog_path": "/data/homer/homer_catalog.sqlite",
+          "path": "/data/homer/parquet"
+        }
+      ]
+    }
   },
   "coordinator": {
     "enable": true,

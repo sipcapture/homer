@@ -1232,6 +1232,45 @@ func Load(configPath string) (*Config, error) {
 	return &cfg, nil
 }
 
+// EnsureNodeDuckLakeVolumes synthesizes a single "default" volume when
+// node.ducklake.volumes is empty but catalog_path / data_path are set.
+// This keeps wizard-generated and older all-in-one configs working after
+// Node began requiring an explicit volumes array.
+func EnsureNodeDuckLakeVolumes(dl *DuckLakeConfig) {
+	if dl == nil || len(dl.Volumes) > 0 {
+		return
+	}
+	catalogPath := strings.TrimSpace(dl.CatalogPath)
+	dataPath := strings.TrimSpace(dl.DataPath)
+	if catalogPath == "" || dataPath == "" {
+		return
+	}
+	catalogType := strings.TrimSpace(dl.CatalogType)
+	if catalogType == "" {
+		catalogType = "sqlite"
+	}
+	volType := "local"
+	if strings.HasPrefix(dataPath, "s3://") {
+		volType = "s3"
+	}
+	vol := VolumeConfig{
+		Name:        "default",
+		Type:        volType,
+		CatalogType: catalogType,
+		CatalogPath: catalogPath,
+		Path:        dataPath,
+	}
+	if volType == "s3" {
+		vol.S3Region = dl.S3.Region
+		vol.S3AccessKeyID = dl.S3.AccessKeyID
+		vol.S3SecretKey = dl.S3.SecretAccessKey
+		vol.S3Endpoint = dl.S3.Endpoint
+		vol.S3UseSSL = dl.S3.UseSSL
+		vol.S3URLStyle = dl.S3.URLStyle
+	}
+	dl.Volumes = []VolumeConfig{vol}
+}
+
 // validateDuckLakeCatalogTypes ensures catalog_type is sqlite (or empty).
 func validateDuckLakeCatalogTypes(cfg *Config) error {
 	check := func(field, v string) error {
@@ -1532,6 +1571,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Node.DuckLake.LakeName == "" {
 		cfg.Node.DuckLake.LakeName = "homer_lake"
 	}
+	// Wizard / legacy configs used node.ducklake.catalog_path + data_path
+	// without volumes; Node now requires node.ducklake.volumes.
+	EnsureNodeDuckLakeVolumes(&cfg.Node.DuckLake)
 	if cfg.Node.FlightSQLServer.CatalogRefreshIntervalSec <= 0 {
 		cfg.Node.FlightSQLServer.CatalogRefreshIntervalSec = 30
 	}
