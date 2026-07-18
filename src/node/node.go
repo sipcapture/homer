@@ -1659,7 +1659,8 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 		return nil, fmt.Errorf("failed to configure S3: %w", err)
 	}
 
-	// Get volumes config
+	// Get volumes config (legacy: synthesize from catalog_path/data_path).
+	config.EnsureNodeDuckLakeVolumes(&cfg.DuckLake)
 	volumeConfigs := cfg.DuckLake.Volumes
 	if len(volumeConfigs) == 0 {
 		return nil, fmt.Errorf("no volumes configured in node.ducklake.volumes")

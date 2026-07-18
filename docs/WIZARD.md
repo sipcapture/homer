@@ -145,7 +145,20 @@ The wizard generates a complete `homer.json` with all modules configured:
   "node": {
     "enable": true,
     "flight_server": { "enable": true, "host": "0.0.0.0", "port": 50051 },
-    "ducklake": { "catalog_path": "/data/homer/homer_catalog.sqlite", "data_path": "/data/homer/parquet" }
+    "ducklake": {
+      "lake_name": "homer_lake",
+      "catalog_path": "/data/homer/homer_catalog.sqlite",
+      "data_path": "/data/homer/parquet",
+      "volumes": [
+        {
+          "name": "default",
+          "type": "local",
+          "catalog_type": "sqlite",
+          "catalog_path": "/data/homer/homer_catalog.sqlite",
+          "path": "/data/homer/parquet"
+        }
+      ]
+    }
   },
   "coordinator": {
     "enable": true,
@@ -161,10 +174,12 @@ The wizard generates a complete `homer.json` with all modules configured:
 
 Disabled modules have `"enable": false` but retain their default settings, so they can be enabled later by editing the config.
 
+**Node volumes:** profiles that enable Node always emit `node.ducklake.volumes` (single local `default` volume aligned with catalog/data paths). Older wizard output that only set `catalog_path` / `data_path` is still accepted at load time — Homer synthesizes the same default volume (see [NODE.md](NODE.md)).
+
 ## Security Notes
 
 - **Admin bootstrap** uses **`"coordinator.auth": {"type":"internal"}`** in the generated file. If you leave **Admin Password** empty in the TUI, the wizard generates a random password, stores its **bcrypt** hash in JSON, and displays the cleartext **once** after save. If you enter a password, that value is bcrypt-hashed in the config. Passwords are never written in plaintext in JSON.
-- On coordinator startup **without** wizard (empty `admin_password_hash`), a random bootstrap password is logged once — see [SECURITY.md](./SECURITY.md).
+- There is **no** fixed default password (`admin`/`admin` or `admin`/`sipcapture`). On coordinator startup **without** a wizard hash (`admin_password_hash` empty), a random bootstrap password is logged once — see [SECURITY.md](./SECURITY.md).
 - **JWT secret** in the TUI: if left empty, a random value is generated and embedded in the saved `homer.json`. Coordinator startup with empty JWT in a hand-edited config instead persists **`/.homer_jwt_secret`** beside the settings DB.
 - The generated config file is written with `0644` permissions. Restrict access if it contains sensitive tokens.
 

@@ -187,6 +187,7 @@ func baseConfig() config.Config {
 				CatalogPath: "/data/homer/homer_catalog.sqlite",
 				DataPath:    "/data/homer/parquet",
 				LakeName:    "homer_lake",
+				Volumes:     localDefaultVolumes("sqlite", "/data/homer/homer_catalog.sqlite", "/data/homer/parquet"),
 			},
 		},
 		Coordinator: config.CoordinatorConfig{
@@ -802,6 +803,7 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 				CatalogPath: catalogPath,
 				DataPath:    dataPath,
 				LakeName:    "homer_lake",
+				Volumes:     localDefaultVolumes(catalogType, catalogPath, dataPath),
 			},
 		},
 		Coordinator: config.CoordinatorConfig{
@@ -844,6 +846,21 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 }
 
 // ---- Helpers ---------------------------------------------------------------
+
+// localDefaultVolumes builds the single-volume layout Node requires for
+// local DuckLake (matches examples/homer.json).
+func localDefaultVolumes(catalogType, catalogPath, dataPath string) []config.VolumeConfig {
+	if strings.TrimSpace(catalogType) == "" {
+		catalogType = "sqlite"
+	}
+	return []config.VolumeConfig{{
+		Name:        "default",
+		Type:        "local",
+		CatalogType: catalogType,
+		CatalogPath: catalogPath,
+		Path:        dataPath,
+	}}
+}
 
 func saveConfig(cfg config.Config, path string) error {
 	data, err := json.MarshalIndent(cfg, "", "  ")

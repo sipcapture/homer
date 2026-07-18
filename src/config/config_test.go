@@ -900,3 +900,69 @@ func TestAuthConfigMarshalJSON_InternalWithFallback(t *testing.T) {
 		t.Fatalf("marshal: got %s", b)
 	}
 }
+
+// TestLoad_LegacyNodeDuckLakeWithoutVolumes synthesizes node.ducklake.volumes
+// from catalog_path/data_path (wizard output before volumes were required).
+func TestLoad_LegacyNodeDuckLakeWithoutVolumes(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "node": {
+    "enable": true,
+    "ducklake": {
+      "lake_name": "homer_lake",
+      "catalog_type": "sqlite",
+      "catalog_path": "/data/homer/homer_catalog.sqlite",
+      "data_path": "/data/homer/parquet"
+    }
+  }
+}`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	vols := cfg.Node.DuckLake.Volumes
+	if len(vols) != 1 {
+		t.Fatalf("node.ducklake.volumes: want 1 synthesized entry, got %d (%+v)", len(vols), vols)
+	}
+	v := vols[0]
+	if v.Name != "default" || v.Type != "local" || v.CatalogType != "sqlite" {
+		t.Errorf("volume identity: %+v", v)
+	}
+	if v.CatalogPath != "/data/homer/homer_catalog.sqlite" || v.Path != "/data/homer/parquet" {
+		t.Errorf("volume paths: %+v", v)
+	}
+}
+
+func TestEnsureNodeDuckLakeVolumes_NoOpWhenPresent(t *testing.T) {
+	dl := DuckLakeConfig{
+		CatalogPath: "/a/catalog.sqlite",
+		DataPath:    "/a/parquet",
+		Volumes: []VolumeConfig{{
+			Name: "hot", Type: "local", CatalogPath: "/hot/c.sqlite", Path: "/hot/p",
+		}},
+	}
+	EnsureNodeDuckLakeVolumes(&dl)
+	if len(dl.Volumes) != 1 || dl.Volumes[0].Name != "hot" {
+		t.Fatalf("expected existing volumes unchanged, got %+v", dl.Volumes)
+	}
+}
+
+func TestEnsureNodeDuckLakeVolumes_S3CopiesCredentials(t *testing.T) {
+	dl := DuckLakeConfig{
+		CatalogPath: "/var/lib/homer/homer_catalog.sqlite",
+		DataPath:    "s3://bucket/lake/",
+		CatalogType: "sqlite",
+		S3: S3Config{
+			Region: "us-east-1", AccessKeyID: "ak", SecretAccessKey: "sk",
+			Endpoint: "http://127.0.0.1:9000", UseSSL: false, URLStyle: "path",
+		},
+	}
+	EnsureNodeDuckLakeVolumes(&dl)
+	if len(dl.Volumes) != 1 {
+		t.Fatalf("want 1 volume, got %d", len(dl.Volumes))
+	}
+	v := dl.Volumes[0]
+	if v.Type != "s3" || v.S3AccessKeyID != "ak" || v.S3SecretKey != "sk" || v.S3Endpoint != "http://127.0.0.1:9000" {
+		t.Fatalf("s3 volume credentials: %+v", v)
+	}
+}
