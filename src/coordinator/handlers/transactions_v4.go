@@ -58,6 +58,24 @@ func sqlFormMatchClauseOr(leftExpr, rightExpr, rawValue string) string {
 	return fmt.Sprintf("(%s = '%s' OR %s = '%s')", leftExpr, esc, rightExpr, esc)
 }
 
+// sipCallIDMatchClause builds a Call-ID / session_id filter for a SIP profile.
+// hep_proto_1_registration stores Call-ID in session_id and has no cid column (#884).
+func sipCallIDMatchClause(txType, rawValue string) string {
+	if strings.EqualFold(strings.TrimSpace(txType), "registration") {
+		return sqlFormMatchClause("session_id", rawValue)
+	}
+	return sqlFormMatchClauseOr("session_id", "cid", rawValue)
+}
+
+// sipCIDMatchClause builds a dedicated cid filter for a SIP profile.
+// On registration tables, cid is aliased to session_id (#884).
+func sipCIDMatchClause(txType, rawValue string) string {
+	if strings.EqualFold(strings.TrimSpace(txType), "registration") {
+		return sqlFormMatchClause("session_id", rawValue)
+	}
+	return sqlFormMatchClause("cid", rawValue)
+}
+
 // sqlFormMatchClauseAny ORs the same value across multiple column expressions.
 func sqlFormMatchClauseAny(columnExprs []string, rawValue string) string {
 	esc := sqlvalidator.SafeString(rawValue)
@@ -2782,7 +2800,7 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		case 100:
 			conditions = append(conditions, sqlFormMatchClause("session_id", sessionFilter))
 		default:
-			conditions = append(conditions, sqlFormMatchClauseOr("session_id", "cid", sessionFilter))
+			conditions = append(conditions, sipCallIDMatchClause(txType, sessionFilter))
 		}
 	} else if req.Filter.CID != "" {
 		switch protoType {
@@ -2791,7 +2809,7 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		case 100:
 			conditions = append(conditions, sqlFormMatchClause("session_id", req.Filter.CID))
 		default:
-			conditions = append(conditions, sqlFormMatchClause("cid", req.Filter.CID))
+			conditions = append(conditions, sipCIDMatchClause(txType, req.Filter.CID))
 		}
 	}
 	// Party / identity filters — column layout depends on SIP profile (ducklake.TableSchema).

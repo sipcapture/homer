@@ -73,6 +73,62 @@ func TestBuildSearchSQLV4_UserAgentRegistrationColumn(t *testing.T) {
 	}
 }
 
+func TestBuildSearchSQLV4_RegistrationCallIDUsesSessionIDOnly(t *testing.T) {
+	// hep_proto_1_registration has session_id but no cid (#884).
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "registration"
+	req.Filter.CallID = "bb2d844e-ba46-4dac-86b3-c0afce431376"
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "FROM homer_lake.main.hep_proto_1_registration") {
+		t.Fatalf("expected registration table, got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "session_id = 'bb2d844e-ba46-4dac-86b3-c0afce431376'") {
+		t.Fatalf("expected session_id = Call-ID, got:\n%s", sql)
+	}
+	if strings.Contains(sql, "cid") {
+		t.Fatalf("registration Call-ID filter must not reference cid, got:\n%s", sql)
+	}
+}
+
+func TestBuildSearchSQLV4_RegistrationCIDAliasToSessionID(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "registration"
+	req.Filter.CID = "reg-cid-1"
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "session_id = 'reg-cid-1'") {
+		t.Fatalf("expected cid filter aliased to session_id, got:\n%s", sql)
+	}
+	if strings.Contains(sql, "cid =") {
+		t.Fatalf("registration must not filter on cid column, got:\n%s", sql)
+	}
+}
+
+func TestBuildSearchSQLV4_CallStillMatchesSessionOrCID(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.CallID = "call-1"
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "(session_id = 'call-1' OR cid = 'call-1')"
+	if !strings.Contains(sql, want) {
+		t.Fatalf("expected %q in call search SQL, got:\n%s", want, sql)
+	}
+}
+
 func TestBuildSearchSQLV4_SIPMethodAndResponseMultiFilter(t *testing.T) {
 	req := SearchObjectV4{}
 	req.Filter.ProtoType = 1

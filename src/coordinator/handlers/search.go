@@ -211,7 +211,8 @@ func (h *SearchHandler) buildSimpleSearchSQL(req *SimpleSearchRequest) (string, 
 
 	// Field filters
 	if req.CallID != "" {
-		conditions = append(conditions, sqlFormMatchClauseOr("session_id", "cid", req.CallID))
+		txType := normalizeSIPTransactionType(req.ProtoType, req.TransactionType)
+		conditions = append(conditions, sipCallIDMatchClause(txType, req.CallID))
 	}
 	if req.FromUser != "" {
 		conditions = append(conditions, sqlFormMatchClause("caller", req.FromUser))
