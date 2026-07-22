@@ -726,6 +726,94 @@ func TestEnsureLimit(t *testing.T) {
 	}
 }
 
+func TestContainsUnsafeComment(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want bool
+	}{
+		{
+			name: "no comment markers",
+			sql:  "SELECT * FROM t WHERE id = 1",
+			want: false,
+		},
+		{
+			name: "-- inside string literal is safe",
+			sql:  "SELECT * FROM t WHERE session_id = 'Core_AA4AFyoKADoKCCAgBS4BJwYWOyYGKjssFl8.CBY5Sh8ACCghICkgAw4pAS0SXCA0DgQ8PxBfPBIXXzwjEV5CSA--'",
+			want: false,
+		},
+		{
+			name: "-- inside simple string literal",
+			sql:  "SELECT * FROM t WHERE name = 'test--value'",
+			want: false,
+		},
+		{
+			name: "-- outside string literal is unsafe",
+			sql:  "SELECT * FROM t -- comment",
+			want: true,
+		},
+		{
+			name: "/* outside string literal is unsafe",
+			sql:  "SELECT * /* block */ FROM t",
+			want: true,
+		},
+		{
+			name: "*/ outside string literal is unsafe",
+			sql:  "SELECT * FROM t WHERE x = 1 */",
+			want: true,
+		},
+		{
+			name: "escaped quote with -- inside string",
+			sql:  "SELECT * FROM t WHERE name = 'O''Brien--test'",
+			want: false,
+		},
+		{
+			name: "multiple strings with --",
+			sql:  "SELECT * FROM t WHERE a = 'x--y' OR b = 'p--q'",
+			want: false,
+		},
+		{
+			name: "-- after string literal (real comment)",
+			sql:  "SELECT * FROM t WHERE session_id = 'safe' -- evil comment",
+			want: true,
+		},
+		{
+			name: "empty string",
+			sql:  "",
+			want: false,
+		},
+		{
+			name: "-- in double-quoted identifier (safe, treated as ident)",
+			sql:  `SELECT "test--value" FROM t`,
+			want: false,
+		},
+		{
+			name: "escaped double quote with -- inside identifier",
+			sql:  `SELECT "test""--value" FROM t`,
+			want: false,
+		},
+		{
+			name: "unclosed string with -- (still inside string)",
+			sql:  "SELECT * FROM t WHERE x = 'unclosed--",
+			want: false,
+		},
+		{
+			name: "-- comment at end after whitespace",
+			sql:  "SELECT 1   -- trailing comment",
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ContainsUnsafeComment(tt.sql)
+			if got != tt.want {
+				t.Errorf("ContainsUnsafeComment(%q) = %v, want %v", tt.sql, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHasLimitToken(t *testing.T) {
 	tests := []struct {
 		name string
