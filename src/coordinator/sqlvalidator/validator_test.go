@@ -439,6 +439,16 @@ func TestValidateExpression(t *testing.T) {
 			exprType: ExprOrderBy,
 			wantErr:  "SQL comments are not allowed",
 		},
+		{
+			name:     "-- inside string literal in SELECT is safe",
+			expr:     "CASE WHEN session_id = 'Core_AA--xx' THEN 1 ELSE 0 END",
+			exprType: ExprSelect,
+		},
+		{
+			name:     "/* inside string literal in ORDER BY is safe",
+			expr:     "CASE WHEN x = 'a/*b*/c' THEN 1 END",
+			exprType: ExprOrderBy,
+		},
 
 		// --- Blocked: clause boundary keywords ---
 		{

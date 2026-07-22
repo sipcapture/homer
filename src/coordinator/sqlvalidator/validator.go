@@ -390,7 +390,9 @@ func ValidateExpression(expr string, exprType ExprType) error {
 	// strips comments but callers concatenate the raw string into SQL.
 	// A comment like "timestamp DESC --" would pass token validation but
 	// comment out server-appended clauses (e.g. LIMIT) in the final SQL.
-	if strings.Contains(trimmed, "--") || strings.Contains(trimmed, "/*") || strings.Contains(trimmed, "*/") {
+	// Use token-aware scanning so "--" / "/*" inside string literals or
+	// double-quoted identifiers are not false-positives (same as node SQL).
+	if ContainsUnsafeComment(trimmed) {
 		return fmt.Errorf("SQL comments are not allowed in %s expression", exprTypeName(exprType))
 	}
 
