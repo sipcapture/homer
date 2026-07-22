@@ -482,6 +482,76 @@ func TestShouldSplitLakeAndMemThresholdAndFallback(t *testing.T) {
 	}
 }
 
+func TestValidateUserSQL_CommentMarkers(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		wantErr string // empty = pass, non-empty = error must contain this
+	}{
+		{
+			name:  "session_id with -- passes",
+			query: "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE session_id = 'Core_AA4AFyoKADoKCCAgBS4BJwYWOyYGKjssFl8.CBY5Sh8ACCghICkgAw4pAS0SXCA0DgQ8PxBfPBIXXzwjEV5CSA--'",
+		},
+		{
+			name:  "multiple session_ids with -- pass",
+			query: "SELECT * FROM t WHERE session_id = 'a--b' OR session_id = 'c--d'",
+		},
+		{
+			name:    "real -- comment outside string rejected",
+			query:   "SELECT * FROM t -- comment",
+			wantErr: "forbidden comment",
+		},
+		{
+			name:    "real /* */ comment outside string rejected",
+			query:   "SELECT * FROM t /* block */",
+			wantErr: "forbidden comment",
+		},
+		{
+			name:  "string with escaped quotes and -- passes",
+			query: "SELECT * FROM t WHERE name = 'O''Brien--test'",
+		},
+		{
+			name:  "/* inside string literal passes",
+			query: "SELECT * FROM t WHERE x = 'foo/*bar*/baz'",
+		},
+		{
+			name:  "all special SIP Call-ID chars inside string pass",
+			query: "SELECT * FROM t WHERE session_id = 'test!%*_+`~()<>:\\\"[]?{}@host'",
+		},
+		{
+			name:    "string with -- followed by real -- comment rejected",
+			query:   "SELECT * FROM t WHERE session_id = 'safe--value' -- actual comment",
+			wantErr: "forbidden comment",
+		},
+		{
+			name:  "normal SELECT passes",
+			query: "SELECT * FROM t WHERE method = 'INVITE'",
+		},
+		{
+			name:    "semicolon still rejected",
+			query:   "SELECT * FROM t; DROP TABLE x",
+			wantErr: "forbidden comment",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateUserSQL(tt.query)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("expected no error, got: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.wantErr)
+				} else if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("expected error containing %q, got: %v", tt.wantErr, err)
+				}
+			}
+		})
+	}
+}
+
 func TestPrepareFlightSQLDataSQLUsesThresholdDecision(t *testing.T) {
 	n := defaultMemoryUnionNode()
 

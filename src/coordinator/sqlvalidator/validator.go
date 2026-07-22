@@ -390,7 +390,9 @@ func ValidateExpression(expr string, exprType ExprType) error {
 	// strips comments but callers concatenate the raw string into SQL.
 	// A comment like "timestamp DESC --" would pass token validation but
 	// comment out server-appended clauses (e.g. LIMIT) in the final SQL.
-	if strings.Contains(trimmed, "--") || strings.Contains(trimmed, "/*") || strings.Contains(trimmed, "*/") {
+	// Use token-aware scanning so "--" / "/*" inside string literals or
+	// double-quoted identifiers are not false-positives (same as node SQL).
+	if ContainsUnsafeComment(trimmed) {
 		return fmt.Errorf("SQL comments are not allowed in %s expression", exprTypeName(exprType))
 	}
 
@@ -526,6 +528,74 @@ func EnsureLimit(sql string, max int) string {
 		return sql
 	}
 	return fmt.Sprintf("%s LIMIT %d", strings.TrimSpace(sql), max)
+}
+
+// ---- ContainsUnsafeComment -------------------------------------------------
+
+// ContainsUnsafeComment reports whether sql contains SQL comment markers
+// (--, /*, */) that appear outside single-quoted string literals or
+// double-quoted identifiers.
+// A naive strings.Contains would false-positive on legitimate data like
+// session_ids with "--" in them when interpolated into string values.
+func ContainsUnsafeComment(sql string) bool {
+	runes := []rune(sql)
+	n := len(runes)
+	i := 0
+	for i < n {
+		ch := runes[i]
+
+		// Skip single-quoted string literals (including '' escape)
+		if ch == '\'' {
+			i++
+			for i < n {
+				if runes[i] == '\'' {
+					if i+1 < n && runes[i+1] == '\'' {
+						i += 2 // escaped quote ''
+						continue
+					}
+					i++ // closing quote
+					break
+				}
+				i++
+			}
+			continue
+		}
+
+		// Skip double-quoted identifiers (including "" escape)
+		if ch == '"' {
+			i++
+			for i < n {
+				if runes[i] == '"' {
+					if i+1 < n && runes[i+1] == '"' {
+						i += 2 // escaped double quote ""
+						continue
+					}
+					i++ // closing quote
+					break
+				}
+				i++
+			}
+			continue
+		}
+
+		// Line comment: --
+		if ch == '-' && i+1 < n && runes[i+1] == '-' {
+			return true
+		}
+
+		// Block comment: /*
+		if ch == '/' && i+1 < n && runes[i+1] == '*' {
+			return true
+		}
+
+		// Closing block comment: */ (standing alone is unsafe)
+		if ch == '*' && i+1 < n && runes[i+1] == '/' {
+			return true
+		}
+
+		i++
+	}
+	return false
 }
 
 // ---- SafeString ------------------------------------------------------------

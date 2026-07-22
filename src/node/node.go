@@ -29,6 +29,7 @@ import (
 
 	airport "github.com/hugr-lab/airport-go"
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"github.com/sipcapture/homer-core/src/stream/hepstream"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
@@ -523,7 +524,13 @@ func validateUserSQL(query string) error {
 		return fmt.Errorf("only SELECT/CTE queries are allowed")
 	}
 
-	if strings.Contains(trimmed, ";") || strings.Contains(trimmed, "--") || strings.Contains(trimmed, "/*") || strings.Contains(trimmed, "*/") {
+	// Semicolons are always rejected regardless of position (defence in depth).
+	// Comment markers only rejected when outside string literals — session_ids
+	// containing "--" (e.g. base64-like provider Call-IDs) are legitimate data.
+	if strings.Contains(trimmed, ";") {
+		return fmt.Errorf("SQL contains forbidden comment or statement separator")
+	}
+	if sqlvalidator.ContainsUnsafeComment(trimmed) {
 		return fmt.Errorf("SQL contains forbidden comment or statement separator")
 	}
 
