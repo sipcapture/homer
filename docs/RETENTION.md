@@ -1,14 +1,15 @@
 # Data retention
 
-Homer 11 has **several retention-related settings**. Only one of them actually **deletes** captured data from DuckLake. The others control tiering, snapshot housekeeping, or legacy mapping metadata.
+Homer 11 has **several retention-related settings**. Data can be deleted by writer compaction TTL and/or by final-volume storage-policy age expiry. Other settings control tiering moves, snapshot housekeeping, or legacy mapping metadata.
 
 ## Quick reference
 
 | What you want | Setting | Where |
 |---------------|---------|--------|
-| **Delete data older than N days** (TTL) | `storage.ducklake.compaction.retention_days` | JSON config, [wizard](WIZARD.md), env, CLI |
+| **Delete data older than N days** (timestamp TTL on writer lake) | `storage.ducklake.compaction.retention_days` | JSON config, [wizard](WIZARD.md), env, CLI |
 | **Per-table TTL override** | `storage.ducklake.compaction.retention_days_by_table` | JSON config (bare table name → days) |
-| Move old partitions to cold / S3 (keep data) | `storage.ducklake.storage_policy.volumes[].max_data_age_days` | [Storage policies](STORAGE_POLICIES.md) |
+| Move old partitions to the next volume | `storage.ducklake.storage_policy.volumes[].max_data_age_days` on intermediate volumes | [Storage policies](STORAGE_POLICIES.md) |
+| **Expire partitions on the final volume** | `storage.ducklake.storage_policy.volumes[].max_data_age_days` on the last volume (`> 0`) | [Storage policies](STORAGE_POLICIES.md) |
 | DuckLake snapshot / file housekeeping | `storage.ducklake.compaction.snapshot_expire_interval_sec` | Compaction cycle (not the same as TTL) |
 | Mapping row `retention` in Settings UI | `mapping_schema.retention` | Legacy Homer 7 field — **does not run TTL in Homer 11** |
 
@@ -116,20 +117,25 @@ OTLP and Line Protocol docs point here: [OTLP.md](OTLP.md), [LINE_PROTOCOL.md](L
 
 ## Tiering vs deletion (`max_data_age_days`)
 
-**Storage policy** moves date partitions from hot → cold volume based on age. It **does not delete** data by itself.
+**Storage policy** uses `max_data_age_days` in two ways:
+
+- **Intermediate volumes** (hot → cold, warm → archive, …): move date partitions whose DuckLake **`date`** is on or before `calendar(today) − N` to the next volume.
+- **Final volume**: there is no next tier. When `max_data_age_days > 0`, matching partitions are **deleted** (expired) from that volume. `0` disables age-based expiry on the final volume.
 
 ```json
 "storage_policy": {
   "volumes": [
-    { "name": "hot", "type": "local", "max_data_age_days": 7 },
-    { "name": "cold", "type": "s3", "max_data_age_days": 0 }
+    { "name": "hot", "type": "local", "max_data_age_days": 2 },
+    { "name": "cold", "type": "s3", "max_data_age_days": 5 }
   ]
 }
 ```
 
-Use this for cost/latency tiering. Combine with:
+Example on `2026-07-22`: hot keeps partitions after `2026-07-20`; cold keeps partitions after `2026-07-17` and expires older cold partitions.
 
-- **`retention_days`** on the writer to drop old data entirely, and/or
+Also available:
+
+- **`retention_days`** on the writer compaction service (timestamp-based TTL on the writer DuckLake catalog), and/or
 - **S3 lifecycle rules** on the cold bucket (Glacier, expire after 1y, …).
 
 Details: [STORAGE_POLICIES.md](STORAGE_POLICIES.md).
@@ -162,6 +168,6 @@ When migrating from Homer 7/10, align **`retention_days`** / **`retention_days_b
 
 1. **Single-node / all-in-one:** `retention_days: 30`, compaction enabled, `check_interval_sec: 1800`.
 2. **Calls longer than REGISTERs:** keep a long default (e.g. `retention_days: 120`) and shorten high-volume tables via `retention_days_by_table` (e.g. `hep_proto_1_registration: 30`). Prefer this over different TTLs on LB backends that shard the same calls.
-3. **Hot + S3 tiering:** short `max_data_age_days` on hot (e.g. 2–7), longer or zero on cold, plus `retention_days` on the writer if cold must also be trimmed.
+3. **Hot + S3 tiering:** short `max_data_age_days` on hot (e.g. 2–7); set a positive `max_data_age_days` on cold to expire final-tier partitions, or `0` to keep cold forever (optionally trim with bucket lifecycle / writer `retention_days`).
 4. **Compliance / legal hold:** set `retention_days: 0` (disabled) and manage expiry outside Homer (bucket lifecycle, offline archive). Use a per-table override of `0` only when you need to disable TTL for selected tables while keeping a global default.
 For OOM or runaway file counts, see [OOM.md](OOM.md) and [INGEST_PERFORMANCE.md](INGEST_PERFORMANCE.md).
