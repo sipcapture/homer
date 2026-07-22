@@ -127,6 +127,7 @@ func (ts *TieringService) runTieringCycle() {
 
 	volumes := ts.tieredStorage.GetVolumes()
 	var totalMoved int64
+	var totalExpired int64
 
 	// Process each volume pair (hot -> next volume based on priority)
 	for i := 0; i < len(volumes)-1; i++ {
@@ -174,8 +175,20 @@ func (ts *TieringService) runTieringCycle() {
 		}
 	}
 
-	// Cleanup empty partition directories after moving data
-	if totalMoved > 0 {
+	// Final volume: max_data_age_days expires partitions (no next tier to move to).
+	if last := finalVolumeForExpire(volumes); last != nil {
+		expired, err := ts.expireOldPartitions(last)
+		if err != nil {
+			logger.Error("TieringService: Failed to expire partitions on final volume",
+				"source", last.Name,
+				"error", err)
+		} else {
+			totalExpired += expired
+		}
+	}
+
+	// Cleanup empty partition directories after moving/expiring data
+	if totalMoved > 0 || totalExpired > 0 {
 		for _, vol := range volumes {
 			if vol.Type == ducklake.VolumeTypeLocal {
 				ts.cleanupEmptyPartitions(vol.Path)
@@ -186,7 +199,8 @@ func (ts *TieringService) runTieringCycle() {
 	duration := time.Since(startTime)
 	logger.Info("TieringService: Tiering cycle completed",
 		"duration", duration.String(),
-		"partitions_moved", totalMoved)
+		"partitions_moved", totalMoved,
+		"partitions_expired", totalExpired)
 }
 
 // checkVolumeSizeThreshold checks if volume size exceeds move_factor threshold
@@ -370,6 +384,99 @@ func (ts *TieringService) moveOldPartitions(srcVol, dstVol *ducklake.Volume) (in
 			"hint", "No partition dates on or before cutoff; increase max_data_age_days or wait for older calendar partitions.")
 	}
 	return totalMoved, nil
+}
+
+// finalVolumeForExpire returns the last storage-policy volume when it has a
+// positive max_data_age_days (TTL expire). Intermediate volumes only move data;
+// the final volume has no destination, so age TTL deletes partitions instead.
+func finalVolumeForExpire(volumes []*ducklake.Volume) *ducklake.Volume {
+	if len(volumes) == 0 {
+		return nil
+	}
+	last := volumes[len(volumes)-1]
+	if last == nil || last.MaxDataAgeDays <= 0 {
+		return nil
+	}
+	return last
+}
+
+// expireOldPartitions deletes partitions older than max_data_age_days from the
+// final storage-policy volume (there is no next tier to move into).
+func (ts *TieringService) expireOldPartitions(vol *ducklake.Volume) (int64, error) {
+	cutoffDate := time.Now().AddDate(0, 0, -vol.MaxDataAgeDays).Format("2006-01-02")
+
+	logger.Info("TieringService: TTL partition expire scan",
+		"source", vol.Name,
+		"max_data_age_days", vol.MaxDataAgeDays,
+		"partition_date_cutoff", cutoffDate,
+		"rule", "partition date <= cutoff (inclusive); cutoff is calendar today minus max_data_age_days; final volume expires instead of moving")
+
+	tables, err := ts.tieredStorage.GetTableNames(vol)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get table names: %w", err)
+	}
+	if len(tables) == 0 {
+		logger.Info("TieringService: No hep_proto* tables on final volume — nothing to expire by age",
+			"source", vol.Name,
+			"lake", vol.LakeName)
+		return 0, nil
+	}
+
+	var totalExpired int64
+	semaphore := make(chan struct{}, ts.config.ConcurrentMoves)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for _, tableName := range tables {
+		partitions, err := ts.tieredStorage.GetPartitionsOlderThan(vol, tableName, cutoffDate)
+		if err != nil {
+			logger.Warn("TieringService: Failed to get partitions for expire",
+				"table", tableName,
+				"error", err)
+			continue
+		}
+		if len(partitions) == 0 {
+			continue
+		}
+
+		logger.Info("TieringService: Found expired partitions",
+			"table", tableName,
+			"count", len(partitions),
+			"dates", partitions)
+
+		for _, partition := range partitions {
+			wg.Add(1)
+			semaphore <- struct{}{}
+
+			go func(table, date string) {
+				defer wg.Done()
+				defer func() { <-semaphore }()
+
+				if err := ts.tieredStorage.DeletePartition(table, date, vol); err != nil {
+					logger.Error("TieringService: Failed to expire partition",
+						"table", table,
+						"date", date,
+						"volume", vol.Name,
+						"error", err)
+					return
+				}
+
+				mu.Lock()
+				totalExpired++
+				mu.Unlock()
+			}(tableName, partition)
+		}
+	}
+
+	wg.Wait()
+	if totalExpired == 0 {
+		logger.Info("TieringService: TTL expire pass completed with no deletes",
+			"source", vol.Name,
+			"tables_checked", len(tables),
+			"partition_date_cutoff", cutoffDate,
+			"hint", "No partition dates on or before cutoff on the final volume.")
+	}
+	return totalExpired, nil
 }
 
 // ensureTableExists ensures the destination table exists with the same schema and partitioning as source

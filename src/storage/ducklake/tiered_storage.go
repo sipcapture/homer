@@ -437,6 +437,49 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 	return nil
 }
 
+// DeletePartition permanently removes a date partition from the given volume.
+// Used to enforce max_data_age_days on the final storage-policy volume (no next tier).
+func (tsm *TieredStorageManager) DeletePartition(tableName string, date string, vol *Volume) error {
+	tableFQN := fmt.Sprintf("%s.main.%s", vol.LakeName, tableName)
+
+	count, err := tsm.partitionRowCount(tableFQN, date)
+	if err != nil {
+		return fmt.Errorf("failed to count partition rows: %w", err)
+	}
+	if count == 0 {
+		logger.Debug("TieredStorageManager: Partition already empty, skip expire",
+			"table", tableName,
+			"date", date,
+			"volume", vol.Name)
+		return nil
+	}
+
+	logger.Info("TieredStorageManager: Expiring partition",
+		"table", tableName,
+		"date", date,
+		"volume", vol.Name,
+		"rows", count)
+
+	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE date = ?", tableFQN)
+	if _, err := execWithRetry(
+		tsm.db,
+		tieringMaxRetries,
+		tieringBaseBackoff,
+		tsm.hotCatalogLocker(vol),
+		deleteSQL,
+		date,
+	); err != nil {
+		return fmt.Errorf("failed to delete partition: %w", err)
+	}
+
+	logger.Info("TieredStorageManager: Partition expired",
+		"table", tableName,
+		"date", date,
+		"volume", vol.Name,
+		"rows", count)
+	return nil
+}
+
 func (tsm *TieredStorageManager) hotCatalogLocker(srcVol *Volume) CatalogLocker {
 	if tsm.primaryVolume != nil && srcVol.LakeName == tsm.primaryVolume.LakeName {
 		return tsm.catalogLocker

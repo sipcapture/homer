@@ -110,7 +110,7 @@ The `move_factor` parameter works similar to ClickHouse storage policies. It con
 | `type` | string | "local" | Storage type: "local" or "s3" |
 | `path` | string | required | Local path or S3 URL |
 | `priority` | int | 0 | Lower = higher priority. Writes go to lowest priority |
-| `max_data_age_days` | int | 0 | Tiering moves rows in partitions whose DuckLake **`date`** is **on or before** `calendar(today) − N days` (inclusive). Example: `N=1` on May 12 includes partition `date=2026-05-11`. `0` disables TTL-based moves. |
+| `max_data_age_days` | int | 0 | On intermediate volumes: move partitions whose DuckLake **`date`** is **on or before** `calendar(today) − N days` (inclusive) to the next volume. On the **final** volume: delete (expire) those partitions instead. Example: `N=1` on May 12 includes partition `date=2026-05-11`. `0` disables TTL for that volume. |
 | `max_size_gb` | int | 0 | Max volume size in GB (0 = no limit) |
 
 ### S3-specific Settings (for `type: "s3"`)
@@ -271,10 +271,23 @@ The `move_factor` parameter works similar to ClickHouse storage policies. It con
 
 1. **Write**: All new data is written to the primary (hot) volume (lowest priority number)
 2. **Tiering**: The TieringService periodically checks for old partitions
-3. **Copy**: Data older than `max_data_age_days` is copied to cold storage (new parquet files created)
-4. **Delete**: After successful copy, data is deleted from hot storage
-5. **Cleanup**: Empty partition directories are automatically removed
-6. **Query**: Queries automatically search across all volumes using UNION ALL
+3. **Copy**: On intermediate volumes, data older than `max_data_age_days` is copied to the next volume (new parquet files created)
+4. **Delete from source**: After successful copy, data is deleted from the source volume
+5. **Final-volume expiry**: On the last volume, `max_data_age_days > 0` deletes matching partitions (no next tier)
+6. **Cleanup**: Empty partition directories are automatically removed
+7. **Query**: Queries automatically search across all volumes using UNION ALL
+
+### Final volume expiry
+
+When the last volume has `max_data_age_days: N` (for example cold S3 with `N=5`), the tiering cycle expires partitions with `date <= calendar(today) − N`. Logs look like:
+
+```
+level=INFO msg="TieringService: TTL partition expire scan" source=cold max_data_age_days=5 partition_date_cutoff=2026-07-17
+level=INFO msg="TieredStorageManager: Partition expired" table=hep_proto_1_call date=2026-07-14 volume=cold rows=...
+level=INFO msg="TieringService: Tiering cycle completed" partitions_moved=0 partitions_expired=4
+```
+
+Set `max_data_age_days: 0` on the final volume to keep data indefinitely (or rely on S3 lifecycle / writer `retention_days`).
 
 ### Partition Movement Process
 
