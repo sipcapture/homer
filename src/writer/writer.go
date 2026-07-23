@@ -970,11 +970,12 @@ func (w *Writer) startTieringService() error {
 
 	// Create tiering service
 	tieringCfg := TieringConfig{
-		Enable:           policy.Enable,
-		CheckIntervalSec: policy.TTLMoveIntervalSec,
-		ConcurrentMoves:  policy.ConcurrentMoves,
-		MoveOnStartup:    policy.MoveOnStartup,
-		MoveFactor:       policy.MoveFactor,
+		Enable:            policy.Enable,
+		CheckIntervalSec:  policy.TTLMoveIntervalSec,
+		ConcurrentMoves:   policy.ConcurrentMoves,
+		MoveOnStartup:     policy.MoveOnStartup,
+		MoveFactor:        policy.MoveFactor,
+		SnapshotExpireSec: w.storageConfig.DuckLake.Compaction.SnapshotExpireIntervalSec,
 	}
 	if tieringCfg.CheckIntervalSec <= 0 {
 		tieringCfg.CheckIntervalSec = 3600 // default 1 hour

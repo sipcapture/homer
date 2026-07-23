@@ -289,6 +289,17 @@ level=INFO msg="TieringService: Tiering cycle completed" partitions_moved=0 part
 
 Set `max_data_age_days: 0` on the final volume to keep data indefinitely (or rely on S3 lifecycle / writer `retention_days`).
 
+### Physical space reclaim
+
+DuckLake `DELETE` (both the move source delete and the final-volume expiry) only marks parquet files as deleted in the catalog — the objects initially stay on disk/S3. Every tiering cycle then runs per-volume maintenance (`ducklake_expire_snapshots` with the `compaction.snapshot_expire_interval_sec` window, `ducklake_cleanup_old_files`, `ducklake_delete_orphaned_files`) on each tiered lake, which physically deletes the obsolete objects from local storage and S3:
+
+```
+level=INFO msg="TieredStorageManager: Running volume maintenance" volume=cold lake=homer_lake_cold snapshot_older_than_sec=3600
+level=INFO msg="TieredStorageManager: Volume maintenance completed" volume=cold lake=homer_lake_cold
+```
+
+Expired data disappears from S3 after the snapshot window passes (default 1 hour), not instantly at the moment of the expire DELETE.
+
 ### Partition Movement Process
 
 Data is partitioned by date (`date` column). The tiering service copies entire date partitions to cold storage:
