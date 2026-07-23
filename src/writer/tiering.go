@@ -28,6 +28,10 @@ type TieringConfig struct {
 	ConcurrentMoves  int
 	MoveOnStartup    bool
 	MoveFactor       float64 // Move data when volume fill ratio exceeds this value (0.0-1.0)
+	// SnapshotExpireSec is the snapshot retention window used when running
+	// DuckLake maintenance on tiered volumes after moves/expires (mirrors
+	// compaction.snapshot_expire_interval_sec; 0 = default 3600).
+	SnapshotExpireSec int
 }
 
 // TieringService manages automatic data tiering between storage volumes
@@ -187,12 +191,24 @@ func (ts *TieringService) runTieringCycle() {
 		}
 	}
 
-	// Cleanup empty partition directories after moving/expiring data
-	if totalMoved > 0 || totalExpired > 0 {
-		for _, vol := range volumes {
-			if vol.Type == ducklake.VolumeTypeLocal {
-				ts.cleanupEmptyPartitions(vol.Path)
-			}
+	// Tiering DELETEs (move source delete, final-volume TTL expire) only mark
+	// parquet files as deleted in the DuckLake catalog — the objects stay on
+	// disk/S3 until snapshots are expired and cleanup runs on that lake. The
+	// writer CompactionService only maintains the writer lake, so run
+	// per-volume maintenance every cycle: this also drains obsolete backlog
+	// from earlier cycles even when nothing moved this time (#882).
+	for _, vol := range volumes {
+		if err := ts.tieredStorage.RunVolumeMaintenance(vol, ts.config.SnapshotExpireSec); err != nil {
+			logger.Error("TieringService: Volume maintenance failed",
+				"volume", vol.Name,
+				"error", err)
+		}
+	}
+
+	// Cleanup empty partition directories after maintenance removed files
+	for _, vol := range volumes {
+		if vol.Type == ducklake.VolumeTypeLocal {
+			ts.cleanupEmptyPartitions(vol.Path)
 		}
 	}
 

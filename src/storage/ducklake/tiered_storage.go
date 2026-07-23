@@ -480,6 +480,65 @@ func (tsm *TieredStorageManager) DeletePartition(tableName string, date string, 
 	return nil
 }
 
+// volumeMaintenanceSQL returns the DuckLake maintenance calls that physically
+// reclaim storage on a volume's lake: expire snapshots referencing deleted
+// files, then delete the superseded/orphaned parquet objects (local or S3).
+func volumeMaintenanceSQL(lakeName string, snapshotOlderThanSec int) []string {
+	if snapshotOlderThanSec <= 0 {
+		snapshotOlderThanSec = 3600
+	}
+	return []string{
+		fmt.Sprintf(
+			"CALL ducklake_expire_snapshots('%s', older_than => CAST(NOW() - INTERVAL '%d seconds' AS TIMESTAMPTZ))",
+			lakeName, snapshotOlderThanSec,
+		),
+		fmt.Sprintf("CALL ducklake_cleanup_old_files('%s', cleanup_all => true)", lakeName),
+		fmt.Sprintf("CALL ducklake_delete_orphaned_files('%s', cleanup_all => true)", lakeName),
+	}
+}
+
+// RunVolumeMaintenance expires old snapshots and deletes obsolete parquet
+// files on the given volume's lake. Without this, DELETEs performed by
+// tiering (move source delete, final-volume TTL expire) only mark files
+// obsolete in the DuckLake catalog while the objects stay on disk/S3
+// (issue #882 follow-up: cold physical space was never reclaimed because
+// the writer CompactionService only maintains the writer lake).
+func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlderThanSec int) error {
+	locker := tsm.hotCatalogLocker(vol)
+
+	logger.Info("TieredStorageManager: Running volume maintenance",
+		"volume", vol.Name,
+		"lake", vol.LakeName,
+		"snapshot_older_than_sec", snapshotOlderThanSec)
+
+	var firstErr error
+	for _, stmt := range volumeMaintenanceSQL(vol.LakeName, snapshotOlderThanSec) {
+		if _, err := execWithRetry(
+			tsm.db,
+			tieringMaxRetries,
+			tieringBaseBackoff,
+			locker,
+			stmt,
+		); err != nil {
+			logger.Warn("TieredStorageManager: Volume maintenance step failed",
+				"volume", vol.Name,
+				"lake", vol.LakeName,
+				"sql", stmt,
+				"error", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+
+	if firstErr == nil {
+		logger.Info("TieredStorageManager: Volume maintenance completed",
+			"volume", vol.Name,
+			"lake", vol.LakeName)
+	}
+	return firstErr
+}
+
 func (tsm *TieredStorageManager) hotCatalogLocker(srcVol *Volume) CatalogLocker {
 	if tsm.primaryVolume != nil && srcVol.LakeName == tsm.primaryVolume.LakeName {
 		return tsm.catalogLocker
