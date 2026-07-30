@@ -14,11 +14,16 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path/filepath"
+	"reflect"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
 	_ "github.com/duckdb/duckdb-go/v2"
+	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/scripting/correlation"
 )
 
 // openTestSettingsDB opens a fresh file-backed DuckDB (file-backed so the
@@ -306,4 +311,105 @@ func safeSlice(s string, lo, hi int) string {
 		return ""
 	}
 	return s[lo:hi]
+}
+
+// seedChainGraph models a multi-hop B2B call as leg -> x_call_id (its parent).
+// leg_a is the first leg and has no parent:
+//
+//	leg_a <- leg_b <- leg_c
+//	      <- leg_d <- leg_e
+var seedChainGraph = map[string]string{
+	"leg_a": "",
+	"leg_b": "leg_a",
+	"leg_c": "leg_b",
+	"leg_d": "leg_a",
+	"leg_e": "leg_d",
+}
+
+var seedQuotedID = regexp.MustCompile(`'([^']*)'`)
+
+// chainExecutor answers the bundled script's SELECT out of seedChainGraph:
+// every leg whose own id, or whose parent id, appears in the query's IN list.
+type chainExecutor struct{ calls int }
+
+func (c *chainExecutor) Query(_ context.Context, sql string) ([]map[string]interface{}, error) {
+	c.calls++
+	wanted := map[string]bool{}
+	for _, m := range seedQuotedID.FindAllStringSubmatch(sql, -1) {
+		if m[1] != "" {
+			wanted[m[1]] = true
+		}
+	}
+	var out []map[string]interface{}
+	for leg, parent := range seedChainGraph {
+		if wanted[leg] || (parent != "" && wanted[parent]) {
+			out = append(out, map[string]interface{}{"session_id": leg, "x_call_id": parent})
+		}
+	}
+	return out, nil
+}
+
+type staticScriptLoader struct{ items []correlation.LoadedScript }
+
+func (s *staticScriptLoader) LoadActiveCorrelation(context.Context) ([]correlation.LoadedScript, error) {
+	return s.items, nil
+}
+
+// TestDefaultCallSeedExpandsWholeChain runs the bundled sip_call.lua and asserts
+// that every leg of a multi-hop B2B chain resolves the whole call. A single-pass
+// expansion only reaches the immediate neighbours (opening leg_e would return
+// just leg_e and leg_d), so this is what pins the transitive behaviour.
+func TestDefaultCallSeedExpandsWholeChain(t *testing.T) {
+	cfg := config.CorrelationScriptingConfig{
+		Enable:          true,
+		SQLTimeoutMS:    500,
+		ScriptTimeoutMS: 3000,
+		MaxSQLCalls:     16,
+		MaxSQLRows:      64,
+		SyncIntervalSec: 0,
+	}
+	loader := &staticScriptLoader{items: []correlation.LoadedScript{
+		{GUID: "seed", HepID: 1, Profile: "call", Script: defaultCallCorrelationLua},
+	}}
+	want := []string{"leg_a", "leg_b", "leg_c", "leg_d", "leg_e"}
+
+	for leg, parent := range seedChainGraph {
+		exec := &chainExecutor{}
+		e := correlation.NewEngine(cfg, loader, exec, "homer_lake")
+		if e == nil {
+			t.Fatal("NewEngine returned nil despite Enable=true")
+		}
+		if err := e.ReloadFromDB(context.Background()); err != nil {
+			t.Fatalf("ReloadFromDB: %v", err)
+		}
+
+		dataExtra := "{}"
+		if parent != "" {
+			dataExtra = fmt.Sprintf(`{"x_call_id":%q}`, parent)
+		}
+		res := e.Correlate(context.Background(), correlation.CorrelationInput{
+			HepID:      1,
+			Profile:    "call",
+			ProtoType:  1,
+			EventType:  "call",
+			SessionIDs: []string{leg},
+			BaseRows: []map[string]interface{}{
+				{"session_id": leg, "data_extra": dataExtra},
+			},
+			TimeFrom: 1,
+			TimeTo:   2,
+		})
+		if res == nil {
+			t.Fatalf("start %s: nil correlation result", leg)
+		}
+
+		got := append([]string(nil), res.ExtraSessionIDs...)
+		sort.Strings(got)
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("start %s: extras = %v, want %v", leg, got, want)
+		}
+		if exec.calls > cfg.MaxSQLCalls {
+			t.Errorf("start %s: %d executeSQL calls exceeds budget %d", leg, exec.calls, cfg.MaxSQLCalls)
+		}
+	}
 }
