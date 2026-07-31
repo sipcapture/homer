@@ -2770,23 +2770,29 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		protoType = 1
 	}
 	transactionType := req.Filter.EventType
-	tableName := getTableName(lakeName, protoType, transactionType)
 	// OTLP virtual mappings (traces / metrics / logs) use a different
 	// column layout than HEP — none of the SIP-specific columns
 	// (caller, callee, method, response_code, src_port, dst_port,
 	// node_id, payload, …) exist on otlp_*. Build SQL separately so we
 	// don't generate WHERE clauses that fail at parse time.
 	if isOTLPProtoType(protoType) {
+		tableName := getTableName(lakeName, protoType, transactionType)
 		return buildOTLPSearchSQLV4(tableName, protoType, req, opts)
 	}
 	// Line Protocol virtual mappings address dynamic lp_<measurement>
 	// tables whose only guaranteed columns are `time` and the user
 	// tags/fields. None of the SIP-specific WHERE clauses below
 	// (caller, callee, method, …) make sense for them — route to the
-	// LP-specific builder.
+	// LP-specific builder. Reject unsafe event_type profiles before
+	// they can reach the FROM clause (GHSA-94cf-g6mg-6gv7).
 	if isLPProtoType(protoType) {
+		tableName, ok := lpTableForProfile(lakeName, transactionType)
+		if !ok {
+			return "", fmt.Errorf("invalid event_type for line protocol search")
+		}
 		return buildLPSearchSQLV4(tableName, req, opts)
 	}
+	tableName := getTableName(lakeName, protoType, transactionType)
 	txType := normalizeSIPTransactionType(protoType, transactionType)
 
 	conditions := make([]string, 0)

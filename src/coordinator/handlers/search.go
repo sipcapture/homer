@@ -351,7 +351,10 @@ func isLPProtoType(protoType int) bool {
 
 // lpTableForProfile decodes the "<schema>__<table>" profile encoding
 // emitted by services.LPProfileFor and returns the fully-qualified
-// DuckLake table name. When the profile lacks the separator we fall
+// DuckLake table name. Schema and table segments MUST be safe SQL
+// identifiers (see isSafeIdent); catalog/system names are rejected so
+// a crafted event_type cannot break out of the FROM clause
+// (GHSA-94cf-g6mg-6gv7). When the profile lacks the separator we fall
 // back to "main.<profile>" so legacy operators who hand-edited the
 // mapping_schema row still get a usable address.
 func lpTableForProfile(lakeName, profile string) (string, bool) {
@@ -360,12 +363,39 @@ func lpTableForProfile(lakeName, profile string) (string, bool) {
 		return "", false
 	}
 	sep := "__"
+	var schema, table string
 	if i := strings.Index(profile, sep); i > 0 && i+len(sep) < len(profile) {
-		schema := profile[:i]
-		table := profile[i+len(sep):]
-		return fmt.Sprintf("%s.%s.%s", lakeName, schema, table), true
+		schema = profile[:i]
+		table = profile[i+len(sep):]
+	} else {
+		schema = "main"
+		table = profile
 	}
-	return fmt.Sprintf("%s.main.%s", lakeName, profile), true
+	if !isSafeIdent(schema) || !isSafeIdent(table) {
+		return "", false
+	}
+	if isReservedLPSchema(schema) || isReservedLPTable(table) {
+		return "", false
+	}
+	return fmt.Sprintf("%s.%s.%s", lakeName, schema, table), true
+}
+
+// isReservedLPSchema reports schemas that must never be addressed via
+// the LP virtual mapping (system / catalog namespaces). Kept in sync
+// with the purge predicates in services.LPMappingSync.
+func isReservedLPSchema(schema string) bool {
+	switch strings.ToLower(schema) {
+	case "information_schema", "pg_catalog":
+		return true
+	default:
+		return false
+	}
+}
+
+// isReservedLPTable reports table names that must never be addressed
+// via the LP virtual mapping (DuckLake internal catalog tables).
+func isReservedLPTable(table string) bool {
+	return strings.HasPrefix(strings.ToLower(table), "ducklake_")
 }
 
 // getTableName returns the DuckLake table name based on proto_type and transaction_type
