@@ -189,6 +189,52 @@ func TestGetTableName_LPVirtualMapping(t *testing.T) {
 	}
 }
 
+func TestLpTableForProfile_RejectsInjection(t *testing.T) {
+	// GHSA-94cf-g6mg-6gv7: crafted event_type must never become part of FROM.
+	cases := []struct {
+		name    string
+		profile string
+	}{
+		{"union injection", "main__cpu UNION SELECT 1"},
+		{"comment injection", "main__cpu--"},
+		{"semicolon breakout", "main__cpu;DROP TABLE x"},
+		{"quote breakout", `main__cpu" OR 1=1`},
+		{"space in table", "main__cpu stats"},
+		{"dot path traversal", "main__cpu.secret"},
+		{"schema information_schema", "information_schema__tables"},
+		{"schema pg_catalog", "pg_catalog__pg_tables"},
+		{"ducklake catalog table", "main__ducklake_snapshot"},
+		{"legacy unsafe bare profile", "cpu;SELECT 1"},
+		{"empty", ""},
+		{"leading digit schema", "1main__cpu"},
+		{"leading digit table", "main__1cpu"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := lpTableForProfile("homer_lake", tc.profile)
+			if ok {
+				t.Fatalf("lpTableForProfile(%q) = %q, ok=true; want ok=false", tc.profile, got)
+			}
+		})
+	}
+}
+
+func TestBuildSearchSQLV4_LPRejectsUnsafeEventType(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = lpHepID
+	req.Filter.EventType = "main__cpu UNION SELECT password FROM users"
+	req.Timestamp.From = 1714400000000
+	req.Timestamp.To = 1714403600000
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err == nil {
+		t.Fatalf("expected error for unsafe LP event_type, got SQL:\n%s", sql)
+	}
+	if sql != "" {
+		t.Fatalf("expected empty SQL on rejection, got:\n%s", sql)
+	}
+}
+
 func TestBuildSearchSQLV4_LPRoutesToTimeColumn(t *testing.T) {
 	req := SearchObjectV4{}
 	req.Filter.ProtoType = lpHepID
