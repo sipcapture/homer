@@ -53,7 +53,14 @@ var legacySeedSHA256 = map[string][]string{
 	// sip_call.lua before 11.0.242: row_correlation_id only looked at
 	// top-level columns, so B-leg -> A-leg correlation never found the
 	// x_call_id stored inside the data_extra JSON.
-	"call": {"d22553459a7bd3e7ad05d68d56e9cd0fbf0343d430003995c0e356104e8559a3"},
+	"call": {
+		"d22553459a7bd3e7ad05d68d56e9cd0fbf0343d430003995c0e356104e8559a3",
+		// sip_call.lua before 11.0.301: correlate() expanded exactly one
+		// hop, so a chain of B2B legs only partially merged and the result
+		// depended on which leg the user opened. Now expands to a fixed
+		// point.
+		"4b4d1007faa5067da4ba18f682defa09be4b840ff2e3292ef9c75c59d29831f2",
+	},
 }
 
 // seedDefaultCorrelationScript inserts the bundled correlation templates

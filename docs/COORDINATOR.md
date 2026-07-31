@@ -339,9 +339,29 @@ The deprecated **`oauth2_providers`** array is still accepted at startup and mig
 |--------|----------|-------------|
 | GET | `/api/v4/mappings` | List field mappings |
 | GET | `/api/v4/hepsubs` | List HEP subscriptions |
-| GET | `/api/v4/aliases` | List aliases |
+| GET | `/api/v4/aliases` | List aliases (auth) |
+| GET | `/api/v4/aliases/lookup?ip=&port=&capture_id=` | LPM diagnostic lookup (auth) |
+| POST | `/api/v4/aliases` | Create alias (**admin**) |
+| PUT | `/api/v4/aliases/:aliasId` | Update alias (**admin**) |
+| DELETE | `/api/v4/aliases/:aliasId` | Delete alias (**admin**) |
 | GET | `/api/v4/db/nodes` | List configured nodes |
 | GET | `/api/v4/modules` | Get modules status |
+
+`/api/v4/ipaliases` is a mirror of the same handlers. The admin UI path is
+**Settings → IP Aliases**. Full request/response schemas live in
+`src/coordinator/docs/openapi.yaml` (tag `Aliases`).
+
+Create body (required: `alias`, `ip`):
+
+```json
+{"alias":"SBC-A","ip":"10.0.0.1","port":0,"mask":32,"status":true}
+```
+
+Aliases are stored in the Coordinator settings DuckDB (`alias` table), not in
+DuckLake. There is no startup file/env seed yet — for GitOps (Flux/k8s), apply
+aliases with an admin JWT via `POST /api/v4/aliases` (for example from a Job
+that curls the API). Homer 7 Postgres aliases can be imported with
+`homer-core migrate settings`.
 
 ### Statistics
 
@@ -440,6 +460,7 @@ The Coordinator uses a DuckDB database for storing:
 - **global_settings** — system-wide key/value rows (`/api/v4/advanced`)  
 - **dashboard_settings** — saved dashboards  
 - **user_mapping_settings** — per-user mapping widget overrides  
+- **alias** — IP/host aliases for flow enrichment (`/api/v4/aliases`)  
 - **correlation_scripts** — Lua correlation + script API rows  
 - **dashboard_alerts**, **export_share_links**, **transaction_view_tokens** — supporting tables  
 

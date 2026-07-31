@@ -333,6 +333,11 @@ func rowGetStringCI(row map[string]interface{}, want string) (string, bool) {
 		return "", false
 	}
 	switch s := v.(type) {
+	case nil:
+		// A SQL NULL must read back as empty, not the literal "<nil>" that
+		// fmt.Sprint(nil) produces (which the UI then renders as a broken
+		// <img src="<nil>"> for alias custom_image, and as "<nil>" tag chips).
+		return "", true
 	case string:
 		return s, true
 	default:

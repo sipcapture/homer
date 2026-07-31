@@ -93,3 +93,53 @@ func TestMapRowToAlias_StatusFromInt32(t *testing.T) {
 		t.Fatalf("mapRowToAlias dropped fields: %+v", got)
 	}
 }
+
+// TestRowGetStringCI_NilSQLNull regresses the broken <img src="<nil>"> /
+// "<nil>" tag-chip bug: a present map key with a nil value (SQL NULL from
+// DuckDB) must return ("", true), never fmt.Sprint(nil) == "<nil>".
+func TestRowGetStringCI_NilSQLNull(t *testing.T) {
+	row := map[string]interface{}{
+		"custom_image": nil,
+		"tag1":         nil,
+		"alias":        "gw",
+	}
+	got, ok := rowGetStringCI(row, "custom_image")
+	if !ok || got != "" {
+		t.Fatalf("custom_image nil: got (%q, %v), want (\"\", true)", got, ok)
+	}
+	got, ok = rowGetStringCI(row, "tag1")
+	if !ok || got != "" {
+		t.Fatalf("tag1 nil: got (%q, %v), want (\"\", true)", got, ok)
+	}
+	got, ok = rowGetStringCI(row, "alias")
+	if !ok || got != "gw" {
+		t.Fatalf("alias string: got (%q, %v), want (\"gw\", true)", got, ok)
+	}
+	got, ok = rowGetStringCI(row, "missing")
+	if ok || got != "" {
+		t.Fatalf("missing key: got (%q, %v), want (\"\", false)", got, ok)
+	}
+}
+
+func TestMapRowToAlias_NullOptionalFields(t *testing.T) {
+	row := map[string]interface{}{
+		"guid":         "g1",
+		"alias":        "edge-1",
+		"ip":           "10.0.0.1",
+		"port":         int32(5060),
+		"mask":         int32(32),
+		"status":       int32(1),
+		"custom_image": nil,
+		"tag1":         nil,
+		"tag2":         nil,
+		"tag3":         nil,
+		"tag4":         nil,
+	}
+	got := mapRowToAlias(row)
+	if got.CustomImage != "" || got.Tag1 != "" || got.Tag2 != "" || got.Tag3 != "" || got.Tag4 != "" {
+		t.Fatalf("NULL optional fields must map to empty strings, got %+v", got)
+	}
+	if got.CustomImage == "<nil>" || got.Tag1 == "<nil>" {
+		t.Fatal("must not serialize SQL NULL as the literal \"<nil>\"")
+	}
+}

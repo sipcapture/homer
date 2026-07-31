@@ -563,9 +563,19 @@ func getColumns(results []map[string]interface{}) []string {
 	if len(results) == 0 {
 		return nil
 	}
+	// Union of keys across all rows (not just results[0]) so columns present on
+	// only some rows — enriched custom headers, aliasSrc/aliasDst — are not dropped
+	// just because the first row happens to lack them.
+	seen := make(map[string]struct{}, len(results[0]))
 	columns := make([]string, 0, len(results[0]))
-	for k := range results[0] {
-		columns = append(columns, k)
+	for _, row := range results {
+		for k := range row {
+			if _, ok := seen[k]; ok {
+				continue
+			}
+			seen[k] = struct{}{}
+			columns = append(columns, k)
+		}
 	}
 	return columns
 }
