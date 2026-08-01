@@ -32,6 +32,13 @@ type RepairResult struct {
 	// table). Cleaning these correctly requires knowing which table_id the
 	// data files reference, so we only report it.
 	DuplicateTableNames int
+	// CorruptDataFileTableIDs counts ducklake_data_file rows whose table_id
+	// column is not stored as INTEGER (sipcapture/homer#900). SQLite permits
+	// mixed storage classes, so a parquet path string can sit in table_id;
+	// DuckDB's sqlite_scanner then aborts file-list resolution with
+	// "Mismatch Type Error … column was declared as integer, found … text".
+	// Detection-only: rewriting those rows safely requires --rebuild-catalog.
+	CorruptDataFileTableIDs int
 	// Malformed is set when an operation failed because the SQLite file is
 	// physically corrupt ("database disk image is malformed"). Only a
 	// .dump/reimport salvage or a full rebuild recovers from this.
@@ -46,7 +53,7 @@ func (r RepairResult) Changed() bool {
 // NeedsRebuild reports whether the lightweight repair was insufficient and the
 // operator should run `homer system --rebuild-catalog`.
 func (r RepairResult) NeedsRebuild() bool {
-	return r.Malformed || r.DuplicateTableNames > 0 || !r.Healthy()
+	return r.Malformed || r.DuplicateTableNames > 0 || r.CorruptDataFileTableIDs > 0 || !r.Healthy()
 }
 
 // isMalformedErr reports whether a SQLite error indicates physical file
@@ -168,6 +175,13 @@ func RepairCatalogSnapshots(catalogPath string) (RepairResult, error) {
 		res.DuplicateTableNames = countDuplicateTableNames(db)
 	}
 
+	// Detect (do NOT auto-fix) non-INTEGER table_id values in
+	// ducklake_data_file — sipcapture/homer#900. A single bad row aborts every
+	// lake query during DuckLake file-list resolution.
+	if exists, _ := sqliteTableExists(db, "ducklake_data_file"); exists {
+		res.CorruptDataFileTableIDs = countCorruptDataFileTableIDs(db)
+	}
+
 	// Push the cleaned state back into the main DB file so the about-to-run
 	// DuckLake ATTACH reads it without depending on our WAL frames.
 	checkpointWAL(db)
@@ -202,6 +216,18 @@ func countDuplicateTableNames(db *sql.DB) int {
 	q := fmt.Sprintf(
 		`SELECT COALESCE(SUM(c-1),0) FROM (SELECT COUNT(*) c FROM ducklake_table %s GROUP BY table_name HAVING c>1)`,
 		filter)
+	var n int
+	if err := db.QueryRow(q).Scan(&n); err != nil {
+		return 0
+	}
+	return n
+}
+
+// countCorruptDataFileTableIDs returns how many ducklake_data_file rows store
+// table_id as something other than INTEGER (TEXT path strings, NULL, …).
+// Returns 0 on any error (best-effort detection).
+func countCorruptDataFileTableIDs(db *sql.DB) int {
+	const q = `SELECT COUNT(*) FROM ducklake_data_file WHERE typeof(table_id) != 'integer'`
 	var n int
 	if err := db.QueryRow(q).Scan(&n); err != nil {
 		return 0

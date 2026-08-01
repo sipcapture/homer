@@ -296,7 +296,7 @@ do **not** have to choose one over the other:
 | Trigger | automatic, on every restart | manual, operator-run |
 | Data | **lossless** — only drops duplicate metadata rows | discards the catalog, re-ingests from parquet; **inline-only rows are lost** |
 | Downtime | none (runs before attach, under the writer lock) | yes — writer must be **stopped** |
-| Scope | duplicate `ducklake_snapshot`/`ducklake_table` rows (the common case) | catalog unreadable / desynced beyond duplicate rows |
+| Scope | duplicate `ducklake_snapshot`/`ducklake_table` rows (the common case); also **detects** (does not auto-fix) duplicate table names and non-INTEGER `ducklake_data_file.table_id` values ([#900](https://github.com/sipcapture/homer/issues/900)) | catalog unreadable / desynced beyond duplicate rows |
 | Cost | negligible | heavy (rewrites every table, re-allocates all ids) |
 
 Rule of thumb: **auto-repair is the first line of defence** — it self-heals the
@@ -340,6 +340,31 @@ kept:
 ```bash
 homer system --config-path /etc/homer/config.json --rebuild-catalog --rebuild-cleanup-orphans
 ```
+
+#### Symptom: `Mismatch Type Error` on `table_id` ([#900](https://github.com/sipcapture/homer/issues/900))
+
+If lake queries fail with:
+
+```text
+Mismatch Type Error: Failed to get data file list from DuckLake:
+Invalid type in column "table_id": column was declared as integer,
+found "date=YYYY-MM-DD/ducklake-….parquet" of type "text" instead.
+```
+
+at least one `ducklake_data_file` row has a **parquet path string stored in the
+integer `table_id` column**. Startup auto-repair **detects** this and logs an
+error pointing at `--rebuild-catalog`; it does **not** rewrite those rows
+(doing so safely requires re-registering files). Confirm with:
+
+```sql
+SELECT rowid, typeof(table_id), table_id, path
+FROM ducklake_data_file
+WHERE typeof(table_id) != 'integer'
+LIMIT 50;
+```
+
+Then stop the writer and run `--rebuild-catalog` as above. This is catalog
+corruption, not a cross-table `date=` glob leak on the query path.
 
 Notes:
 - Run with the writer **stopped** (it discards the live catalog).

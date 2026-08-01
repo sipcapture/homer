@@ -181,6 +181,49 @@ func TestRepairCatalogDuplicateTableNames(t *testing.T) {
 	}
 }
 
+// TestRepairCatalogCorruptDataFileTableIDs covers sipcapture/homer#900: a
+// parquet relative path stored in ducklake_data_file.table_id (TEXT storage
+// class). Detection-only — auto-repair must not delete those rows.
+func TestRepairCatalogCorruptDataFileTableIDs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "catalog.sqlite")
+	db := openTestCatalog(t, path)
+	for _, s := range []string{
+		`CREATE TABLE ducklake_snapshot (snapshot_id BIGINT, next_file_id BIGINT)`,
+		`INSERT INTO ducklake_snapshot VALUES (1,10)`,
+		`CREATE TABLE ducklake_data_file (data_file_id BIGINT, table_id, path TEXT)`,
+		// Healthy row + corrupt row with path string in table_id.
+		`INSERT INTO ducklake_data_file VALUES (1, 42, 'date=2026-07-30/ok.parquet')`,
+		`INSERT INTO ducklake_data_file VALUES (2, 'date=2026-07-30/ducklake-019fb128-3ac0-7662-8a3c-ba00875c1066.parquet', 'date=2026-07-30/bad.parquet')`,
+	} {
+		if _, err := db.Exec(s); err != nil {
+			t.Fatalf("setup %q: %v", s, err)
+		}
+	}
+	db.Close()
+
+	res, err := RepairCatalogSnapshots(path)
+	if err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	if res.CorruptDataFileTableIDs != 1 {
+		t.Errorf("CorruptDataFileTableIDs=%d want 1", res.CorruptDataFileTableIDs)
+	}
+	if !res.NeedsRebuild() {
+		t.Errorf("NeedsRebuild()=false want true")
+	}
+	if res.Changed() {
+		t.Errorf("Changed()=true want false (detection must not mutate rows)")
+	}
+	db2 := openTestCatalog(t, path)
+	var cnt int
+	if err := db2.QueryRow(`SELECT COUNT(*) FROM ducklake_data_file`).Scan(&cnt); err != nil {
+		t.Fatal(err)
+	}
+	if cnt != 2 {
+		t.Errorf("ducklake_data_file rows=%d want 2 (no rows deleted)", cnt)
+	}
+}
+
 func TestRepairCatalogSnapshotsHealthy(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "catalog.sqlite")
 	db := openTestCatalog(t, path)

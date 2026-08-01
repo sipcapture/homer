@@ -474,6 +474,17 @@ func (mtw *MultiTableWriter) connect() error {
 				"duplicate_table_names", res.DuplicateTableNames,
 				"catalog", mtw.config.CatalogPath)
 		}
+		// Non-INTEGER table_id values in ducklake_data_file (sipcapture/homer#900)
+		// abort DuckLake file-list resolution with a Mismatch Type Error. Auto-
+		// repair cannot rewrite those rows safely — rebuild from parquet.
+		if err == nil && res.CorruptDataFileTableIDs > 0 {
+			logger.Error("DuckLake catalog has corrupt ducklake_data_file.table_id values "+
+				"(expected INTEGER, found non-integer storage class such as a parquet path). "+
+				"Lake queries will fail with 'Mismatch Type Error: Failed to get data file list'. "+
+				"Stop the writer and run `homer system --rebuild-catalog`.",
+				"corrupt_table_id_rows", res.CorruptDataFileTableIDs,
+				"catalog", mtw.config.CatalogPath)
+		}
 	}
 
 	// SET s3_* is applied per pooled connection by the connector init above.
