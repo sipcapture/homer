@@ -93,7 +93,7 @@ The generated SQL is returned in the response (`generated_sql`) and is server-si
 - only `SELECT` / `WITH` allowed
 - semicolons forbidden
 - only `homer_lake.main.hep_proto_1_call` allowed
-- forbidden tokens: `insert`, `update`, `delete`, `drop`, `alter`, `truncate`, `copy`, `attach`, `detach`, `call`, `create`, `grant`, `revoke`
+- forbidden tokens (as SQL identifiers, not inside string literals): `insert`, `update`, `delete`, `drop`, `alter`, `truncate`, `copy`, `attach`, `detach`, `call`, `create`, `grant`, `revoke`, plus the shared read-only keyword set (`load`, `pragma`, `merge`, …). Call-IDs that embed words like `call` are allowed.
 
 ### `homer_query`
 

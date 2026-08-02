@@ -511,8 +511,6 @@ func mergeSelectResults(a, b []map[string]interface{}, colsA, colsB []string, li
 // UNIONs and the overall statement shape are built dynamically. As defence in
 // depth we still reject anything that is not a single read-only SELECT before
 // it reaches the driver, so a malformed/stacked statement can never run here.
-var dangerousSQLPattern = regexp.MustCompile(`(?i)\b(attach|detach|copy|pragma|install|load|call|create|alter|drop|truncate|insert|update|delete|merge|replace|grant|revoke|vacuum|analyze|export|import)\b`)
-
 func validateUserSQL(query string) error {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
@@ -534,7 +532,10 @@ func validateUserSQL(query string) error {
 		return fmt.Errorf("SQL contains forbidden comment or statement separator")
 	}
 
-	if dangerousSQLPattern.MatchString(trimmed) {
+	// Token-aware keyword check: ignore string literals so Call-IDs that embed
+	// words like "call" / "delete" do not false-positive (same class of bug as
+	// "--" inside session_id before ContainsUnsafeComment).
+	if sqlvalidator.ContainsForbiddenIdentifier(trimmed, sqlvalidator.ForbiddenReadOnlyKeywords) {
 		return fmt.Errorf("SQL contains forbidden keyword")
 	}
 

@@ -552,6 +552,63 @@ func TestValidateUserSQL_CommentMarkers(t *testing.T) {
 	}
 }
 
+func TestValidateUserSQL_KeywordsInLiterals(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		wantErr string // empty = pass
+	}{
+		{
+			name:  "session_id with call token passes",
+			query: "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE session_id = 'foo-call-bar'",
+		},
+		{
+			name:  "session_id exactly call passes",
+			query: "SELECT * FROM t WHERE session_id = 'call'",
+		},
+		{
+			name:  "delete/load/update inside literals pass",
+			query: "SELECT * FROM t WHERE session_id = 'delete-me' OR cid = 'load-copy-update'",
+		},
+		{
+			name:  "hep_proto_1_call table name is not CALL keyword",
+			query: "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE method = 'INVITE'",
+		},
+		{
+			name:    "real CALL statement rejected",
+			query:   "SELECT * FROM t WHERE 1=1 CALL some_proc()",
+			wantErr: "forbidden keyword",
+		},
+		{
+			name:    "real DELETE identifier rejected",
+			query:   "SELECT * FROM t WHERE DELETE",
+			wantErr: "forbidden keyword",
+		},
+		{
+			name:    "real INSERT identifier rejected",
+			query:   "SELECT INSERT FROM t",
+			wantErr: "forbidden keyword",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateUserSQL(tt.query)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("expected no error, got: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.wantErr)
+				} else if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("expected error containing %q, got: %v", tt.wantErr, err)
+				}
+			}
+		})
+	}
+}
+
 func TestPrepareFlightSQLDataSQLUsesThresholdDecision(t *testing.T) {
 	n := defaultMemoryUnionNode()
 

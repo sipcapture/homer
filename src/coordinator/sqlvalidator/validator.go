@@ -598,6 +598,56 @@ func ContainsUnsafeComment(sql string) bool {
 	return false
 }
 
+// ---- Forbidden identifiers (read-only paths) -------------------------------
+
+// ForbiddenReadOnlyKeywords are statement keywords that must not appear as
+// identifiers outside string literals on read-only SELECT paths (node / MCP).
+// CALL remains blocked as a real DuckDB statement; matching is token-aware so
+// Call-IDs / session_ids that embed words like "call" are not rejected.
+var ForbiddenReadOnlyKeywords = map[string]bool{
+	"ATTACH":   true,
+	"DETACH":   true,
+	"COPY":     true,
+	"PRAGMA":   true,
+	"INSTALL":  true,
+	"LOAD":     true,
+	"CALL":     true,
+	"CREATE":   true,
+	"ALTER":    true,
+	"DROP":     true,
+	"TRUNCATE": true,
+	"INSERT":   true,
+	"UPDATE":   true,
+	"DELETE":   true,
+	"MERGE":    true,
+	"REPLACE":  true,
+	"GRANT":    true,
+	"REVOKE":   true,
+	"VACUUM":   true,
+	"ANALYZE":  true,
+	"EXPORT":   true,
+	"IMPORT":   true,
+}
+
+// ContainsForbiddenIdentifier reports whether sql contains any of the given
+// keywords as identifier tokens outside string literals. A naive whole-string
+// regex would false-positive on Call-IDs / session_ids that embed words like
+// "call" or "delete".
+func ContainsForbiddenIdentifier(sql string, forbidden map[string]bool) bool {
+	if len(forbidden) == 0 {
+		return false
+	}
+	for _, tok := range tokenize(sql) {
+		if tok.kind != tkIdent {
+			continue
+		}
+		if forbidden[tok.upper] {
+			return true
+		}
+	}
+	return false
+}
+
 // ---- SafeString ------------------------------------------------------------
 
 const maxSafeStringLen = 1000
