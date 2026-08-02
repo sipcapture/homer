@@ -17,6 +17,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -102,10 +103,6 @@ var (
 	sipMethods = []string{
 		"INVITE", "BYE", "REGISTER", "OPTIONS", "ACK", "CANCEL", "PRACK",
 		"UPDATE", "INFO", "REFER", "SUBSCRIBE", "NOTIFY", "PUBLISH", "MESSAGE",
-	}
-	bannedSQLTokens = []string{
-		"insert", "update", "delete", "drop", "alter", "truncate",
-		"copy", "attach", "detach", "call", "create", "grant", "revoke",
 	}
 )
 
@@ -685,11 +682,8 @@ func validateSQL(sql string) error {
 		return fmt.Errorf("only homer_lake.main.hep_proto_1_call is allowed")
 	}
 
-	for _, token := range bannedSQLTokens {
-		re := regexp.MustCompile(`(?i)\b` + token + `\b`)
-		if re.MatchString(trimmed) {
-			return fmt.Errorf("forbidden SQL token: %s", token)
-		}
+	if sqlvalidator.ContainsForbiddenIdentifier(trimmed, sqlvalidator.ForbiddenReadOnlyKeywords) {
+		return fmt.Errorf("forbidden SQL token")
 	}
 	return nil
 }

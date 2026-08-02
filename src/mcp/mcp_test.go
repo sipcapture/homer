@@ -59,6 +59,13 @@ func TestValidateSQLAllowsCallTableName(t *testing.T) {
 	}
 }
 
+func TestValidateSQLAllowsForbiddenWordsInLiterals(t *testing.T) {
+	sql := "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE session_id = 'foo-call-bar' OR note = 'drop table'"
+	if err := validateSQL(sql); err != nil {
+		t.Fatalf("expected keywords inside string literals to be allowed, got: %v", err)
+	}
+}
+
 func TestValidateSQLRejectsSemicolon(t *testing.T) {
 	sql := "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE method = 'INVITE';"
 	if err := validateSQL(sql); err == nil {
@@ -67,9 +74,18 @@ func TestValidateSQLRejectsSemicolon(t *testing.T) {
 }
 
 func TestValidateSQLRejectsDropToken(t *testing.T) {
-	sql := "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE note = 'drop table'"
+	// Bare DROP identifier must still be rejected; words inside string
+	// literals are allowed (see TestValidateSQLAllowsForbiddenWordsInLiterals).
+	sql := "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE DROP"
 	if err := validateSQL(sql); err == nil {
-		t.Fatalf("expected DROP token SQL to be rejected")
+		t.Fatalf("expected DROP identifier SQL to be rejected")
+	}
+}
+
+func TestValidateSQLRejectsCallStatement(t *testing.T) {
+	sql := "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE 1=1 CALL some_proc()"
+	if err := validateSQL(sql); err == nil {
+		t.Fatalf("expected CALL statement SQL to be rejected")
 	}
 }
 

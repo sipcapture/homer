@@ -824,6 +824,58 @@ func TestContainsUnsafeComment(t *testing.T) {
 	}
 }
 
+func TestContainsForbiddenIdentifier(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want bool
+	}{
+		{
+			name: "call inside session_id literal",
+			sql:  "SELECT * FROM t WHERE session_id = 'foo-call-bar'",
+			want: false,
+		},
+		{
+			name: "hep_proto_1_call table name",
+			sql:  "SELECT * FROM hep_proto_1_call",
+			want: false,
+		},
+		{
+			name: "real CALL statement",
+			sql:  "SELECT * FROM t CALL some_proc()",
+			want: true,
+		},
+		{
+			name: "delete inside literal allowed",
+			sql:  "SELECT * FROM t WHERE x = 'delete'",
+			want: false,
+		},
+		{
+			name: "DELETE as identifier blocked",
+			sql:  "SELECT * FROM t WHERE DELETE",
+			want: true,
+		},
+		{
+			name: "empty forbidden map",
+			sql:  "SELECT CALL FROM t",
+			want: false, // tested with nil map below
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			forbidden := ForbiddenReadOnlyKeywords
+			if tt.name == "empty forbidden map" {
+				forbidden = nil
+			}
+			got := ContainsForbiddenIdentifier(tt.sql, forbidden)
+			if got != tt.want {
+				t.Errorf("ContainsForbiddenIdentifier(%q) = %v, want %v", tt.sql, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHasLimitToken(t *testing.T) {
 	tests := []struct {
 		name string

@@ -70,7 +70,7 @@ See [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#internal-duckdb-authentica
 
 - Allowed statement starts: `SELECT`, `WITH`, `SHOW`, `DESCRIBE`, `EXPLAIN`, `PRAGMA`
 - No semicolons (multi-statement blocked)
-- Blocked DML/DDL keywords and dangerous functions
+- Blocked DML/DDL keywords and dangerous functions (token-aware: keywords inside string literals / Call-IDs are ignored; real `CALL` / `DELETE` identifiers remain blocked)
 
 Invalid SQL returns **400** with `SQL validation failed`. Grafana-style read-only panels using single `SELECT` statements continue to work.
 
