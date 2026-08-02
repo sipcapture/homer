@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useConfirm } from '@/components/ui/confirm-dialog'
 import { Lock, Plus, Settings, Unlock } from 'lucide-react'
-import { ResponsiveGridLayout } from 'react-grid-layout'
+import { GridLayout } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import DashboardHeader from './DashboardHeader'
@@ -12,7 +12,14 @@ import DashboardSettingsDialog from './components/DashboardSettingsDialog'
 import SearchWidgetSettings from './components/SearchWidgetSettings'
 import { getWidgetMeta, isWidgetCategoryEnabled } from './widgets/registry'
 import { useModules } from '@/hooks/useModules'
-import { GRID_ROW_HEIGHT, GRID_MARGIN, computeAvailableRows, fitWidgetHeight } from './utils/grid-utils'
+import {
+  GRID_COLS,
+  GRID_ROW_HEIGHT,
+  GRID_MARGIN,
+  computeAvailableRows,
+  fitWidgetHeight,
+  mergeLayoutIntoWidgets,
+} from './utils/grid-utils'
 import { resolveTimeRange, type CalendarPreset } from './utils/resolveTimeRange'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,10 +48,11 @@ function DashboardGrid() {
   const [containerWidth, setContainerWidth] = useState(0)
   const [containerHeight, setContainerHeight] = useState(0)
   const widgetsRef = useRef(widgets)
-  const skipLayoutChangeRef = useRef(false)
+  const lockedRef = useRef(locked)
   const { widgetControl } = useModules()
 
   useEffect(() => { widgetsRef.current = widgets }, [widgets])
+  useEffect(() => { lockedRef.current = locked }, [locked])
 
   useEffect(() => {
     const el = containerRef.current
@@ -86,28 +94,18 @@ function DashboardGrid() {
       }
     }), [widgets, locked])
 
-  const handleLayoutChange = useCallback((newLayout) => {
-    if (skipLayoutChangeRef.current) {
-      skipLayoutChangeRef.current = false
-      return
-    }
-    const current = widgetsRef.current
-    let changed = false
-    const updated = current.map((w) => {
-      const item = newLayout.find((l) => l.i === w.id)
-      if (item && (w.x !== item.x || w.y !== item.y || w.w !== item.w || w.h !== item.h)) {
-        changed = true
-        return { ...w, x: item.x, y: item.y, w: item.w, h: item.h }
-      }
-      return w
-    })
-    if (changed) updateWidgets(updated)
+  // Persist only after intentional drag/resize. Do not use onLayoutChange:
+  // responsive breakpoint compaction previously overwrote the saved layout
+  // (and auto-saved it) when the window or DevTools width changed (#906).
+  const handleLayoutCommit = useCallback((newLayout) => {
+    if (lockedRef.current) return
+    const updated = mergeLayoutIntoWidgets(widgetsRef.current, newLayout)
+    if (updated) updateWidgets(updated)
   }, [updateWidgets])
 
   const availableRows = computeAvailableRows(containerHeight)
 
   const handleAddWidget = (widget) => {
-    skipLayoutChangeRef.current = true
     if (locked) setLocked(false)
     const meta = getWidgetMeta(widget.type)
     const clampedH = fitWidgetHeight(widget.h ?? meta?.defaultH ?? 3, meta?.minH ?? 2, availableRows)
@@ -115,12 +113,10 @@ function DashboardGrid() {
   }
 
   const handleRemoveWidget = (widgetId) => {
-    skipLayoutChangeRef.current = true
     updateWidgets(widgets.filter((w) => w.id !== widgetId))
   }
 
   const handleDuplicateWidget = (widget) => {
-    skipLayoutChangeRef.current = true
     const meta = getWidgetMeta(widget.type)
     const clampedH = fitWidgetHeight(widget.h ?? meta?.defaultH ?? 3, meta?.minH ?? 2, availableRows)
     const copy = { ...widget, id: `${widget.type}-${Date.now()}`, x: 0, y: Infinity, h: clampedH }
@@ -331,16 +327,19 @@ function DashboardGrid() {
           </div>
         )}
         {!loading && activeDashboardId && widgets.length > 0 && containerWidth > 0 && (
-          <ResponsiveGridLayout
+          <GridLayout
             className="layout"
-            layouts={{ lg: layout }}
-            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
-            cols={{ lg: 12, md: 10, sm: 6, xs: 4 }}
-            rowHeight={GRID_ROW_HEIGHT}
+            layout={layout}
             width={containerWidth - 24}
+            gridConfig={{
+              cols: GRID_COLS,
+              rowHeight: GRID_ROW_HEIGHT,
+              margin: [GRID_MARGIN, GRID_MARGIN],
+            }}
             dragConfig={{ enabled: !locked, handle: '.widget-drag-handle' }}
             resizeConfig={{ enabled: !locked }}
-            onLayoutChange={handleLayoutChange}
+            onDragStop={handleLayoutCommit}
+            onResizeStop={handleLayoutCommit}
           >
             {widgets.map((widget) => {
               const meta = getWidgetMeta(widget.type)
@@ -390,7 +389,7 @@ function DashboardGrid() {
                 </div>
               )
             })}
-          </ResponsiveGridLayout>
+          </GridLayout>
         )}
       </div>
 
