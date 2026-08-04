@@ -222,11 +222,7 @@ func (h *HEP) parse(packet []byte) error {
 			hepV3Enable, hepV2Enable, protobufEnable)
 	}
 
-	h.Timestamp = time.Unix(int64(h.Tsec), int64(h.Tmsec*1000))
-	if h.Tsec == 0 && h.Tmsec == 0 {
-		logger.Debug("got null timestamp", "nodeID", h.NodeID)
-		h.Timestamp = time.Now()
-	}
+	h.sanitizeHEPTimestamp(time.Now())
 
 	h.normPayload()
 	h.HEPParseNs = time.Now().UnixNano() - hepStart
@@ -276,6 +272,76 @@ func (h *HEP) parse(packet []byte) error {
 	}
 
 	return nil
+}
+
+// ntpUnixOffset is seconds between NTP epoch (1900-01-01) and Unix epoch (1970-01-01).
+const ntpUnixOffset uint32 = 2208988800
+
+// hepTimestampPastWindow / hepTimestampFutureWindow bound acceptable HEP wall times
+// relative to receive time. Far-future Tsec (NTP mis-encoded as Unix, clock skew)
+// otherwise creates DuckLake date= partitions decades ahead and can OOM the catalog.
+const (
+	hepTimestampPastWindow   = 10 * 365 * 24 * time.Hour
+	hepTimestampFutureWindow = 24 * time.Hour
+)
+
+// sanitizeHEPTimestamp normalizes HEP chunk 0x0009/0x000a into a sane wall clock,
+// writing Timestamp, Tsec, and Tmsec in sync so DuckLake date partitions stay correct.
+// See https://github.com/sipcapture/homer/issues/909
+func (h *HEP) sanitizeHEPTimestamp(now time.Time) {
+	now = now.UTC()
+
+	// HEP usec must be < 1e6; larger values are typically NTP fractional seconds
+	// wrongly placed in chunk 0x000a (not wall-clock microseconds).
+	if h.Tmsec >= 1_000_000 {
+		logger.Debug("invalid HEP usec, clamping to 0", "nodeID", h.NodeID, "tmsec", h.Tmsec)
+		h.Tmsec = 0
+	}
+
+	if h.Tsec == 0 {
+		logger.Debug("got null timestamp", "nodeID", h.NodeID)
+		h.applyTimestamp(now)
+		return
+	}
+
+	// Cast Tmsec to int64 before *1000 to avoid uint32 overflow.
+	ts := time.Unix(int64(h.Tsec), int64(h.Tmsec)*1000).UTC()
+	if hepTimestampInWindow(ts, now) {
+		h.applyTimestamp(ts)
+		return
+	}
+
+	// NTP seconds misread as Unix: subtract NTP→Unix offset and re-check.
+	if h.Tsec > ntpUnixOffset {
+		converted := time.Unix(int64(h.Tsec-ntpUnixOffset), int64(h.Tmsec)*1000).UTC()
+		if hepTimestampInWindow(converted, now) {
+			logger.Debug("HEP timestamp looked like NTP epoch, converted to Unix",
+				"nodeID", h.NodeID, "rawTsec", h.Tsec, "converted", converted)
+			h.applyTimestamp(converted)
+			return
+		}
+	}
+
+	logger.Debug("HEP timestamp out of range, using receive time",
+		"nodeID", h.NodeID, "rawTsec", h.Tsec, "decoded", ts)
+	h.applyTimestamp(now)
+}
+
+func hepTimestampInWindow(ts, now time.Time) bool {
+	if ts.After(now.Add(hepTimestampFutureWindow)) {
+		return false
+	}
+	if ts.Before(now.Add(-hepTimestampPastWindow)) {
+		return false
+	}
+	return true
+}
+
+func (h *HEP) applyTimestamp(ts time.Time) {
+	ts = ts.UTC()
+	h.Timestamp = ts
+	h.Tsec = uint32(ts.Unix())
+	h.Tmsec = uint32(ts.Nanosecond() / 1000)
 }
 
 func (h *HEP) normPayload() {

@@ -178,8 +178,11 @@ func (a *MultiTableAdapter) convertHEPToValues(hep *decoder.HEP) (TableKey, []in
 // If forcedSIPSubtype is non-empty and hep is SIP (proto 1), that subtype selects the
 // DuckLake table and row shape (call / registration / default) instead of inferring from the method.
 func (a *MultiTableAdapter) convertHEPToValuesWithSIPSubtype(hep *decoder.HEP, forcedSIPSubtype string) (TableKey, []interface{}) {
-	// Calculate timestamp as time.Time for DuckDB TIMESTAMP type
-	ts := time.Unix(int64(hep.Tsec), int64(hep.Tmsec)*1000)
+	// Use decoder-sanitized Timestamp (Tsec/Tmsec are kept in sync there).
+	ts := hep.Timestamp
+	if ts.IsZero() {
+		ts = time.Unix(int64(hep.Tsec), int64(hep.Tmsec)*1000)
+	}
 	date := fastDuckDate(ts)
 	uid := fastUUID()
 	nodeID := fastNodeID(hep.NodeID)
@@ -424,8 +427,11 @@ func (a *MultiTableAdapter) GetReader() *MultiTableReader {
 
 // convertHEP converts a HEP packet to a DuckLake record (legacy)
 func (a *HEPAdapter) convertHEP(hep *decoder.HEP) HEPRecord {
-	// Calculate timestamp as time.Time for DuckDB TIMESTAMP type
-	ts := time.Unix(int64(hep.Tsec), int64(hep.Tmsec)*1000)
+	// Use decoder-sanitized Timestamp (Tsec/Tmsec are kept in sync there).
+	ts := hep.Timestamp
+	if ts.IsZero() {
+		ts = time.Unix(int64(hep.Tsec), int64(hep.Tmsec)*1000)
+	}
 
 	record := HEPRecord{
 		UUID:      fastUUID(),
