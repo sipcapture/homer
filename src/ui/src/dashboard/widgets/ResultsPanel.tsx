@@ -42,6 +42,7 @@ import OTLPLogRowModal from '../OTLPLogRowModal'
 import OTLPMetricsSeriesModal from '../OTLPMetricsSeriesModal'
 import MessageModal from '../MessageModal'
 import { useLocale } from '@/components/locale/locale-provider'
+import { columnDisplayLabel, columnDisplayTitle } from '../resultColumnLabels'
 
 const OTLP_TRACES_PROTO = 200
 const OTLP_METRICS_PROTO = 201
@@ -1108,7 +1109,11 @@ export default function ResultsPanel({ widgetId, config: _config }) {
                       'whitespace-nowrap border-b border-border px-2 py-1.5 text-left font-medium text-slate-600 dark:text-slate-300',
                       col !== '_actions' && col !== '_select' && 'cursor-pointer select-none hover:text-slate-900 dark:hover:text-sky-100',
                     )}
-                    title={col !== '_actions' && col !== '_select' ? `Sort by ${col}` : undefined}
+                    title={
+                      col !== '_actions' && col !== '_select'
+                        ? `Sort by ${columnDisplayTitle(col)}`
+                        : undefined
+                    }
                   >
                     {col === '_select' ? (
                       <span className="inline-flex items-center" onClick={(e) => e.stopPropagation()}>
@@ -1128,7 +1133,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
                       <span className="text-[10px] uppercase tracking-wider">Actions</span>
                     ) : (
                       <span className="inline-flex items-center gap-1">
-                        {col}
+                        {columnDisplayLabel(col)}
                         {sortCol === col ? (
                           sortDir === 'asc' ? (
                             <ArrowUp className="h-3 w-3" />
@@ -1390,8 +1395,12 @@ export default function ResultsPanel({ widgetId, config: _config }) {
                       })
                     }}
                   />
-                  <label htmlFor={`col-${col}`} className="flex-1 cursor-pointer truncate">
-                    {col}
+                  <label
+                    htmlFor={`col-${col}`}
+                    className="flex-1 cursor-pointer truncate"
+                    title={columnDisplayTitle(col)}
+                  >
+                    {columnDisplayLabel(col)}
                   </label>
                   <Button
                     type="button"
