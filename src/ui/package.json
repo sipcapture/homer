@@ -65,11 +65,11 @@
   },
   "overrides": {
     "express-rate-limit": "8.5.1",
-    "ip-address": "10.2.0",
-    "hono": "4.12.31",
+    "ip-address": "10.3.1",
+    "hono": "4.12.34",
     "js-yaml": "4.3.0",
     "@hono/node-server": "2.0.11",
-    "fast-uri": "3.1.4",
+    "fast-uri": "3.1.5",
     "@babel/core": "7.29.6",
     "ws": "8.21.0"
   }
