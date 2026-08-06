@@ -104,10 +104,19 @@ function highlightSIP(payload) {
   return out.join('\n')
 }
 
+import { captureIdOf } from './flow/flow-data'
+
 const META_FIELDS = ['uuid', 'date', 'timestamp', 'event', 'method', 'src_ip', 'dst_ip', 'src_port', 'dst_port', 'session_id', 'cid', 'node_id']
 
 const META_FIELD_LABELS: Record<string, string> = {
   node_id: 'Capture ID',
+}
+
+function resolveCaptureIdDisplay(data) {
+  if (!data) return undefined
+  if (data.node_id != null && String(data.node_id).trim() !== '') return String(data.node_id).trim()
+  const resolved = captureIdOf(data)
+  return resolved || undefined
 }
 
 function parseTimestampValue(value) {
@@ -166,7 +175,7 @@ function MetaGrid({ data, timeZone, locale, overrides = {} }) {
             </div>
           )
         }
-        const raw = data[field]
+        const raw = field === 'node_id' ? resolveCaptureIdDisplay(data) : data[field]
         const display = raw === undefined
           ? '—'
           : field === 'timestamp'
