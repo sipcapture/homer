@@ -157,7 +157,7 @@
       "secret": "change-me-in-production",
       "expire_hours": 24
     },
-    "auth": { "type": "internal" }
+    "auth": { "type": "internal" },
     "hep_stream": {
       "enable": true,
       "allow_payload": false,
@@ -190,6 +190,7 @@
     "enable": false,
     "host": "0.0.0.0",
     "port": 9090,
-    "path": "/metrics"
+    "path": "/metrics",
+    "agent_label": "node_id"
   }
 }

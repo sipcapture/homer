@@ -176,8 +176,8 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 
 	// Initialize SIP metrics processor if Prometheus is enabled
 	if promCfg != nil && promCfg.Enable {
-		w.sipMetrics = metrics.NewSIPMetricsProcessor(promCfg.TargetIP, promCfg.TargetName)
-		logger.Info("Writer: SIP metrics processor initialized")
+		w.sipMetrics = metrics.NewSIPMetricsProcessor(promCfg.TargetIP, promCfg.TargetName, promCfg.AgentLabel)
+		logger.Info("Writer: SIP metrics processor initialized", "agent_label", config.NormalizePrometheusAgentLabel(promCfg.AgentLabel))
 	}
 
 	// Initialize remote logging clients
@@ -565,9 +565,11 @@ func (w *Writer) Reload() error {
 		newProcessor := metrics.NewSIPMetricsProcessor(
 			w.prometheusConfig.TargetIP,
 			w.prometheusConfig.TargetName,
+			w.prometheusConfig.AgentLabel,
 		)
 		w.sipMetrics = newProcessor
-		logger.Info("Writer: SIP metrics target mapping reloaded")
+		logger.Info("Writer: SIP metrics target mapping reloaded",
+			"agent_label", config.NormalizePrometheusAgentLabel(w.prometheusConfig.AgentLabel))
 	}
 
 	logger.Info("Writer: Configuration reloaded")
@@ -787,11 +789,12 @@ func (w *Writer) processSIPMetrics(hepPkt *decoder.HEP) {
 	}
 
 	nodeID := fmt.Sprintf("%d", hepPkt.NodeID)
+	nodeName := hepPkt.NodeName
 
 	// Process SIP packets (ProtoType 1)
 	if hepPkt.ProtoType == 1 && hepPkt.SIP != nil {
 		pkt := &metrics.SIPPacketInfo{
-			NodeName:      hepPkt.NodeName,
+			NodeName:      nodeName,
 			NodeID:        nodeID,
 			ProtoType:     hepPkt.ProtoType,
 			ProtoString:   hepPkt.ProtoString,
@@ -815,12 +818,12 @@ func (w *Writer) processSIPMetrics(hepPkt *decoder.HEP) {
 
 	// Process RTCP packets (ProtoType 5)
 	if hepPkt.ProtoType == 5 {
-		w.sipMetrics.ProcessRTCPPacket(nodeID, hepPkt.SrcIP, hepPkt.DstIP, []byte(hepPkt.Payload))
+		w.sipMetrics.ProcessRTCPPacket(nodeID, nodeName, hepPkt.SrcIP, hepPkt.DstIP, []byte(hepPkt.Payload))
 	}
 
 	// Process RTPAgent packets (ProtoType 34)
 	if hepPkt.ProtoType == 34 {
-		w.sipMetrics.ProcessRTPAgentPacket(nodeID, []byte(hepPkt.Payload))
+		w.sipMetrics.ProcessRTPAgentPacket(nodeID, nodeName, []byte(hepPkt.Payload))
 	}
 }
 
