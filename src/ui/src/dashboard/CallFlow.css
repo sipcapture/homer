@@ -132,12 +132,6 @@
   padding: 4px 0;
 }
 
-.callflow-filter-note {
-  margin-top: 2px;
-  font-size: 10px;
-  color: var(--color-muted-foreground);
-}
-
 .flow-threshold-row {
   gap: 8px;
 }
