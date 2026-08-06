@@ -96,39 +96,39 @@ export function FilterPanel({
                   onCheckedChange={(v) => setFilters((p) => ({ ...p, isHighContrast: !!v }))}
                 />
               </div>
-              <div className="callflow-filter-row">
-                <Label htmlFor="flow-consolidate-capture-ids">Consolidate by fingerprint</Label>
-                <Switch
-                  id="flow-consolidate-capture-ids"
-                  checked={filters.isConsolidateCaptureIds && canConsolidateCaptureIds}
-                  disabled={!canConsolidateCaptureIds}
-                  onCheckedChange={(v) =>
-                    setFilters((p) => ({ ...p, isConsolidateCaptureIds: !!v }))
-                  }
-                />
-              </div>
-              {!canConsolidateCaptureIds ? (
-                <div className="callflow-filter-note">No fingerprint-capable rows in current flow.</div>
+              {canConsolidateCaptureIds ? (
+                <>
+                  <div className="callflow-filter-row">
+                    <Label htmlFor="flow-consolidate-capture-ids">Consolidate by fingerprint</Label>
+                    <Switch
+                      id="flow-consolidate-capture-ids"
+                      checked={filters.isConsolidateCaptureIds}
+                      onCheckedChange={(v) =>
+                        setFilters((p) => ({ ...p, isConsolidateCaptureIds: !!v }))
+                      }
+                    />
+                  </div>
+                  <div className="callflow-filter-row flow-threshold-row">
+                    <Label htmlFor="flow-consolidate-threshold">Threshold (ms)</Label>
+                    <input
+                      id="flow-consolidate-threshold"
+                      type="number"
+                      min={0}
+                      step={1}
+                      className="callflow-threshold-input"
+                      disabled={!filters.isConsolidateCaptureIds}
+                      value={filters.consolidationTimeThresholdMs}
+                      onChange={(e) => {
+                        const next = Number.parseInt(e.target.value || '0', 10)
+                        setFilters((p) => ({
+                          ...p,
+                          consolidationTimeThresholdMs: Number.isFinite(next) ? Math.max(0, next) : 0,
+                        }))
+                      }}
+                    />
+                  </div>
+                </>
               ) : null}
-              <div className="callflow-filter-row flow-threshold-row">
-                <Label htmlFor="flow-consolidate-threshold">Threshold (ms)</Label>
-                <input
-                  id="flow-consolidate-threshold"
-                  type="number"
-                  min={0}
-                  step={1}
-                  className="callflow-threshold-input"
-                  disabled={!canConsolidateCaptureIds || !filters.isConsolidateCaptureIds}
-                  value={filters.consolidationTimeThresholdMs}
-                  onChange={(e) => {
-                    const next = Number.parseInt(e.target.value || '0', 10)
-                    setFilters((p) => ({
-                      ...p,
-                      consolidationTimeThresholdMs: Number.isFinite(next) ? Math.max(0, next) : 0,
-                    }))
-                  }}
-                />
-              </div>
             </section>
 
             <section className="callflow-filter-section">
