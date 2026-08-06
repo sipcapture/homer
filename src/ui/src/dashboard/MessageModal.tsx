@@ -106,10 +106,11 @@ function highlightSIP(payload) {
 
 import { captureIdOf } from './flow/flow-data'
 
-const META_FIELDS = ['uuid', 'date', 'timestamp', 'event', 'method', 'src_ip', 'dst_ip', 'src_port', 'dst_port', 'session_id', 'cid', 'node_id']
+const META_FIELDS = ['uuid', 'date', 'timestamp', 'event', 'method', 'src_ip', 'dst_ip', 'src_port', 'dst_port', 'session_id', 'cid', 'node_id', 'node_name']
 
 const META_FIELD_LABELS: Record<string, string> = {
   node_id: 'Capture ID',
+  node_name: 'Node Name',
 }
 
 function resolveCaptureIdDisplay(data) {
@@ -117,6 +118,27 @@ function resolveCaptureIdDisplay(data) {
   if (data.node_id != null && String(data.node_id).trim() !== '') return String(data.node_id).trim()
   const resolved = captureIdOf(data)
   return resolved || undefined
+}
+
+function resolveNodeNameDisplay(data) {
+  if (!data) return undefined
+  if (data.node_name != null && String(data.node_name).trim() !== '') {
+    return String(data.node_name).trim()
+  }
+  const extra = data.data_extra
+  if (!extra) return undefined
+  let obj = extra
+  if (typeof extra === 'string') {
+    try {
+      obj = JSON.parse(extra)
+    } catch {
+      return undefined
+    }
+  }
+  if (obj && typeof obj === 'object' && obj.node_name != null && String(obj.node_name).trim() !== '') {
+    return String(obj.node_name).trim()
+  }
+  return undefined
 }
 
 function parseTimestampValue(value) {
@@ -175,7 +197,11 @@ function MetaGrid({ data, timeZone, locale, overrides = {} }) {
             </div>
           )
         }
-        const raw = field === 'node_id' ? resolveCaptureIdDisplay(data) : data[field]
+        const raw = field === 'node_id'
+          ? resolveCaptureIdDisplay(data)
+          : field === 'node_name'
+            ? resolveNodeNameDisplay(data)
+            : data[field]
         const display = raw === undefined
           ? '—'
           : field === 'timestamp'

@@ -208,6 +208,7 @@ type SearchObjectV4 struct {
 		CaptureID     int      `json:"capture_id"`
 		Node          string   `json:"node"`
 		NodeID        string   `json:"node_id,omitempty"` // alias for node
+		NodeName      string   `json:"node_name,omitempty"` // HEP 0x0013 in data_extra.node_name
 		Aor           string   `json:"aor,omitempty"`           // SIP registration column
 		Contact       string   `json:"contact,omitempty"`     // SIP registration column
 		Expires       string   `json:"expires,omitempty"`     // SIP registration column
@@ -2895,10 +2896,17 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 			"(CAST(node_id AS VARCHAR) = '%s' OR json_extract_string(data_extra, '$.capture_id') = '%s' OR json_extract_string(data_extra, '$.captureId') = '%s')",
 			capStr, capStr, capStr))
 	}
-	// node / node_id
+	// node / node_id: match numeric column or HEP hostname in data_extra (#922).
 	nodeFilter := firstNonEmpty(req.Filter.Node, req.Filter.NodeID)
 	if nodeFilter != "" {
-		conditions = append(conditions, fmt.Sprintf("node_id = '%s'", sqlvalidator.SafeString(nodeFilter)))
+		ns := sqlvalidator.SafeString(nodeFilter)
+		conditions = append(conditions, fmt.Sprintf(
+			"(node_id = '%s' OR json_extract_string(data_extra, '$.node_name') = '%s')",
+			ns, ns))
+	}
+	if nn := strings.TrimSpace(req.Filter.NodeName); nn != "" {
+		conditions = append(conditions, sqlFormMatchClause(
+			"json_extract_string(data_extra, '$.node_name')", nn))
 	}
 	if ua := strings.TrimSpace(req.Filter.UserAgent); ua != "" {
 		if protoType == 1 && txType == "registration" {

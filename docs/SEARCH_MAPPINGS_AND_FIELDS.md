@@ -296,6 +296,9 @@ Multi-select with one value uses singular key (`method`); multiple values use pl
 | `src_ip`, `dst_ip`, `src_port`, `dst_port` | same | |
 | `user_agent` | column or `data_extra` | registration vs call |
 | `ruri_user` | `data_extra.request_uri` | LIKE |
+| `node` / `node_id` | `node_id` **OR** `data_extra.node_name` | HEP `-hi` / `-hn` (#922) |
+| `node_name` | `data_extra.node_name` | HEP `0x0013` when distinct from numeric id |
+| `capture_id` | `node_id` (+ `data_extra.capture_id`) | numeric Capture ID only |
 | `payload` | `payload` | substring |
 | `aor`, `contact`, `expires` | registration columns | `profile: registration` |
 | `from_tag`, `to_tag` | **virtual** `data_extra` | |

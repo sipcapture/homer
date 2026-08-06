@@ -25,6 +25,46 @@ func TestBuildSearchSQLV4_CaptureID(t *testing.T) {
 	}
 }
 
+func TestBuildSearchSQLV4_NodeMatchesIDOrDataExtraName(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.Node = "voice"
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "node_id = 'voice'") {
+		t.Fatalf("expected node_id match, got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "json_extract_string(data_extra, '$.node_name') = 'voice'") {
+		t.Fatalf("expected data_extra.node_name OR, got:\n%s", sql)
+	}
+}
+
+func TestBuildSearchSQLV4_NodeNameFilter(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.NodeName = "voice"
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql, "json_extract_string(data_extra, '$.node_name')") {
+		t.Fatalf("expected node_name extract, got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "voice") {
+		t.Fatalf("expected voice value, got:\n%s", sql)
+	}
+	// Dedicated node_name filter must not require node_id equality alone.
+	if strings.Contains(sql, "node_id = 'voice'") {
+		t.Fatalf("node_name-only filter should not OR node_id, got:\n%s", sql)
+	}
+}
+
 func TestBuildSearchSQLV4_SIPDefaultUsesDataExtraHosts(t *testing.T) {
 	req := SearchObjectV4{}
 	req.Filter.ProtoType = 1

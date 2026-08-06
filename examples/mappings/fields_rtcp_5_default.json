@@ -73,6 +73,15 @@
     "hide": true
   },
   {
+    "id": "node_name",
+    "name": "Node Name",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 8,
+    "hide": true
+  },
+  {
     "id": "payload",
     "name": "Payload contains",
     "type": "string",

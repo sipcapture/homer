@@ -46,6 +46,15 @@
     "hide": true
   },
   {
+    "id": "node_name",
+    "name": "Node Name",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 5,
+    "hide": true
+  },
+  {
     "id": "user_agent",
     "name": "Extra JSON user_agent",
     "type": "string",

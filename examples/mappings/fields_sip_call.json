@@ -180,6 +180,15 @@
     "hide": true
   },
   {
+    "id": "node_name",
+    "name": "Node Name",
+    "type": "string",
+    "index": "none",
+    "form_type": "input",
+    "position": 13,
+    "hide": true
+  },
+  {
     "id": "user_agent",
     "name": "User-Agent",
     "type": "string",
