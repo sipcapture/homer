@@ -8,6 +8,8 @@ export interface FlowFilters {
   isSimplify: boolean
   isAbsoluteTime: boolean
   isHighContrast: boolean
+  isConsolidateCaptureIds: boolean
+  consolidationTimeThresholdMs: number
   hostGrouping: HostGrouping
   ipExcluded: Set<string>
   methodExcluded: Set<string>
@@ -19,6 +21,8 @@ export const DEFAULT_FILTERS: FlowFilters = {
   isSimplify: false,
   isAbsoluteTime: false,
   isHighContrast: false,
+  isConsolidateCaptureIds: false,
+  consolidationTimeThresholdMs: 500,
   hostGrouping: 'ungrouped',
   ipExcluded: new Set(),
   methodExcluded: new Set(),
@@ -31,6 +35,8 @@ export interface StoredFlowPrefs {
   isSimplify?: boolean
   isAbsoluteTime?: boolean
   isHighContrast?: boolean
+  isConsolidateCaptureIds?: boolean
+  consolidationTimeThresholdMs?: number
 }
 
 export function isHostGrouping(value: unknown): value is HostGrouping {
@@ -49,6 +55,15 @@ export function loadStoredFlowPrefs(): StoredFlowPrefs {
     if (typeof parsed.isSimplify === 'boolean') out.isSimplify = parsed.isSimplify
     if (typeof parsed.isAbsoluteTime === 'boolean') out.isAbsoluteTime = parsed.isAbsoluteTime
     if (typeof parsed.isHighContrast === 'boolean') out.isHighContrast = parsed.isHighContrast
+    if (typeof parsed.isConsolidateCaptureIds === 'boolean') {
+      out.isConsolidateCaptureIds = parsed.isConsolidateCaptureIds
+    }
+    if (
+      typeof parsed.consolidationTimeThresholdMs === 'number' &&
+      Number.isFinite(parsed.consolidationTimeThresholdMs)
+    ) {
+      out.consolidationTimeThresholdMs = Math.max(0, Math.round(parsed.consolidationTimeThresholdMs))
+    }
     return out
   } catch {
     return {}
@@ -62,6 +77,8 @@ export function saveStoredFlowPrefs(filters: FlowFilters): void {
     isSimplify: filters.isSimplify,
     isAbsoluteTime: filters.isAbsoluteTime,
     isHighContrast: filters.isHighContrast,
+    isConsolidateCaptureIds: filters.isConsolidateCaptureIds,
+    consolidationTimeThresholdMs: filters.consolidationTimeThresholdMs,
   }
   try {
     localStorage.setItem(FLOW_FILTER_PREFS_LS_KEY, JSON.stringify(payload))

@@ -1,0 +1,23 @@
+{
+  "name": "homer-dev (go+ui)",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "target": "devbase"
+  },
+  "workspaceFolder": "/workspaces/homer-dev",
+  "postCreateCommand": "cd src/ui && npm ci",
+  "postStartCommand": "cd src/ui && npm run build",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "golang.Go",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}

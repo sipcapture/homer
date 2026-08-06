@@ -150,6 +150,10 @@ make
 ./homer --config-path /etc/homer/homer.json --log-level debug
 ```
 
+### Development Container
+
+For an in-container development workflow (build + tests), see [docs/DEVCONTAINER.md](docs/DEVCONTAINER.md).
+
 ## Subcommands
 
 Homer uses a subcommand-based CLI. Running `homer` without arguments starts the server.

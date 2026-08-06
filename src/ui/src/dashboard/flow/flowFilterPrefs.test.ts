@@ -25,6 +25,8 @@ describe('flowFilterPrefs', () => {
       isSimplify: true,
       isAbsoluteTime: true,
       isHighContrast: true,
+      isConsolidateCaptureIds: false,
+      consolidationTimeThresholdMs: 500,
     })
   })
 

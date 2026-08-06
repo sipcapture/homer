@@ -104,7 +104,11 @@ function highlightSIP(payload) {
   return out.join('\n')
 }
 
-const META_FIELDS = ['uuid', 'date', 'timestamp', 'event', 'method', 'src_ip', 'dst_ip', 'src_port', 'dst_port', 'session_id', 'cid']
+const META_FIELDS = ['uuid', 'date', 'timestamp', 'event', 'method', 'src_ip', 'dst_ip', 'src_port', 'dst_port', 'session_id', 'cid', 'node_id']
+
+const META_FIELD_LABELS: Record<string, string> = {
+  node_id: 'Capture ID',
+}
 
 function parseTimestampValue(value) {
   if (!value && value !== 0) return null
@@ -147,11 +151,21 @@ function formatDateTime(value, locale, timeZone, dateOnly = false) {
   return new Intl.DateTimeFormat(locale, options).format(date)
 }
 
-function MetaGrid({ data, timeZone, locale }) {
+function MetaGrid({ data, timeZone, locale, overrides = {} }) {
   if (!data) return null
   return (
     <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-3">
       {META_FIELDS.map((field) => {
+        if (field in overrides) {
+          return (
+            <div key={field} className="flex min-w-0 flex-col">
+              <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{META_FIELD_LABELS[field] ?? field}</dt>
+              <dd className="truncate font-mono text-muted-foreground" title={String(overrides[field])}>
+                {String(overrides[field])}
+              </dd>
+            </div>
+          )
+        }
         const raw = data[field]
         const display = raw === undefined
           ? '—'
@@ -253,7 +267,7 @@ export default function MessageModal({ modal, onClose, timeZone }) {
 
         {!loading && !error && (
           <>
-            <MetaGrid data={data} timeZone={timeZone} locale={locale} />
+            <MetaGrid data={data} timeZone={timeZone} locale={locale} overrides={messageContext?.metaOverrides ?? {}} />
 
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">

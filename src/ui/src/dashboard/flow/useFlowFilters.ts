@@ -55,7 +55,14 @@ export function useFlowFilters(items: RawMessage[] | null | undefined): UseFlowF
 
   useEffect(() => {
     saveStoredFlowPrefs(filters)
-  }, [filters.hostGrouping, filters.isSimplify, filters.isAbsoluteTime, filters.isHighContrast])
+  }, [
+    filters.hostGrouping,
+    filters.isSimplify,
+    filters.isAbsoluteTime,
+    filters.isHighContrast,
+    filters.isConsolidateCaptureIds,
+    filters.consolidationTimeThresholdMs,
+  ])
 
   const { filterIP, filterMethod, filterPayloadType, filterCallId, filteredItems } = useMemo(() => {
     const safe = items ?? []

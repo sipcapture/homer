@@ -748,6 +748,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
   const handleFlowMessageClick = async (flowItem) => {
     const raw = flowItem.raw || flowItem
     const uuid = raw.uuid || raw.id || flowItem.id
+    const isConsolidatedParent = Array.isArray(flowItem.subItems) && flowItem.subItems.length > 0
     const messageContext = {
       proto_type: 1,
       event_type: 'call',
@@ -755,6 +756,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
         const ts = resolveTimeRange(timeRange, timeZone)
         return ts ? { from: ts.from, to: ts.to } : undefined
       })(),
+      metaOverrides: isConsolidatedParent ? { node_id: 'multiple' } : undefined,
     }
     const nestedKey = newModalKey()
     const update = (modal) => setMessageModals(prev =>

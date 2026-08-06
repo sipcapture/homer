@@ -1,9 +1,10 @@
 # Debian/glibc: DuckDB static libs expect glibc (backtrace, malloc_trim, resolver);
 # Alpine/musl link fails. Runtime must match libc linked into the binary.
-FROM golang:bookworm AS builder
+FROM golang:bookworm AS devbase
 
 # Base build deps (no Debian nodejs — bookworm ships Node 18; Vite 7 needs 20.19+ / 22.12+).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
     git ca-certificates build-essential curl \
     libluajit-5.1-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -13,13 +14,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+FROM devbase AS builder
+
 COPY . /homer-core
 WORKDIR /homer-core
 RUN make modules && make all
 
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
     ca-certificates bash sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
