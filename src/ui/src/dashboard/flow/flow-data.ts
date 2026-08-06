@@ -314,6 +314,24 @@ export function hasRuntimeFingerprintCandidates(items: RawMessage[] | null | und
   return items.some((msg) => runtimeFingerprintOf(msg) !== '')
 }
 
+/** True when at least one fingerprint is shared by two or more distinct capture IDs. */
+export function canConsolidateFlowItems(items: FlowItemData[]): boolean {
+  const captureIdsByFp = new Map<string, Set<string>>()
+  for (const item of items) {
+    const fp = item.runtimeFingerprint || ''
+    const captureId = item.captureId || ''
+    if (!fp || !captureId) continue
+    let ids = captureIdsByFp.get(fp)
+    if (!ids) {
+      ids = new Set()
+      captureIdsByFp.set(fp, ids)
+    }
+    ids.add(captureId)
+    if (ids.size >= 2) return true
+  }
+  return false
+}
+
 export function shortcutIPv6(str: string): string {
   if (!str) return ''
   const m = str.match(/^\[?([\da-fA-F]+):.*:([\da-fA-F]+)]?$/)

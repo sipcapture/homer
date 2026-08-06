@@ -1,5 +1,4 @@
 import type { FlowItemData } from './flow-data'
-import { useEffect, useState } from 'react'
 
 interface FlowItemProps {
   item: FlowItemData
@@ -24,15 +23,8 @@ export function FlowItem({
 }: FlowItemProps) {
   const itemKey = String(item.id ?? item.idx)
   const hasSubItems = !!item.subItems && item.subItems.length > 0
-  const [showSubItems, setShowSubItems] = useState(false)
-
-  useEffect(() => {
-    if (!hasSubItems) {
-      setShowSubItems(false)
-      return
-    }
-    setShowSubItems(expandedKey === itemKey)
-  }, [expandedKey, hasSubItems, itemKey])
+  const canToggleSubItems = hasSubItems && typeof setExpandedKey === 'function'
+  const showSubItems = canToggleSubItems && expandedKey === itemKey
 
   const flexStart = item.start || 0.0000001
   const flexMiddle = item.middle || 0.0000001
@@ -68,7 +60,7 @@ export function FlowItem({
                 className={`call_text${item.direction ? ' right' : ''}`}
                 style={{ color: item.methodColor }}
               >
-                {hasSubItems ? (
+                {canToggleSubItems ? (
                   <button
                     type="button"
                     className="subitems-toggle"
@@ -77,9 +69,7 @@ export function FlowItem({
                     title={showSubItems ? 'Collapse consolidated messages' : 'Expand consolidated messages'}
                     onClick={(event) => {
                       event.stopPropagation()
-                      if (!setExpandedKey) return
-                      const nextExpanded = showSubItems ? null : itemKey
-                      setExpandedKey(nextExpanded)
+                      setExpandedKey(showSubItems ? null : itemKey)
                     }}
                   >
                     {showSubItems ? '▽' : '▷'}

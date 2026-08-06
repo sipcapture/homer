@@ -70,6 +70,14 @@ describe('FlowItem consolidation', () => {
     expect(container.querySelector('.subitems-count')?.textContent).toBe('+1')
   })
 
+  it('does not render toggle when setExpandedKey is missing', () => {
+    const { container } = render(
+      <FlowItem item={parentItem} isSimplify={false} isAbsoluteTime={false} />,
+    )
+    expect(container.querySelector('.subitems-toggle')).toBeNull()
+    expect(container.querySelector('.subitems-count')?.textContent).toBe('+1')
+  })
+
   it('does not render toggle when item has no subItems', () => {
     const { container } = render(
       <FlowItem item={makeItem(false)} isSimplify={false} isAbsoluteTime={false} />,

@@ -5,7 +5,7 @@ import { FilterPanel } from './flow/FilterPanel'
 import { FlowHostsLine } from './flow/FlowHostsLine'
 import { FlowItem } from './flow/FlowItem'
 import type { FlowItemData, RawMessage } from './flow/flow-data'
-import { buildFlow, buildCallIdLegend, consolidateFlowItems } from './flow/flow-data'
+import { buildFlow, buildCallIdLegend, canConsolidateFlowItems, consolidateFlowItems } from './flow/flow-data'
 import { useFlowFilters } from './flow/useFlowFilters'
 import { useLocale } from '@/components/locale/locale-provider'
 
@@ -40,7 +40,7 @@ export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowPr
   )
 
   const canConsolidateCaptureIds = useMemo(
-    () => flowItems.some((item) => (item.runtimeFingerprint ?? '') !== ''),
+    () => canConsolidateFlowItems(flowItems),
     [flowItems],
   )
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildFlow, buildHosts, endpointAlias, hostKey, hostKeyFromMessage,
-  runtimeFingerprintOf, captureIdOf, consolidateFlowItems,
+  runtimeFingerprintOf, captureIdOf, consolidateFlowItems, canConsolidateFlowItems,
 } from './flow-data'
 import type { FlowItemData, RawMessage } from './flow-data'
 
@@ -209,5 +209,31 @@ describe('consolidateFlowItems', () => {
     consolidateFlowItems(original, { enabled: true, timeThresholdMs: 500 })
     expect(original[0].subItems).toBeUndefined()
     expect(original[1].subItems).toBeUndefined()
+  })
+})
+
+describe('canConsolidateFlowItems', () => {
+  it('returns true when the same fingerprint appears with different capture IDs', () => {
+    const items = [
+      makeFlowItem({ id: 'a', captureId: '1001', runtimeFingerprint: 'fp1' }),
+      makeFlowItem({ id: 'b', captureId: '1002', runtimeFingerprint: 'fp1' }),
+    ]
+    expect(canConsolidateFlowItems(items)).toBe(true)
+  })
+
+  it('returns false when fingerprints exist but capture IDs are unique per fingerprint', () => {
+    const items = [
+      makeFlowItem({ id: 'a', captureId: '1001', runtimeFingerprint: 'fp1' }),
+      makeFlowItem({ id: 'b', captureId: '1001', runtimeFingerprint: 'fp1' }),
+      makeFlowItem({ id: 'c', captureId: '1002', runtimeFingerprint: 'fp2' }),
+    ]
+    expect(canConsolidateFlowItems(items)).toBe(false)
+  })
+
+  it('returns false when capture IDs or fingerprints are missing', () => {
+    expect(canConsolidateFlowItems([
+      makeFlowItem({ id: 'a', captureId: '', runtimeFingerprint: 'fp1' }),
+      makeFlowItem({ id: 'b', captureId: '1002', runtimeFingerprint: '' }),
+    ])).toBe(false)
   })
 })
