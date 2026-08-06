@@ -286,9 +286,14 @@ export function consolidateFlowItems(items: FlowItemData[], opts: ConsolidationO
     }
 
     const candidates = groups.get(fp) || []
-    const parent = candidates.slice().reverse().find((candidate) =>
-      canConsolidateInto(candidate, resetItem, Math.max(0, opts.timeThresholdMs)),
-    )
+    const threshold = Math.max(0, opts.timeThresholdMs)
+    let parent: FlowItemData | undefined
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      if (canConsolidateInto(candidates[i], resetItem, threshold)) {
+        parent = candidates[i]
+        break
+      }
+    }
 
     if (!parent) {
       candidates.push(resetItem)
