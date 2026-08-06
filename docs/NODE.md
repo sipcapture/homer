@@ -123,7 +123,7 @@ The Node module exposes **DuckDB Airport** on `flight_server` (Arrow Flight with
 | `host` | string | "0.0.0.0" | Listen address |
 | `port` | int | 50055 | gRPC FlightSQL port |
 | `auth_token` | string | "" | If set, require `Authorization: Bearer <token>` |
-| `catalog_refresh_interval_sec` | int | 30 | Periodic `DETACH`/`ATTACH` refresh when not using a shared writer DB |
+| `catalog_refresh_interval_sec` | int | 30 | Periodic DuckDB reconnect (re-ATTACH volumes on a fresh handle) when not using a shared writer DB; avoids DuckLake ObjectCache growth from in-place `DETACH`/`ATTACH` |
 
 See [FLIGHTSQL.md](FLIGHTSQL.md) for Grafana setup and coordinator proxy (`coordinator.flightsql_server`, default port **32010**).
 
