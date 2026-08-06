@@ -135,6 +135,18 @@ var (
 		[]string{"table"},
 	)
 
+	// MCP natural-language parser duration histogram, labelled by which brain
+	// produced the query (llm|regex|regex_fallback) and the execution mode
+	// (structured|sql). The _count series doubles as the parser hit-rate.
+	MCPParserDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "homer_mcp_parser_duration_seconds",
+			Help:    "MCP natural-language parse duration in seconds by parser (llm|regex|regex_fallback) and mode",
+			Buckets: []float64{0.001, 0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10},
+		},
+		[]string{"parser", "mode"},
+	)
+
 	// DuckLake flushed row counter
 	DucklakeTableFlushedRows = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -323,6 +335,12 @@ func RecordPipelineStageError(protocol, stage, reason string) {
 // RecordPipelineQueueWaitDuration records queue wait duration
 func RecordPipelineQueueWaitDuration(protocol string, duration float64) {
 	PipelineQueueWaitDuration.WithLabelValues(protocol).Observe(duration)
+}
+
+// RecordMCPParser records the MCP parse duration for the given parser brand
+// (llm|regex|regex_fallback) and execution mode (structured|sql).
+func RecordMCPParser(parser, mode string, duration float64) {
+	MCPParserDuration.WithLabelValues(parser, mode).Observe(duration)
 }
 
 // RecordDucklakeTableFlushDuration records table flush duration

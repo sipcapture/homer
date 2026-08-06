@@ -27,6 +27,7 @@ import (
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	"github.com/sipcapture/homer-core/src/pcapwriter"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
+	"github.com/sipcapture/homer-core/src/utils/metrics"
 )
 
 // b2bSuffixRe matches B2BUA suffixes appended to Call-IDs by SIP proxies
@@ -2220,6 +2221,7 @@ func (h *SearchHandler) runMCPAsStructured(c echo.Context, req *MCPQueryRequest)
 		resp.Meta.TimeRange = &TimeRangeMeta{From: searchReq.Timestamp.From, To: searchReq.Timestamp.To}
 	}
 	resp.Meta.Parser = parserMeta
+	metrics.RecordMCPParser(parserMeta.Used, "structured", float64(parserMeta.LatencyMS)/1000.0)
 	return c.JSON(http.StatusOK, resp)
 }
 
@@ -2297,6 +2299,7 @@ func (h *SearchHandler) runMCPAsSQL(c echo.Context, req *MCPQueryRequest) error 
 		resp.Meta.TimeRange = &TimeRangeMeta{From: sqlReq.Timestamp.From, To: sqlReq.Timestamp.To}
 	}
 	resp.Meta.Parser = parserMeta
+	metrics.RecordMCPParser(parserMeta.Used, "sql", float64(parserMeta.LatencyMS)/1000.0)
 	return c.JSON(http.StatusOK, resp)
 }
 

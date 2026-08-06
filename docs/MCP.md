@@ -348,6 +348,28 @@ Every tool returns a JSON envelope:
 
 The `meta.parser_used` field always tells the client which path actually produced the filters, even when `parser=auto`. This lets you observe LLM hit/miss rates from the agent side.
 
+### Server-side metrics
+
+Every MCP query is also recorded on the standard `/metrics` Prometheus endpoint, so you can watch parser hit rate and latency across all clients without inspecting individual responses:
+
+| Metric                               | Labels             | Meaning                                            |
+|--------------------------------------|--------------------|----------------------------------------------------|
+| `homer_mcp_parser_duration_seconds`  | `parser`, `mode`   | NL parse duration. `parser` = `llm` \| `regex` \| `regex_fallback`; `mode` = `structured` \| `sql`. The `_count` series is the parser hit-rate. |
+
+`parser` says which brain produced the query: `llm` (model used), `regex` (rules only — LLM skipped or disabled), or `regex_fallback` (LLM tried but errored/timed out). `mode` is the resolved execution path (`auto` is resolved to `structured` or `sql` before recording). The regex paths record a near-zero duration, so use `_count` for hit-rate and filter `parser="llm"` for LLM latency.
+
+Example queries:
+
+```promql
+# LLM hit rate over 5m
+sum(rate(homer_mcp_parser_duration_seconds_count{parser="llm"}[5m]))
+  / sum(rate(homer_mcp_parser_duration_seconds_count[5m]))
+
+# LLM p95 latency
+histogram_quantile(0.95,
+  sum by (le) (rate(homer_mcp_parser_duration_seconds_bucket{parser="llm"}[5m])))
+```
+
 ## 9. HTTP API for the UI
 
 Beyond stdio, the Coordinator also exposes the MCP query path over HTTP for the UI's `AI` tab. The HTTP path uses the **same** `LLMClient` as the stdio path, so the parser strategies, provider compatibility, and diagnostics are identical.
