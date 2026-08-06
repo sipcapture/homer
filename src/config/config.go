@@ -1111,6 +1111,28 @@ type PrometheusConfig struct {
 	Path       string `json:"path" mapstructure:"path" default:"/metrics"`
 	TargetIP   string `json:"target_ip" mapstructure:"target_ip" default:""`     // Comma-separated IPs for target mapping
 	TargetName string `json:"target_name" mapstructure:"target_name" default:""` // Comma-separated names for target mapping
+	// AgentLabel selects which HEP capture-agent field fills the Prometheus
+	// "node_id" label for SIP/RTCP/RTP metrics:
+	//   "node_id"   — HEP chunk 0x000c / heplify -hi (numeric; default)
+	//   "node_name" — HEP chunk 0x0013 / heplify -hn (hostname string; falls
+	//                 back to node_id when the name chunk is absent)
+	AgentLabel string `json:"agent_label" mapstructure:"agent_label" default:"node_id"`
+}
+
+const (
+	PrometheusAgentLabelNodeID   = "node_id"
+	PrometheusAgentLabelNodeName = "node_name"
+)
+
+// NormalizePrometheusAgentLabel returns a supported agent_label value.
+// Empty or unknown values fall back to node_id.
+func NormalizePrometheusAgentLabel(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case PrometheusAgentLabelNodeName:
+		return PrometheusAgentLabelNodeName
+	default:
+		return PrometheusAgentLabelNodeID
+	}
 }
 
 // Global configuration instance
@@ -1532,6 +1554,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("prometheus.host", "0.0.0.0")
 	v.SetDefault("prometheus.port", 9090)
 	v.SetDefault("prometheus.path", "/metrics")
+	v.SetDefault("prometheus.agent_label", "node_id")
 }
 
 // applyDefaults applies default values for missing fields
@@ -1793,6 +1816,7 @@ func applyDefaults(cfg *Config) {
 	if cfg.Prometheus.Path == "" {
 		cfg.Prometheus.Path = "/metrics"
 	}
+	cfg.Prometheus.AgentLabel = NormalizePrometheusAgentLabel(cfg.Prometheus.AgentLabel)
 }
 
 // SaveExample writes an example configuration file
@@ -1935,10 +1959,11 @@ func SaveExample(path string) error {
 			},
 		},
 		Prometheus: PrometheusConfig{
-			Enable: false,
-			Host:   "0.0.0.0",
-			Port:   9090,
-			Path:   "/metrics",
+			Enable:     false,
+			Host:       "0.0.0.0",
+			Port:       9090,
+			Path:       "/metrics",
+			AgentLabel: "node_id",
 		},
 	}
 

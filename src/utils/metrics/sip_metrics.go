@@ -207,16 +207,41 @@ type SIPMetricsProcessor struct {
 	TargetConf  *sync.RWMutex
 	srdCache    *fastcache.Cache
 	cacheSize   int
+	// agentLabel is "node_id" (HEP 0x000c) or "node_name" (HEP 0x0013).
+	// It controls which value fills the Prometheus "node_id" label.
+	agentLabel string
 }
 
 const defaultCacheSize = 60 * 1024 * 1024
 
-// NewSIPMetricsProcessor creates a new SIP metrics processor
-func NewSIPMetricsProcessor(targetIP, targetName string) *SIPMetricsProcessor {
+const (
+	AgentLabelNodeID   = "node_id"
+	AgentLabelNodeName = "node_name"
+)
+
+// ResolveAgentLabel picks the Prometheus node_id label value.
+// mode "node_name" prefers the HEP NodeName (hostname); otherwise NodeID.
+// Empty nodeName falls back to nodeID so RTCP/SIP stay consistent.
+func ResolveAgentLabel(mode, nodeID, nodeName string) string {
+	if strings.EqualFold(strings.TrimSpace(mode), AgentLabelNodeName) {
+		if name := strings.TrimSpace(nodeName); name != "" {
+			return name
+		}
+	}
+	if id := strings.TrimSpace(nodeID); id != "" {
+		return id
+	}
+	return strings.TrimSpace(nodeName)
+}
+
+// NewSIPMetricsProcessor creates a new SIP metrics processor.
+// agentLabel selects "node_id" or "node_name" for the Prometheus node_id label.
+func NewSIPMetricsProcessor(targetIP, targetName, agentLabel string) *SIPMetricsProcessor {
 	p := &SIPMetricsProcessor{
 		TargetConf: new(sync.RWMutex),
 		srdCache:   fastcache.New(defaultCacheSize),
 		cacheSize:  defaultCacheSize,
+		agentLabel: normalizeAgentLabel(agentLabel),
 	}
 
 	p.TargetIP = strings.Split(strings.ReplaceAll(targetIP, " ", ""), ",")
@@ -234,6 +259,24 @@ func NewSIPMetricsProcessor(targetIP, targetName string) *SIPMetricsProcessor {
 	}
 
 	return p
+}
+
+func normalizeAgentLabel(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), AgentLabelNodeName) {
+		return AgentLabelNodeName
+	}
+	return AgentLabelNodeID
+}
+
+func (p *SIPMetricsProcessor) agentLabelFor(nodeID, nodeName string) string {
+	return ResolveAgentLabel(p.agentLabel, nodeID, nodeName)
+}
+
+func (p *SIPMetricsProcessor) agentLabelForPacket(pkt *SIPPacketInfo) string {
+	if pkt == nil {
+		return ""
+	}
+	return p.agentLabelFor(pkt.NodeID, pkt.NodeName)
 }
 
 // SIPPacketInfo contains information about a SIP packet for metrics
@@ -256,9 +299,11 @@ type SIPPacketInfo struct {
 
 // ProcessSIPPacket processes a SIP packet and records metrics
 func (p *SIPMetricsProcessor) ProcessSIPPacket(pkt *SIPPacketInfo) {
+	agent := p.agentLabelForPacket(pkt)
+
 	// Record packets by type
-	SIPPacketsByType.WithLabelValues(pkt.NodeName, pkt.ProtoString).Inc()
-	SIPPacketsBySize.WithLabelValues(pkt.NodeName, pkt.ProtoString).Set(float64(pkt.PayloadSize))
+	SIPPacketsByType.WithLabelValues(agent, pkt.ProtoString).Inc()
+	SIPPacketsBySize.WithLabelValues(agent, pkt.ProtoString).Set(float64(pkt.PayloadSize))
 
 	var srcTarget, dstTarget string
 	var srcHit, dstHit bool
@@ -272,16 +317,16 @@ func (p *SIPMetricsProcessor) ProcessSIPPacket(pkt *SIPPacketInfo) {
 	if pkt.ProtoType == 1 && pkt.Method != "" {
 		if !p.TargetEmpty {
 			if srcHit {
-				SIPMethodResponses.WithLabelValues(srcTarget, "src", pkt.NodeName, pkt.Response, pkt.CseqMethod).Inc()
+				SIPMethodResponses.WithLabelValues(srcTarget, "src", agent, pkt.Response, pkt.CseqMethod).Inc()
 				if pkt.ReasonVal != "" && strings.Contains(pkt.ReasonVal, "850") {
 					SIPReasonCause.WithLabelValues(srcTarget, extractCause(pkt.ReasonVal), pkt.Response).Inc()
 				}
 			}
 			if dstHit {
-				SIPMethodResponses.WithLabelValues(dstTarget, "dst", pkt.NodeName, pkt.Response, pkt.CseqMethod).Inc()
+				SIPMethodResponses.WithLabelValues(dstTarget, "dst", agent, pkt.Response, pkt.CseqMethod).Inc()
 			}
 			if !srcHit && !dstHit {
-				SIPMethodResponses.WithLabelValues("unknown", "", pkt.NodeName, pkt.Response, pkt.CseqMethod).Inc()
+				SIPMethodResponses.WithLabelValues("unknown", "", agent, pkt.Response, pkt.CseqMethod).Inc()
 			}
 		}
 
@@ -322,9 +367,9 @@ func (p *SIPMetricsProcessor) ProcessSIPPacket(pkt *SIPPacketInfo) {
 				}
 
 				if pkt.CseqMethod == "INVITE" {
-					SIPSRD.WithLabelValues(dstTarget, pkt.NodeName).Set(float64(d) / 1e9) // Convert to seconds
+					SIPSRD.WithLabelValues(dstTarget, agent).Set(float64(d) / 1e9) // Convert to seconds
 				} else {
-					SIPRRD.WithLabelValues(dstTarget, pkt.NodeName).Set(float64(d) / 1e9)
+					SIPRRD.WithLabelValues(dstTarget, agent).Set(float64(d) / 1e9)
 					p.srdCache.Del([]byte(callID))
 				}
 				p.srdCache.Del(did)
@@ -347,7 +392,7 @@ func (p *SIPMetricsProcessor) ProcessSIPPacket(pkt *SIPPacketInfo) {
 				return
 			}
 			p.srdCache.Set(k, nil)
-			SIPMethodResponses.WithLabelValues(pkt.NodeName, "", pkt.NodeName, pkt.Response, pkt.CseqMethod).Inc()
+			SIPMethodResponses.WithLabelValues(agent, "", agent, pkt.Response, pkt.CseqMethod).Inc()
 
 			if pkt.ReasonVal != "" && strings.Contains(pkt.ReasonVal, "850") {
 				SIPReasonCause.WithLabelValues("unknown", extractCause(pkt.ReasonVal), pkt.Response).Inc()
@@ -356,8 +401,11 @@ func (p *SIPMetricsProcessor) ProcessSIPPacket(pkt *SIPPacketInfo) {
 	}
 }
 
-// ProcessRTCPPacket processes RTCP packet (ProtoType 5)
-func (p *SIPMetricsProcessor) ProcessRTCPPacket(nodeID, srcIP, dstIP string, payload []byte) {
+// ProcessRTCPPacket processes RTCP packet (ProtoType 5).
+// nodeID is HEP 0x000c; nodeName is HEP 0x0013 (may be empty).
+func (p *SIPMetricsProcessor) ProcessRTCPPacket(nodeID, nodeName, srcIP, dstIP string, payload []byte) {
+	agent := p.agentLabelFor(nodeID, nodeName)
+
 	var srcTarget, dstTarget string
 	var srcHit, dstHit bool
 
@@ -367,19 +415,20 @@ func (p *SIPMetricsProcessor) ProcessRTCPPacket(nodeID, srcIP, dstIP string, pay
 	}
 
 	if srcHit {
-		p.dissectRTCPStats(srcTarget, "src", nodeID, payload)
+		p.dissectRTCPStats(srcTarget, "src", agent, payload)
 	}
 	if dstHit {
-		p.dissectRTCPStats(dstTarget, "dst", nodeID, payload)
+		p.dissectRTCPStats(dstTarget, "dst", agent, payload)
 	}
 	if !srcHit && !dstHit {
-		p.dissectRTCPStats("unknown", "", nodeID, payload)
+		p.dissectRTCPStats("unknown", "", agent, payload)
 	}
 }
 
-// ProcessRTPAgentPacket processes RTPAgent packet (ProtoType 34)
-func (p *SIPMetricsProcessor) ProcessRTPAgentPacket(nodeID string, payload []byte) {
-	p.dissectRTPAgentStats(nodeID, payload)
+// ProcessRTPAgentPacket processes RTPAgent packet (ProtoType 34).
+// nodeID is HEP 0x000c; nodeName is HEP 0x0013 (may be empty).
+func (p *SIPMetricsProcessor) ProcessRTPAgentPacket(nodeID, nodeName string, payload []byte) {
+	p.dissectRTPAgentStats(p.agentLabelFor(nodeID, nodeName), payload)
 }
 
 // dissectXRTPStats extracts and records X-RTP-Stat metrics

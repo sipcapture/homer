@@ -166,7 +166,8 @@
     "enable": true,
     "host": "0.0.0.0",
     "port": 9090,
-    "path": "/metrics"
+    "path": "/metrics",
+    "agent_label": "node_id"
   },
   "remote_logging": {
     "loki": {
