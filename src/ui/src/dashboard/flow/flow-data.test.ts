@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildFlow, buildHosts, endpointAlias, hostKey, hostKeyFromMessage } from './flow-data'
+import {
+  buildFlow, buildHosts, endpointAlias, hostKey, hostKeyFromMessage,
+  runtimeFingerprintOf, captureIdOf, consolidateFlowItems,
+} from './flow-data'
+import type { FlowItemData, RawMessage } from './flow-data'
 
 describe('hostKey group-by-alias', () => {
   it('uses alias prefix when enrichment provides alias', () => {
@@ -86,5 +90,124 @@ describe('buildFlow group-by-alias', () => {
     expect(flowItems).toHaveLength(2)
     expect(flowItems[0].start).toBe(flowItems[1].start)
     expect(endpointAlias({ src_ip: '1.2.3.4', aliasSrc: 'Edge' }, 'src')).toBe('Edge')
+  })
+})
+
+function makeFlowItem(overrides: Partial<FlowItemData> & { ts?: number } = {}): FlowItemData {
+  const { ts, ...rest } = overrides
+  return {
+    id: 'x', idx: 0, method: 'INVITE', description: '', srcIp: '10.0.0.1',
+    dstIp: '10.0.0.2', srcPort: 5060, dstPort: 5060, callid: 'c1',
+    callidColors: { color: '#000', tabColor: '#000', arrowColor: '#000' },
+    methodColor: '#000', timeStr: '', fullDateStr: '', diffStr: '',
+    protoLabel: '', payloadType: 'SIP', start: 0, middle: 1, rightEnd: 0,
+    direction: false, isRadial: false, isLastHost: false, arrowStyleSolid: true,
+    raw: { timestamp: ts ?? new Date('2026-01-01T00:00:00Z').getTime() },
+    runtimeFingerprint: 'fp1',
+    captureId: '1001',
+    ...rest,
+  }
+}
+
+describe('runtimeFingerprintOf', () => {
+  it('returns empty string when payload is missing', () => {
+    expect(runtimeFingerprintOf({ src_ip: '10.0.0.1', dst_ip: '10.0.0.2' })).toBe('')
+  })
+
+  it('returns empty string when src_ip is missing', () => {
+    expect(runtimeFingerprintOf({ dst_ip: '10.0.0.2', payload: 'INVITE sip:bob SIP/2.0' })).toBe('')
+  })
+
+  it('produces the same hash for identical inputs', () => {
+    const msg: RawMessage = { src_ip: '10.0.0.1', src_port: 5060, dst_ip: '10.0.0.2', dst_port: 5060, payload: 'INVITE sip:bob SIP/2.0' }
+    expect(runtimeFingerprintOf(msg)).toBe(runtimeFingerprintOf({ ...msg }))
+  })
+
+  it('produces different hashes for different payloads', () => {
+    const base: RawMessage = { src_ip: '10.0.0.1', src_port: 5060, dst_ip: '10.0.0.2', dst_port: 5060 }
+    const a = runtimeFingerprintOf({ ...base, payload: 'INVITE sip:bob SIP/2.0' })
+    const b = runtimeFingerprintOf({ ...base, payload: 'BYE sip:bob SIP/2.0' })
+    expect(a).not.toBe('')
+    expect(a).not.toBe(b)
+  })
+
+  it('returns a pre-existing fingerprint field without recomputing', () => {
+    const msg: RawMessage = {
+      src_ip: '10.0.0.1', src_port: 5060, dst_ip: '10.0.0.2', dst_port: 5060,
+      payload: 'INVITE sip:bob SIP/2.0', fingerprint: 'precomputed-abc123',
+    }
+    expect(runtimeFingerprintOf(msg)).toBe('precomputed-abc123')
+  })
+})
+
+describe('captureIdOf', () => {
+  it('reads capture_id from the top-level row', () => {
+    expect(captureIdOf({ capture_id: '1001' } as RawMessage)).toBe('1001')
+  })
+
+  it('falls back to node_id', () => {
+    expect(captureIdOf({ node_id: 42 } as RawMessage)).toBe('42')
+  })
+
+  it('reads capture_id from data_extra JSON string', () => {
+    expect(captureIdOf({ data_extra: JSON.stringify({ capture_id: '2002' }) } as RawMessage)).toBe('2002')
+  })
+
+  it('returns empty string when nothing is present', () => {
+    expect(captureIdOf({} as RawMessage)).toBe('')
+  })
+})
+
+describe('consolidateFlowItems', () => {
+  it('returns items without subItems when disabled', () => {
+    const items = [makeFlowItem({ id: 'a' }), makeFlowItem({ id: 'b', captureId: '1002' })]
+    const result = consolidateFlowItems(items, { enabled: false, timeThresholdMs: 500 })
+    expect(result).toHaveLength(2)
+    expect(result.every((i) => i.subItems === undefined)).toBe(true)
+  })
+
+  it('consolidates items with same fingerprint and different capture IDs within threshold', () => {
+    const base = new Date('2026-01-01T00:00:00Z').getTime()
+    const a = makeFlowItem({ id: 'a', captureId: '1001', ts: base })
+    const b = makeFlowItem({ id: 'b', captureId: '1002', ts: base + 100 })
+    const result = consolidateFlowItems([a, b], { enabled: true, timeThresholdMs: 500 })
+    expect(result).toHaveLength(1)
+    expect(result[0].subItems).toHaveLength(1)
+    expect(result[0].subItems![0].captureId).toBe('1002')
+  })
+
+  it('does not consolidate items outside the time threshold', () => {
+    const base = new Date('2026-01-01T00:00:00Z').getTime()
+    const a = makeFlowItem({ id: 'a', captureId: '1001', ts: base })
+    const b = makeFlowItem({ id: 'b', captureId: '1002', ts: base + 1000 })
+    const result = consolidateFlowItems([a, b], { enabled: true, timeThresholdMs: 500 })
+    expect(result).toHaveLength(2)
+    expect(result.every((i) => i.subItems === undefined)).toBe(true)
+  })
+
+  it('does not consolidate items with the same capture ID', () => {
+    const base = new Date('2026-01-01T00:00:00Z').getTime()
+    const a = makeFlowItem({ id: 'a', captureId: '1001', ts: base })
+    const b = makeFlowItem({ id: 'b', captureId: '1001', ts: base + 100 })
+    const result = consolidateFlowItems([a, b], { enabled: true, timeThresholdMs: 500 })
+    expect(result).toHaveLength(2)
+  })
+
+  it('does not consolidate items with different fingerprints', () => {
+    const base = new Date('2026-01-01T00:00:00Z').getTime()
+    const a = makeFlowItem({ id: 'a', captureId: '1001', runtimeFingerprint: 'fp1', ts: base })
+    const b = makeFlowItem({ id: 'b', captureId: '1002', runtimeFingerprint: 'fp2', ts: base + 100 })
+    const result = consolidateFlowItems([a, b], { enabled: true, timeThresholdMs: 500 })
+    expect(result).toHaveLength(2)
+  })
+
+  it('does not mutate original items', () => {
+    const base = new Date('2026-01-01T00:00:00Z').getTime()
+    const a = makeFlowItem({ id: 'a', captureId: '1001', ts: base })
+    const b = makeFlowItem({ id: 'b', captureId: '1002', ts: base + 100 })
+    const original = [a, b]
+    consolidateFlowItems(original, { enabled: true, timeThresholdMs: 500 })
+    expect(original[0].subItems).toBeUndefined()
+    expect(original[1].subItems).toBeUndefined()
   })
 })

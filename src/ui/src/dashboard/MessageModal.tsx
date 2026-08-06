@@ -186,7 +186,7 @@ function MetaGrid({ data, timeZone, locale, overrides = {} }) {
             : String(display)
         return (
           <div key={field} className="flex min-w-0 flex-col">
-            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{field}</dt>
+            <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{META_FIELD_LABELS[field] ?? field}</dt>
             <dd className="truncate font-mono text-foreground" title={tip}>
               {String(display)}
             </dd>

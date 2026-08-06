@@ -69,19 +69,21 @@ export function FlowItem({
                 style={{ color: item.methodColor }}
               >
                 {hasSubItems ? (
-                  <span
+                  <button
+                    type="button"
                     className="subitems-toggle"
+                    aria-expanded={showSubItems}
+                    aria-label={showSubItems ? 'Collapse consolidated messages' : 'Expand consolidated messages'}
+                    title={showSubItems ? 'Collapse consolidated messages' : 'Expand consolidated messages'}
                     onClick={(event) => {
                       event.stopPropagation()
                       if (!setExpandedKey) return
                       const nextExpanded = showSubItems ? null : itemKey
                       setExpandedKey(nextExpanded)
                     }}
-                    aria-label={showSubItems ? 'Collapse consolidated messages' : 'Expand consolidated messages'}
-                    title={showSubItems ? 'Collapse consolidated messages' : 'Expand consolidated messages'}
                   >
                     {showSubItems ? '▽' : '▷'}
-                  </span>
+                  </button>
                 ) : null}
                 <span>{item.method || '—'}</span>
                 {item.protoLabel ? <span className="proto-label">{item.protoLabel}</span> : null}

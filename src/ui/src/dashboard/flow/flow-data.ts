@@ -271,14 +271,14 @@ function adoptParentGeometry(parent: FlowItemData, child: FlowItemData): FlowIte
 
 export function consolidateFlowItems(items: FlowItemData[], opts: ConsolidationOptions): FlowItemData[] {
   if (!opts.enabled || items.length === 0) {
-    return items.map((item) => (item.subItems ? { ...item, subItems: undefined } : item))
+    return items.map((item) => ({ ...item, subItems: undefined }))
   }
 
   const groups = new Map<string, FlowItemData[]>()
   const visible: FlowItemData[] = []
 
   for (const item of items) {
-    const resetItem = item.subItems ? { ...item, subItems: undefined } : item
+    const resetItem = { ...item, subItems: undefined }
     const fp = resetItem.runtimeFingerprint || ''
     if (!fp) {
       visible.push(resetItem)
