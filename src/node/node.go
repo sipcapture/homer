@@ -153,7 +153,7 @@ func (n *Node) Start() error {
 	// Refresh catalog so we see tables created by the storage module (which
 	// runs its own DuckDB instance sharing the same catalog file). Reconnect
 	// DuckDB instead of DETACH+ATTACH in place so DuckLake ObjectCache is
-	// freed — see refreshCatalog and QXIP/hepic-lake#70.
+	// freed — see refreshCatalog.
 	n.refreshCatalog()
 
 	n.mu.Lock()
@@ -217,8 +217,7 @@ func (n *Node) Start() error {
 // swaps the Node *sql.DB under refreshMu, then closes the previous Database.
 // Closing the old handle frees DuckDB's ObjectCache, which is required because
 // DETACH+ATTACH on the same Database orphans DuckLake schema/stats cache
-// entries keyed by a per-ATTACH random instance_id (upstream duckdb/ducklake;
-// tracked as QXIP/hepic-lake#70 / sipcapture/homer catalog refresh).
+// entries keyed by a per-ATTACH random instance_id (upstream duckdb/ducklake).
 //
 // FlightSQL reads through queryDB() / n.db, so swapping n.db is enough for
 // Grafana. Airport catalog wrappers hold their own *sql.DB pointers and are
