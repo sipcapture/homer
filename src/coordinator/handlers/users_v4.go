@@ -178,13 +178,20 @@ func (h *UsersHandler) V4UsersUpdate(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid user id")
 	}
 
-	if !isAdmin(c) && !isSelf(c, h.userService, userID) {
+	adminCaller := isAdmin(c)
+	if !adminCaller && !isSelf(c, h.userService, userID) {
 		return writeError(c, http.StatusForbidden, "Forbidden", "Insufficient permissions")
 	}
 
 	var req UserPatchRequest
 	if err := c.Bind(&req); err != nil {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid request body")
+	}
+
+	// Non-admins may update their own profile fields, but must not elevate
+	// privileges or change account activation state (GHSA-24vc-w334-95wm).
+	if !adminCaller && (req.UserGroup != nil || req.Enabled != nil) {
+		return writeError(c, http.StatusForbidden, "Forbidden", "Only administrators can change user_group or enabled")
 	}
 
 	var isAdminValue *bool
