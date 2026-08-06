@@ -62,6 +62,10 @@ type Node struct {
 	// fsql is the optional Apache Arrow FlightSQL server (Grafana / InfluxDB FlightSQL).
 	fsql *fsqlServer
 
+	// refreshMu serializes catalog reconnect on n.db so queries never observe
+	// a half-swapped handle while ObjectCache from DETACH+ATTACH is avoided.
+	refreshMu sync.Mutex
+
 	// broker is optional: wired from main.go when the ingest module is
 	// running in the same process and ingest.hep_stream.enable is true.
 	// When nil the /stream endpoint responds with 503 so the coordinator
@@ -137,15 +141,23 @@ func New(cfg *config.NodeConfig) (*Node, error) {
 // Start starts the node module
 func (n *Node) Start() error {
 	n.mu.Lock()
-	defer n.mu.Unlock()
-
 	if n.running {
+		n.mu.Unlock()
 		return fmt.Errorf("node already running")
 	}
+	// Release the lock before refreshCatalog: that function acquires n.mu
+	// internally, so calling it while holding the lock causes a self-deadlock
+	// (sync.RWMutex is not reentrant). Re-acquire after the refresh.
+	n.mu.Unlock()
 
-	// Refresh catalog: DETACH + re-ATTACH so we see tables created by the
-	// storage module that started before us but used a separate DuckDB instance.
+	// Refresh catalog so we see tables created by the storage module (which
+	// runs its own DuckDB instance sharing the same catalog file). Reconnect
+	// DuckDB instead of DETACH+ATTACH in place so DuckLake ObjectCache is
+	// freed — see refreshCatalog and QXIP/hepic-lake#70.
 	n.refreshCatalog()
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
 	// Start gRPC server for FlightSQL (Airport protocol)
 	grpcAddr := fmt.Sprintf("%s:%d", n.config.FlightServer.Host, n.config.FlightServer.Port)
@@ -188,6 +200,8 @@ func (n *Node) Start() error {
 	}()
 
 	if n.fsql != nil {
+		// Periodic refresh only when the node owns its DuckDB. With a shared
+		// writer DB, queries already see live flushes via queryDB().
 		if n.sharedDB == nil {
 			n.fsql.withCatalogRefresher(func() { n.refreshCatalog() })
 		}
@@ -199,27 +213,50 @@ func (n *Node) Start() error {
 	return nil
 }
 
-// refreshCatalog detaches and re-attaches all DuckLake volumes so that
-// the node sees any tables created by the storage module (which runs
-// its own DuckDB instance sharing the same catalog file).
+// refreshCatalog opens a fresh in-memory DuckDB, re-ATTACHes DuckLake volumes,
+// swaps the Node *sql.DB under refreshMu, then closes the previous Database.
+// Closing the old handle frees DuckDB's ObjectCache, which is required because
+// DETACH+ATTACH on the same Database orphans DuckLake schema/stats cache
+// entries keyed by a per-ATTACH random instance_id (upstream duckdb/ducklake;
+// tracked as QXIP/hepic-lake#70 / sipcapture/homer catalog refresh).
+//
+// FlightSQL reads through queryDB() / n.db, so swapping n.db is enough for
+// Grafana. Airport catalog wrappers hold their own *sql.DB pointers and are
+// updated via DuckLakeCatalog.replaceDB.
 func (n *Node) refreshCatalog() {
-	for _, vol := range n.volumes {
-		detachSQL := fmt.Sprintf("DETACH %s;", vol.LakeName)
-		if _, err := n.db.Exec(detachSQL); err != nil {
-			logger.Warn(fmt.Sprintf("Node: refreshCatalog: DETACH %s failed: %v", vol.LakeName, err))
-		}
-	}
+	n.refreshMu.Lock()
+	defer n.refreshMu.Unlock()
 
-	// Re-attach volumes using the original config
-	newVolumes, err := configureDuckLake(n.db, n.config)
+	newDB, err := sql.Open("duckdb", "")
 	if err != nil {
-		logger.Error(fmt.Sprintf("Node: refreshCatalog: re-attach failed: %v", err))
+		logger.Error(fmt.Sprintf("Node: catalog reconnect failed to open DuckDB: %v", err))
+		return
+	}
+	newDB.SetMaxOpenConns(1)
+
+	newVolumes, err := configureDuckLake(newDB, n.config)
+	if err != nil {
+		_ = newDB.Close()
+		logger.Error(fmt.Sprintf("Node: catalog reconnect failed: %v", err))
 		return
 	}
 
+	n.mu.Lock()
+	oldDB := n.db
+	n.db = newDB
 	n.volumes = newVolumes
-	n.catalog = NewDuckLakeCatalog(n.db, n.config.DuckLake.LakeName, newVolumes)
-	logger.Info("Node: catalog refreshed", "volumes", len(newVolumes))
+	n.mu.Unlock()
+
+	if n.catalog != nil {
+		n.catalog.replaceDB(newDB, newVolumes)
+	}
+
+	if oldDB != nil {
+		if err := oldDB.Close(); err != nil {
+			logger.Warn(fmt.Sprintf("Node: closing previous DuckDB after catalog reconnect: %v", err))
+		}
+	}
+	logger.Info("Node: catalog refreshed via reconnect", "volumes", len(newVolumes))
 }
 
 // Stop stops the node module
@@ -1586,7 +1623,10 @@ func (n *Node) SetTieredQueryDB(db *sql.DB) {
 
 // queryDB returns the best DuckDB connection for queries.
 // Prefers the shared writer DB (real-time visibility) over the node's own DB.
+// Takes n.mu so callers never observe a half-swapped handle during reconnect.
 func (n *Node) queryDB() *sql.DB {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
 	if n.sharedDB != nil {
 		return n.sharedDB
 	}

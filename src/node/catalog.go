@@ -49,6 +49,20 @@ func NewDuckLakeCatalog(db *sql.DB, lakeName string, volumes []VolumeInfo) *Duck
 	return c
 }
 
+// replaceDB swaps the underlying DuckDB handle and rebuilds schema wrappers
+// after a catalog reconnect. Must be called while holding the Node refresh
+// write lock so no Airport query still uses the previous *sql.DB.
+func (c *DuckLakeCatalog) replaceDB(db *sql.DB, volumes []VolumeInfo) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.db = db
+	c.volumes = volumes
+	c.schemas = make(map[string]*DuckLakeSchema)
+	mainSchema := NewDuckLakeSchema(db, c.lakeName, "main", volumes)
+	c.schemas["main"] = mainSchema
+	c.schemas[c.lakeName] = mainSchema
+}
+
 // Name returns the catalog name
 func (c *DuckLakeCatalog) Name() string {
 	return "homer"
