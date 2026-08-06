@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
@@ -151,5 +152,84 @@ func TestAppenderJSONColumnNotDoubleEncoded(t *testing.T) {
 	}
 	if !xcid.Valid || xcid.String != "aleg-call-id-1" {
 		t.Fatalf("x_call_id = %#v, want aleg-call-id-1", xcid)
+	}
+}
+
+func TestEffectiveNodeName(t *testing.T) {
+	if got := effectiveNodeName(nil); got != "" {
+		t.Fatalf("nil hep: got %q", got)
+	}
+	hep := &decoder.HEP{NodeID: 2002, NodeName: "2002"}
+	if got := effectiveNodeName(hep); got != "" {
+		t.Fatalf("id fallback name should be skipped, got %q", got)
+	}
+	hep.NodeName = "voice"
+	if got := effectiveNodeName(hep); got != "voice" {
+		t.Fatalf("got %q, want voice", got)
+	}
+	hep.NodeName = "  "
+	if got := effectiveNodeName(hep); got != "" {
+		t.Fatalf("whitespace: got %q", got)
+	}
+}
+
+func TestBuildExtraJSONCell_NodeNameInDataExtra(t *testing.T) {
+	pkt := decoder.BenchHEP3SIPPacket()
+	hep, err := decoder.DecodeHEP(pkt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer decoder.ReleaseHEP(hep)
+
+	hep.NodeID = 2002
+	hep.NodeName = "2002"
+	cell := buildExtraJSONCell(hep)
+	raw := cellJSONBytes(t, cell)
+	releaseExtraJSONCell(cell)
+	if strings.Contains(string(raw), `"node_name"`) {
+		t.Fatalf("fallback NodeName must not be written: %s", raw)
+	}
+
+	hep.NodeName = "voice"
+	cell = buildExtraJSONCell(hep)
+	raw = cellJSONBytes(t, cell)
+	releaseExtraJSONCell(cell)
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		t.Fatal(err)
+	}
+	if obj["node_name"] != "voice" {
+		t.Fatalf("node_name=%v, want voice; json=%s", obj["node_name"], raw)
+	}
+}
+
+func TestBuildSimpleExtraJSONCell_NodeName(t *testing.T) {
+	hep := &decoder.HEP{Version: 3, ProtoType: 5, NodeID: 2002, NodeName: "2002"}
+	raw := buildSimpleExtraJSONCell(hep)
+	if strings.Contains(string(raw), `"node_name"`) {
+		t.Fatalf("unexpected node_name: %s", raw)
+	}
+
+	hep.NodeName = "voice"
+	raw = buildSimpleExtraJSONCell(hep)
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		t.Fatal(err)
+	}
+	if obj["node_name"] != "voice" {
+		t.Fatalf("node_name=%v, want voice; json=%s", obj["node_name"], raw)
+	}
+}
+
+func cellJSONBytes(t *testing.T, cell interface{}) []byte {
+	t.Helper()
+	switch v := cell.(type) {
+	case json.RawMessage:
+		return []byte(v)
+	case *[]byte:
+		return append([]byte(nil), (*v)...)
+	default:
+		t.Fatalf("unexpected cell type %T", cell)
+		return nil
 	}
 }

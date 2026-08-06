@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { displayDstIp, displaySrcIp } from '@/lib/ipAliasDisplay'
+import { promoteDataExtraNodeName } from './promoteDataExtraNodeName'
 import {
   formatJsonField,
   highlightJSON,
@@ -267,6 +268,7 @@ function formatDateTime(value, locale, timeZone) {
 const EVENTS_TABLE_COLUMNS = [
   { header: 'Date', keys: ['timestamp', 'date', 'record_datetime'], isDate: true, colClass: 'w-[14%] min-w-0' },
   { header: 'Node_ID', keys: ['node_id', 'node'], colClass: 'w-[10%] min-w-0' },
+  { header: 'Node Name', keys: ['node_name'], colClass: 'w-[10%] min-w-0' },
   { header: 'Payload', keys: ['payload', 'message', 'data'], colClass: 'w-[26%] min-w-0', cellBreak: 'break-all' },
   { header: 'Session_ID', keys: ['session_id', 'call_id', 'callid', 'cid'], colClass: 'w-[20%] min-w-0' },
   { header: 'Storage Value', keys: ['storage_value', 'storage', 'lake_name', 'lake'], colClass: 'w-[12%] min-w-0' },
@@ -711,7 +713,9 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     try {
       const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone)
       const data = await apiPost('/transactions/events', body)
-      setEventsData(data?.data || {})
+      const payload = data?.data || {}
+      const items = promoteDataExtraNodeName(payload.items || [])
+      setEventsData({ ...payload, items })
     } catch (err) {
       setEventsError(err.message)
     } finally {

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"math/rand"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -590,9 +591,28 @@ func buildSIPExtraJSONInto(b []byte, hep *decoder.HEP) []byte {
 	b = append(b, `"version":`...)
 	b = strconv.AppendUint(b, uint64(hep.Version), 10)
 	first := false
+	// HEP 0x0013 hostname when distinct from numeric 0x000c (issue #922).
+	appendJSONField(&b, &first, "node_name", effectiveNodeName(hep))
 	appendSIPExtraFields(&b, &first, hep)
 	b = append(b, '}')
 	return b
+}
+
+// effectiveNodeName returns HEP NodeName (chunk 0x0013 / heplify -hn) only when it
+// carries a real hostname. The decoder falls back to strconv(NodeID) when the
+// chunk is absent; we must not duplicate that into data_extra.node_name.
+func effectiveNodeName(hep *decoder.HEP) string {
+	if hep == nil {
+		return ""
+	}
+	name := strings.TrimSpace(hep.NodeName)
+	if name == "" {
+		return ""
+	}
+	if name == strconv.FormatUint(uint64(hep.NodeID), 10) {
+		return ""
+	}
+	return name
 }
 
 // buildExtraJSONCell returns a value suitable for row data_extra column.
@@ -671,26 +691,43 @@ func buildExtraJSON(hep *decoder.HEP) string {
 var simpleExtraCache sync.Map // uint32 -> json.RawMessage
 
 // buildSimpleExtraJSONCell builds a minimal extra JSON cell for non-SIP packets.
-// Result is cached since version and proto_type rarely change between packets.
+// Result is cached by version|proto_type when there is no distinct HEP NodeName.
+// Packets with data_extra.node_name skip the cache (name is per-agent).
 // Returned as json.RawMessage so the Appender writes it as a JSON document
 // (see cellToDriverValue).
 func buildSimpleExtraJSONCell(hep *decoder.HEP) json.RawMessage {
-	key := uint32(hep.Version)<<16 | (hep.ProtoType & 0xffff)
-	if v, ok := simpleExtraCache.Load(key); ok {
-		return v.(json.RawMessage)
+	nodeName := effectiveNodeName(hep)
+	if nodeName == "" {
+		key := uint32(hep.Version)<<16 | (hep.ProtoType & 0xffff)
+		if v, ok := simpleExtraCache.Load(key); ok {
+			return v.(json.RawMessage)
+		}
+		bp := sbPool.Get().(*[]byte)
+		b := (*bp)[:0]
+		b = append(b, `{"version":`...)
+		b = strconv.AppendUint(b, uint64(hep.Version), 10)
+		b = append(b, `,"proto_type":`...)
+		b = strconv.AppendUint(b, uint64(hep.ProtoType), 10)
+		b = append(b, '}')
+		m := json.RawMessage(string(b))
+		*bp = b
+		sbPool.Put(bp)
+		simpleExtraCache.Store(key, m)
+		return m
 	}
+
 	bp := sbPool.Get().(*[]byte)
 	b := (*bp)[:0]
 	b = append(b, `{"version":`...)
 	b = strconv.AppendUint(b, uint64(hep.Version), 10)
 	b = append(b, `,"proto_type":`...)
 	b = strconv.AppendUint(b, uint64(hep.ProtoType), 10)
+	first := false
+	appendJSONField(&b, &first, "node_name", nodeName)
 	b = append(b, '}')
-	// The cached value lives indefinitely, so copy out of the pooled buffer.
 	m := json.RawMessage(string(b))
 	*bp = b
 	sbPool.Put(bp)
-	simpleExtraCache.Store(key, m)
 	return m
 }
 

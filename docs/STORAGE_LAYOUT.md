@@ -153,10 +153,10 @@ method VARCHAR,         -- SIP method (INVITE, BYE, etc.)
 response_code VARCHAR,  -- Response code (200, 404, etc.)
 cseq_method VARCHAR,    -- Method from CSeq header
 protocol UINTEGER,      -- Transport (17=UDP, 6=TCP)
-node_id VARCHAR,        -- HEP node ID
+node_id VARCHAR,        -- HEP 0x000c capture agent id (heplify -hi)
 cid VARCHAR,            -- Correlation ID
 payload VARCHAR,        -- Raw SIP message
-data_extra JSON         -- Additional headers (via, user_agent, etc.)
+data_extra JSON         -- Headers + optional node_name (HEP 0x0013 / -hn when distinct from node_id)
 ```
 
 ### SIP Registration (hep_proto_1_registration)

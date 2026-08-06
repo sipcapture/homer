@@ -43,6 +43,7 @@ import OTLPMetricsSeriesModal from '../OTLPMetricsSeriesModal'
 import MessageModal from '../MessageModal'
 import { useLocale } from '@/components/locale/locale-provider'
 import { columnDisplayLabel, columnDisplayTitle } from '../resultColumnLabels'
+import { ensureNodeNameKey, promoteDataExtraNodeName } from '../promoteDataExtraNodeName'
 
 const OTLP_TRACES_PROTO = 200
 const OTLP_METRICS_PROTO = 201
@@ -396,9 +397,10 @@ export default function ResultsPanel({ widgetId, config: _config }) {
         return
       }
       const data = await res.json()
-      const items = data?.data?.items || []
+      const items = promoteDataExtraNodeName(data?.data?.items || [])
+      const keys = ensureNodeNameKey(data?.data?.keys || [], items)
       setRows(items)
-      setKeys(data?.data?.keys || [])
+      setKeys(keys)
       setStatus(`${items.length} rows in ${elapsed}ms`)
       setStatusType('success')
       if (useMcp && (sd.nl_mode === 'sql' || sd.nl_mode === 'auto')) {
