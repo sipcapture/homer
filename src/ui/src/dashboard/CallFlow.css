@@ -71,6 +71,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: color-mix(in oklch, var(--color-card) 96%, transparent);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
 }
@@ -129,6 +130,26 @@
   align-items: center;
   justify-content: space-between;
   padding: 4px 0;
+}
+
+.flow-threshold-row {
+  gap: 8px;
+}
+
+.callflow-threshold-input {
+  width: 92px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.callflow-threshold-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* radio */
@@ -307,6 +328,7 @@
   z-index: 10;
   padding: 6px 12px;
   background: color-mix(in oklch, var(--color-card) 92%, transparent);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--color-border);
 }
@@ -425,6 +447,15 @@
   min-height: 64px;
 }
 
+.item-flow-packet-container.consolidated-parent {
+  min-height: 72px;
+}
+
+.item-flow-packet-container.consolidated-subitem {
+  min-height: 54px;
+  opacity: 0.9;
+}
+
 .item-flow-packet-container .bg-color-polygon {
   position: absolute;
   z-index: 0;
@@ -466,6 +497,7 @@
   cursor: pointer;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
   background-color: color-mix(in oklch, var(--color-background) 35%, transparent);
+  -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
 }
 
@@ -493,6 +525,29 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.item-flow-packet .subitems-toggle {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in oklch, var(--color-border) 65%, transparent);
+  background: var(--color-background);
+  background: color-mix(in oklch, var(--color-background) 75%, transparent);
+  color: var(--color-muted-foreground);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.item-flow-packet .subitems-count {
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+  font-weight: 500;
 }
 
 .item-flow-packet .call_text.right {
@@ -679,6 +734,7 @@
   flex-shrink: 0;
   z-index: 15;
   background-color: color-mix(in oklch, var(--color-card) 85%, transparent);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   border-top: 1px solid var(--color-border);
   line-height: 1.2;

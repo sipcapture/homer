@@ -5,7 +5,7 @@ import { FilterPanel } from './flow/FilterPanel'
 import { FlowHostsLine } from './flow/FlowHostsLine'
 import { FlowItem } from './flow/FlowItem'
 import type { FlowItemData, RawMessage } from './flow/flow-data'
-import { buildFlow, buildCallIdLegend } from './flow/flow-data'
+import { buildFlow, buildCallIdLegend, consolidateFlowItems } from './flow/flow-data'
 import { useFlowFilters } from './flow/useFlowFilters'
 import { useLocale } from '@/components/locale/locale-provider'
 
@@ -27,6 +27,8 @@ export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowPr
     filteredItems,
   } = useFlowFilters(items)
 
+  const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null)
+
   const { hosts, flowItems } = useMemo(
     () =>
       buildFlow(filteredItems, {
@@ -36,6 +38,26 @@ export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowPr
       }),
     [filteredItems, timeZone, filters.hostGrouping, locale],
   )
+
+  const canConsolidateCaptureIds = useMemo(
+    () => flowItems.some((item) => (item.runtimeFingerprint ?? '') !== ''),
+    [flowItems],
+  )
+
+  const consolidatedFlowItems = useMemo(
+    () =>
+      consolidateFlowItems(flowItems, {
+        enabled: filters.isConsolidateCaptureIds && canConsolidateCaptureIds,
+        timeThresholdMs: filters.consolidationTimeThresholdMs,
+      }),
+    [flowItems, filters.isConsolidateCaptureIds, filters.consolidationTimeThresholdMs, canConsolidateCaptureIds],
+  )
+
+  useEffect(() => {
+    if (!expandedItemKey) return
+    const exists = consolidatedFlowItems.some((item) => String(item.id ?? item.idx) === expandedItemKey)
+    if (!exists) setExpandedItemKey(null)
+  }, [expandedItemKey, consolidatedFlowItems])
 
   const callIds = useMemo(() => buildCallIdLegend(items), [items])
 
@@ -93,8 +115,9 @@ export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowPr
           filterMethod={filterMethod}
           filterPayloadType={filterPayloadType}
           filterCallId={filterCallId}
+          canConsolidateCaptureIds={canConsolidateCaptureIds}
         />
-        <span>{flowItems.length} messages</span>
+        <span>{consolidatedFlowItems.length} messages</span>
         <span className="callflow-toolbar-spacer" />
         <span>{hosts.length} hosts</span>
       </div>
@@ -119,10 +142,10 @@ export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowPr
             <FlowHostsLine hosts={hosts} />
 
             <div className="callflow-items">
-              {flowItems.length === 0 ? (
+              {consolidatedFlowItems.length === 0 ? (
                 <div className="callflow-empty-state">No rows match the current filters</div>
               ) : (
-                flowItems.map((item) => (
+                consolidatedFlowItems.map((item) => (
                   <FlowItem
                     key={item.id}
                     item={item}
@@ -130,6 +153,8 @@ export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowPr
                     isAbsoluteTime={filters.isAbsoluteTime}
                     singleHost={hosts.length === 1}
                     onClickItem={onClickMessage}
+                    expandedKey={expandedItemKey}
+                    setExpandedKey={setExpandedItemKey}
                   />
                 ))
               )}

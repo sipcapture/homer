@@ -25,6 +25,8 @@ describe('flowFilterPrefs', () => {
       isSimplify: true,
       isAbsoluteTime: true,
       isHighContrast: true,
+      isConsolidateCaptureIds: false,
+      consolidationTimeThresholdMs: 500,
     })
   })
 
@@ -45,5 +47,25 @@ describe('flowFilterPrefs', () => {
     expect(f.hostGrouping).toBe('group-by-ip')
     expect(f.ipExcluded.size).toBe(0)
     expect(f.methodExcluded.size).toBe(0)
+  })
+
+  it('round-trips consolidation prefs', () => {
+    saveStoredFlowPrefs({ ...DEFAULT_FILTERS, isConsolidateCaptureIds: true, consolidationTimeThresholdMs: 250 })
+    expect(loadStoredFlowPrefs()).toMatchObject({ isConsolidateCaptureIds: true, consolidationTimeThresholdMs: 250 })
+  })
+
+  it('ignores non-boolean isConsolidateCaptureIds', () => {
+    localStorage.setItem(FLOW_FILTER_PREFS_LS_KEY, JSON.stringify({ isConsolidateCaptureIds: 'yes' }))
+    expect(loadStoredFlowPrefs().isConsolidateCaptureIds).toBeUndefined()
+  })
+
+  it('clamps negative consolidationTimeThresholdMs to 0', () => {
+    localStorage.setItem(FLOW_FILTER_PREFS_LS_KEY, JSON.stringify({ consolidationTimeThresholdMs: -100 }))
+    expect(loadStoredFlowPrefs().consolidationTimeThresholdMs).toBe(0)
+  })
+
+  it('ignores non-finite consolidationTimeThresholdMs', () => {
+    localStorage.setItem(FLOW_FILTER_PREFS_LS_KEY, JSON.stringify({ consolidationTimeThresholdMs: null }))
+    expect(loadStoredFlowPrefs().consolidationTimeThresholdMs).toBeUndefined()
   })
 })

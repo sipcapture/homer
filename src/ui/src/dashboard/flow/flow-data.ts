@@ -67,6 +67,9 @@ export interface FlowItemData {
   isLastHost: boolean
   arrowStyleSolid: boolean
   raw: RawMessage
+  runtimeFingerprint?: string
+  captureId?: string
+  subItems?: FlowItemData[]
 }
 
 export interface CallIdLegend {
@@ -75,6 +78,11 @@ export interface CallIdLegend {
 }
 
 export type HostGrouping = 'ungrouped' | 'group-by-ip' | 'group-by-alias'
+
+export interface ConsolidationOptions {
+  enabled: boolean
+  timeThresholdMs: number
+}
 
 const ALIAS_KEY_PREFIX = 'alias:'
 
@@ -174,6 +182,136 @@ export function payloadTypeOf(msg: RawMessage): string {
   if (p === '100') return 'LOG'
   if (msg.sip_method || msg.method) return 'SIP'
   return 'OTHER'
+}
+
+function parseJSONLike(value: unknown): Record<string, unknown> | null {
+  if (!value) return null
+  if (typeof value === 'object') return value as Record<string, unknown>
+  if (typeof value !== 'string') return null
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+function fnv1a32Hex(input: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+export function captureIdOf(msg: RawMessage): string {
+  const direct = msg.capture_id ?? msg.captureId ?? msg.node_id
+  if (direct != null && String(direct).trim() !== '') return String(direct).trim()
+
+  const extra = parseJSONLike(msg.data_extra)
+  if (!extra) return ''
+
+  const fromExtra = extra.capture_id ?? extra.captureId ?? extra.node_id
+  if (fromExtra == null) return ''
+  return String(fromExtra).trim()
+}
+
+export function runtimeFingerprintOf(msg: RawMessage): string {
+  const existing = msg.fingerprint
+  if (existing != null && String(existing).trim() !== '') return String(existing).trim()
+
+  const srcIp = String(msg.src_ip ?? '').trim()
+  const srcPort = String(msg.src_port ?? '').trim()
+  const dstIp = String(msg.dst_ip ?? '').trim()
+  const dstPort = String(msg.dst_port ?? '').trim()
+  const payload = typeof msg.payload === 'string' ? msg.payload.replace(/\r\n/g, '\n').trim() : ''
+
+  if (!srcIp || !srcPort || !dstIp || !dstPort || !payload) return ''
+
+  const source = `${srcIp}:${srcPort}-${dstIp}:${dstPort}-${payload}`
+  return fnv1a32Hex(source)
+}
+
+function itemTimestampMs(item: FlowItemData): number {
+  const d = parseTs(item.raw?.timestamp ?? item.raw?.create_ts)
+  if (!d) return Number.NaN
+  return d.getTime()
+}
+
+function canConsolidateInto(parent: FlowItemData, child: FlowItemData, timeThresholdMs: number): boolean {
+  if (!parent.runtimeFingerprint || !child.runtimeFingerprint) return false
+  if (parent.runtimeFingerprint !== child.runtimeFingerprint) return false
+
+  const parentCapture = parent.captureId
+  const childCapture = child.captureId
+  if (!parentCapture || !childCapture || parentCapture === childCapture) return false
+
+  if (parent.subItems?.some((s) => s.captureId && s.captureId === childCapture)) return false
+
+  const parentTs = itemTimestampMs(parent)
+  const childTs = itemTimestampMs(child)
+  if (!Number.isFinite(parentTs) || !Number.isFinite(childTs)) return false
+
+  return Math.abs(parentTs - childTs) <= timeThresholdMs
+}
+
+function adoptParentGeometry(parent: FlowItemData, child: FlowItemData): FlowItemData {
+  return {
+    ...child,
+    start: parent.start,
+    middle: parent.middle,
+    rightEnd: parent.rightEnd,
+    direction: parent.direction,
+    isRadial: parent.isRadial,
+    isLastHost: parent.isLastHost,
+    arrowStyleSolid: parent.arrowStyleSolid,
+  }
+}
+
+export function consolidateFlowItems(items: FlowItemData[], opts: ConsolidationOptions): FlowItemData[] {
+  if (!opts.enabled || items.length === 0) {
+    return items.map((item) => ({ ...item, subItems: undefined }))
+  }
+
+  const groups = new Map<string, FlowItemData[]>()
+  const visible: FlowItemData[] = []
+
+  for (const item of items) {
+    const resetItem = { ...item, subItems: undefined }
+    const fp = resetItem.runtimeFingerprint || ''
+    if (!fp) {
+      visible.push(resetItem)
+      continue
+    }
+
+    const candidates = groups.get(fp) || []
+    const threshold = Math.max(0, opts.timeThresholdMs)
+    let parent: FlowItemData | undefined
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      if (canConsolidateInto(candidates[i], resetItem, threshold)) {
+        parent = candidates[i]
+        break
+      }
+    }
+
+    if (!parent) {
+      candidates.push(resetItem)
+      groups.set(fp, candidates)
+      visible.push(resetItem)
+      continue
+    }
+
+    const sub = adoptParentGeometry(parent, resetItem)
+    parent.subItems = parent.subItems ? [...parent.subItems, sub] : [sub]
+  }
+
+  return visible
+}
+
+export function hasRuntimeFingerprintCandidates(items: RawMessage[] | null | undefined): boolean {
+  if (!items || items.length === 0) return false
+  return items.some((msg) => runtimeFingerprintOf(msg) !== '')
 }
 
 export function shortcutIPv6(str: string): string {
@@ -470,6 +608,8 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
       isLastHost,
       arrowStyleSolid,
       raw: msg,
+      runtimeFingerprint: runtimeFingerprintOf(msg),
+      captureId: captureIdOf(msg),
     }
   })
 

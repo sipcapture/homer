@@ -69,6 +69,12 @@ polyfill-glibc
 homer-core_*.deb
 homer-core_*.rpm
 bundled_extensions/
+# Local test rig (docker-compose + hepgen scenarios + generated data)
+local/
+
+# Vite local env override (proxy target etc.)
+src/ui/.env.local
+
 # Cursor IDE — ignore local workspace state; keep shared agent rules
 .cursor/*
 !.cursor/rules/
