@@ -6,6 +6,7 @@
  */
 const COLUMN_DISPLAY_LABELS: Record<string, string> = {
   node_id: 'Capture ID',
+  node_name: 'Node Name',
 }
 
 /** Human-readable column title; falls back to the raw key. */

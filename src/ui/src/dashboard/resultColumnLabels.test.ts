@@ -7,6 +7,11 @@ describe('resultColumnLabels', () => {
     expect(columnDisplayTitle('node_id')).toBe('Capture ID (node_id)')
   })
 
+  it('aliases node_name as Node Name', () => {
+    expect(columnDisplayLabel('node_name')).toBe('Node Name')
+    expect(columnDisplayTitle('node_name')).toBe('Node Name (node_name)')
+  })
+
   it('passes through unknown columns unchanged', () => {
     expect(columnDisplayLabel('session_id')).toBe('session_id')
     expect(columnDisplayTitle('session_id')).toBe('session_id')
