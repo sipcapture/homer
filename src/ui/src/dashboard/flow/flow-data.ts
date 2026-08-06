@@ -227,7 +227,7 @@ export function runtimeFingerprintOf(msg: RawMessage): string {
   const dstPort = String(msg.dst_port ?? '').trim()
   const payload = typeof msg.payload === 'string' ? msg.payload.replace(/\r\n/g, '\n').trim() : ''
 
-  if (!srcIp || !dstIp || !payload) return ''
+  if (!srcIp || !srcPort || !dstIp || !dstPort || !payload) return ''
 
   const source = `${srcIp}:${srcPort}-${dstIp}:${dstPort}-${payload}`
   return fnv1a32Hex(source)
@@ -286,7 +286,7 @@ export function consolidateFlowItems(items: FlowItemData[], opts: ConsolidationO
     }
 
     const candidates = groups.get(fp) || []
-    const parent = candidates.find((candidate) =>
+    const parent = candidates.slice().reverse().find((candidate) =>
       canConsolidateInto(candidate, resetItem, Math.max(0, opts.timeThresholdMs)),
     )
 

@@ -18,7 +18,7 @@ function readHomerAppVersion(): string {
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+  const env = loadEnv(mode, __dirname, '')
   const proxyTarget = env.HOMER_PROXY_TARGET || 'http://de7.sipcapture.io:8081'
   return {
   define: {

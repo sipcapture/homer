@@ -111,11 +111,11 @@ function makeFlowItem(overrides: Partial<FlowItemData> & { ts?: number } = {}): 
 
 describe('runtimeFingerprintOf', () => {
   it('returns empty string when payload is missing', () => {
-    expect(runtimeFingerprintOf({ src_ip: '10.0.0.1', dst_ip: '10.0.0.2' })).toBe('')
+    expect(runtimeFingerprintOf({ src_ip: '10.0.0.1', src_port: 5060, dst_ip: '10.0.0.2', dst_port: 5060 })).toBe('')
   })
 
-  it('returns empty string when src_ip is missing', () => {
-    expect(runtimeFingerprintOf({ dst_ip: '10.0.0.2', payload: 'INVITE sip:bob SIP/2.0' })).toBe('')
+  it('returns empty string when ports are missing', () => {
+    expect(runtimeFingerprintOf({ src_ip: '10.0.0.1', dst_ip: '10.0.0.2', payload: 'INVITE sip:bob SIP/2.0' })).toBe('')
   })
 
   it('produces the same hash for identical inputs', () => {
