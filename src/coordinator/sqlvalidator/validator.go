@@ -236,6 +236,13 @@ var blockedFunctions = map[string]bool{
 	"SYSTEM":            true,
 	"SHELL":             true,
 	"READ_PARQUET_FUNC": true,
+	// External table scanners (GHSA-4687-q698-mccv / CVE-2026-62251 bypass).
+	"SQLITE_SCAN":   true,
+	"POSTGRES_SCAN": true,
+	"MYSQL_SCAN":    true,
+	"ICEBERG_SCAN":  true,
+	"DELTA_SCAN":    true,
+	"SPATIAL_SCAN":  true,
 }
 
 // allowedStatementStarts are the only statement types allowed in raw SQL.

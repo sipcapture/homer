@@ -102,6 +102,12 @@ func New(cfg *config.NodeConfig) (*Node, error) {
 	// Create DuckLake catalog with volume support
 	catalog := NewDuckLakeCatalog(db, cfg.DuckLake.LakeName, volumes)
 
+	// Resolve / persist Bearer token for exposed HTTP /query (GHSA-rm5w-rqr7-2h54).
+	if err := ensureFlightAuthToken(cfg); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("node auth token: %w", err)
+	}
+
 	// Build airport config
 	airportConfig := airport.ServerConfig{
 		Catalog:        catalog,
@@ -180,9 +186,10 @@ func (n *Node) Start() error {
 	httpAddr := fmt.Sprintf("%s:%d", n.config.FlightServer.Host, httpPort)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/query", n.handleQuery)
+	authTok := n.config.FlightServer.AuthToken
+	mux.HandleFunc("/query", withBearerAuth(authTok, n.handleQuery))
 	mux.HandleFunc("/health", n.handleHealth)
-	mux.HandleFunc("/vacuum", n.handleVacuum)
+	mux.HandleFunc("/vacuum", withBearerAuth(authTok, n.handleVacuum))
 	mux.HandleFunc("/stream", n.handleStream)
 
 	n.httpServer = &http.Server{
@@ -1051,6 +1058,15 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, QueryResponse{
 			Success: false,
 			Error:   "SQL query is required",
+		})
+		return
+	}
+
+	// Deny DML/DDL and filesystem/network table functions (GHSA-rm5w-rqr7-2h54).
+	if err := sqlvalidator.ValidateRawSQL(req.SQL); err != nil {
+		writeJSON(w, http.StatusBadRequest, QueryResponse{
+			Success: false,
+			Error:   "SQL validation failed: " + err.Error(),
 		})
 		return
 	}

@@ -169,6 +169,31 @@ func TestValidateRawSQL(t *testing.T) {
 			sql:     "SELECT * FROM read_blob('/tmp/data.bin')",
 			wantErr: "blocked function",
 		},
+		{
+			name:    "read_text function",
+			sql:     "SELECT content FROM read_text('/etc/passwd') LIMIT 1",
+			wantErr: "blocked function",
+		},
+		{
+			name:    "sqlite_scan function",
+			sql:     `SELECT * FROM sqlite_scan('/tmp/homer_catalog.sqlite','ducklake_snapshot') LIMIT 2`,
+			wantErr: "blocked function",
+		},
+		{
+			name:    "postgres_scan function",
+			sql:     `SELECT * FROM postgres_scan('host=x', 'public', 't')`,
+			wantErr: "blocked function",
+		},
+		{
+			name:    "iceberg_scan function",
+			sql:     `SELECT * FROM iceberg_scan('/tmp/iceberg')`,
+			wantErr: "blocked function",
+		},
+		{
+			name:    "delta_scan function",
+			sql:     `SELECT * FROM delta_scan('/tmp/delta')`,
+			wantErr: "blocked function",
+		},
 
 		// --- Blocked: comment-based obfuscation ---
 		{

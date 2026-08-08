@@ -112,7 +112,7 @@ The Node module exposes **DuckDB Airport** on `flight_server` (Arrow Flight with
 |-----------|------|---------|-------------|
 | `host` | string | "0.0.0.0" | Listen address |
 | `port` | int | 50051 | gRPC server port |
-| `auth_token` | string | "" | Bearer token for authentication |
+| `auth_token` | string | "" | Bearer token for Airport **and** HTTP `/query`+`/vacuum` (port+1). Empty + non-loopback host → auto-generated `.homer_node_auth_token` (11.0.313+). Prefer `127.0.0.1` for local-only nodes. |
 | `max_message_size` | int | 16777216 | Maximum message size (16MB) |
 
 ### flightsql_server (optional, Grafana FlightSQL)
@@ -195,6 +195,17 @@ DuckDB automatically optimizes UNION ALL queries through:
 This means if the data for the requested period exists only in the hot volume, the cold volume won't be scanned at all.
 
 ## HTTP API
+
+The node process also listens for HTTP on **`flight_server.port + 1`** (default **50052**). This path is what the coordinator uses for search/`/api/v4/query`.
+
+| Endpoint | Auth | Notes |
+|----------|------|--------|
+| `POST /query` | Bearer when `auth_token` set (required on non-loopback after auto-token) | Body `{"sql":"…"}`; SQL must pass `ValidateRawSQL` |
+| `POST /vacuum` | Same Bearer as `/query` | DuckLake maintenance |
+| `GET /health` | None | Liveness probe |
+| `GET /stream` | None (private network) | Live HEP WebSocket — see [HEP_STREAM.md](HEP_STREAM.md) |
+
+Set the same secret on `coordinator.nodes[].token` so the hub sends `Authorization: Bearer …`. See [SECURITY.md](SECURITY.md#node-http-query-110313).
 
 ### GET /api/v4/node/stats
 

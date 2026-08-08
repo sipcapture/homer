@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -314,6 +315,9 @@ func (s *FlightService) queryNode(ctx context.Context, node config.NodeEndpoint,
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if tok := strings.TrimSpace(node.Token); tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
 
 	resp, err := s.queryClient.Do(req)
 	if err != nil {
