@@ -1798,14 +1798,47 @@ func applyDefaults(cfg *Config) {
 		cfg.MCP.LLM.MaxTokens = 400
 	}
 
+	// Resolve node HTTP / Airport Bearer token before wiring coordinator nodes.
+	// Exposed binds (default 0.0.0.0) with empty auth_token get an auto-generated
+	// persisted token (GHSA-rm5w-rqr7-2h54). Loopback-only binds may stay empty.
+	if cfg.Node.Enable {
+		catalogPath := strings.TrimSpace(cfg.Node.DuckLake.CatalogPath)
+		if catalogPath == "" && len(cfg.Node.DuckLake.Volumes) > 0 {
+			catalogPath = strings.TrimSpace(cfg.Node.DuckLake.Volumes[0].CatalogPath)
+		}
+		tok, _, _, err := ResolveNodeFlightAuthToken(
+			cfg.Node.FlightServer.Host,
+			cfg.Node.FlightServer.AuthToken,
+			catalogPath,
+		)
+		if err == nil {
+			cfg.Node.FlightServer.AuthToken = tok
+		}
+	}
+
 	// If no nodes configured but node is enabled locally, add local node
 	if cfg.Coordinator.Enable && len(cfg.Coordinator.Nodes) == 0 && cfg.Node.Enable {
 		cfg.Coordinator.Nodes = []NodeEndpoint{
 			{
-				Name: "local",
-				Host: "127.0.0.1",
-				Port: cfg.Node.FlightServer.Port,
+				Name:  "local",
+				Host:  "127.0.0.1",
+				Port:  cfg.Node.FlightServer.Port,
+				Token: cfg.Node.FlightServer.AuthToken,
 			},
+		}
+	}
+
+	// Same-process local nodes: copy flight_server.auth_token into empty node tokens
+	// so FlightService can send Authorization: Bearer on POST /query.
+	if cfg.Node.Enable && cfg.Node.FlightServer.AuthToken != "" {
+		for i := range cfg.Coordinator.Nodes {
+			n := &cfg.Coordinator.Nodes[i]
+			if n.Token != "" {
+				continue
+			}
+			if IsLoopbackBindHost(n.Host) && n.Port == cfg.Node.FlightServer.Port {
+				n.Token = cfg.Node.FlightServer.AuthToken
+			}
 		}
 	}
 

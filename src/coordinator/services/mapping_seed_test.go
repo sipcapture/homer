@@ -31,7 +31,7 @@ func TestSeedDefaultMappingSchema_Idempotent(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mapping_schema`).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	const expectedRows = 9 // SIP{call,default,registration} + RTCP + DNS + LOG + OTLP{traces,metrics,logs}
+	const expectedRows = 10 // SIP{call,default,registration} + SIPREC + RTCP + DNS + LOG + OTLP{traces,metrics,logs}
 	if n != expectedRows {
 		t.Fatalf("expected %d seeded rows, got %d", expectedRows, n)
 	}
@@ -115,8 +115,8 @@ func TestSeedDefaultMappingSchema_FillsMissingOnUpgrade(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mapping_schema`).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	if n != 9 {
-		t.Fatalf("expected 9 rows after upgrade-style seed, got %d", n)
+	if n != 10 {
+		t.Fatalf("expected 10 rows after upgrade-style seed, got %d", n)
 	}
 
 	// The pre-existing SIP/call row must still be exactly one — i.e.
