@@ -34,8 +34,14 @@ func nodeTimeRange(db *sql.DB) (minNs, maxNs int64, err error) {
 			return 0, 0, err
 		}
 		fqn := fmt.Sprintf(`"%s"."%s"."%s"`, dbName, schema, table)
+		// Apply epoch_ns to the result of min/max (not min/max of epoch_ns):
+		// epoch_ns is monotonic so the values are identical, but min(timestamp)/
+		// max(timestamp) operate on the bare column, letting DuckDB answer from
+		// Parquet zone-map stats instead of scanning. The epoch conversion still
+		// happens in-DB (BIGINT ns, timezone-independent) — important since these
+		// stats gate node pruning; no Go-side time.Time/timezone conversion.
 		union = append(union, fmt.Sprintf(
-			`SELECT min(epoch_ns(timestamp)) AS mn, max(epoch_ns(timestamp)) AS mx FROM %s`, fqn))
+			`SELECT epoch_ns(min(timestamp)) AS mn, epoch_ns(max(timestamp)) AS mx FROM %s`, fqn))
 	}
 	if err := rows.Err(); err != nil {
 		return 0, 0, err

@@ -135,25 +135,59 @@ func (s *FlightService) healthCheckLoop() {
 		case <-s.stopCh:
 			return
 		case <-ticker.C:
-			s.mu.Lock()
+			// Snapshot the prior connected state under the lock so online/offline
+			// transition logging is accurate, then release it before any HTTP.
+			s.mu.RLock()
+			wasConnected := make(map[string]bool, len(s.connected))
+			for k, v := range s.connected {
+				wasConnected[k] = v
+			}
+			s.mu.RUnlock()
+
+			// Do ALL blocking HTTP (checkNode + fetchNodeRange) with NO lock held.
+			// s.nodes is immutable after construction, so iterating it here is safe.
+			// Results are collected locally and applied under a single write lock
+			// below, so QueryWithRange readers are never stalled behind HTTP.
+			type nodeResult struct {
+				name      string
+				connected bool
+				hasRange  bool // true only when a fresh range was fetched
+				rng       tsRange
+			}
+			results := make([]nodeResult, 0, len(s.nodes))
 			for _, node := range s.nodes {
-				wasConnected := s.connected[node.Name]
+				res := nodeResult{name: node.Name}
 				if err := s.checkNode(node); err != nil {
-					if wasConnected {
+					if wasConnected[node.Name] {
 						logger.Warn(fmt.Sprintf("Hub: Node %s went offline: %v", node.Name, err))
 					}
-					s.connected[node.Name] = false
+					res.connected = false
 				} else {
-					if !wasConnected {
+					if !wasConnected[node.Name] {
 						logger.Info("Hub: Node is now online", "node", node.Name)
 					}
-					s.connected[node.Name] = true
+					res.connected = true
 					if s.smartRouting {
 						if rng, rerr := s.fetchNodeRange(node); rerr == nil {
-							s.rangeCache[node.Name] = rng
-						} else {
-							delete(s.rangeCache, node.Name) // unknown -> keep node
+							res.hasRange = true
+							res.rng = rng
 						}
+						// Fail-safe: a stats-fetch error leaves hasRange false, which
+						// deletes the cache entry below (unknown -> keep the node).
+					}
+				}
+				results = append(results, res)
+			}
+
+			// Apply results under a single write lock: in-memory map writes only.
+			s.mu.Lock()
+			for _, res := range results {
+				s.connected[res.name] = res.connected
+				if s.smartRouting && res.connected {
+					if res.hasRange {
+						s.rangeCache[res.name] = res.rng
+					} else {
+						delete(s.rangeCache, res.name) // unknown -> keep node
 					}
 				}
 			}
@@ -278,10 +312,22 @@ func (s *FlightService) nodesForRange(connectedNodes []config.NodeEndpoint, from
 	kept := make([]config.NodeEndpoint, 0, len(connectedNodes))
 	for _, n := range connectedNodes {
 		rng, ok := s.rangeCache[n.Name]
+		// Too-old safety relies on the query window exceeding the node's
+		// persist/flush lag: buffered-but-unpersisted rows are excluded from
+		// min/max, so a "last N seconds" window with N < flush interval could
+		// skip a hot node holding only buffered rows. Typical UI windows
+		// (5/15/30 min) comfortably exceed the flush interval and are safe.
 		if ok && rng.max > 0 && rng.max < fromNs {
 			logger.Info("Hub: skipping node (data too old)", "node", n.Name, "node_max", rng.max, "query_from", fromNs)
 			continue
 		}
+		// Too-new direction assumes a node's min timestamp only rises (true for
+		// live capture + retention aging out old rows). Historical backfill
+		// (pcap import / replay ingesting rows OLDER than the cached min)
+		// violates this: for up to one health interval the stale-high cached min
+		// could skip a node that now holds matching old rows. The too-old
+		// direction has no such hazard. Operators doing historical import should
+		// keep smart_routing disabled or accept <=1 health-interval staleness.
 		if ok && rng.min > 0 && rng.min > toNs {
 			logger.Info("Hub: skipping node (data too new)", "node", n.Name, "node_min", rng.min, "query_to", toNs)
 			continue
@@ -303,29 +349,24 @@ func (s *FlightService) Query(ctx context.Context, sql string) ([]map[string]int
 // provably hold no data at or after fromNs when smart routing is enabled.
 // fromNs/toNs are epoch nanoseconds; pass 0 to disable pruning.
 func (s *FlightService) QueryWithRange(ctx context.Context, sql string, fromNs, toNs int64) ([]map[string]interface{}, error) {
+	// Single RLock critical section: snapshot nodes, build the connected set,
+	// and compute range-pruned targets before releasing the lock. The goroutine
+	// fan-out below must NOT hold the lock.
 	s.mu.RLock()
 	nodes := make([]config.NodeEndpoint, len(s.nodes))
 	copy(nodes, s.nodes)
-	connected := make(map[string]bool)
-	for k, v := range s.connected {
-		connected[k] = v
+	connectedNodes := make([]config.NodeEndpoint, 0, len(s.nodes))
+	for _, node := range s.nodes {
+		if s.connected[node.Name] {
+			connectedNodes = append(connectedNodes, node)
+		}
 	}
+	targets := s.nodesForRange(connectedNodes, fromNs, toNs)
 	s.mu.RUnlock()
 
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("no configured nodes")
 	}
-
-	connectedNodes := make([]config.NodeEndpoint, 0, len(nodes))
-	for _, node := range nodes {
-		if connected[node.Name] {
-			connectedNodes = append(connectedNodes, node)
-		}
-	}
-
-	s.mu.RLock()
-	targets := s.nodesForRange(connectedNodes, fromNs, toNs)
-	s.mu.RUnlock()
 
 	logger.Info("Hub: Query to nodes", "targets", len(targets), "connected", len(connectedNodes), "total", len(nodes), "sql_chars", len(sql))
 	logger.Debug("Hub: Query to nodes", "sql", sql)
