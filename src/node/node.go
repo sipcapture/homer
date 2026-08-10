@@ -190,6 +190,7 @@ func (n *Node) Start() error {
 	mux.HandleFunc("/query", withBearerAuth(authTok, n.handleQuery))
 	mux.HandleFunc("/health", n.handleHealth)
 	mux.HandleFunc("/vacuum", withBearerAuth(authTok, n.handleVacuum))
+	mux.HandleFunc("/metadata/stats", withBearerAuth(authTok, n.handleMetadataStats))
 	mux.HandleFunc("/stream", n.handleStream)
 
 	n.httpServer = &http.Server{
