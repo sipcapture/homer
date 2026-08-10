@@ -255,8 +255,54 @@ func (s *FlightService) QueryFirstConnected(ctx context.Context, sql string) ([]
 	return nil, fmt.Errorf("no connected storage nodes")
 }
 
-// Query executes a SQL query against all nodes and returns results
+// nodesForRange filters connected nodes to those whose cached timestamp range
+// may overlap the query window [fromNs, toNs]. A node is skipped only when its
+// cached range provably does not overlap the window in either direction:
+//   - too old: cached max is non-zero and strictly before fromNs.
+//   - too new: cached min is non-zero and strictly after toNs.
+//
+// Unknown/uncached nodes, nodes with min/max == 0, and all nodes when smart
+// routing is disabled (or the window is open-ended) are kept. Never returns an
+// empty slice when the input is non-empty.
+//
+// This is staleness-safe: a node's data max only grows over time and its min
+// only rises as old data ages out, so a stale cache can only under-skip (keep a
+// node that could now be pruned) — it can never wrongly drop a node that holds
+// matching data.
+//
+// Callers must hold at least s.mu.RLock() because it reads s.rangeCache.
+func (s *FlightService) nodesForRange(connectedNodes []config.NodeEndpoint, fromNs, toNs int64) []config.NodeEndpoint {
+	if !s.smartRouting || fromNs <= 0 || toNs <= 0 {
+		return connectedNodes
+	}
+	kept := make([]config.NodeEndpoint, 0, len(connectedNodes))
+	for _, n := range connectedNodes {
+		rng, ok := s.rangeCache[n.Name]
+		if ok && rng.max > 0 && rng.max < fromNs {
+			logger.Info("Hub: skipping node (data too old)", "node", n.Name, "node_max", rng.max, "query_from", fromNs)
+			continue
+		}
+		if ok && rng.min > 0 && rng.min > toNs {
+			logger.Info("Hub: skipping node (data too new)", "node", n.Name, "node_min", rng.min, "query_to", toNs)
+			continue
+		}
+		kept = append(kept, n)
+	}
+	if len(kept) == 0 {
+		return connectedNodes // never empty due to pruning
+	}
+	return kept
+}
+
+// Query executes SQL against all connected nodes (no time-range pruning).
 func (s *FlightService) Query(ctx context.Context, sql string) ([]map[string]interface{}, error) {
+	return s.QueryWithRange(ctx, sql, 0, 0)
+}
+
+// QueryWithRange executes SQL against connected nodes, skipping nodes that
+// provably hold no data at or after fromNs when smart routing is enabled.
+// fromNs/toNs are epoch nanoseconds; pass 0 to disable pruning.
+func (s *FlightService) QueryWithRange(ctx context.Context, sql string, fromNs, toNs int64) ([]map[string]interface{}, error) {
 	s.mu.RLock()
 	nodes := make([]config.NodeEndpoint, len(s.nodes))
 	copy(nodes, s.nodes)
@@ -270,13 +316,18 @@ func (s *FlightService) Query(ctx context.Context, sql string) ([]map[string]int
 		return nil, fmt.Errorf("no configured nodes")
 	}
 
-	connectedCount := 0
+	connectedNodes := make([]config.NodeEndpoint, 0, len(nodes))
 	for _, node := range nodes {
 		if connected[node.Name] {
-			connectedCount++
+			connectedNodes = append(connectedNodes, node)
 		}
 	}
-	logger.Info("Hub: Query to nodes", "connected", connectedCount, "total", len(nodes), "sql_chars", len(sql))
+
+	s.mu.RLock()
+	targets := s.nodesForRange(connectedNodes, fromNs, toNs)
+	s.mu.RUnlock()
+
+	logger.Info("Hub: Query to nodes", "targets", len(targets), "connected", len(connectedNodes), "total", len(nodes), "sql_chars", len(sql))
 	logger.Debug("Hub: Query to nodes", "sql", sql)
 
 	allResults := make([]map[string]interface{}, 0)
@@ -285,18 +336,11 @@ func (s *FlightService) Query(ctx context.Context, sql string) ([]map[string]int
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	for _, node := range nodes {
-		if !connected[node.Name] {
-			logger.Info("Hub: Skipping disconnected node", "node", node.Name)
-			continue
-		}
-
+	for _, node := range targets {
 		wg.Add(1)
 		go func(n config.NodeEndpoint) {
 			defer wg.Done()
-
 			results, err := s.queryNode(ctx, n, sql)
-
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -308,7 +352,6 @@ func (s *FlightService) Query(ctx context.Context, sql string) ([]map[string]int
 			allResults = append(allResults, results...)
 		}(node)
 	}
-
 	wg.Wait()
 
 	// Surface the failure when no node produced a result; silently returning

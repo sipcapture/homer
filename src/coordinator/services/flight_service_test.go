@@ -98,3 +98,47 @@ func TestFetchNodeRangeParsesStats(t *testing.T) {
 		t.Fatalf("got %+v, want {100 200}", rng)
 	}
 }
+
+func TestNodesForRangeSkipsNonOverlapping(t *testing.T) {
+	s := NewFlightService(nil, time.Second, true)
+	s.rangeCache = map[string]tsRange{
+		"hot":    {min: 0, max: 1_000},     // overlaps window -> keep
+		"cold":   {min: 0, max: 100},       // max < from -> skip (too old)
+		"future": {min: 5_000, max: 6_000}, // min > to -> skip (too new)
+		"empty":  {min: 0, max: 0},         // unknown -> keep
+	}
+	nodes := []config.NodeEndpoint{{Name: "hot"}, {Name: "cold"}, {Name: "future"}, {Name: "empty"}, {Name: "uncached"}}
+	got := s.nodesForRange(nodes, 500, 2_000) // query window [500, 2000]ns
+	names := map[string]bool{}
+	for _, n := range got {
+		names[n.Name] = true
+	}
+	if !names["hot"] || !names["empty"] || !names["uncached"] {
+		t.Fatalf("hot/empty/uncached must be kept, got %v", names)
+	}
+	if names["cold"] {
+		t.Fatalf("cold (max<from) must be skipped, got %v", names)
+	}
+	if names["future"] {
+		t.Fatalf("future (min>to) must be skipped, got %v", names)
+	}
+}
+
+func TestNodesForRangeNeverEmpties(t *testing.T) {
+	s := NewFlightService(nil, time.Second, true)
+	s.rangeCache = map[string]tsRange{"a": {max: 100}, "b": {max: 200}}
+	nodes := []config.NodeEndpoint{{Name: "a"}, {Name: "b"}}
+	got := s.nodesForRange(nodes, 1_000, 2_000) // both too old
+	if len(got) != 2 {
+		t.Fatalf("filter must not empty the set; want 2 got %d", len(got))
+	}
+}
+
+func TestNodesForRangeDisabledKeepsAll(t *testing.T) {
+	s := NewFlightService(nil, time.Second, false) // smart routing off
+	s.rangeCache = map[string]tsRange{"a": {max: 100}}
+	nodes := []config.NodeEndpoint{{Name: "a"}}
+	if len(s.nodesForRange(nodes, 1_000, 2_000)) != 1 {
+		t.Fatalf("disabled must keep all")
+	}
+}
