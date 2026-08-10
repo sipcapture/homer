@@ -20,7 +20,7 @@ import (
 
 func TestV4StatisticsQuery_RejectsUnsafeSQL(t *testing.T) {
 	e := echo.New()
-	h := NewStatisticsHandler(services.NewFlightService(nil, 0))
+	h := NewStatisticsHandler(services.NewFlightService(nil, 0, false))
 
 	body, err := json.Marshal(map[string]interface{}{
 		"param": map[string]interface{}{
@@ -51,7 +51,7 @@ func TestV4StatisticsQuery_RejectsUnsafeSQL(t *testing.T) {
 
 func TestV4StatisticsQuery_RejectsMultiStatement(t *testing.T) {
 	e := echo.New()
-	h := NewStatisticsHandler(services.NewFlightService(nil, 0))
+	h := NewStatisticsHandler(services.NewFlightService(nil, 0, false))
 
 	body, err := json.Marshal(map[string]interface{}{
 		"param": map[string]interface{}{

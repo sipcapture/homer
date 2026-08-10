@@ -40,7 +40,7 @@ func TestBuildExportExcludeIPClause_escapesQuotes(t *testing.T) {
 }
 
 func TestBuildTransactionExportSQL_includesWhitelist(t *testing.T) {
-	h := &SearchHandler{flightService: services.NewFlightService(nil, 0)}
+	h := &SearchHandler{flightService: services.NewFlightService(nil, 0, false)}
 	sql, ids, err := h.buildTransactionExportSQL(&TransactionSessionRequestV4{
 		SessionID: "abc@host",
 		Whitelist: []string{"10.0.0.1", "192.168.1.5"},
@@ -63,7 +63,7 @@ func TestShareExportPayload_whitelistRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(body, &req); err != nil {
 		t.Fatal(err)
 	}
-	h := &SearchHandler{flightService: services.NewFlightService(nil, 0)}
+	h := &SearchHandler{flightService: services.NewFlightService(nil, 0, false)}
 	sql, _, err := h.buildTransactionExportSQL(&req)
 	if err != nil {
 		t.Fatal(err)

@@ -33,15 +33,23 @@ type FlightService struct {
 	// shorter deadline are still honored.
 	queryTimeout time.Duration
 	connected    map[string]bool
+	smartRouting bool
+	rangeCache   map[string]tsRange // node name -> cached min/max (ns)
 	mu           sync.RWMutex
 	stopCh       chan struct{}
 	stopOnce     sync.Once
 	lakeName     string
 }
 
+// tsRange is a node's cached min/max timestamp in nanoseconds.
+type tsRange struct {
+	min int64
+	max int64
+}
+
 // NewFlightService creates a new FlightSQL service.
 // queryTimeout controls the per-query timeout for data queries to nodes.
-func NewFlightService(nodes []config.NodeEndpoint, queryTimeout time.Duration) *FlightService {
+func NewFlightService(nodes []config.NodeEndpoint, queryTimeout time.Duration, smartRouting bool) *FlightService {
 	if queryTimeout <= 0 {
 		queryTimeout = 30 * time.Second
 	}
@@ -52,9 +60,11 @@ func NewFlightService(nodes []config.NodeEndpoint, queryTimeout time.Duration) *
 		healthClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
-		connected: make(map[string]bool),
-		stopCh:    make(chan struct{}),
-		lakeName:  "homer_lake",
+		connected:    make(map[string]bool),
+		rangeCache:   make(map[string]tsRange),
+		smartRouting: smartRouting,
+		stopCh:       make(chan struct{}),
+		lakeName:     "homer_lake",
 	}
 }
 
@@ -138,6 +148,13 @@ func (s *FlightService) healthCheckLoop() {
 						logger.Info("Hub: Node is now online", "node", node.Name)
 					}
 					s.connected[node.Name] = true
+					if s.smartRouting {
+						if rng, rerr := s.fetchNodeRange(node); rerr == nil {
+							s.rangeCache[node.Name] = rng
+						} else {
+							delete(s.rangeCache, node.Name) // unknown -> keep node
+						}
+					}
 				}
 			}
 			s.mu.Unlock()
@@ -163,6 +180,35 @@ func (s *FlightService) checkNode(node config.NodeEndpoint) error {
 
 	logger.Info("🔗 Hub: Connected to node", "node", node.Name, "addr", fmt.Sprintf("%s:%d", node.Host, httpPort))
 	return nil
+}
+
+// fetchNodeRange retrieves a node's min/max timestamp via GET /metadata/stats.
+func (s *FlightService) fetchNodeRange(node config.NodeEndpoint) (tsRange, error) {
+	httpPort := node.Port + 1
+	url := fmt.Sprintf("http://%s:%d/metadata/stats", node.Host, httpPort)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return tsRange{}, err
+	}
+	if tok := strings.TrimSpace(node.Token); tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
+	resp, err := s.healthClient.Do(req)
+	if err != nil {
+		return tsRange{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return tsRange{}, fmt.Errorf("stats HTTP error: %d", resp.StatusCode)
+	}
+	var body struct {
+		MinTs int64 `json:"min_ts"`
+		MaxTs int64 `json:"max_ts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return tsRange{}, err
+	}
+	return tsRange{min: body.MinTs, max: body.MaxTs}, nil
 }
 
 // CloseAll closes all connections and stops the health check loop

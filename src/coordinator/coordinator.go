@@ -77,7 +77,7 @@ func (c *Coordinator) SetLocalBroker(b *hepstream.Broker) {
 func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 	// Create FlightSQL service
 	queryTimeout := time.Duration(cfg.QueryTimeoutSec) * time.Second
-	flightService := services.NewFlightService(cfg.Nodes, queryTimeout)
+	flightService := services.NewFlightService(cfg.Nodes, queryTimeout, cfg.SmartRouting.Enable)
 	flightService.SetLakeName(cfg.LakeName)
 
 	c := &Coordinator{
