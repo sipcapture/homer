@@ -14,6 +14,11 @@ import (
 	"strings"
 )
 
+// quoteIdent wraps a DuckDB identifier in double quotes, escaping embedded quotes.
+func quoteIdent(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+}
+
 // nodeTimeRange returns the min/max timestamp (nanoseconds since epoch) across
 // all hep_proto_* tables visible to this node's DuckDB connection, spanning any
 // attached DuckLake volumes. Returns 0,0 when the node holds no data.
@@ -33,7 +38,7 @@ func nodeTimeRange(db *sql.DB) (minNs, maxNs int64, err error) {
 		if err := rows.Scan(&dbName, &schema, &table); err != nil {
 			return 0, 0, err
 		}
-		fqn := fmt.Sprintf(`"%s"."%s"."%s"`, dbName, schema, table)
+		fqn := quoteIdent(dbName) + "." + quoteIdent(schema) + "." + quoteIdent(table)
 		// Apply epoch_ns to the result of min/max (not min/max of epoch_ns):
 		// epoch_ns is monotonic so the values are identical, but min(timestamp)/
 		// max(timestamp) operate on the bare column, letting DuckDB answer from

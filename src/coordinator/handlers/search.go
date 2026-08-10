@@ -165,8 +165,8 @@ func (h *SearchHandler) SearchCalls(c echo.Context) error {
 		})
 	}
 
-	// Execute query via FlightSQL
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	fromNs, toNs := simpleSearchRangeNs(&req)
+	results, err := h.flightService.QueryWithRange(c.Request().Context(), sql, fromNs, toNs)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
@@ -473,7 +473,18 @@ func (h *SearchHandler) GetCallByID(c echo.Context) error {
 
 	slog.Info("GetCallByID query", "sql", sql, "callid", callID)
 
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	var fromNs, toNs int64
+	if fromTs != "" {
+		if ts, err := parseTimestamp(fromTs); err == nil {
+			fromNs = msToNs(ts)
+		}
+	}
+	if toTs != "" {
+		if ts, err := parseTimestamp(toTs); err == nil {
+			toNs = msToNs(ts)
+		}
+	}
+	results, err := h.flightService.QueryWithRange(c.Request().Context(), sql, fromNs, toNs)
 	if err != nil {
 		slog.Error("GetCallByID query failed", "error", err)
 		return c.JSON(http.StatusOK, map[string]interface{}{
@@ -541,6 +552,25 @@ func (h *SearchHandler) GetPayload(c echo.Context) error {
 		"success": false,
 		"error":   "Record not found",
 	})
+}
+
+// simpleSearchRangeNs converts SimpleSearchRequest from/to strings to epoch ns
+// for smart-routing pruning. Missing/invalid values stay 0 (no pruning).
+func simpleSearchRangeNs(req *SimpleSearchRequest) (fromNs, toNs int64) {
+	if req == nil {
+		return 0, 0
+	}
+	if req.From != "" {
+		if ts, err := parseTimestamp(req.From); err == nil {
+			fromNs = msToNs(ts)
+		}
+	}
+	if req.To != "" {
+		if ts, err := parseTimestamp(req.To); err == nil {
+			toNs = msToNs(ts)
+		}
+	}
+	return fromNs, toNs
 }
 
 // parseTimestamp parses ISO timestamp or unix milliseconds
@@ -642,7 +672,7 @@ func (h *SearchHandler) GetCallTransaction(c echo.Context) error {
 			table, sidCondition, tsCondition,
 		)
 
-		results, err := h.flightService.Query(c.Request().Context(), sql)
+		results, err := h.flightService.QueryWithRange(c.Request().Context(), sql, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 		if err != nil {
 			continue
 		}

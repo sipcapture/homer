@@ -7,6 +7,15 @@ import (
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
+func TestQuoteIdent(t *testing.T) {
+	if got := quoteIdent(`abc`); got != `"abc"` {
+		t.Fatalf("got %q", got)
+	}
+	if got := quoteIdent(`a"b`); got != `"a""b"` {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestNodeTimeRange(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
