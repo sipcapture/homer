@@ -69,7 +69,7 @@ func newLLMTestHandler(t *testing.T, llmHandler http.HandlerFunc, apiKey string)
 		TimeoutSec: 5,
 	}
 
-	fs := services.NewFlightService(nil, 0)
+	fs := services.NewFlightService(nil, 0, false)
 	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0, nil, "", 0)
 	return h, ts.Close
 }
@@ -154,7 +154,7 @@ func TestTryLLMStructured_FallbackToFallbackTime(t *testing.T) {
 func TestTryLLMStructured_DisabledReturnsZeroResult(t *testing.T) {
 	cfg := &config.MCPConfig{}
 	cfg.LLM = config.MCPLLMConfig{Enable: false}
-	fs := services.NewFlightService(nil, 0)
+	fs := services.NewFlightService(nil, 0, false)
 	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0, nil, "", 0)
 
 	req, res := h.tryLLMStructured(context.Background(), "anything", 0, 0, 0)
@@ -245,7 +245,7 @@ func TestV4MCPLLMStatus_OllamaPingNoAPIKey(t *testing.T) {
 		Model:      "llama3.1",
 		TimeoutSec: 2,
 	}
-	fs := services.NewFlightService(nil, 0)
+	fs := services.NewFlightService(nil, 0, false)
 	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0, nil, "", 0)
 
 	e := echo.New()
@@ -289,7 +289,7 @@ func TestV4MCPLLMStatus_OllamaPingNoAPIKey(t *testing.T) {
 func TestNewSearchHandler_LLMDisabledMeansNilClient(t *testing.T) {
 	cfg := &config.MCPConfig{}
 	cfg.LLM = config.MCPLLMConfig{Enable: false}
-	fs := services.NewFlightService(nil, 0)
+	fs := services.NewFlightService(nil, 0, false)
 	h := NewSearchHandler(fs, nil, cfg, nil, nil, 0, nil, "", 0)
 	if h.llm != nil {
 		t.Fatalf("expected nil LLM client when Enable=false, got %#v", h.llm)

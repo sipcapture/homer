@@ -28,6 +28,9 @@
         "priority": 1
       }
     ],
+    "smart_routing": {
+      "enable": false
+    },
     "flightsql_server": {
       "enable": false,
       "host": "0.0.0.0",

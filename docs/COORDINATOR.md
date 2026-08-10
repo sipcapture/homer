@@ -133,6 +133,45 @@ The Coordinator module provides REST API for frontend applications and orchestra
 }
 ```
 
+### Smart Routing (time-range node pruning)
+
+Opt-in optimization for multi-node clusters. When enabled, the Coordinator skips
+querying any node whose data time range cannot overlap a search's time window —
+so a "last 15 minutes" search never wakes a node holding only cold archives.
+**Off by default; when off, every connected node is queried (unchanged behavior).**
+
+```json
+{
+  "coordinator": {
+    "enable": true,
+    "nodes": [
+      { "name": "hot",  "host": "hot.example.com",  "port": 50051 },
+      { "name": "cold", "host": "cold.example.com", "port": 50051 }
+    ],
+    "smart_routing": {
+      "enable": true
+    }
+  }
+}
+```
+
+How it works: each node exposes `GET /metadata/stats` (`{min_ts, max_ts}`); the
+Coordinator polls it on the existing node health-check tick and caches each
+node's range. A node is skipped only when its cached range provably does not
+overlap the query window — its newest data is older than the window start, or
+its oldest data is newer than the window end. If pruning would leave no nodes,
+all connected nodes are queried, so pruning never drops results.
+
+> **Precondition — historical ingest.** The "newer than the window end" skip
+> direction assumes a node's oldest (`min`) timestamp only rises over time (true
+> for live capture plus retention). **Historical pcap import or replay that
+> ingests packets older than a node's current `min` violates this.** During the
+> ≤1 health-check interval before the cache refreshes, such a node could be
+> skipped for a query that it now has matching (older) rows for. If you run
+> historical/backfill ingest, keep `smart_routing.enable` **off**, or accept up
+> to one health-interval of staleness. The "older than the window start"
+> direction has no such hazard.
+
 ### With OAuth2 Providers
 
 Authorization **code** flow (server exchanges `code`, loads userinfo, provisions DuckDB user). See [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#oauth2).
@@ -210,6 +249,12 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `query_timeout_sec` | int | 30 | Per-query timeout (seconds) for coordinator → node `POST /query`. Raise for long transaction searches — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#search-timeouts-30-seconds). Env: `HOMER_COORDINATOR_QUERY_TIMEOUT_SEC`. |
+
+### smart_routing
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enable` | bool | false | Skip nodes whose cached data time range cannot overlap a search's time window (UI search path). Off = every connected node is queried. See [Smart Routing](#smart-routing-time-range-node-pruning) — note the historical-ingest precondition before enabling. |
 
 ### jwt
 

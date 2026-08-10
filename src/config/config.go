@@ -346,9 +346,19 @@ type NodeConfig struct {
 	DuckLake DuckLakeConfig `json:"ducklake" mapstructure:"ducklake"`
 }
 
+// SmartRoutingConfig controls time-range node pruning for UI search fan-out.
+type SmartRoutingConfig struct {
+	// Enable turns on skipping nodes whose newest data predates the query
+	// window. Off by default; off = every connected node is queried.
+	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
+}
+
 // CoordinatorConfig configures the API coordinator module
 type CoordinatorConfig struct {
 	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
+
+	// SmartRouting: skip nodes with no data in the query time range (UI path).
+	SmartRouting SmartRoutingConfig `json:"smart_routing" mapstructure:"smart_routing"`
 
 	// HTTP API server
 	HTTPServer CoordinatorHTTPServerConfig `json:"http_server" mapstructure:"http_server"`

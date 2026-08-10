@@ -124,7 +124,7 @@ func newTestSearchHandler(t *testing.T, rowsPerCall [][]map[string]interface{}, 
 
 	fs := services.NewFlightService([]config.NodeEndpoint{{
 		Name: "n1", Host: host, Port: flightPort,
-	}}, 0)
+	}}, 0, false)
 	_ = fs.ConnectAll()
 	fs.SetLakeName("homer_lake")
 

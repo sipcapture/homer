@@ -821,6 +821,14 @@ func (h *SearchHandler) queryTransactionSearch(ctx context.Context, fullSQL stri
 	return rows, nil
 }
 
+// msToNs converts a millisecond epoch to nanoseconds; non-positive stays 0.
+func msToNs(ms int64) int64 {
+	if ms <= 0 {
+		return 0
+	}
+	return ms * 1_000_000
+}
+
 // runTransactionSearch executes the search/sort phase for the configured
 // strategy. When narrow is true the wide blob columns are dropped from the
 // projection (the caller re-attaches them by uuid).
@@ -829,13 +837,13 @@ func (h *SearchHandler) runTransactionSearch(ctx context.Context, fullSQL string
 	// or non-default ordering must see the whole range at once): single query.
 	if strategy == topNFull || !transactionSearchTopNShape(req) {
 		if !narrow {
-			return h.flightService.Query(ctx, fullSQL)
+			return h.flightService.QueryWithRange(ctx, fullSQL, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 		}
 		sql, err := buildSearchSQLV4WithOpts(h.flightService.LakeName(), req, virtualRules, searchSQLOpts{narrowNoHeavy: true})
 		if err != nil {
 			return nil, err
 		}
-		return h.flightService.Query(ctx, sql)
+		return h.flightService.QueryWithRange(ctx, sql, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 	}
 
 	// stream: a single query over the whole range, ORDER BY dropped, re-sorted
@@ -848,7 +856,7 @@ func (h *SearchHandler) runTransactionSearch(ctx context.Context, fullSQL string
 		}
 		logger.Info("V4TransactionsSearch: stream execution (single query)", "limit", limit,
 			"narrow", narrow, "from", req.Timestamp.From, "to", req.Timestamp.To)
-		rows, err := h.flightService.Query(ctx, streamSQL)
+		rows, err := h.flightService.QueryWithRange(ctx, streamSQL, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 		if err != nil {
 			return nil, err
 		}
@@ -877,7 +885,7 @@ func (h *SearchHandler) runTransactionSearch(ctx context.Context, fullSQL string
 		if err != nil {
 			return nil, err
 		}
-		rows, err := h.flightService.Query(ctx, sql)
+		rows, err := h.flightService.QueryWithRange(ctx, sql, msToNs(chunkReq.Timestamp.From), msToNs(chunkReq.Timestamp.To))
 		if err != nil {
 			return nil, err
 		}
@@ -985,7 +993,7 @@ func (h *SearchHandler) hydrateHeavyColumns(ctx context.Context, req *SearchObje
 
 	logger.Info("V4TransactionsSearch: hydrating full rows by uuid", "uuids", len(uuids),
 		"from", fromMs, "to", toMs)
-	fullRows, err := h.flightService.Query(ctx, sql)
+	fullRows, err := h.flightService.QueryWithRange(ctx, sql, msToNs(fromMs), msToNs(toMs))
 	if err != nil {
 		logger.Warn("V4TransactionsSearch: row hydration failed, returning narrow rows",
 			"error", err)
