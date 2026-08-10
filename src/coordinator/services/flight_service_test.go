@@ -101,23 +101,27 @@ func TestFetchNodeRangeParsesStats(t *testing.T) {
 
 func TestNodesForRangeSkipsNonOverlapping(t *testing.T) {
 	s := NewFlightService(nil, time.Second, true)
+	const fromNs int64 = 1_700_000_000_000_000_000
+	const toNs int64 = 1_700_000_900_000_000_000
+	slack := smartRoutingMaxSlackNs
 	s.rangeCache = map[string]tsRange{
-		"hot":    {min: 0, max: 1_000},     // overlaps window -> keep
-		"cold":   {min: 0, max: 100},       // max < from -> skip (too old)
-		"future": {min: 5_000, max: 6_000}, // min > to -> skip (too new)
-		"empty":  {min: 0, max: 0},         // unknown -> keep
+		"hot":    {min: fromNs - int64(time.Hour), max: fromNs + int64(time.Minute)}, // overlaps
+		"cold":   {min: 0, max: fromNs - slack - 1},                                  // too old even with slack
+		"near":   {min: 0, max: fromNs - slack/2},                                    // within slack -> keep
+		"future": {min: toNs + 1, max: toNs + int64(time.Hour)},                      // too new
+		"empty":  {min: 0, max: 0},                                                   // unknown -> keep
 	}
-	nodes := []config.NodeEndpoint{{Name: "hot"}, {Name: "cold"}, {Name: "future"}, {Name: "empty"}, {Name: "uncached"}}
-	got := s.nodesForRange(nodes, 500, 2_000) // query window [500, 2000]ns
+	nodes := []config.NodeEndpoint{{Name: "hot"}, {Name: "cold"}, {Name: "near"}, {Name: "future"}, {Name: "empty"}, {Name: "uncached"}}
+	got := s.nodesForRange(nodes, fromNs, toNs)
 	names := map[string]bool{}
 	for _, n := range got {
 		names[n.Name] = true
 	}
-	if !names["hot"] || !names["empty"] || !names["uncached"] {
-		t.Fatalf("hot/empty/uncached must be kept, got %v", names)
+	if !names["hot"] || !names["near"] || !names["empty"] || !names["uncached"] {
+		t.Fatalf("hot/near/empty/uncached must be kept, got %v", names)
 	}
 	if names["cold"] {
-		t.Fatalf("cold (max<from) must be skipped, got %v", names)
+		t.Fatalf("cold (effectiveMax<from) must be skipped, got %v", names)
 	}
 	if names["future"] {
 		t.Fatalf("future (min>to) must be skipped, got %v", names)
@@ -126,9 +130,13 @@ func TestNodesForRangeSkipsNonOverlapping(t *testing.T) {
 
 func TestNodesForRangeNeverEmpties(t *testing.T) {
 	s := NewFlightService(nil, time.Second, true)
-	s.rangeCache = map[string]tsRange{"a": {max: 100}, "b": {max: 200}}
+	from := int64(1_700_000_000_000_000_000)
+	s.rangeCache = map[string]tsRange{
+		"a": {max: from - smartRoutingMaxSlackNs - 10},
+		"b": {max: from - smartRoutingMaxSlackNs - 20},
+	}
 	nodes := []config.NodeEndpoint{{Name: "a"}, {Name: "b"}}
-	got := s.nodesForRange(nodes, 1_000, 2_000) // both too old
+	got := s.nodesForRange(nodes, from, from+int64(time.Hour))
 	if len(got) != 2 {
 		t.Fatalf("filter must not empty the set; want 2 got %d", len(got))
 	}
@@ -140,5 +148,16 @@ func TestNodesForRangeDisabledKeepsAll(t *testing.T) {
 	nodes := []config.NodeEndpoint{{Name: "a"}}
 	if len(s.nodesForRange(nodes, 1_000, 2_000)) != 1 {
 		t.Fatalf("disabled must keep all")
+	}
+}
+
+func TestNodesForRangeFlushSlackKeepsNearMax(t *testing.T) {
+	s := NewFlightService(nil, time.Second, true)
+	from := int64(1_700_000_000_000_000_000)
+	// max is before from, but within slack — must keep.
+	s.rangeCache = map[string]tsRange{"hot": {max: from - smartRoutingMaxSlackNs + 1}}
+	got := s.nodesForRange([]config.NodeEndpoint{{Name: "hot"}}, from, from+int64(time.Minute))
+	if len(got) != 1 {
+		t.Fatalf("node within flush/health slack must be kept")
 	}
 }

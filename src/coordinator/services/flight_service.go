@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -22,6 +23,17 @@ import (
 	"github.com/sipcapture/homer-core/src/config"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
+
+const (
+	nodeHealthInterval = 15 * time.Second
+	// Default DuckLake flush_interval_sec; used as an upper bound when treating
+	// cached max as possibly lagging buffered-but-unflushed rows.
+	smartRoutingFlushLag = 30 * time.Second
+)
+
+// smartRoutingMaxSlackNs widens cached max so flush lag + one stale health poll
+// cannot cause a false too-old skip on short query windows.
+var smartRoutingMaxSlackNs = int64(nodeHealthInterval + smartRoutingFlushLag)
 
 // FlightService manages connections to nodes via HTTP API
 type FlightService struct {
@@ -127,7 +139,7 @@ func (s *FlightService) ConnectAll() error {
 // healthCheckLoop periodically re-checks disconnected nodes and verifies
 // connected ones are still alive.
 func (s *FlightService) healthCheckLoop() {
-	ticker := time.NewTicker(15 * time.Second)
+	ticker := time.NewTicker(nodeHealthInterval)
 	defer ticker.Stop()
 
 	for {
@@ -291,8 +303,10 @@ func (s *FlightService) QueryFirstConnected(ctx context.Context, sql string) ([]
 
 // nodesForRange filters connected nodes to those whose cached timestamp range
 // may overlap the query window [fromNs, toNs]. A node is skipped only when its
-// cached range provably does not overlap the window in either direction:
-//   - too old: cached max is non-zero and strictly before fromNs.
+// cached range (with flush/health slack on max) provably does not overlap the
+// window in either direction:
+//   - too old: effectiveMax (cached max + smartRoutingMaxSlackNs) is non-zero
+//     basis and strictly before fromNs.
 //   - too new: cached min is non-zero and strictly after toNs.
 //
 // Unknown/uncached nodes, nodes with min/max == 0, and all nodes when smart
@@ -302,7 +316,8 @@ func (s *FlightService) QueryFirstConnected(ctx context.Context, sql string) ([]
 // This is staleness-safe: a node's data max only grows over time and its min
 // only rises as old data ages out, so a stale cache can only under-skip (keep a
 // node that could now be pruned) — it can never wrongly drop a node that holds
-// matching data.
+// matching data. The max slack covers buffered-but-unflushed rows and one stale
+// health poll on short UI windows.
 //
 // Callers must hold at least s.mu.RLock() because it reads s.rangeCache.
 func (s *FlightService) nodesForRange(connectedNodes []config.NodeEndpoint, fromNs, toNs int64) []config.NodeEndpoint {
@@ -312,22 +327,23 @@ func (s *FlightService) nodesForRange(connectedNodes []config.NodeEndpoint, from
 	kept := make([]config.NodeEndpoint, 0, len(connectedNodes))
 	for _, n := range connectedNodes {
 		rng, ok := s.rangeCache[n.Name]
-		// Too-old safety relies on the query window exceeding the node's
-		// persist/flush lag: buffered-but-unpersisted rows are excluded from
-		// min/max, so a "last N seconds" window with N < flush interval could
-		// skip a hot node holding only buffered rows. Typical UI windows
-		// (5/15/30 min) comfortably exceed the flush interval and are safe.
-		if ok && rng.max > 0 && rng.max < fromNs {
-			logger.Info("Hub: skipping node (data too old)", "node", n.Name, "node_max", rng.max, "query_from", fromNs)
-			continue
+		if ok && rng.max > 0 {
+			effectiveMax := rng.max
+			if smartRoutingMaxSlackNs > 0 && effectiveMax <= math.MaxInt64-smartRoutingMaxSlackNs {
+				effectiveMax += smartRoutingMaxSlackNs
+			}
+			if effectiveMax < fromNs {
+				logger.Info("Hub: skipping node (data too old)", "node", n.Name, "node_max", rng.max, "effective_max", effectiveMax, "query_from", fromNs)
+				continue
+			}
 		}
 		// Too-new direction assumes a node's min timestamp only rises (true for
 		// live capture + retention aging out old rows). Historical backfill
 		// (pcap import / replay ingesting rows OLDER than the cached min)
 		// violates this: for up to one health interval the stale-high cached min
-		// could skip a node that now holds matching old rows. The too-old
-		// direction has no such hazard. Operators doing historical import should
-		// keep smart_routing disabled or accept <=1 health-interval staleness.
+		// could skip a node that now holds matching old rows. Operators doing
+		// historical import should keep smart_routing disabled or accept ≤1
+		// health-interval staleness.
 		if ok && rng.min > 0 && rng.min > toNs {
 			logger.Info("Hub: skipping node (data too new)", "node", n.Name, "node_min", rng.min, "query_to", toNs)
 			continue

@@ -162,6 +162,15 @@ overlap the query window — its newest data is older than the window start, or
 its oldest data is newer than the window end. If pruning would leave no nodes,
 all connected nodes are queried, so pruning never drops results.
 
+Pruning applies to UI search and transaction paths that carry a time window
+(search, call flow / messages, QoS, callinfo, events, export, OTLP tabs).
+Admin/raw SQL, schema discovery, and unbounded lookups still fan out to every
+connected node.
+
+Cached `max` is widened by a fixed slack (default health interval + DuckLake
+flush lag ≈ 45s) so short windows and buffered-but-unflushed rows do not cause
+false too-old skips.
+
 > **Precondition — historical ingest.** The "newer than the window end" skip
 > direction assumes a node's oldest (`min`) timestamp only rises over time (true
 > for live capture plus retention). **Historical pcap import or replay that
@@ -170,7 +179,7 @@ all connected nodes are queried, so pruning never drops results.
 > skipped for a query that it now has matching (older) rows for. If you run
 > historical/backfill ingest, keep `smart_routing.enable` **off**, or accept up
 > to one health-interval of staleness. The "older than the window start"
-> direction has no such hazard.
+> direction is hardened with flush/health slack on cached `max`.
 
 ### With OAuth2 Providers
 
@@ -254,7 +263,7 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `enable` | bool | false | Skip nodes whose cached data time range cannot overlap a search's time window (UI search path). Off = every connected node is queried. See [Smart Routing](#smart-routing-time-range-node-pruning) — note the historical-ingest precondition before enabling. |
+| `enable` | bool | false | Skip nodes whose cached data time range cannot overlap a search's time window (UI search + transaction paths with timestamps). Off = every connected node is queried. See [Smart Routing](#smart-routing-time-range-node-pruning) — note the historical-ingest precondition before enabling. |
 
 ### jwt
 

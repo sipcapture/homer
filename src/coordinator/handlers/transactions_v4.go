@@ -547,7 +547,8 @@ func (h *SearchHandler) V4TransactionsList(c echo.Context) error {
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
 	}
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	fromNs, toNs := simpleSearchRangeNs(&req)
+	results, err := h.flightService.QueryWithRange(c.Request().Context(), sql, fromNs, toNs)
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
@@ -1228,7 +1229,7 @@ func (h *SearchHandler) executeTransactionMessagesSQL(ctx context.Context, table
 		return nil, fmt.Errorf("no session_id provided")
 	}
 	sql := transactionMessagesSelectSQL(table, sessionIDs, from, to)
-	return h.flightService.Query(ctx, sql)
+	return h.flightService.QueryWithRange(ctx, sql, msToNs(from), msToNs(to))
 }
 
 // mergeSessionIDs returns base ∪ extras with order preserved, whitespace
@@ -1345,7 +1346,7 @@ func (h *SearchHandler) V4MessageGet(c echo.Context) error {
 		where += fmt.Sprintf(" AND timestamp >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC') AND timestamp <= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')",
 			req.Timestamp.From, req.Timestamp.To)
 	}
-	results, err := h.queryMessageByUUIDAcrossTables(c.Request().Context(), protoType, eventType, where)
+	results, err := h.queryMessageByUUIDAcrossTables(c.Request().Context(), protoType, eventType, where, req.Timestamp.From, req.Timestamp.To)
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
@@ -1365,12 +1366,13 @@ func (h *SearchHandler) V4MessageGet(c echo.Context) error {
 // when event_type is "all") until one produces a row. uuid is assigned once
 // per message at ingest, so at most one table is expected to match; trying
 // the rest costs one cheap indexed-column lookup each.
-func (h *SearchHandler) queryMessageByUUIDAcrossTables(ctx context.Context, protoType int, eventType, where string) ([]map[string]interface{}, error) {
+// fromMs/toMs (epoch ms) enable smart-routing pruning when both are set.
+func (h *SearchHandler) queryMessageByUUIDAcrossTables(ctx context.Context, protoType int, eventType, where string, fromMs, toMs int64) ([]map[string]interface{}, error) {
 	tables := resolveSearchTables(h.flightService.LakeName(), protoType, eventType)
 	var firstErr error
 	for _, table := range tables {
 		sql := fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT 1", table, where)
-		rows, err := h.flightService.Query(ctx, sql)
+		rows, err := h.flightService.QueryWithRange(ctx, sql, msToNs(fromMs), msToNs(toMs))
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -1409,7 +1411,7 @@ func (h *SearchHandler) V4MessageDecoded(c echo.Context) error {
 		where += fmt.Sprintf(" AND timestamp >= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC') AND timestamp <= (to_timestamp(%d / 1000.0) AT TIME ZONE 'UTC')",
 			req.Timestamp.From, req.Timestamp.To)
 	}
-	results, err := h.queryMessageByUUIDAcrossTables(c.Request().Context(), protoType, eventType, where)
+	results, err := h.queryMessageByUUIDAcrossTables(c.Request().Context(), protoType, eventType, where, req.Timestamp.From, req.Timestamp.To)
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
@@ -1446,7 +1448,8 @@ func (h *SearchHandler) V4TransactionQos(c echo.Context) error {
 		"SELECT * FROM %s WHERE %s%s ORDER BY timestamp ASC",
 		rtcpTable, sidCondition, tsCondition,
 	)
-	rtcpResults, rtcpErr := h.flightService.Query(c.Request().Context(), rtcpSQL)
+	fromNs, toNs := msToNs(req.Timestamp.From), msToNs(req.Timestamp.To)
+	rtcpResults, rtcpErr := h.flightService.QueryWithRange(c.Request().Context(), rtcpSQL, fromNs, toNs)
 	if rtcpErr != nil {
 		rtcpResults = []map[string]interface{}{}
 	}
@@ -1457,7 +1460,7 @@ func (h *SearchHandler) V4TransactionQos(c echo.Context) error {
 		"SELECT * FROM %s WHERE %s%s ORDER BY timestamp ASC",
 		rtpTable, sidCondition, tsCondition,
 	)
-	rtpResults, rtpErr := h.flightService.Query(c.Request().Context(), rtpSQL)
+	rtpResults, rtpErr := h.flightService.QueryWithRange(c.Request().Context(), rtpSQL, fromNs, toNs)
 	if rtpErr != nil {
 		rtpResults = []map[string]interface{}{}
 	}
@@ -1469,7 +1472,7 @@ func (h *SearchHandler) V4TransactionQos(c echo.Context) error {
 		"SELECT * FROM %s WHERE %s%s ORDER BY timestamp ASC",
 		vqrtcpTable, callidCondition, tsCondition,
 	)
-	vqrtcpResults, vqrtcpErr := h.flightService.Query(c.Request().Context(), vqrtcpSQL)
+	vqrtcpResults, vqrtcpErr := h.flightService.QueryWithRange(c.Request().Context(), vqrtcpSQL, fromNs, toNs)
 	if vqrtcpErr != nil {
 		vqrtcpResults = []map[string]interface{}{}
 	}
@@ -1526,6 +1529,7 @@ func (h *SearchHandler) V4TransactionCallInfo(c echo.Context) error {
 	}
 
 	var results []map[string]interface{}
+	fromNs, toNs := msToNs(req.Timestamp.From), msToNs(req.Timestamp.To)
 	if protoType == 1 && sipEvent == "call" {
 		detailSQL := fmt.Sprintf(
 			`SELECT session_id, timestamp, method, response_code, cseq_method, caller, callee,
@@ -1534,7 +1538,7 @@ func (h *SearchHandler) V4TransactionCallInfo(c echo.Context) error {
 			FROM %s WHERE %s%s ORDER BY timestamp ASC LIMIT %d`,
 			table, sessionWhere, tsFilter, callInfoMaxRows,
 		)
-		rows, err := h.flightService.Query(c.Request().Context(), detailSQL)
+		rows, err := h.flightService.QueryWithRange(c.Request().Context(), detailSQL, fromNs, toNs)
 		if err != nil {
 			return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 		}
@@ -1560,7 +1564,7 @@ func (h *SearchHandler) V4TransactionCallInfo(c echo.Context) error {
 	FROM %s WHERE %s%s GROUP BY session_id`,
 			table, sessionWhere, tsFilter)
 		var err error
-		results, err = h.flightService.Query(c.Request().Context(), sql)
+		results, err = h.flightService.QueryWithRange(c.Request().Context(), sql, fromNs, toNs)
 		if err != nil {
 			return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 		}
@@ -1593,7 +1597,7 @@ func (h *SearchHandler) V4TransactionEvents(c echo.Context) error {
 		)
 	}
 	sql := fmt.Sprintf("SELECT * FROM %s WHERE %s ORDER BY timestamp ASC LIMIT 5000", table, where)
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	results, err := h.flightService.QueryWithRange(c.Request().Context(), sql, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
@@ -1629,7 +1633,7 @@ func (h *SearchHandler) V4TransactionSub(c echo.Context) error {
 		"SELECT timestamp, src_ip, src_port, dst_ip, dst_port, method, response_code, caller, callee, node_id FROM %s WHERE %s ORDER BY timestamp ASC LIMIT 5000",
 		table, where,
 	)
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	results, err := h.flightService.QueryWithRange(c.Request().Context(), sql, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
@@ -1682,7 +1686,7 @@ func (h *SearchHandler) V4TransactionOtlpLogs(c echo.Context) error {
 
 	lake := h.flightService.LakeName()
 	sql := fmt.Sprintf("SELECT * FROM %s.otlp_logs WHERE %s ORDER BY timestamp ASC LIMIT %d", lake, where, maxOTLPLogsPerQuery)
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	results, err := h.flightService.QueryWithRange(c.Request().Context(), sql, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
@@ -1722,7 +1726,7 @@ func (h *SearchHandler) V4TransactionOtlpLogsTrace(c echo.Context) error {
 	where := strings.Join(whereParts, " AND ")
 	lake := h.flightService.LakeName()
 	sql := fmt.Sprintf("SELECT * FROM %s.otlp_logs WHERE %s ORDER BY timestamp ASC LIMIT %d", lake, where, maxOTLPLogsPerQuery)
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	results, err := h.flightService.QueryWithRange(c.Request().Context(), sql, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
@@ -1747,7 +1751,7 @@ func (h *SearchHandler) V4TransactionOtlpMetricNames(c echo.Context) error {
 	}
 	lake := h.flightService.LakeName()
 	sql := buildOTLPMetricNamesSQL(lake, req.Timestamp.From, req.Timestamp.To, req.ServiceName)
-	results, err := h.flightService.Query(c.Request().Context(), sql)
+	results, err := h.flightService.QueryWithRange(c.Request().Context(), sql, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 	if err != nil {
 		logger.Error(fmt.Sprintf("V4TransactionOtlpMetricNames: query error: %v", err))
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
@@ -1884,7 +1888,7 @@ func (h *SearchHandler) hasTransactionMessages(ctx context.Context, req *Transac
 	}
 	prefix := strings.Replace(sqlStr[:idx], "SELECT *", "SELECT 1", 1)
 	probeSQL := prefix + " LIMIT 1"
-	rows, err := h.flightService.Query(ctx, probeSQL)
+	rows, err := h.flightService.QueryWithRange(ctx, probeSQL, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 	if err != nil {
 		return false, err
 	}
@@ -1897,7 +1901,7 @@ func (h *SearchHandler) fetchTransactionRowsWithRequest(c echo.Context, req *Tra
 	if err != nil {
 		return nil, "", writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
 	}
-	rows, err := h.flightService.Query(c.Request().Context(), sqlStr)
+	rows, err := h.flightService.QueryWithRange(c.Request().Context(), sqlStr, msToNs(req.Timestamp.From), msToNs(req.Timestamp.To))
 	if err != nil {
 		return nil, "", writeError(c, http.StatusInternalServerError, "Server Error", "Query failed")
 	}
