@@ -242,7 +242,6 @@ type Snapshot struct {
 	RowCount  int64
 }
 
-
 // NewMultiTableWriter creates a new multi-table DuckLake writer
 func NewMultiTableWriter(config Config) (*MultiTableWriter, error) {
 	ct, err := NormalizeSQLiteCatalog(config.CatalogType)
@@ -372,13 +371,7 @@ func (mtw *MultiTableWriter) connect() error {
 	threads := mtw.config.TuningThreads
 	memLimit := mtw.config.TuningMemoryLimit
 	if threads == 0 {
-		threads = runtime.NumCPU() / 2
-		if threads < 1 {
-			threads = 1
-		}
-		if threads > 4 {
-			threads = 4
-		}
+		threads = AutoThreads()
 		logger.Info("DuckDB writer: auto-limiting threads (operator did not set tuning.threads)",
 			"threads", threads, "host_cpus", runtime.NumCPU())
 	}

@@ -65,7 +65,7 @@
       "search_buffer": true,
       "tuning": {
         "threads": 2,
-        "memory_limit": "2GB"
+        "memory_limit": "4GB"
       },
       "compaction": {
         "enable": true,

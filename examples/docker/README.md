@@ -38,6 +38,23 @@ docker compose -f docker-compose_s3direct.yaml up -d
 
 Edit the chosen compose file to change ports, image (`ghcr.io/sipcapture/homer:latest`), secrets, or storage settings—no separate `.env` file is required.
 
+## Memory (DuckDB)
+
+The image bakes in writer defaults (`HOMER_STORAGE_DUCKLAKE_TUNING_*`):
+`MEMORY_LIMIT=4GB`, `THREADS=2`, spill under `/data/homer/.duckdb_spill`.
+Compose repeats the same variables so they are visible and easy to
+override without rebuilding. The all-in-one container needs **~8GB RAM**.
+
+```bash
+# docker run
+docker run -e HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT=8GB ghcr.io/sipcapture/homer:latest
+
+# compose: edit homer.environment in docker-compose.yaml
+```
+
+Raise `MEMORY_LIMIT` toward 50% of the container budget under SIPREC /
+high ingest. Details: [OOM.md](../../docs/OOM.md), [DUCKDB_TUNING.md](../../docs/DUCKDB_TUNING.md).
+
 ## Endpoints
 
 - **Coordinator UI:** http://localhost:8080

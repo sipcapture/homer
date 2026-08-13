@@ -125,6 +125,13 @@ func TestApplyDuckDBMemorySafety(t *testing.T) {
 	ApplyDuckDBMemorySafety(nil, "test") // must not panic
 }
 
+func TestAutoThreadsRange(t *testing.T) {
+	n := AutoThreads()
+	if n < 1 || n > 4 {
+		t.Fatalf("AutoThreads() = %d, want 1..4", n)
+	}
+}
+
 func TestEnsureWriterS3Secret_MinIOStyle(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	if err != nil {

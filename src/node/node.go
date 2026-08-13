@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1677,13 +1676,7 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 	nodeThreads := cfg.DuckLake.Tuning.Threads
 	nodeMemLimit := cfg.DuckLake.Tuning.MemoryLimit
 	if nodeThreads == 0 {
-		nodeThreads = runtime.NumCPU() / 2
-		if nodeThreads < 1 {
-			nodeThreads = 1
-		}
-		if nodeThreads > 4 {
-			nodeThreads = 4
-		}
+		nodeThreads = ducklake.AutoThreads()
 	}
 	if strings.TrimSpace(nodeMemLimit) == "" {
 		nodeMemLimit = "2GB"

@@ -758,6 +758,24 @@ func isFlushRetriableError(errStr string) bool {
 	return false
 }
 
+// isDuckDBFatalError is true when DuckDB has invalidated the in-memory
+// instance (typically a checkpoint/pin OOM). Further queries fail until
+// the process restarts; retrying the flush cannot recover it.
+func isDuckDBFatalError(errStr string) bool {
+	return strings.Contains(errStr, "database has been invalidated") ||
+		strings.Contains(errStr, "FATAL Error") ||
+		strings.Contains(errStr, "failed to pin block")
+}
+
+func logFlushFailure(memName, tableFQN string, attempts int, err error) {
+	msg := fmt.Sprintf("flush %s → %s failed after %d attempts: %v", memName, tableFQN, attempts, err)
+	if err != nil && isDuckDBFatalError(err.Error()) {
+		logger.Error(msg + "; DuckDB instance is dead until restart — raise storage.ducklake.tuning.memory_limit (docs/OOM.md)")
+		return
+	}
+	logger.Error(msg)
+}
+
 // flushWorker is the dedicated goroutine that processes flush jobs.
 // It reads from flushCh and for each job copies data from the standby
 // memory table to DuckLake with retry on transient errors (catalog lock,
@@ -791,8 +809,7 @@ func (tw *TableWriter) flushSlotToDuckLake(slot int) {
 		errStr := err.Error()
 		if !isFlushRetriableError(errStr) || attempt == flushMaxRetries {
 			metrics.RecordPipelineStageError("ducklake", "flush", "insert_error")
-			logger.Error(fmt.Sprintf("flush %s → %s failed after %d attempts: %v",
-				memName, tw.tableFQN, attempt+1, err))
+			logFlushFailure(memName, tw.tableFQN, attempt+1, err)
 			return
 		}
 		logger.Warn(fmt.Sprintf("flush %s: retriable error (attempt %d/%d), retrying in %v: %v",
@@ -845,8 +862,7 @@ func (tw *TableWriter) flushSlotDirect(slot int, catalogMu *sync.Mutex) {
 		errStr := err.Error()
 		if !isFlushRetriableError(errStr) || attempt == flushMaxRetries {
 			metrics.RecordPipelineStageError("ducklake", "flush", "insert_error")
-			logger.Error(fmt.Sprintf("flush %s → %s failed after %d attempts: %v",
-				memName, tw.tableFQN, attempt+1, err))
+			logFlushFailure(memName, tw.tableFQN, attempt+1, err)
 			return
 		}
 		logger.Warn(fmt.Sprintf("flush %s: retriable error (attempt %d/%d), retrying in %v: %v",

@@ -633,7 +633,8 @@ type FlightSQLServerConfig struct {
 // When threads is 0 or memory_limit is empty, the writer and node apply
 // sensible defaults (threads = min(NumCPU/2, 4), memory_limit = "2GB")
 // to prevent DuckDB from oversubscribing the host. Set explicit values
-// to override these defaults.
+// to override these defaults. Docker images set HOMER_*_TUNING_* ENV
+// so the generic container does not stay on the 2GB floor.
 type DuckDBTuning struct {
 	// Threads sets the size of the DuckDB worker pool. 0 = auto
 	// (writer/node default to min(NumCPU/2, 4) to leave headroom
@@ -1046,14 +1047,14 @@ type OAuthProviderConfig struct {
 
 	// Authorization code flow (RFC 6749). When ClientID, AuthURL, TokenURL, RedirectURL, and ProfileURL
 	// are all non-empty, the coordinator runs the full flow (state + optional PKCE, server-side code exchange).
-	ClientID      string   `json:"client_id" mapstructure:"client_id"`
-	ClientSecret  string   `json:"client_secret" mapstructure:"client_secret"`
-	AuthURL       string   `json:"auth_url" mapstructure:"auth_url"`
-	TokenURL      string   `json:"token_url" mapstructure:"token_url"`
-	RedirectURL   string   `json:"redirect_url" mapstructure:"redirect_url"`
-	ProfileURL    string   `json:"profile_url" mapstructure:"profile_url"`
-	Scopes        []string `json:"scopes" mapstructure:"scopes"`
-	UsePKCE       bool     `json:"use_pkce" mapstructure:"use_pkce"`
+	ClientID     string   `json:"client_id" mapstructure:"client_id"`
+	ClientSecret string   `json:"client_secret" mapstructure:"client_secret"`
+	AuthURL      string   `json:"auth_url" mapstructure:"auth_url"`
+	TokenURL     string   `json:"token_url" mapstructure:"token_url"`
+	RedirectURL  string   `json:"redirect_url" mapstructure:"redirect_url"`
+	ProfileURL   string   `json:"profile_url" mapstructure:"profile_url"`
+	Scopes       []string `json:"scopes" mapstructure:"scopes"`
+	UsePKCE      bool     `json:"use_pkce" mapstructure:"use_pkce"`
 	// SkipAutoProvision when true: user must already exist in DuckDB (matched by username or email).
 	SkipAutoProvision bool     `json:"skip_auto_provision" mapstructure:"skip_auto_provision"`
 	AdminGroups       []string `json:"admin_groups" mapstructure:"admin_groups"`
