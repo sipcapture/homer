@@ -97,7 +97,8 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, username, dashbo
 
 	sqlCheck := fmt.Sprintf(
 		`SELECT username FROM dashboard_settings
-		 WHERE dashboard_id = '%s' LIMIT 1`,
+		 WHERE username = '%s' AND dashboard_id = '%s' LIMIT 1`,
+		escapeSQL(username),
 		escapeSQL(dashboardID),
 	)
 	row := s.db.QueryRowContext(ctx, sqlCheck)
@@ -105,8 +106,8 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, username, dashbo
 	if err := row.Scan(&owner); err != nil && err != sql.ErrNoRows {
 		return "", err
 	}
-	if owner.Valid && !strings.EqualFold(owner.String, username) {
-		return "", fmt.Errorf("dashboard is owned by another user")
+	if owner.Valid {
+		return "", fmt.Errorf("dashboard already exists")
 	}
 
 	guid := newGUID()
