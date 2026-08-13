@@ -36,8 +36,12 @@ per-connection DuckDB SET statements:
 
 ## Behaviour
 
-- Empty / zero values are no-ops — DuckDB keeps its built-in default.
-  Operators do not need to touch the section unless they want hard caps.
+- Empty / zero values apply Homer defaults (not DuckDB's 80%-of-RAM
+  built-in): `threads` = `min(NumCPU/2, 4)`, `memory_limit` = `2GB`,
+  `temp_directory` = `<catalog dir>/.duckdb_spill`. Set explicit values
+  to override. The Docker image sets `HOMER_STORAGE_DUCKLAKE_TUNING_*`
+  (and node spill/threads) so the generic container is not stuck on
+  the 2GB floor — see [OOM.md](OOM.md#docker-image-ghcriosipcapturehomer).
 - Tuning is applied **before** `LOAD ducklake` and the catalog ATTACH
   on every fresh connection, so the limits are in effect during
   startup too.

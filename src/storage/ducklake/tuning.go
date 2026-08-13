@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
@@ -243,4 +244,18 @@ func ApplyDuckDBMemorySafety(db *sql.DB, who string) {
 	} else {
 		logger.Info("DuckDB tuning: preserve_insertion_order disabled", "where", who)
 	}
+}
+
+// AutoThreads is the writer/node default when tuning.threads is 0:
+// min(NumCPU/2, 4), at least 1. Leaves headroom for Go ingest goroutines
+// and matches DuckDB's own advice to lower threads under memory pressure.
+func AutoThreads() int {
+	n := runtime.NumCPU() / 2
+	if n < 1 {
+		n = 1
+	}
+	if n > 4 {
+		n = 4
+	}
+	return n
 }

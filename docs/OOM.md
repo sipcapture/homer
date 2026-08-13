@@ -14,6 +14,41 @@ Typical failing query shape:
 - `ORDER BY timestamp DESC LIMIT ...`
 - Union of lake + in-memory buffers (`mem_hep_proto_*`)
 
+Ingest flush (SIPREC / wide SIP payloads) can hit the same cap:
+
+```
+flush mem_hep_proto_1_siprec_b → homer_lake.hep_proto_1_siprec failed
+FATAL Error: database has been invalidated
+Original error: Failed to create checkpoint ... failed to pin block
+(... GiB/... GiB used)
+```
+
+A FATAL pin/checkpoint error **invalidates the in-memory DuckDB**. The
+process keeps running but every later flush/search fails until restart.
+Raise `memory_limit` and restart; retrying the flush cannot recover it.
+
+## Docker image (`ghcr.io/sipcapture/homer`)
+
+The generic image (`Dockerfile`) sets writer DuckDB caps as `ENV`, so
+`docker run` and Compose pick them up without a `homer.json`. Override
+at runtime — do not rebuild:
+
+```bash
+docker run -e HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT=8GB ghcr.io/sipcapture/homer:latest
+```
+
+Image / Compose defaults:
+
+```bash
+HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT=4GB
+HOMER_STORAGE_DUCKLAKE_TUNING_THREADS=2
+HOMER_STORAGE_DUCKLAKE_TUNING_TEMP_DIRECTORY=/data/homer/.duckdb_spill
+```
+
+Give the Homer container **at least 8GB RAM**. Under SIPREC or high
+ingest, raise `MEMORY_LIMIT` toward 50% of that budget (and the
+container limit accordingly). See [examples/docker](../examples/docker/README.md).
+
 ## 1) Fast Runtime Fix (No Recompile)
 
 Edit your runtime config (for example `/usr/local/homer-core/etc/homer.json`) and set:

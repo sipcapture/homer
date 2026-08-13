@@ -116,6 +116,14 @@ services:
       HOMER_STORAGE_DUCKLAKE_LAKE_NAME: homer_lake
       HOMER_STORAGE_DUCKLAKE_BATCH_SIZE: "10000"
       HOMER_STORAGE_DUCKLAKE_FLUSH_INTERVAL_SEC: "30"
+      # Same DuckDB caps as the image ENV (Dockerfile). Override here without
+      # rebuilding. All-in-one needs ~8GB RAM; raise MEMORY_LIMIT toward 50%
+      # of the container budget under SIPREC / high ingest (docs/OOM.md).
+      HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT: "4GB"
+      HOMER_STORAGE_DUCKLAKE_TUNING_THREADS: "2"
+      HOMER_STORAGE_DUCKLAKE_TUNING_TEMP_DIRECTORY: /data/homer/.duckdb_spill
+      HOMER_NODE_DUCKLAKE_TUNING_THREADS: "2"
+      HOMER_NODE_DUCKLAKE_TUNING_TEMP_DIRECTORY: /data/homer/.duckdb_spill
 
       HOMER_STORAGE_DUCKLAKE_S3_ENDPOINT: http://rustfs:9000
       HOMER_STORAGE_DUCKLAKE_S3_ACCESS_KEY_ID: rustfsadmin

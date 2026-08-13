@@ -22,10 +22,29 @@ func TestIsFlushRetriableError(t *testing.T) {
 		{"InvalidAccessKeyId", false},
 		{"SignatureDoesNotMatch", false},
 		{"syntax error near unexpected", false},
+		{"FATAL Error: Failed: database has been invalidated because of a previous fatal error", false},
+		{"Failed to create checkpoint because of error: failed to pin block of size 256.0 KiB", false},
 	}
 	for _, tc := range cases {
 		if got := isFlushRetriableError(tc.msg); got != tc.want {
 			t.Errorf("isFlushRetriableError(%q) = %v, want %v", tc.msg, got, tc.want)
+		}
+	}
+}
+
+func TestIsDuckDBFatalError(t *testing.T) {
+	cases := []struct {
+		msg  string
+		want bool
+	}{
+		{"FATAL Error: Failed: database has been invalidated because of a previous fatal error", true},
+		{"Failed to create checkpoint because of error: failed to pin block of size 256.0 KiB (1.7 GiB/1.8 GiB used)", true},
+		{"HTTP Error: SlowDown", false},
+		{"database is locked", false},
+	}
+	for _, tc := range cases {
+		if got := isDuckDBFatalError(tc.msg); got != tc.want {
+			t.Errorf("isDuckDBFatalError(%q) = %v, want %v", tc.msg, got, tc.want)
 		}
 	}
 }
