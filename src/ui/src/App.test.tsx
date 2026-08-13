@@ -69,4 +69,27 @@ describe('App smoke/integration', () => {
       expect(screen.getByText('No dashboards available. Create one above or reset to defaults.')).toBeInTheDocument()
     })
   })
+
+  it('defaults to system theme and follows prefers-color-scheme when storage is empty', async () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: String(query).includes('prefers-color-scheme: dark') ? false : false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    )
+
+    renderApp()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Login')).toBeInTheDocument()
+    })
+    expect(document.documentElement.classList.contains('light')).toBe(true)
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+  })
 })
