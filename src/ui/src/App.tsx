@@ -584,7 +584,7 @@ function App() {
   }
 
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
       <LocaleProvider defaultLocale="auto" storageKey="vite-ui-locale">
       <div className="app">
         <main className="content">
