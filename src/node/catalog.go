@@ -541,6 +541,13 @@ func duckDBTypeToArrow(duckType string) arrow.DataType {
 		return arrow.PrimitiveTypes.Float32
 	case strings.HasPrefix(duckType, "BOOLEAN"), strings.HasPrefix(duckType, "BOOL"):
 		return arrow.FixedWidthTypes.Boolean
+	// More specific TIMESTAMP_* prefixes must be checked before TIMESTAMP.
+	case strings.HasPrefix(duckType, "TIMESTAMP_NS"):
+		return arrow.FixedWidthTypes.Timestamp_ns
+	case strings.HasPrefix(duckType, "TIMESTAMP_MS"):
+		return arrow.FixedWidthTypes.Timestamp_ms
+	case strings.HasPrefix(duckType, "TIMESTAMP_S"):
+		return arrow.FixedWidthTypes.Timestamp_s
 	case strings.HasPrefix(duckType, "TIMESTAMP"):
 		return arrow.FixedWidthTypes.Timestamp_us
 	case strings.HasPrefix(duckType, "DATE"):

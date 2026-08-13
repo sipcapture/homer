@@ -152,11 +152,11 @@ func appendFsqlValue(b array.Builder, dt arrow.DataType, val interface{}) {
 	case *array.TimestampBuilder:
 		switch v := val.(type) {
 		case time.Time:
-			bldr.Append(arrow.Timestamp(v.UnixNano()))
+			appendFsqlTimestamp(bldr, dt, v)
 		case string:
 			for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05", "2006-01-02T15:04:05"} {
 				if t, err := time.Parse(layout, v); err == nil {
-					bldr.Append(arrow.Timestamp(t.UnixNano()))
+					appendFsqlTimestamp(bldr, dt, t)
 					return
 				}
 			}
@@ -191,6 +191,25 @@ func appendFsqlValue(b array.Builder, dt arrow.DataType, val interface{}) {
 	default:
 		b.AppendNull()
 	}
+}
+
+// appendFsqlTimestamp writes t in the Arrow timestamp unit of the builder.
+// DuckDB TIMESTAMP is microseconds; Grafana FlightSQL (Influx) converts
+// timestamp[us] → ns with value*1000. Writing UnixNano() into timestamp[us]
+// overflows int64 and displays as ~1882 instead of the real capture time.
+func appendFsqlTimestamp(bldr *array.TimestampBuilder, dt arrow.DataType, t time.Time) {
+	unit := arrow.Microsecond
+	if tsType, ok := dt.(*arrow.TimestampType); ok {
+		unit = tsType.Unit
+	} else if tsType, ok := bldr.Type().(*arrow.TimestampType); ok {
+		unit = tsType.Unit
+	}
+	ts, err := arrow.TimestampFromTime(t.UTC(), unit)
+	if err != nil {
+		bldr.AppendNull()
+		return
+	}
+	bldr.Append(ts)
 }
 
 func toFsqlInt8(v interface{}) int8 {
