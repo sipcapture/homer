@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sipcapture/homer-core/src/config"
@@ -169,6 +170,88 @@ func TestResetDashboards_IsIdempotent(t *testing.T) {
 
 	if len(first) != len(second) {
 		t.Fatalf("dashboard count drifted: first=%d second=%d", len(first), len(second))
+	}
+}
+
+// TestResetDashboards_SeedsIndependentDefaultsPerUser is issue #936: default
+// IDs (home, smartsearch, …) are per-user, not globally unique. Seeding for
+// alice must not block bob's auto-seed or reset.
+func TestResetDashboards_SeedsIndependentDefaultsPerUser(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenSettingsDB(filepath.Join(dir, "settings.duckdb"))
+	if err != nil {
+		t.Fatalf("OpenSettingsDB: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := EnsureSettingsSchema(db); err != nil {
+		t.Fatalf("EnsureSettingsSchema: %v", err)
+	}
+
+	svc := NewDashboardService(db, config.DefaultWidgetControl())
+	ctx := context.Background()
+
+	if err := svc.ResetDashboards(ctx, "alice"); err != nil {
+		t.Fatalf("ResetDashboards alice: %v", err)
+	}
+	if err := svc.ResetDashboards(ctx, "bob"); err != nil {
+		t.Fatalf("ResetDashboards bob: %v", err)
+	}
+
+	for _, user := range []string{"alice", "bob"} {
+		settings, err := svc.ListDashboards(ctx, user)
+		if err != nil {
+			t.Fatalf("ListDashboards %s: %v", user, err)
+		}
+		byParam := make(map[string]string, len(settings))
+		for _, s := range settings {
+			byParam[s.Param] = s.UserName
+		}
+		for _, id := range []string{"home", "smartsearch", "games", "netgames"} {
+			owner, ok := byParam[id]
+			if !ok {
+				t.Fatalf("%s missing default dashboard %q; got %v", user, id, keys(byParam))
+			}
+			if !strings.EqualFold(owner, user) {
+				t.Errorf("%s listed %q owned by %q", user, id, owner)
+			}
+		}
+
+		got, err := svc.GetDashboard(ctx, user, "home")
+		if err != nil {
+			t.Fatalf("GetDashboard %s/home: %v", user, err)
+		}
+		if got == nil {
+			t.Fatalf("GetDashboard %s/home: nil", user)
+		}
+		if !strings.EqualFold(got.UserName, user) {
+			t.Errorf("GetDashboard %s/home owner=%q", user, got.UserName)
+		}
+	}
+}
+
+func TestCreateDashboard_AllowsSameIDForDifferentUsers(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenSettingsDB(filepath.Join(dir, "settings.duckdb"))
+	if err != nil {
+		t.Fatalf("OpenSettingsDB: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := EnsureSettingsSchema(db); err != nil {
+		t.Fatalf("EnsureSettingsSchema: %v", err)
+	}
+
+	svc := NewDashboardService(db, config.DefaultWidgetControl())
+	ctx := context.Background()
+	payload := json.RawMessage(`{"name":"Custom","param":"custom","shared":false}`)
+
+	if _, err := svc.CreateDashboard(ctx, "alice", "custom", payload); err != nil {
+		t.Fatalf("CreateDashboard alice: %v", err)
+	}
+	if _, err := svc.CreateDashboard(ctx, "bob", "custom", payload); err != nil {
+		t.Fatalf("CreateDashboard bob: %v", err)
+	}
+	if _, err := svc.CreateDashboard(ctx, "alice", "custom", payload); err == nil {
+		t.Fatal("expected error creating duplicate dashboard for same user")
 	}
 }
 
