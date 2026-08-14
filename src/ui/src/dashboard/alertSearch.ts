@@ -89,7 +89,16 @@ function specFromHomerUrl(raw: string): SearchDeepLinkSpec | null {
   if (!t) return null
   const absolute = /^https?:\/\//i.test(t)
   if (absolute && !isSafeHttpUrl(t)) return null
-  if (!absolute && t.startsWith('javascript:')) return null
+  if (!absolute) {
+    const lower = t.toLowerCase()
+    if (
+      lower.startsWith('javascript:') ||
+      lower.startsWith('data:') ||
+      lower.startsWith('vbscript:')
+    ) {
+      return null
+    }
+  }
   try {
     const u = absolute ? new URL(t) : new URL(t, 'http://homer.invalid')
     const params = new URLSearchParams(u.search)
