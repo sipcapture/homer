@@ -5,6 +5,7 @@ Homer 11 can open the dashboard with **prefilled search filters** and run a quer
 Related docs:
 
 - [Search CLI](SEARCH.md) — terminal search and `--proto` names
+- [Dashboard alerts](ALERTS.md) — `POST /api/v4/alerts` and Open in search
 - [Mapping examples](../examples/mappings/README.md) — `fields_mapping` JSON per protocol
 - [Search mappings and field types](SEARCH_MAPPINGS_AND_FIELDS.md) — form fields, virtual filters, `form_type` reference
 - [UI and API tokens](UI_COORDINATOR_AUTH_AND_TOKENS.md) — `Auth-Token` for server-side integrations

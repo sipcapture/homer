@@ -3966,7 +3966,7 @@ components:
         message:
           type: string
         payload:
-          description: Optional JSON payload
+          description: Optional JSON. UI drill-down reads payload.search (call_id, src_ip, from/to, …), payload.query (retained SQL), and payload.homer_url (dashboard deep link). See docs/ALERTS.md.
         created_at:
           type: string
           format: date-time
@@ -3992,7 +3992,7 @@ components:
         message:
           type: string
         payload: {}
-      description: At least one of title or message should be non-empty.
+      description: At least one of title or message should be non-empty. Optional payload.search / payload.homer_url retain the firing query for UI drill-down (docs/ALERTS.md).
     DashboardAlertCreateResponse:
       type: object
       properties:

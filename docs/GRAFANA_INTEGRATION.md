@@ -156,3 +156,4 @@ Adjust **`homer_lake`**, table name, and columns to match your deployment (`DESC
 - [Apache Arrow FlightSQL](https://arrow.apache.org/docs/format/FlightSql.html)
 - [FLIGHTSQL.md](FLIGHTSQL.md) — ports and protocol split in homer-core
 - [NODE.md](NODE.md) — `flight_server` vs `flightsql_server` configuration
+- [ALERTS.md](ALERTS.md) — Grafana webhook → `POST /api/v4/alerts` and Homer search drill-down
