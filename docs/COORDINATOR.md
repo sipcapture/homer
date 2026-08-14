@@ -413,9 +413,11 @@ Create body (required: `alias`, `ip`):
 
 Aliases are stored in the Coordinator settings DuckDB (`alias` table), not in
 DuckLake. There is no startup file/env seed yet — for GitOps (Flux/k8s), apply
-aliases with an admin JWT via `POST /api/v4/aliases` (for example from a Job
-that curls the API). Homer 7 Postgres aliases can be imported with
-`homer-core migrate settings`.
+aliases with an **admin JWT** or an **admin Auth-Token** via `POST /api/v4/aliases`
+(for example from a Job that curls the API). When password login is disabled
+(`coordinator.auth.disable_password_login`), use Auth-Token — see
+[UI_COORDINATOR_AUTH_AND_TOKENS.md — OAuth-only CLI](./UI_COORDINATOR_AUTH_AND_TOKENS.md#oauth-only-cli--scripts-without-password-login).
+Homer 7 Postgres aliases can be imported with `homer-core migrate settings`.
 
 ### Statistics
 

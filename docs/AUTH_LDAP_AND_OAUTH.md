@@ -343,6 +343,8 @@ Configure a fixed **`callback_url`** (e.g. `https://homer.example.org/`) in prod
 
 Set **`coordinator.auth.disable_password_login`** to **`true`** to hide internal and LDAP password methods from **`GET /auth/providers`** and reject **`POST /auth/sessions`** with **403**. The bundled UI then shows only OAuth controls.
 
+Scripts and CLI cannot use username/password in this mode. For IP alias CRUD and other admin APIs, create an **admin Auth-Token** (Settings → Auth tokens) and send **`Auth-Token: <secret>`** — see [UI_COORDINATOR_AUTH_AND_TOKENS.md — OAuth-only CLI](./UI_COORDINATOR_AUTH_AND_TOKENS.md#oauth-only-cli--scripts-without-password-login).
+
 Typical Azure / Entra ID setup:
 
 ```json

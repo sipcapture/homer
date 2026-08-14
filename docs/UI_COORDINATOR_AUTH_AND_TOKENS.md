@@ -112,6 +112,41 @@ When a valid row is found, the request is treated as authenticated with a **synt
 
 Tokens support optional **expiry**, **call limits**, and **active** flag; the server increments usage on successful lookups.
 
+### OAuth-only: CLI / scripts without password login
+
+`coordinator.auth.disable_password_login: true` hides the username/password form **and** rejects `POST /api/v4/auth/sessions` with **403**. Username/password API login (including `homer search --user/--pass`) does not work in that mode.
+
+Use an **admin Auth-Token** for automation instead. Alias CRUD (`POST`/`PUT`/`DELETE /api/v4/aliases`) requires admin: create the token while signed in as an admin user so `user_object.user_group` is `admin`.
+
+1. Set `coordinator.api_settings.enable_token_access` to `true` and restart.
+2. Sign in once via OAuth as an admin (Settings → Auth tokens).
+3. Call the API with **`Auth-Token: <secret>`** (not `Authorization: Bearer`):
+
+```bash
+# list
+curl -sS -H "Auth-Token: <secret>" http://127.0.0.1:8080/api/v4/aliases
+
+# create
+curl -sS -H "Auth-Token: <secret>" -H "Content-Type: application/json" \
+  -X POST http://127.0.0.1:8080/api/v4/aliases \
+  -d '{"alias":"sbc-1","ip":"10.0.0.1","port":0,"mask":32,"status":true}'
+
+# update (guid from the list/create response)
+curl -sS -H "Auth-Token: <secret>" -H "Content-Type: application/json" \
+  -X PUT http://127.0.0.1:8080/api/v4/aliases/<guid> \
+  -d '{"alias":"sbc-1","ip":"10.0.0.1","port":0,"mask":32,"status":true}'
+
+# delete
+curl -sS -H "Auth-Token: <secret>" \
+  -X DELETE http://127.0.0.1:8080/api/v4/aliases/<guid>
+```
+
+The same token works with `homer search --token <secret>`. There is no dedicated `homer alias` subcommand.
+
+If the UI is unreachable even via OAuth, temporarily set `disable_password_login` to `false`, create the token, then turn OAuth-only back on. Direct writes into the settings DuckDB `alias` table are possible but not recommended while Homer is running (file lock + in-memory alias cache).
+
+Alias endpoints are listed in [COORDINATOR.md](./COORDINATOR.md#settings--configuration). OAuth-only config: [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#oauth-only-login-hide-usernamepassword).
+
 ---
 
 ## Summary table
@@ -122,6 +157,7 @@ Tokens support optional **expiry**, **call limits**, and **active** flag; the se
 | LDAP users | Configure LDAP; `POST /auth/sessions` with `"type":"ldap"`. |
 | OAuth2 users | Configure single `oauth2_provider`; redirect + **`POST /auth/oauth2/token`**. |
 | Scripts / integrations without JWT | Enable `api_settings.enable_token_access`; send **`Auth-Token`**. |
+| OAuth-only + alias CLI | Admin Auth-Token + `POST`/`PUT`/`DELETE /api/v4/aliases` ([details](#oauth-only-cli--scripts-without-password-login)). |
 | Revoke JWT session (UI logout) | `DELETE /api/v4/auth/sessions/current`. |
 | Revoke specific session | `DELETE /api/v4/auth/sessions/{jti}`. |
 
