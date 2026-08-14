@@ -17,6 +17,7 @@ const ACCESS = {
     'auth-tokens': { view: true, add: true, edit: true, delete: true },
     'agent-subs': { view: true, delete: true },
     dashboards: { view: true, add: true, edit: true, delete: true },
+    alerts: { view: true, delete: true },
     scripts: { view: true, add: true, edit: true, delete: true },
     system: { view: true },
     reset: { view: true, serverReset: true },
@@ -34,11 +35,13 @@ const ACCESS = {
     // by JWT username), so a common user managing their own saved
     // layouts is safe and never sees other users' dashboards.
     dashboards: { view: true, add: true, edit: true, delete: true },
+    alerts: { view: true },
     advanced: { view: true },
     reset: { view: true },
   },
   [ROLE.EXTERNAL]: {
     profile: { view: true, edit: true },
+    alerts: { view: true },
     advanced: { view: true },
     reset: { view: true },
   },

@@ -7,6 +7,7 @@ describe('SettingsSidebar RBAC', () => {
   it('shows full admin menu', () => {
     render(<SettingsSidebar activeSection="about" onSelect={() => {}} role={ROLE.ADMIN} />)
     expect(screen.getByText('Users')).toBeInTheDocument()
+    expect(screen.getByText('Alerts')).toBeInTheDocument()
     expect(screen.getByText('API Documentation')).toBeInTheDocument()
     expect(screen.getByText('Scripts')).toBeInTheDocument()
   })
@@ -15,6 +16,7 @@ describe('SettingsSidebar RBAC', () => {
     render(<SettingsSidebar activeSection="about" onSelect={() => {}} role={ROLE.COMMON} />)
     expect(screen.queryByText('API Documentation')).not.toBeInTheDocument()
     expect(screen.queryByText('Scripts')).not.toBeInTheDocument()
+    expect(screen.getByText('Alerts')).toBeInTheDocument()
     expect(screen.getByText('Reset')).toBeInTheDocument()
   })
 

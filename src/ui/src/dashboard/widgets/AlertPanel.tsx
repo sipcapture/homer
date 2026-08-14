@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Settings2, Trash2 } from 'lucide-react'
+import { Search, Settings2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useDashboard } from '../context/DashboardContext'
+import {
+  alertCanOpenSearch,
+  alertSearchSummary,
+  navigateToAlertHomerUrl,
+  navigateToDashboardSearch,
+  parseAlertPayload,
+} from '../alertSearch'
+import { useApplyDeepLinkSearch } from '../useApplyDeepLinkSearch'
 
 const DEFAULT_SQL =
   'SELECT method, count(*) as cnt FROM homer_lake.main.hep_proto_1_call GROUP BY method ORDER BY cnt DESC LIMIT 10'
@@ -35,6 +43,7 @@ interface AlertPanelProps {
 
 export default function AlertPanel({ config, onConfigChange }: AlertPanelProps) {
   const { apiBase, authHeader } = useDashboard()
+  const applySearch = useApplyDeepLinkSearch()
   const [alerts, setAlerts] = useState<Record<string, unknown>[] | DashboardAlertRow[]>([])
   const [loading, setLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -114,6 +123,19 @@ export default function AlertPanel({ config, onConfigChange }: AlertPanelProps) 
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
   }
 
+  const openAlertSearch = (row: DashboardAlertRow) => {
+    const ctx = parseAlertPayload(row.payload)
+    if (ctx.spec) {
+      if (!applySearch(ctx.spec)) {
+        navigateToDashboardSearch(ctx.spec)
+      }
+      return
+    }
+    if (ctx.homerUrl) {
+      navigateToAlertHomerUrl(ctx.homerUrl)
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-1 overflow-hidden p-2">
       <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-border/50 pb-1">
@@ -157,10 +179,15 @@ export default function AlertPanel({ config, onConfigChange }: AlertPanelProps) 
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="sql">SQL (lake)</SelectItem>
-                  <SelectItem value="db">Dashboard DB</SelectItem>
+                  <SelectItem value="db">Alert store (POST /alerts)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {source === 'db' ? (
+              <p className="max-w-xs text-[10px] leading-snug text-muted-foreground">
+                Click a row with stored filters to open dashboard search.
+              </p>
+            ) : null}
             <div className="grid gap-1">
               <Label htmlFor="alert-interval" className="text-muted-foreground">
                 Interval (sec)
@@ -209,10 +236,26 @@ export default function AlertPanel({ config, onConfigChange }: AlertPanelProps) 
           </div>
         )}
         {source === 'db'
-          ? (alerts as DashboardAlertRow[]).map((a) => (
+          ? (alerts as DashboardAlertRow[]).map((a) => {
+              const ctx = parseAlertPayload(a.payload)
+              const canOpen = alertCanOpenSearch(ctx)
+              const summary = alertSearchSummary(ctx)
+              return (
               <div
                 key={a.id}
-                className="space-y-0.5 border border-border bg-card/60 px-2 py-1.5 text-[11px]"
+                className={`space-y-0.5 border border-border bg-card/60 px-2 py-1.5 text-[11px] ${canOpen ? 'cursor-pointer hover:bg-accent/40' : ''}`}
+                role={canOpen ? 'button' : undefined}
+                tabIndex={canOpen ? 0 : undefined}
+                onClick={() => {
+                  if (canOpen) openAlertSearch(a)
+                }}
+                onKeyDown={(e) => {
+                  if (!canOpen) return
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    openAlertSearch(a)
+                  }
+                }}
               >
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   {a.severity ? (
@@ -220,15 +263,23 @@ export default function AlertPanel({ config, onConfigChange }: AlertPanelProps) 
                   ) : null}
                   {a.title ? <span className="font-medium text-foreground">{a.title}</span> : null}
                   <span className="text-muted-foreground">{formatTime(a.created_at)}</span>
+                  {canOpen ? (
+                    <Search className="ml-auto size-3 shrink-0 text-muted-foreground" aria-hidden />
+                  ) : null}
                 </div>
                 {a.message ? <div className="text-foreground/90">{a.message}</div> : null}
-                {a.payload != null && a.payload !== '' ? (
+                {summary ? (
+                  <div className="truncate font-mono text-[10px] text-muted-foreground" title={summary}>
+                    {summary}
+                  </div>
+                ) : a.payload != null && a.payload !== '' ? (
                   <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">
                     {typeof a.payload === 'string' ? a.payload : JSON.stringify(a.payload)}
                   </pre>
                 ) : null}
               </div>
-            ))
+              )
+            })
           : (alerts as Record<string, unknown>[]).map((a, i) => (
               <div
                 key={i}

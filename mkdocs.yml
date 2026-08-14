@@ -74,6 +74,7 @@ nav:
       - Environment variables: ENVIRONMENT_VARIABLES.md
       - Search CLI: SEARCH.md
       - Dashboard URL search: SEARCH_URL.md
+      - Dashboard alerts: ALERTS.md
       - Search mappings & fields: SEARCH_MAPPINGS_AND_FIELDS.md
       - Certificates: CERTIFICATES_README.md
   - Architecture:

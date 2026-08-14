@@ -17,6 +17,7 @@ import UserSettingsPanel from './settings/UserSettingsPanel'
 import ScriptsPanel from './settings/ScriptsPanel'
 import ResetPanel from './settings/ResetPanel'
 import ApiDocsPanel from './settings/ApiDocsPanel'
+import AlertsPanel from './settings/AlertsPanel'
 import {
   detectRole,
   getSectionPerms,
@@ -570,6 +571,8 @@ function App() {
         return <AgentSubsPanel readOnly={readOnly} />
       case 'dashboards':
         return <DashboardsPanel readOnly={readOnly} />
+      case 'alerts':
+        return <AlertsPanel />
       case 'system':
         return <SystemPanel />
       case 'scripts':

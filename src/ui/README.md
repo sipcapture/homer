@@ -47,7 +47,7 @@ files are served directly by `homer-core`.
 ## Implemented feature coverage
 
 - Dashboard widgets: search, proto search, smart input, results, charts, iframe/grafana, alert, pcap uploader, code editor, clock, note.
-- Settings pages: profile, about, users, user settings, aliases (IP aliases / CIDR), advanced, mappings, hepsubs, auth tokens, agent subscriptions, dashboards, scripts, import, statistics, loki, grafana, system, reset, API docs.
+- Settings pages: profile, about, users, user settings, aliases (IP aliases / CIDR), advanced, mappings, hepsubs, auth tokens, agent subscriptions, dashboards, alerts, scripts, import, statistics, loki, grafana, system, reset, API docs.
 - Transaction details tabs: messages, flow, qos, logs, call info, events, hepsub.
 - Role-based settings navigation/action visibility: `admin`, `commonUser`, `external`.
 

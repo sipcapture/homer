@@ -11,4 +11,10 @@ describe('permissions reset', () => {
   it('keeps reset page visible for common users', () => {
     expect(canViewSection(ROLE.COMMON, 'reset')).toBe(true)
   })
+
+  it('shows alerts for all roles', () => {
+    expect(canViewSection(ROLE.ADMIN, 'alerts')).toBe(true)
+    expect(canViewSection(ROLE.COMMON, 'alerts')).toBe(true)
+    expect(canViewSection(ROLE.EXTERNAL, 'alerts')).toBe(true)
+  })
 })
