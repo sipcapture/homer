@@ -28,8 +28,8 @@ func TestRetentionDaysForTable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := svc.retentionDaysForTable(tt.table); got != tt.want {
-				t.Fatalf("retentionDaysForTable(%q)=%d, want %d", tt.table, got, tt.want)
+			if got := svc.retentionValueForTable(tt.table); got != tt.want {
+				t.Fatalf("retentionValueForTable(%q)=%d, want %d", tt.table, got, tt.want)
 			}
 		})
 	}
