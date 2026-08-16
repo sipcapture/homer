@@ -13,10 +13,8 @@ func TestEffectiveMaxCompactedFiles(t *testing.T) {
 	}{
 		{"zero uses default", CompactionConfig{}, defaultDuckDBMaxCompactedFiles},
 		{"explicit small kept", CompactionConfig{MaxCompactedFiles: 4}, 4},
-		{"example 100 clamped on duckdb", CompactionConfig{MaxCompactedFiles: 100}, duckdbMaxCompactedFilesCap},
-		{"engine duckdb still clamped", CompactionConfig{Engine: EngineDuckDB, MaxCompactedFiles: 100}, duckdbMaxCompactedFilesCap},
-		{"native not clamped", CompactionConfig{Engine: EngineNativeGo, MaxCompactedFiles: 100}, 100},
-		{"native zero uses default", CompactionConfig{Engine: EngineNativeGo}, defaultDuckDBMaxCompactedFiles},
+		{"explicit 100 kept", CompactionConfig{MaxCompactedFiles: 100}, 100},
+		{"engine duckdb explicit kept", CompactionConfig{Engine: EngineDuckDB, MaxCompactedFiles: 100}, 100},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -42,11 +40,11 @@ func TestEffectiveMaxFileSizeBytes(t *testing.T) {
 func TestBuildMergeSQLAlwaysBoundsBatch(t *testing.T) {
 	svc := &CompactionService{
 		lakeName: "homer_lake",
-		config:   CompactionConfig{MaxCompactedFiles: 100},
+		config:   CompactionConfig{},
 	}
 	sql := svc.buildMergeSQL("hep_proto_1_call")
-	if !strings.Contains(sql, "max_compacted_files => 16") {
-		t.Fatalf("expected clamped max_compacted_files in %q", sql)
+	if !strings.Contains(sql, "max_compacted_files => 32") {
+		t.Fatalf("expected default max_compacted_files in %q", sql)
 	}
 	if !strings.Contains(sql, "max_file_size => 67108864") {
 		t.Fatalf("expected default max_file_size in %q", sql)
@@ -63,8 +61,8 @@ func TestBuildMergeSQLRespectsMinFileSize(t *testing.T) {
 	svc := &CompactionService{
 		lakeName: "homer_lake",
 		config: CompactionConfig{
-			MinFileSizeBytes: 1024,
-			MaxFileSizeBytes: 10 << 20,
+			MinFileSizeBytes:  1024,
+			MaxFileSizeBytes:  10 << 20,
 			MaxCompactedFiles: 2,
 		},
 	}

@@ -122,9 +122,9 @@ type CompactionConfig struct {
 	MinFileSizeBytes int64 `json:"min_file_size_bytes"`
 	// MaxFileSizeBytes: maximum size of merged file. 0 = no limit (DuckLake default).
 	MaxFileSizeBytes int64 `json:"max_file_size_bytes"`
-	// MaxCompactedFiles: maximum number of compaction groups per table per cycle.
-	// 0 = writer default (8). DuckLake may apply this per date-partition on
-	// older extensions, so keep it small on sorted SIP tables.
+	// MaxCompactedFiles: maximum number of compaction operations (output files)
+	// per table per cycle. 0 = writer default (32). This is not an input-file
+	// cap; peak memory is bounded by MaxFileSizeBytes and merge threads=1.
 	MaxCompactedFiles int `json:"max_compacted_files"`
 	// Engine selects the compaction backend: "duckdb" (default) or "native".
 	Engine string `json:"engine"`
@@ -138,13 +138,18 @@ const (
 	EngineNativeGo = "native"
 )
 
-// Defaults for the DuckDB merge path. The previous writer default of 100
-// compaction groups was enough to OOM hep_proto_1_call (wide payload +
-// SORTED BY timestamp) and get the process SIGKILL'd with no error log
-// (sipcapture/homer#945). Leftovers are picked up by the next cycle.
+// Defaults for the DuckDB merge path (sipcapture/homer#945).
+//
+// max_compacted_files is the number of compaction *operations* (output
+// files) per CALL, not the number of input files. Each operation may
+// rewrite many parquet files up to max_file_size. Memory is therefore
+// bounded by max_file_size + threads=1 (one group at a time), not by
+// this count. 32 is a drain-vs-lock compromise: 8 falls behind a 30s
+// flush (~120 files/h) on busy call tables; 100 held the catalog lock
+// long enough for ingest buffers to blow RSS. Leftovers go to the next
+// cycle. Operators may raise this; we do not clamp an explicit value.
 const (
-	defaultDuckDBMaxCompactedFiles = 8
-	duckdbMaxCompactedFilesCap     = 16
+	defaultDuckDBMaxCompactedFiles = 32
 	defaultDuckDBMaxFileSizeBytes  = 64 << 20 // 64 MiB
 )
 
@@ -591,12 +596,6 @@ func (c *CompactionService) runMerge(tables []string) error {
 
 	maxFiles := c.effectiveMaxCompactedFiles()
 	maxSize := c.effectiveMaxFileSizeBytes()
-	if c.config.MaxCompactedFiles > duckdbMaxCompactedFilesCap {
-		logger.Warn("CompactionService: clamping max_compacted_files for duckdb merge",
-			"configured", c.config.MaxCompactedFiles,
-			"using", maxFiles,
-			"reason", "large batches OOM sorted SIP tables (homer#945)")
-	}
 
 	// 1. Merge adjacent small files FIRST — lock per table.
 	// The CALL runs on a dedicated pool connection with threads=1 so
@@ -885,17 +884,10 @@ func (c *CompactionService) GetStats() map[string]interface{} {
 }
 
 func (c *CompactionService) effectiveMaxCompactedFiles() int {
-	n := c.config.MaxCompactedFiles
-	if n <= 0 {
-		n = defaultDuckDBMaxCompactedFiles
+	if c.config.MaxCompactedFiles > 0 {
+		return c.config.MaxCompactedFiles
 	}
-	if strings.EqualFold(strings.TrimSpace(c.config.Engine), EngineNativeGo) {
-		return n
-	}
-	if n > duckdbMaxCompactedFilesCap {
-		return duckdbMaxCompactedFilesCap
-	}
-	return n
+	return defaultDuckDBMaxCompactedFiles
 }
 
 func (c *CompactionService) effectiveMaxFileSizeBytes() int64 {

@@ -354,15 +354,9 @@ func (w *Writer) Start() error {
 		}
 		if compactionCfg.MaxCompactedFiles <= 0 {
 			// Unbounded merge rewrites every small parquet of a table in one
-			// CALL; on a memory-capped writer that working set alone can hit
-			// memory_limit and abort with Out of Memory while search/flush
-			// run on the same instance. Capping keeps each cycle's peak
-			// bounded — leftovers are picked up by the next cycle.
-			// 8 (not 100): hep_proto_1_call is PARTITIONED BY date and
-			// SORTED BY timestamp, so each compaction group is fully
-			// decompressed and re-sorted. 100 wide SIP files exceeds a
-			// typical 2–4GB memory_limit and the process is then SIGKILL'd
-			// with no DuckDB error (sipcapture/homer#945).
+			// CALL. 32 operations/cycle is a drain-vs-lock compromise
+			// (sipcapture/homer#945); peak memory is bounded by
+			// MaxFileSizeBytes and merge threads=1, not by this count.
 			compactionCfg.MaxCompactedFiles = defaultDuckDBMaxCompactedFiles
 		}
 		if compactionCfg.MaxFileSizeBytes <= 0 {

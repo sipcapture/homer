@@ -283,13 +283,16 @@ Mitigations already in the writer (stay on the DuckDB engine — do **not**
 switch to `engine: "native"` to work around this; earlier native builds
 wrote snapshot ids out-of-band and corrupted live catalogs):
 
-- DuckDB merge is capped at 8 compaction groups per table (16 max even if
-  config says 100) and `max_file_size` defaults to 64MB.
-- Each merge runs on a dedicated connection with `threads=1` so date
-  partitions are not rewritten in parallel.
+- DuckDB merge defaults to 32 operations per table per cycle and
+  `max_file_size` 64MB. `max_compacted_files` counts output files, not
+  inputs; peak memory is the size of one group (`max_file_size`) because
+  merge runs on a dedicated connection with `threads=1`.
+- Explicit `max_compacted_files` is not clamped. Lower it if RSS still
+  climbs; raise it if file count grows between cycles.
 - Leftover files are picked up by the next cycle.
-- If it still OOMs, lower `max_compacted_files` further or temporarily set
-  `compaction.enable: false` (see section 4). Do not flip the engine.
+- If it still OOMs, lower `max_file_size_bytes` / `max_compacted_files` or
+  temporarily set `compaction.enable: false` (see section 4). Do not flip
+  the engine.
 
 The `native` engine avoids the DuckDB merge entirely. It does **not** use
 DuckDB for compaction. It remains **opt-in only** and is not the

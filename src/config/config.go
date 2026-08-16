@@ -779,11 +779,9 @@ type CompactionConfig struct {
 	MinFileSizeBytes int64 `json:"min_file_size_bytes" mapstructure:"min_file_size_bytes" default:"0"`
 	// MaxFileSizeBytes: maximum size of merged file. 0 = no limit (DuckLake default).
 	MaxFileSizeBytes int64 `json:"max_file_size_bytes" mapstructure:"max_file_size_bytes" default:"0"`
-	// MaxCompactedFiles: maximum number of compaction groups per table per cycle.
-	// 0 = writer default (8). Bounding the merge batch keeps the compaction
-	// working set within memory_limit on memory-capped writers. Values above
-	// 16 are clamped on the DuckDB engine — 100 wide SIP files is enough to
-	// OOM hep_proto_1_call (sipcapture/homer#945).
+	// MaxCompactedFiles: maximum number of compaction operations (output files)
+	// per table per cycle. 0 = writer default (32). This is not an input-file
+	// cap; peak memory is bounded by max_file_size_bytes and merge threads=1.
 	MaxCompactedFiles int `json:"max_compacted_files" mapstructure:"max_compacted_files" default:"0"`
 	// Engine selects the compaction implementation:
 	//   "duckdb" — DuckLake's ducklake_merge_adjacent_files (default). Loads a
