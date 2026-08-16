@@ -78,7 +78,7 @@
         "min_age_sec": 3600,
         "min_file_size_bytes": 0,
         "max_file_size_bytes": 134217728,
-        "max_compacted_files": 100
+        "max_compacted_files": 32
       },
       "storage_policy": {
         "enable": false,

@@ -354,11 +354,16 @@ func (w *Writer) Start() error {
 		}
 		if compactionCfg.MaxCompactedFiles <= 0 {
 			// Unbounded merge rewrites every small parquet of a table in one
-			// CALL; on a memory-capped writer that working set alone can hit
-			// memory_limit and abort with Out of Memory while search/flush
-			// run on the same instance. Capping keeps each cycle's peak
-			// bounded — leftovers are picked up by the next cycle.
-			compactionCfg.MaxCompactedFiles = 100
+			// CALL. 32 operations/cycle is a drain-vs-lock compromise
+			// (sipcapture/homer#945); peak memory is bounded by
+			// MaxFileSizeBytes and merge threads=1, not by this count.
+			compactionCfg.MaxCompactedFiles = defaultDuckDBMaxCompactedFiles
+		}
+		if compactionCfg.MaxFileSizeBytes <= 0 {
+			// Without max_file_size DuckLake defaults to target_file_size
+			// and will try to rewrite already-large files. Bound inputs so
+			// a merge group stays within memory_limit.
+			compactionCfg.MaxFileSizeBytes = defaultDuckDBMaxFileSizeBytes
 		}
 		var compactionS3 *CompactionS3Client
 		if ducklake.IsRemoteLakeDataPath(w.storageConfig.DuckLake.DataPath) {

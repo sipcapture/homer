@@ -274,12 +274,29 @@ tables bypass it. Log: `V4TransactionsSearch: hydrating payload by uuid`.
 The default DuckDB merge (`ducklake_merge_adjacent_files`) loads a whole
 partition into memory to sort/rewrite it. On wide SIP data (large `payload`
 columns) this can exceed `memory_limit` and OOM even for a handful of ~77MB
-files, because the parquet write buffers are not spillable. Use the batching
-knobs (`max_compacted_files`, `max_file_size_bytes`, lower `memory_limit`
-headroom) from the sections above to keep it within budget.
+files, because the parquet write buffers are not spillable. Homer then often
+dies **silently** (Linux OOM killer / DuckDB abort) during
+`hep_proto_1_call` merge — no `Out of Memory` line, UI returns 5xx, ingest
+`adapter_us` spikes because the catalog lock is held for the whole CALL.
+
+Mitigations already in the writer (stay on the DuckDB engine — do **not**
+switch to `engine: "native"` to work around this; earlier native builds
+wrote snapshot ids out-of-band and corrupted live catalogs):
+
+- DuckDB merge defaults to 32 operations per table per cycle and
+  `max_file_size` 64MB. `max_compacted_files` counts output files, not
+  inputs; peak memory is the size of one group (`max_file_size`) because
+  merge runs on a dedicated connection with `threads=1`.
+- Explicit `max_compacted_files` is not clamped. Lower it if RSS still
+  climbs; raise it if file count grows between cycles.
+- Leftover files are picked up by the next cycle.
+- If it still OOMs, lower `max_file_size_bytes` / `max_compacted_files` or
+  temporarily set `compaction.enable: false` (see section 4). Do not flip
+  the engine.
 
 The `native` engine avoids the DuckDB merge entirely. It does **not** use
-DuckDB for compaction. Instead it:
+DuckDB for compaction. It remains **opt-in only** and is not the
+recommended workaround for compaction OOM. Instead it:
 
 - groups a partition's parquet files into batches up to `target_file_size_bytes`
   (default 512MB), based on their on-disk sizes;
@@ -295,9 +312,11 @@ DuckDB for compaction. Instead it:
 
 ### Configuration
 
-The default is `duckdb`. The native engine is **opt-in** and safe to enable on a
-live writer (see the note above); it is the recommended choice when the DuckDB
-merge OOMs on wide SIP data:
+The default is `duckdb`. The native engine is **opt-in only**. Do not enable
+it as an OOM workaround on a live writer: earlier builds corrupted catalogs
+(`Corrupt DuckLake - multiple snapshots returned from database`). Prefer the
+DuckDB batching knobs above. If you still experiment with native, use a
+catalog backup first:
 
 ```json
 {
