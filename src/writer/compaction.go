@@ -122,7 +122,9 @@ type CompactionConfig struct {
 	MinFileSizeBytes int64 `json:"min_file_size_bytes"`
 	// MaxFileSizeBytes: maximum size of merged file. 0 = no limit (DuckLake default).
 	MaxFileSizeBytes int64 `json:"max_file_size_bytes"`
-	// MaxCompactedFiles: maximum number of files to merge per table per cycle. 0 = no limit.
+	// MaxCompactedFiles: maximum number of compaction groups per table per cycle.
+	// 0 = writer default (8). DuckLake may apply this per date-partition on
+	// older extensions, so keep it small on sorted SIP tables.
 	MaxCompactedFiles int `json:"max_compacted_files"`
 	// Engine selects the compaction backend: "duckdb" (default) or "native".
 	Engine string `json:"engine"`
@@ -134,6 +136,16 @@ type CompactionConfig struct {
 const (
 	EngineDuckDB   = "duckdb"
 	EngineNativeGo = "native"
+)
+
+// Defaults for the DuckDB merge path. The previous writer default of 100
+// compaction groups was enough to OOM hep_proto_1_call (wide payload +
+// SORTED BY timestamp) and get the process SIGKILL'd with no error log
+// (sipcapture/homer#945). Leftovers are picked up by the next cycle.
+const (
+	defaultDuckDBMaxCompactedFiles = 8
+	duckdbMaxCompactedFilesCap     = 16
+	defaultDuckDBMaxFileSizeBytes  = 64 << 20 // 64 MiB
 )
 
 // CatalogLocker provides Lock/Unlock for serializing catalog-modifying operations.
@@ -577,7 +589,19 @@ func (c *CompactionService) runMerge(tables []string) error {
 			"has_catalog_path", strings.TrimSpace(c.catalogPath) != "")
 	}
 
-	// 1. Merge adjacent small files FIRST — lock per table
+	maxFiles := c.effectiveMaxCompactedFiles()
+	maxSize := c.effectiveMaxFileSizeBytes()
+	if c.config.MaxCompactedFiles > duckdbMaxCompactedFilesCap {
+		logger.Warn("CompactionService: clamping max_compacted_files for duckdb merge",
+			"configured", c.config.MaxCompactedFiles,
+			"using", maxFiles,
+			"reason", "large batches OOM sorted SIP tables (homer#945)")
+	}
+
+	// 1. Merge adjacent small files FIRST — lock per table.
+	// The CALL runs on a dedicated pool connection with threads=1 so
+	// date-partitions are compacted serially instead of in parallel
+	// (each group fully decompresses + re-sorts SIP payloads).
 	for _, table := range tables {
 		tableName := tableNameFromFQN(table)
 		if tableName == "" {
@@ -586,14 +610,27 @@ func (c *CompactionService) runMerge(tables []string) error {
 		}
 
 		c.withCatalogLock(func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error("CompactionService: merge panic", "table", tableName, "panic", r)
+				}
+			}()
+
 			fileCount, err := c.getTableFileCount(tableName)
 			if err == nil {
 				logger.Info("CompactionService: Files before merge", "table", tableName, "count", fileCount)
+				if fileCount < 2 {
+					return
+				}
 			}
 
-			mergeSQL := c.buildMergeSQL(tableName)
-			logger.Info("CompactionService: Merge adjacent files", "lake", c.lakeName, "table", tableName)
-			result, err := c.execWithRetry(mergeSQL)
+			logger.Info("CompactionService: Merge adjacent files",
+				"lake", c.lakeName,
+				"table", tableName,
+				"max_compacted_files", maxFiles,
+				"max_file_size_bytes", maxSize,
+				"threads", 1)
+			processed, created, err := c.mergeAdjacentFiles(tableName)
 			if err != nil {
 				if brokenPath := extractBrokenParquetPath(err); brokenPath != "" {
 					logger.Warn("CompactionService: merge hit broken/missing parquet, removing catalog entry",
@@ -609,9 +646,11 @@ func (c *CompactionService) runMerge(tables []string) error {
 				if strings.Contains(err.Error(), "Out of Memory") {
 					c.logMemoryBreakdown()
 				}
-			} else if result != nil {
-				rowsAffected, _ := result.RowsAffected()
-				logger.Info("CompactionService: merge_adjacent_files completed", "table", tableName, "files_merged", rowsAffected)
+			} else {
+				logger.Info("CompactionService: merge_adjacent_files completed",
+					"table", tableName,
+					"files_processed", processed,
+					"files_created", created)
 
 				fileCountAfter, err := c.getTableFileCount(tableName)
 				if err == nil {
@@ -845,21 +884,36 @@ func (c *CompactionService) GetStats() map[string]interface{} {
 	}
 }
 
+func (c *CompactionService) effectiveMaxCompactedFiles() int {
+	n := c.config.MaxCompactedFiles
+	if n <= 0 {
+		n = defaultDuckDBMaxCompactedFiles
+	}
+	if strings.EqualFold(strings.TrimSpace(c.config.Engine), EngineNativeGo) {
+		return n
+	}
+	if n > duckdbMaxCompactedFilesCap {
+		return duckdbMaxCompactedFilesCap
+	}
+	return n
+}
+
+func (c *CompactionService) effectiveMaxFileSizeBytes() int64 {
+	if c.config.MaxFileSizeBytes > 0 {
+		return c.config.MaxFileSizeBytes
+	}
+	return defaultDuckDBMaxFileSizeBytes
+}
+
 // buildMergeSQL constructs the merge SQL with optional parameters
 func (c *CompactionService) buildMergeSQL(tableName string) string {
-	// Build optional parameters
-	var params []string
-	params = append(params, "schema => 'main'")
+	params := []string{"schema => 'main'"}
 
 	if c.config.MinFileSizeBytes > 0 {
 		params = append(params, fmt.Sprintf("min_file_size => %d", c.config.MinFileSizeBytes))
 	}
-	if c.config.MaxFileSizeBytes > 0 {
-		params = append(params, fmt.Sprintf("max_file_size => %d", c.config.MaxFileSizeBytes))
-	}
-	if c.config.MaxCompactedFiles > 0 {
-		params = append(params, fmt.Sprintf("max_compacted_files => %d", c.config.MaxCompactedFiles))
-	}
+	params = append(params, fmt.Sprintf("max_file_size => %d", c.effectiveMaxFileSizeBytes()))
+	params = append(params, fmt.Sprintf("max_compacted_files => %d", c.effectiveMaxCompactedFiles()))
 
 	return fmt.Sprintf(
 		"CALL ducklake_merge_adjacent_files('%s', '%s', %s)",
@@ -867,6 +921,81 @@ func (c *CompactionService) buildMergeSQL(tableName string) string {
 		tableName,
 		strings.Join(params, ", "),
 	)
+}
+
+// mergeAdjacentFiles runs ducklake_merge_adjacent_files on a dedicated
+// connection with threads=1. Query (not Exec) is required to read the
+// files_processed/files_created result set; Exec always reports 0.
+func (c *CompactionService) mergeAdjacentFiles(tableName string) (filesProcessed, filesCreated int64, err error) {
+	if c.db == nil {
+		return 0, 0, fmt.Errorf("no database")
+	}
+	ctx := c.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	const attempts = 4
+	backoff := 500 * time.Millisecond
+	var lastErr error
+	mergeSQL := c.buildMergeSQL(tableName)
+
+	for attempt := 1; attempt <= attempts; attempt++ {
+		filesProcessed, filesCreated, lastErr = c.mergeAdjacentFilesOnce(ctx, mergeSQL)
+		if lastErr == nil {
+			return filesProcessed, filesCreated, nil
+		}
+		if !isDatabaseLocked(lastErr) {
+			return 0, 0, lastErr
+		}
+		if attempt < attempts {
+			logger.Warn("CompactionService: database locked, retrying",
+				"attempt", attempt,
+				"next_wait", backoff.String(),
+				"error", lastErr)
+			time.Sleep(backoff)
+			backoff *= 2
+		}
+	}
+	return 0, 0, lastErr
+}
+
+func (c *CompactionService) mergeAdjacentFilesOnce(ctx context.Context, mergeSQL string) (filesProcessed, filesCreated int64, err error) {
+	conn, err := c.db.Conn(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer conn.Close()
+
+	// Session-scoped: only this connection, not the rest of the writer pool.
+	// Serializes per-partition merge groups so two date= partitions of
+	// hep_proto_1_call are not decompressed at once.
+	if _, err := conn.ExecContext(ctx, "SET threads = 1"); err != nil {
+		logger.Warn("CompactionService: SET threads=1 for merge failed", "error", err)
+	}
+
+	rows, err := conn.QueryContext(ctx, mergeSQL)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var schemaName, tableName string
+		var processed, created int64
+		if scanErr := rows.Scan(&schemaName, &tableName, &processed, &created); scanErr != nil {
+			// Older DuckLake builds may return a different shape; the merge
+			// itself succeeded, so do not fail the cycle.
+			logger.Warn("CompactionService: merge result scan failed", "error", scanErr)
+			continue
+		}
+		filesProcessed += processed
+		filesCreated += created
+	}
+	if err := rows.Err(); err != nil {
+		return filesProcessed, filesCreated, err
+	}
+	return filesProcessed, filesCreated, nil
 }
 
 // logMemoryBreakdown dumps DuckDB's buffer-manager accounting after an
@@ -1119,6 +1248,7 @@ func (c *CompactionService) getTableFileCount(tableName string) (int64, error) {
 		FROM %s.ducklake_data_file f
 		JOIN %s.ducklake_table t ON t.table_id = f.table_id
 		WHERE t.table_name = ?
+		  AND f.end_snapshot IS NULL
 	`, metadataSchema, metadataSchema)
 
 	rows, err := c.queryWithRetry(query, tableName)
