@@ -786,16 +786,15 @@ type CompactionConfig struct {
 	// Engine selects the compaction implementation:
 	//   "duckdb" — DuckLake's ducklake_merge_adjacent_files (default). Loads a
 	//              whole partition into memory, which can OOM on wide SIP data.
-	//   "native" — DuckDB-free Go compactor that concatenates a partition's
-	//              parquet row groups (peak memory ≈ one row group) and writes
-	//              the SQLite catalog directly. Safe to run alongside the live
-	//              DuckDB writer: every commit/reap runs under the catalog lock
-	//              and, while still holding it, the compactor refreshes the
-	//              writer's DuckLake metadata cache (DETACH/ATTACH) so the
-	//              writer re-reads the latest snapshot and never reuses a
-	//              snapshot id the compactor allocated. Requires a local
-	//              data_path and a SQLite catalog; otherwise it falls back to
-	//              the DuckDB merge automatically.
+	//   "native" — Go compactor that concatenates a partition's parquet row
+	//              groups itself (peak memory ≈ one row group), then swaps each
+	//              partition in with one short DuckDB transaction: a DELETE over
+	//              the partition column retires the old files and
+	//              ducklake_add_data_files registers the merged output. DuckLake
+	//              allocates every snapshot and file id, so the live writer's
+	//              cache cannot go stale. Requires a local data_path and a
+	//              DuckLake build providing ducklake_add_data_files; otherwise it
+	//              falls back to the DuckDB merge automatically.
 	Engine string `json:"engine" mapstructure:"engine" default:"duckdb"`
 	// TargetFileSizeBytes caps each merged output file for the native engine.
 	// 0 = engine default (512MB).

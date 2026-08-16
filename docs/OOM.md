@@ -250,26 +250,32 @@ tables bypass it. Log: `V4TransactionsSearch: hydrating payload by uuid`.
 
 ## 6) Native Go Compaction Engine
 
-> ℹ️ **The native engine is safe to run alongside the live DuckDB writer as of
-> 11.0.260.** Earlier builds corrupted the catalog because the native engine
-> allocates snapshot ids out-of-band as `MAX(snapshot_id)+1` in SQLite, while the
-> DuckLake writer kept its snapshot/id counter cached in DuckDB memory and reused
-> the same id on its next flush — producing a **duplicate** `ducklake_snapshot`
-> row and:
+> ℹ️ **The native engine no longer writes the catalog itself.** Builds before
+> 11.0.321 allocated snapshot ids out-of-band as `MAX(snapshot_id)+1` in SQLite,
+> while the DuckLake writer kept its snapshot/id counter cached in DuckDB memory
+> and reused the same id on its next flush — producing a **duplicate**
+> `ducklake_snapshot` row and:
 >
 > ```
 > Invalid Input Error: Corrupt DuckLake - multiple snapshots returned from database
 > ```
 >
-> This is now prevented by a two-part protocol: (1) every native commit/reap runs
-> under the `CatalogLock`, so it never overlaps a flush's catalog `INSERT`; and
-> (2) right after each commit, **while still holding the lock**, the compactor
-> refreshes the writer's DuckLake metadata cache (`DETACH`/`ATTACH`), so the
-> writer's next flush re-reads the latest snapshot from SQLite and never reuses an
-> id the compactor allocated. The engine remains **opt-in** (default `duckdb`).
-> Note: this protects against the *compactor*; running **two writer processes**
-> on the same catalog still corrupts it — homer takes an exclusive writer lock
-> (`<catalog>.lock`) to prevent that. See "Recovering a corrupted catalog" below.
+> The mitigation at the time was to refresh the writer's cache with a
+> `DETACH`/`ATTACH` right after each commit, which is exactly what fails under
+> load — and when it failed the corruption still happened, because the snapshot
+> was already written.
+>
+> That whole protocol is gone. The compactor never opens the catalog file: it
+> registers merged parquet through DuckLake's own `ducklake_add_data_files`, so
+> **DuckLake allocates every snapshot and file id**. The writer's cache cannot
+> fall behind ids it issued itself, and no cache refresh (hence no `DETACH`) is
+> needed — ingest and search are never interrupted. The engine remains **opt-in**
+> (default `duckdb`).
+>
+> Note: this only ever protected against the *compactor*. Running **two writer
+> processes** on the same catalog still corrupts it — homer takes an exclusive
+> writer lock (`<catalog>.lock`) to prevent that. See "Recovering a corrupted
+> catalog" below.
 
 The default DuckDB merge (`ducklake_merge_adjacent_files`) loads a whole
 partition into memory to sort/rewrite it. On wide SIP data (large `payload`
@@ -279,9 +285,7 @@ dies **silently** (Linux OOM killer / DuckDB abort) during
 `hep_proto_1_call` merge — no `Out of Memory` line, UI returns 5xx, ingest
 `adapter_us` spikes because the catalog lock is held for the whole CALL.
 
-Mitigations already in the writer (stay on the DuckDB engine — do **not**
-switch to `engine: "native"` to work around this; earlier native builds
-wrote snapshot ids out-of-band and corrupted live catalogs):
+Mitigations already in the writer, and the first thing to try:
 
 - DuckDB merge defaults to 32 operations per table per cycle and
   `max_file_size` 64MB. `max_compacted_files` counts output files, not
@@ -291,32 +295,54 @@ wrote snapshot ids out-of-band and corrupted live catalogs):
   climbs; raise it if file count grows between cycles.
 - Leftover files are picked up by the next cycle.
 - If it still OOMs, lower `max_file_size_bytes` / `max_compacted_files` or
-  temporarily set `compaction.enable: false` (see section 4). Do not flip
-  the engine.
+  temporarily set `compaction.enable: false` (see section 4).
 
-The `native` engine avoids the DuckDB merge entirely. It does **not** use
-DuckDB for compaction. It remains **opt-in only** and is not the
-recommended workaround for compaction OOM. Instead it:
+The `native` engine does the merge itself instead of asking DuckDB to do it:
 
 - groups a partition's parquet files into batches up to `target_file_size_bytes`
   (default 512MB), based on their on-disk sizes;
 - concatenates each batch by copying parquet **row groups** one at a time, so
   peak memory is bounded by a single row group (a few hundred MB), never the
   whole partition;
-- registers the new files and retires the old ones by writing the DuckLake
-  SQLite catalog directly (new snapshot, `ducklake_data_file`,
-  `ducklake_file_column_stats`, `ducklake_file_partition_value`, retire via
-  `end_snapshot`, `ducklake_table_stats` bookkeeping);
-- reaps fully-superseded files and aged-out snapshots once they fall outside
-  the retention window (`snapshot_expire_interval_sec`).
+- swaps each partition in with **one short DuckDB transaction**: a `DELETE` over
+  the partition column retires the old files (the predicate covers every row of
+  every file, so DuckLake drops whole files instead of writing row-level delete
+  files), then `ducklake_add_data_files` registers the merged output. DuckLake
+  allocates the snapshot and the file ids;
+- leaves physical removal of superseded files to the normal
+  `ducklake_expire_snapshots` / `ducklake_cleanup_old_files` /
+  `ducklake_delete_orphaned_files` calls, which honour
+  `snapshot_expire_interval_sec`. The compactor never deletes parquet itself, so
+  it cannot pull a file out from under a search node that still references it.
+
+Because retirement is per partition, coverage is all-or-nothing: every file in
+the partition is rewritten, or the partition is skipped. A partition is skipped
+when rewriting its already-large files would cost more bytes than consolidating
+the small ones gains, which lets small files accumulate until the merge is worth
+it rather than rewriting a 512MB file every cycle.
+
+Safety checks per partition, all inside the swap transaction: the partition's
+live row count must equal the merged row count both **before** and **after** the
+swap. Any mismatch — a concurrent flush, or rows still inlined in the catalog —
+rolls the transaction back and defers the partition to the next cycle, leaving
+the catalog exactly as it was. Tables with active row-level delete files, tables
+not partitioned by a single identity column, and lakes with un-flushed inlined
+rows are skipped entirely.
+
+Additionally, each native cycle takes a `VACUUM INTO` copy of the catalog first
+(keeping the last 3), and verifies afterwards that the catalog still has exactly
+one latest snapshot and no duplicate `snapshot_id`. If that check fails the
+native engine **switches itself off** until the process restarts and falls back
+to the DuckDB merge.
 
 ### Configuration
 
-The default is `duckdb`. The native engine is **opt-in only**. Do not enable
-it as an OOM workaround on a live writer: earlier builds corrupted catalogs
-(`Corrupt DuckLake - multiple snapshots returned from database`). Prefer the
-DuckDB batching knobs above. If you still experiment with native, use a
-catalog backup first:
+The default is `duckdb`; the native engine is **opt-in**. It requires a local
+`data_path` and a DuckLake build that provides `ducklake_add_data_files` — if
+either is missing, the writer logs the reason and transparently uses the DuckDB
+merge. A `data_path` containing a `key=value` directory component is also
+rejected, because DuckLake infers partition values from an added file's whole
+path and would read that component as a column the table does not have.
 
 ```json
 {
@@ -334,8 +360,7 @@ catalog backup first:
 }
 ```
 
-Leaving `engine` unset (or `"duckdb"`) uses the DuckLake merge, which is the
-recommended, catalog-safe path.
+Leaving `engine` unset (or `"duckdb"`) uses the DuckLake merge.
 
 ### Recovering a corrupted catalog
 
@@ -450,29 +475,39 @@ SET next_file_id    = (SELECT COALESCE(MAX(data_file_id),0)+1 FROM ducklake_data
 WHERE snapshot_id = (SELECT MAX(snapshot_id) FROM ducklake_snapshot);
 ```
 
-Then set `engine` to `duckdb` (or remove it) and restart. If you keep a backup
-of the catalog from before the native run, restoring it is the safest recovery.
+Then set `engine` to `duckdb` (or remove it) and restart. A native run also
+leaves `<catalog>.bak-<timestamp>` copies; restoring the newest one from before
+the run is the fastest recovery.
 
 Requirements and behavior:
 
-- **Safe with a live writer** — each commit/reap holds the `CatalogLock` and then
-  refreshes the writer's DuckLake cache, so the writer never reuses a snapshot id
-  the compactor allocated (see the note at the top of this section).
-- **Local storage + SQLite catalog** — for remote (`s3://`) `data_path` or a
-  missing `catalog_path`, the writer **automatically falls back to the `duckdb`
-  engine**, so compaction always runs.
-- **Append-only tables only** — tables with delete files are skipped (the engine
-  reassigns row ids, which is only safe without positional deletes). HEP ingest
-  is append-only, so this always holds for Homer.
-- Holds the `CatalogLock` only for the short per-partition commit/reap phases,
-  never during the slow merge, so flush/ingest stays responsive.
+- **Safe with a live writer** — the compactor never writes the catalog itself.
+  DuckLake allocates every snapshot and file id inside the swap transaction, so
+  there is no id the writer's cache could miss and no `DETACH` to fail.
+- **Local storage** — for remote (`s3://`) `data_path` the writer **automatically
+  falls back to the `duckdb` engine**, so compaction always runs.
+- **Partitioned, append-only tables only** — tables with active row-level delete
+  files, tables not partitioned by a single identity column, and lakes with
+  un-flushed inlined rows are skipped. HEP ingest is append-only and partitioned
+  by `date`, so Homer's tables qualify.
+- Holds the `CatalogLock` for the fast metadata reads that plan a cycle and for
+  the short per-partition swap transaction, never during the slow merge, so
+  flush/ingest stays responsive. Reading the catalog without the lock would make
+  both the flush and the compactor fail with SQLite's `database is locked`.
+- If a flush commits into a partition while it is being merged, the swap's row
+  count no longer matches and the partition is **deferred** to the next cycle
+  rather than retired, so no row can be dropped. Because a partition is only busy
+  while ingest targets it, and Homer partitions by `date`, this only delays the
+  current day; older partitions compact on the first attempt.
 
 Memory profile: bounded by one row group regardless of partition size, so a
 512MB target safely compacts 76×77MB files on a writer capped well under the
-multi-GB working set the DuckDB merge required.
+multi-GB working set the DuckDB merge required. The retirement `DELETE` reads the
+partition to confirm the files are fully covered, and runs with `threads = 1` to
+keep that scan's memory bounded too.
 
-> Note: after a native commit, the search node picks up the new snapshot on its
-> next periodic catalog refresh.
+> Note: the search node picks up the new snapshot on its next periodic catalog
+> refresh, exactly as it does for a normal writer flush.
 
 ## Notes
 

@@ -1,40 +1,64 @@
+// Package compactor consolidates a DuckLake table's small parquet files without
+// letting DuckDB load a whole partition into memory, which is what makes
+// ducklake_merge_adjacent_files OOM on wide SIP parquet.
+//
+// It works in two phases per partition:
+//
+//  1. Merge: concatenate the partition's parquet row groups into new files of at
+//     most a target size, copying one row group at a time, so peak memory is
+//     about one row group. No lock is held.
+//  2. Swap: in a single short DuckDB transaction, DELETE the partition (which
+//     retires whole files, since the predicate covers every row) and register the
+//     merged files with ducklake_add_data_files.
+//
+// The swap is the important part. An earlier version of this package wrote the
+// SQLite catalog directly, allocating snapshot ids itself; the live writer's
+// cached ids then went stale and the catalog ended up with duplicate snapshots
+// ("Corrupt DuckLake - multiple snapshots returned from database"). Here DuckLake
+// allocates every snapshot and file id, so the writer's cache cannot fall behind
+// and no DETACH/ATTACH cache refresh is needed — ingest and search keep running.
+//
+// The compactor never opens the catalog file: all reads and writes go through the
+// DuckDB handle it is given.
 package compactor
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
+	"strings"
 
 	"github.com/google/uuid"
 
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
+// errPartitionChanged reports that a partition no longer matches what was
+// planned, so its swap was abandoned. It is expected under concurrent ingest and
+// simply defers the partition to the next cycle.
+var errPartitionChanged = errors.New("partition changed since planning")
+
 // Options configures a native compaction run.
 type Options struct {
-	// CatalogPath is the DuckLake SQLite catalog file (e.g. homer_catalog.sqlite).
-	CatalogPath string
+	// DB is the DuckDB handle with the lake ATTACHed — the same pool the writer
+	// uses. All catalog access goes through it; the compactor never opens the
+	// SQLite catalog file itself.
+	DB *sql.DB
+	// LakeName is the ATTACH alias of the lake (e.g. "homer_lake").
+	LakeName string
 	// DataPath is the parquet root; files live under {DataPath}/main/{table}/.
 	DataPath string
 	// TargetFileSizeBytes caps each merged output file (default 512MB).
 	TargetFileSizeBytes int64
-	// SnapshotRetention controls how long retired snapshots/files are kept for
-	// time travel before the reaper removes them.
-	SnapshotRetention time.Duration
 	// Lock/Unlock serialize catalog access with the DuckLake writer (flush).
-	// They are held only for the short catalog read/commit/reap phases — never
-	// during the slow parquet merge — so ingestion is not blocked for minutes.
-	// Both may be nil (e.g. in tests) for no locking.
+	// They are held only for the short swap transaction — never during the slow
+	// parquet merge — so ingestion is not blocked for minutes. Both may be nil
+	// (e.g. in tests) for no locking.
 	Lock   func()
 	Unlock func()
-	// Invalidate drops the DuckLake writer's in-memory snapshot/stats cache so
-	// its next flush re-reads the catalog. It is called right after each
-	// out-of-band commit while the catalog lock is still held, so the DuckDB
-	// writer never reuses a snapshot id this compactor just allocated. May be
-	// nil (tests / no live writer).
-	Invalidate func()
 }
 
 func (o Options) lock() {
@@ -49,12 +73,6 @@ func (o Options) unlock() {
 	}
 }
 
-func (o Options) invalidate() {
-	if o.Invalidate != nil {
-		o.Invalidate()
-	}
-}
-
 // Result summarizes one CompactTable call.
 type Result struct {
 	Skipped             bool
@@ -63,84 +81,84 @@ type Result struct {
 	FilesMerged         int
 	FilesCreated        int
 	PartitionsCompacted int
-	NewSnapshot         int64
-	FilesReaped         int
-	SnapshotsPruned     int
+	PartitionsDeferred  int
 }
 
 const defaultTargetFileSizeBytes int64 = 512 << 20 // 512MB
 
-// tableMeta is the table metadata read once under the catalog lock.
-type tableMeta struct {
-	tableID    int64
-	colTypes   map[int64]string
-	tablePath  string
-	partitions map[string][]sourceFile
-}
-
-// CompactTable merges the small parquet files of one table into files up to
-// TargetFileSizeBytes, **partition by partition**: for each partition it writes
-// the merged parquet (lock-free), then commits a snapshot that registers the
-// new files / retires the old ones and reaps superseded data — all without
-// DuckDB. Committing per partition means progress is durable incrementally, the
-// CatalogLock is only held for the short commit/reap phases (never during the
-// slow merge), and disk never holds the old+new set for more than one partition
-// at a time.
+// CompactTable consolidates one table's small parquet files, partition by
+// partition. For each partition it writes the merged parquet without holding any
+// lock, then swaps it in with a single short DuckDB transaction (see
+// swapPartition) that lets DuckLake allocate the snapshot.
+//
+// Committing per partition keeps progress durable incrementally, holds the
+// catalog lock only for the swap, and never leaves more than one partition's
+// old+new files on disk at once. Superseded files are removed by the caller's
+// regular ducklake_expire_snapshots / ducklake_cleanup_old_files maintenance,
+// which respects the configured time-travel window.
 func CompactTable(ctx context.Context, opts Options, tableName string) (Result, error) {
+	if opts.DB == nil {
+		return Result{}, fmt.Errorf("compactor: no database handle")
+	}
 	target := opts.TargetFileSizeBytes
 	if target <= 0 {
 		target = defaultTargetFileSizeBytes
 	}
-	retention := opts.SnapshotRetention
-	if retention <= 0 {
-		retention = time.Hour
-	}
 
-	cat, err := OpenCatalog(opts.CatalogPath)
-	if err != nil {
-		return Result{}, err
-	}
-	defer cat.Close()
-
-	// Phase 1: read table metadata under the lock (fast).
-	var meta tableMeta
-	skip, err := func() (string, error) {
+	// Planning reads the catalog, so it runs under the same lock the writer's
+	// flush takes. These are indexed metadata reads on a small SQLite file, so the
+	// lock is held for milliseconds — unlike the merge below, which must not hold
+	// it. Reading without the lock races a flush's commit and both sides fail with
+	// "database is locked".
+	var (
+		meta       tableMeta
+		partitions map[string][]sourceFile
+		skip       string
+	)
+	err := withRetryOnLocked(func() error {
 		opts.lock()
 		defer opts.unlock()
-		tableID, ok, err := cat.tableID(tableName)
+
+		var ok bool
+		var err error
+		meta, ok, err = readTableMeta(ctx, opts.DB, opts.LakeName, tableName)
 		if err != nil {
-			return "", err
+			return err
 		}
 		if !ok {
-			return "table not found", nil
+			skip = "table not found"
+			return nil
 		}
-		// Native compaction reassigns row ids; only safe with no delete files.
-		hasDeletes, err := cat.hasDeleteFiles(tableID)
+		if !meta.partition.usable() {
+			skip = fmt.Sprintf(
+				"table is not partitioned by a single identity column (column=%q transform=%q type=%q)",
+				meta.partition.columnName, meta.partition.transform, meta.partition.columnType)
+			return nil
+		}
+
+		// A partition is retired with one DELETE, which cannot preserve row-level
+		// deletes, and inlined rows are invisible to the parquet merge but would
+		// be swept away by that DELETE.
+		deletes, err := hasDeleteFiles(ctx, opts.DB, opts.LakeName, meta.tableID)
 		if err != nil {
-			return "", err
+			return err
 		}
-		if hasDeletes {
-			return "table has delete files", nil
+		if deletes {
+			skip = "table has active row-level delete files"
+			return nil
 		}
-		cols, err := cat.columns(tableID)
+		inlined, err := hasInlinedData(ctx, opts.DB, opts.LakeName)
 		if err != nil {
-			return "", err
+			return err
 		}
-		colTypes := make(map[int64]string, len(cols))
-		for _, c := range cols {
-			colTypes[c.columnID] = c.colType
+		if inlined {
+			skip = "lake still holds inlined rows; flush them first"
+			return nil
 		}
-		tablePath, err := cat.tablePath(tableID)
-		if err != nil {
-			return "", err
-		}
-		partitions, err := cat.activeFilesByPartition(tableID)
-		if err != nil {
-			return "", err
-		}
-		meta = tableMeta{tableID: tableID, colTypes: colTypes, tablePath: tablePath, partitions: partitions}
-		return "", nil
-	}()
+
+		partitions, err = activeFilesByPartition(ctx, opts.DB, opts.LakeName, meta.tableID)
+		return err
+	})
 	if err != nil {
 		return Result{}, err
 	}
@@ -149,172 +167,126 @@ func CompactTable(ctx context.Context, opts Options, tableName string) (Result, 
 	}
 
 	res := Result{}
-	for partVal, files := range meta.partitions {
-		res.FilesBefore += len(files)
+	for partVal, files := range partitions {
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
-		if len(files) < 2 {
+		res.FilesBefore += len(files)
+		if partVal == "" {
+			// No partition value means no safe retirement predicate.
 			continue
 		}
 		sizes := make([]int64, len(files))
 		for i, f := range files {
 			sizes[i] = f.fileSizeBytes
 		}
-		batches := planBatches(sizes, target)
-		if len(batches) == 0 {
+		batches, worth := planPartition(sizes, target)
+		if !worth {
 			continue
 		}
 
-		pr, err := compactPartition(ctx, cat, opts, meta, partVal, files, batches, retention)
+		pr, err := compactPartition(ctx, opts, meta, tableName, partVal, files, batches)
 		if err != nil {
+			if errors.Is(err, errPartitionChanged) {
+				logger.Info("native compactor: partition changed during merge, deferring",
+					"table", tableName, "partition", partVal, "reason", err)
+				res.PartitionsDeferred++
+				continue
+			}
 			return res, err
 		}
 		res.PartitionsCompacted++
 		res.FilesMerged += pr.filesMerged
 		res.FilesCreated += pr.filesCreated
-		res.FilesReaped += pr.filesReaped
-		res.SnapshotsPruned += pr.snapshotsPruned
-		res.NewSnapshot = pr.snapshot
 	}
 
 	return res, nil
 }
 
 type partitionResult struct {
-	filesMerged     int
-	filesCreated    int
-	snapshot        int64
-	filesReaped     int
-	snapshotsPruned int
+	filesMerged  int
+	filesCreated int
 }
 
-// compactPartition merges one partition's batches (lock-free), then commits and
-// reaps under the catalog lock.
+// compactPartition merges one partition's batches (lock-free), then swaps them
+// in under the catalog lock. Every active file of the partition is rewritten,
+// because the swap retires the partition wholesale.
 func compactPartition(
-	ctx context.Context, cat *Catalog, opts Options, meta tableMeta,
-	partVal string, files []sourceFile, batches [][]int, retention time.Duration,
+	ctx context.Context, opts Options, meta tableMeta,
+	tableName, partVal string, files []sourceFile, batches [][]int,
 ) (partitionResult, error) {
 	var pr partitionResult
-	in := commitInput{tableID: meta.tableID}
 	var writtenOut []string
+	var expectedRows int64
 
-	// Phase 2: write merged parquet without holding the catalog lock.
+	cleanup := func() {
+		for _, p := range writtenOut {
+			_ = os.Remove(p)
+		}
+	}
+
+	// Phase 1: write merged parquet without holding the catalog lock.
 	for _, batch := range batches {
 		if err := ctx.Err(); err != nil {
+			cleanup()
 			return pr, err
 		}
-		batchFiles := make([]sourceFile, len(batch))
+		srcAbs := make([]string, len(batch))
+		var batchRows int64
 		for i, idx := range batch {
-			batchFiles[i] = files[idx]
-		}
-
-		srcAbs := make([]string, len(batchFiles))
-		var expectedRows, batchSrcSize int64
-		for i, sf := range batchFiles {
+			sf := files[idx]
 			srcAbs[i] = tableFileAbs(opts.DataPath, meta.tablePath, sf.path, sf.pathIsRel)
-			expectedRows += sf.recordCount
-			batchSrcSize += sf.fileSizeBytes
+			batchRows += sf.recordCount
 		}
-		outRel := newOutputRelPath(batchFiles[0].path)
+		outRel := newOutputRelPath(files[batch[0]].path)
 		outAbs := tableFileAbs(opts.DataPath, meta.tablePath, outRel, 1)
 
 		mr, err := mergeParquetFiles(ctx, srcAbs, outAbs)
 		if err != nil {
-			cleanupFiles(writtenOut)
+			cleanup()
 			return pr, fmt.Errorf("merge partition %s: %w", partVal, err)
 		}
-		if mr.recordCount != expectedRows {
+		if mr.recordCount != batchRows {
 			_ = os.Remove(outAbs)
-			cleanupFiles(writtenOut)
+			cleanup()
 			return pr, fmt.Errorf("partition %s: merged row count %d != expected %d",
-				partVal, mr.recordCount, expectedRows)
+				partVal, mr.recordCount, batchRows)
 		}
 		writtenOut = append(writtenOut, outAbs)
-
-		for _, sf := range batchFiles {
-			in.retired = append(in.retired, retiredFile{
-				dataFileID: sf.dataFileID, path: sf.path, pathIsRel: sf.pathIsRel,
-			})
-		}
-		in.netSizeDelta += mr.fileSizeBytes - batchSrcSize
-
-		ref := batchFiles[0]
-		in.newFiles = append(in.newFiles, newFile{
-			relPath: outRel, fileFormat: "parquet", recordCount: mr.recordCount,
-			fileSizeBytes: mr.fileSizeBytes, footerSize: mr.footerSize,
-			partitionID: ref.partitionID, mappingID: ref.mappingID, fileOrder: ref.fileOrder,
-			partitionValue: partVal,
-			batchFiles:     batchFiles, // stats read at commit, under the lock
-		})
-		pr.filesMerged += len(batchFiles)
+		expectedRows += mr.recordCount
+		pr.filesMerged += len(batch)
 		pr.filesCreated++
 
 		logger.Info("native compactor: merged batch",
-			"table", partTableName(meta), "partition", partVal,
-			"input_files", len(batchFiles), "output_bytes", mr.fileSizeBytes, "rows", mr.recordCount)
+			"table", tableName, "partition", partVal,
+			"input_files", len(batch), "output_bytes", mr.fileSizeBytes, "rows", mr.recordCount)
 	}
 
-	if len(in.newFiles) == 0 {
-		return pr, nil
+	if len(writtenOut) == 0 {
+		return partitionResult{}, nil
 	}
 
-	// Phase 3: commit + reap under the catalog lock (fast).
-	opts.lock()
-	defer opts.unlock()
-
-	// Aggregate per-column stats now (consistent catalog read under the lock).
-	for i := range in.newFiles {
-		perFileStats := make([][]colStat, len(in.newFiles[i].batchFiles))
-		for j, sf := range in.newFiles[i].batchFiles {
-			st, err := cat.columnStats(sf.dataFileID, meta.tableID)
-			if err != nil {
-				cleanupFiles(writtenOut)
-				return pr, fmt.Errorf("read column stats: %w", err)
-			}
-			perFileStats[j] = st
-		}
-		in.newFiles[i].stats = aggregateColumnStats(perFileStats, meta.colTypes)
+	// Phase 2: swap under the catalog lock (short).
+	if err := withRetryOnLocked(func() error {
+		opts.lock()
+		defer opts.unlock()
+		return swapPartition(ctx, opts.DB, opts.LakeName, swapRequest{
+			tableName:    tableName,
+			partition:    meta.partition,
+			partitionVal: partVal,
+			expectedRows: expectedRows,
+			mergedAbs:    writtenOut,
+		})
+	}); err != nil {
+		// The transaction rolled back, so the merged files are unreferenced.
+		cleanup()
+		return partitionResult{}, err
 	}
 
-	snap, err := cat.commit(in)
-	if err != nil {
-		cleanupFiles(writtenOut)
-		return pr, fmt.Errorf("commit partition %s: %w", partVal, err)
-	}
-	pr.snapshot = snap
-	logger.Info("native compactor: committed partition snapshot",
-		"partition", partVal, "snapshot", snap,
-		"new_files", pr.filesCreated, "retired_files", pr.filesMerged)
-
-	reaped, pruned, err := cat.reap(opts.DataPath, retention)
-	if err != nil {
-		logger.Warn("native compactor: reap failed", "partition", partVal, "error", err)
-	} else {
-		pr.filesReaped = reaped
-		pr.snapshotsPruned = pruned
-		if reaped > 0 || pruned > 0 {
-			logger.Info("native compactor: reaped superseded data",
-				"partition", partVal, "files_deleted", reaped, "snapshots_pruned", pruned)
-		}
-	}
-
-	// Drop the DuckLake writer's cached snapshot/file-id counters while still
-	// holding the catalog lock, so the next flush re-reads this just-committed
-	// snapshot instead of reusing its id (which would corrupt the catalog).
-	opts.invalidate()
-
+	logger.Info("native compactor: swapped partition",
+		"table", tableName, "partition", partVal,
+		"new_files", pr.filesCreated, "retired_files", pr.filesMerged, "rows", expectedRows)
 	return pr, nil
-}
-
-func cleanupFiles(paths []string) {
-	for _, p := range paths {
-		_ = os.Remove(p)
-	}
-}
-
-func partTableName(meta tableMeta) string {
-	return filepath.Clean(meta.tablePath)
 }
 
 // tableFileAbs builds the absolute filesystem path of a catalog file entry.
@@ -327,6 +299,8 @@ func tableFileAbs(dataPath, tablePath, relPath string, isRel int64) string {
 
 // newOutputRelPath returns the relative path for a new merged file in the same
 // partition directory as the source files (e.g. "date=2026-05-30/ducklake-<uuid>.parquet").
+// Staying in the partition directory is required: DuckLake derives the added
+// file's partition value from that directory name.
 func newOutputRelPath(srcRelPath string) string {
 	dir := filepath.Dir(srcRelPath)
 	name := "ducklake-" + uuid.NewString() + ".parquet"
@@ -336,14 +310,18 @@ func newOutputRelPath(srcRelPath string) string {
 	return filepath.Join(dir, name)
 }
 
-// tablePath returns the catalog path of a table (e.g. "hep_proto_1_call/").
-func (c *Catalog) tablePath(tableID int64) (string, error) {
-	var p string
-	if err := c.db.QueryRow(
-		`SELECT path FROM ducklake_table WHERE table_id = ? AND end_snapshot IS NULL`,
-		tableID,
-	).Scan(&p); err != nil {
-		return "", fmt.Errorf("read table path: %w", err)
+// HiveLikePathComponent returns the first component of an absolute data path
+// that looks like a hive partition ("key=value"). DuckLake infers partition
+// values from the entire path of an added file, so such a component would be
+// read as a column the table does not have.
+func HiveLikePathComponent(dataPath string) string {
+	for _, part := range strings.Split(filepath.Clean(dataPath), string(filepath.Separator)) {
+		if part == "" {
+			continue
+		}
+		if i := strings.IndexByte(part, '='); i > 0 {
+			return part
+		}
 	}
-	return p, nil
+	return ""
 }

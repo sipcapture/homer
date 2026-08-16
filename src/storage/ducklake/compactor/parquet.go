@@ -22,18 +22,19 @@ type mergeResult struct {
 }
 
 // planBatches groups consecutive files so each group's combined on-disk size
-// stays within targetBytes. Only groups with at least two files are returned —
-// a lone file (or one already larger than the target) is left untouched, since
-// rewriting it yields no merge benefit. Input order is preserved.
+// stays within targetBytes. Every input file lands in exactly one group,
+// including lone files and files already larger than the target: the compactor
+// retires a partition with a single DELETE, so anything left out of the merged
+// output would be lost. Input order is preserved.
 func planBatches(sizes []int64, targetBytes int64) [][]int {
-	if targetBytes <= 0 {
+	if targetBytes <= 0 || len(sizes) == 0 {
 		return nil
 	}
 	var batches [][]int
 	var cur []int
 	var curSize int64
 	flush := func() {
-		if len(cur) >= 2 {
+		if len(cur) > 0 {
 			batches = append(batches, cur)
 		}
 		cur = nil
@@ -48,6 +49,42 @@ func planBatches(sizes []int64, targetBytes int64) [][]int {
 	}
 	flush()
 	return batches
+}
+
+// planPartition decides whether a partition is worth compacting and, if so,
+// returns a batching that covers all of its files.
+//
+// Because retirement is per partition, coverage is all-or-nothing: either every
+// file is rewritten or the partition is skipped. That makes a file already at or
+// above the target size pure overhead — it gets rewritten to a new path for no
+// gain. The partition is therefore skipped when that overhead exceeds the bytes
+// actually being consolidated, which lets small files accumulate until merging
+// them is worth the rewrite. The cost of touching a large file is amortised
+// instead of paid every cycle.
+func planPartition(sizes []int64, targetBytes int64) ([][]int, bool) {
+	if len(sizes) < 2 {
+		return nil, false
+	}
+	batches := planBatches(sizes, targetBytes)
+	if len(batches) == 0 {
+		return nil, false
+	}
+	var consolidated, overhead int64
+	for _, b := range batches {
+		var total int64
+		for _, i := range b {
+			total += sizes[i]
+		}
+		if len(b) >= 2 {
+			consolidated += total
+		} else {
+			overhead += total
+		}
+	}
+	if consolidated == 0 || overhead > consolidated {
+		return nil, false
+	}
+	return batches, true
 }
 
 // readParquetFooterSize returns the serialized FileMetaData length recorded in

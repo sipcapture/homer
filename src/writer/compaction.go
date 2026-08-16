@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
@@ -160,14 +161,9 @@ type CatalogLocker interface {
 	CatalogUnlock()
 }
 
-// CatalogRefresher drops the DuckLake writer's in-memory snapshot/stats cache so
-// its next flush re-reads the catalog. The native compactor calls it right after
-// each out-of-band commit (while holding the catalog lock) so the live DuckDB
-// writer never reuses a snapshot id the compactor allocated. Implemented by the
-// DuckLake Manager.
-type CatalogRefresher interface {
-	RefreshCatalogCache() error
-}
+// nativeCatalogBackupsKept is how many VACUUM INTO copies of the catalog the
+// native engine retains before each cycle.
+const nativeCatalogBackupsKept = 3
 
 // CompactionS3Client holds DuckDB httpfs S3 settings for maintenance calls that
 // read s3:// objects (ducklake_cleanup_old_files / ducklake_delete_orphaned_files).
@@ -195,6 +191,10 @@ type CompactionService struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 	mu     sync.RWMutex
+
+	// nativeDisabled latches when a native cycle leaves the catalog failing its
+	// invariants, so the process stops using the native engine until restart.
+	nativeDisabled atomic.Bool
 
 	// Stats
 	lastCompactionTime time.Time
@@ -579,19 +579,18 @@ func (c *CompactionService) runMerge(tables []string) error {
 	// flushInlinedData for why this matters even when inlining is disabled.
 	c.flushInlinedData()
 
-	// Native engine: replace the whole DuckDB merge/expire/cleanup path with a
-	// memory-bounded, DuckDB-free compactor (see storage/ducklake/compactor).
-	// It needs local storage + a SQLite catalog; for remote (S3) data or a
-	// missing catalog_path we transparently fall back to the DuckDB path so
-	// compaction still runs.
+	// Native engine: replace the DuckDB merge with a memory-bounded Go compactor
+	// (see storage/ducklake/compactor). It needs local storage and a DuckLake
+	// build that can register pre-merged files; otherwise we transparently fall
+	// back to the DuckDB path so compaction still runs.
 	if c.useNativeEngine() {
 		return c.runNativeMerge(tables)
 	}
 	if c.config.Engine == EngineNativeGo {
-		logger.Info("CompactionService: native engine unavailable for this storage, using duckdb",
+		logger.Info("CompactionService: native engine unavailable, using duckdb",
 			"lake", c.lakeName,
 			"remote_data_path", ducklake.IsRemoteLakeDataPath(c.dataPath),
-			"has_catalog_path", strings.TrimSpace(c.catalogPath) != "")
+			"disabled_after_failure", c.nativeDisabled.Load())
 	}
 
 	maxFiles := c.effectiveMaxCompactedFiles()
@@ -659,7 +658,19 @@ func (c *CompactionService) runMerge(tables []string) error {
 		})
 	}
 
-	// 2. Expire old snapshots (AFTER merge) — lock for this call only
+	c.runMaintenanceCalls()
+
+	logger.Info("CompactionService: Maintenance completed", "lake", c.lakeName)
+	return nil
+}
+
+// runMaintenanceCalls retires aged-out snapshots and removes the data files they
+// were keeping alive. Shared by both engines: the native compactor retires files
+// as ordinary DuckLake snapshots, so it needs exactly the same follow-up.
+// Each CALL takes the catalog lock on its own rather than holding it for the
+// whole sequence, so flush and queries are not blocked for the entire cycle.
+func (c *CompactionService) runMaintenanceCalls() {
+	// 1. Expire old snapshots (AFTER merge) — lock for this call only
 	c.withCatalogLock(func() {
 		expireSeconds := c.config.SnapshotExpireIntervalSec
 		if expireSeconds <= 0 {
@@ -678,7 +689,7 @@ func (c *CompactionService) runMerge(tables []string) error {
 		}
 	})
 
-	// 3. Cleanup old files — lock for this call only
+	// 2. Cleanup old files — lock for this call only
 	c.withCatalogLock(func() {
 		c.ensureS3ClientSettings()
 		logger.Info("CompactionService: Cleanup old files", "lake", c.lakeName)
@@ -688,7 +699,7 @@ func (c *CompactionService) runMerge(tables []string) error {
 		}
 	})
 
-	// 4. Delete orphaned files — lock for this call only
+	// 3. Delete orphaned files — lock for this call only
 	c.withCatalogLock(func() {
 		c.ensureS3ClientSettings()
 		logger.Info("CompactionService: Delete orphaned files", "lake", c.lakeName)
@@ -698,93 +709,103 @@ func (c *CompactionService) runMerge(tables []string) error {
 		}
 	})
 
-	// 5. Remove empty directories (no catalog lock needed — filesystem only)
+	// 4. Remove empty directories (no catalog lock needed — filesystem only)
 	if c.dataPath != "" && !ducklake.IsRemoteLakeDataPath(c.dataPath) {
 		removed := cleanupEmptyDirs(filepath.Join(c.dataPath, "main"))
 		if removed > 0 {
 			logger.Info("CompactionService: Removed empty directories", "lake", c.lakeName, "count", removed)
 		}
 	}
-
-	logger.Info("CompactionService: Maintenance completed", "lake", c.lakeName)
-	return nil
 }
 
 // useNativeEngine reports whether the native compactor should run. The native
 // engine is OPT-IN (the default empty engine and "duckdb" both use the DuckLake
-// merge). It writes the SQLite catalog out-of-band, but it is safe to run
-// alongside the live DuckDB writer because: (1) each commit/reap runs under the
-// CatalogLock, so it never overlaps a flush's catalog INSERT, and (2) right
-// after every commit it refreshes the writer's DuckLake metadata cache (see
-// CatalogRefresher), so the writer re-reads the latest snapshot and never reuses
-// a snapshot id the compactor allocated. It requires local storage and a SQLite
-// catalog; otherwise the caller falls back to the DuckDB merge.
+// merge).
+//
+// It is safe to run alongside the live DuckDB writer because it registers merged
+// files through DuckLake's own ducklake_add_data_files inside a short
+// transaction: DuckLake allocates every snapshot and file id, so the writer's
+// cached ids can never go stale. That is the difference from the version that
+// corrupted catalogs, which wrote snapshots into SQLite itself and then tried to
+// refresh the writer's cache with a DETACH that fails under load.
+//
+// The gate is therefore about capability, not about cache refreshing: without
+// ducklake_add_data_files there is no way to hand a pre-written parquet file to
+// DuckLake, and we stay on the DuckDB merge.
 func (c *CompactionService) useNativeEngine() bool {
 	if c.config.Engine != EngineNativeGo {
 		// empty/default and "duckdb" → DuckLake merge.
 		return false
 	}
+	if c.nativeDisabled.Load() {
+		return false
+	}
 	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
 		return false
 	}
-	if strings.TrimSpace(c.catalogPath) == "" {
+	ctx := c.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ok, reason := compactor.SwapSupported(ctx, c.db); !ok {
+		logger.Warn("CompactionService: native engine selected but this DuckLake build cannot "+
+			"register pre-merged files; falling back to the DuckDB merge",
+			"lake", c.lakeName, "reason", reason)
 		return false
 	}
-	if _, ok := c.catalogLocker.(CatalogRefresher); !ok {
-		// Without a way to refresh the writer's cache after a commit, the native
-		// engine could race the live writer's snapshot-id allocation. Fall back
-		// to the DuckDB merge rather than risk catalog corruption.
-		logger.Warn("CompactionService: native engine selected but the catalog locker cannot "+
-			"refresh the writer cache; falling back to the DuckDB merge",
-			"lake", c.lakeName)
+	// DuckLake derives an added file's partition values from its whole path, so a
+	// "key=value" directory anywhere above the table would be read as a column
+	// the table does not have.
+	if comp := compactor.HiveLikePathComponent(c.dataPath); comp != "" {
+		logger.Warn("CompactionService: native engine cannot be used because data_path contains a "+
+			"hive-style directory that DuckLake would read as a partition column; "+
+			"falling back to the DuckDB merge",
+			"lake", c.lakeName, "data_path", c.dataPath, "component", comp)
 		return false
 	}
 	return true
 }
 
-// runNativeMerge compacts every table with the DuckDB-free Go compactor. Each
-// table is processed under the CatalogLock so it never races a DuckDB catalog
-// mutation (flush). The compactor concatenates parquet row groups (peak memory
-// ≈ one row group), writes the SQLite catalog directly, and reaps superseded
-// files/snapshots, so no DuckLake expire/cleanup CALL is needed afterwards.
+// runNativeMerge compacts every table with the native compactor, then runs the
+// same expire/cleanup maintenance as the DuckDB path.
+//
+// The compactor concatenates parquet row groups itself (peak memory ≈ one row
+// group) and swaps each partition in through DuckLake's own API, so superseded
+// files are retired as ordinary DuckLake snapshots. Removing them is therefore
+// the job of the standard expire_snapshots / cleanup_old_files /
+// delete_orphaned_files calls, which honour the configured time-travel window —
+// the earlier native engine deleted parquet itself and could pull files out from
+// under a node that still referenced them.
 func (c *CompactionService) runNativeMerge(tables []string) error {
 	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
 		logger.Warn("CompactionService: native engine requires a local data_path; skipping merge",
 			"lake", c.lakeName, "data_path", c.dataPath)
 		return nil
 	}
-	if strings.TrimSpace(c.catalogPath) == "" {
-		logger.Warn("CompactionService: native engine requires catalog_path; skipping merge",
-			"lake", c.lakeName)
-		return nil
+
+	// Cheap insurance before metadata-rewriting maintenance: the catalog is
+	// metadata only, so a copy costs little and makes a bad cycle recoverable.
+	if path := strings.TrimSpace(c.catalogPath); path != "" {
+		c.withCatalogLock(func() {
+			dest, err := ducklake.BackupCatalog(path, nativeCatalogBackupsKept)
+			if err != nil {
+				logger.Warn("CompactionService: catalog backup before native merge failed",
+					"lake", c.lakeName, "error", err)
+				return
+			}
+			logger.Info("CompactionService: catalog backed up before native merge", "path", dest)
+		})
 	}
 
-	// Lock/Unlock are passed into the compactor so it can hold the CatalogLock
-	// only for the short per-partition commit/reap phases — never during the
-	// slow parquet merge — keeping flush/ingest responsive.
+	// Lock/Unlock are passed into the compactor so it holds the CatalogLock only
+	// for the short per-partition swap transaction — never during the slow
+	// parquet merge — keeping flush/ingest responsive.
 	var lockFn, unlockFn func()
 	if c.catalogLocker != nil {
 		lockFn = c.catalogLocker.CatalogLock
 		unlockFn = c.catalogLocker.CatalogUnlock
 	}
 
-	// invalidateFn lets the native compactor drop the live DuckDB writer's
-	// DuckLake metadata cache right after each commit (still under the catalog
-	// lock), so the writer's next flush re-reads the catalog and never reuses a
-	// snapshot id the compactor just allocated. This is what makes the native
-	// engine safe to run alongside the live DuckDB writer.
-	var invalidateFn func()
-	if r, ok := c.catalogLocker.(CatalogRefresher); ok {
-		invalidateFn = func() {
-			if err := r.RefreshCatalogCache(); err != nil {
-				logger.Warn("CompactionService: catalog cache refresh after native commit failed; "+
-					"next flush may briefly retry on a snapshot conflict",
-					"lake", c.lakeName, "error", err)
-			}
-		}
-	}
-
-	retention := time.Duration(c.config.SnapshotExpireIntervalSec) * time.Second
 	for _, table := range tables {
 		tableName := tableNameFromFQN(table)
 		if tableName == "" {
@@ -793,13 +814,12 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 		}
 		logger.Info("CompactionService: native merge starting", "table", tableName)
 		res, err := compactor.CompactTable(c.ctx, compactor.Options{
-			CatalogPath:         c.catalogPath,
+			DB:                  c.db,
+			LakeName:            c.lakeName,
 			DataPath:            c.dataPath,
 			TargetFileSizeBytes: c.config.TargetFileSizeBytes,
-			SnapshotRetention:   retention,
 			Lock:                lockFn,
 			Unlock:              unlockFn,
-			Invalidate:          invalidateFn,
 		}, tableName)
 		if err != nil {
 			logger.Warn("CompactionService: native merge failed", "table", tableName, "error", err)
@@ -815,19 +835,65 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			"files_merged", res.FilesMerged,
 			"files_created", res.FilesCreated,
 			"partitions", res.PartitionsCompacted,
-			"snapshot", res.NewSnapshot,
-			"files_reaped", res.FilesReaped,
-			"snapshots_pruned", res.SnapshotsPruned)
+			"partitions_deferred", res.PartitionsDeferred)
 	}
 
-	// Remove now-empty partition directories left after reaping.
-	if c.dataPath != "" {
-		if removed := cleanupEmptyDirs(filepath.Join(c.dataPath, "main")); removed > 0 {
-			logger.Info("CompactionService: Removed empty directories", "lake", c.lakeName, "count", removed)
-		}
+	// A native cycle must never leave the catalog in the state that produced
+	// "multiple snapshots returned from database". If it did, stop using the
+	// native engine until the process restarts and an operator has looked.
+	if err := c.checkCatalogInvariants(); err != nil {
+		c.nativeDisabled.Store(true)
+		logger.Error("CompactionService: catalog invariants violated after native merge; "+
+			"native engine disabled until restart, falling back to the DuckDB merge",
+			"lake", c.lakeName, "error", err)
 	}
+
+	c.runMaintenanceCalls()
 
 	logger.Info("CompactionService: Native maintenance completed", "lake", c.lakeName)
+	return nil
+}
+
+// checkCatalogInvariants verifies the catalog is still queryable after a native
+// cycle.
+func (c *CompactionService) checkCatalogInvariants() error {
+	return verifySnapshotInvariants(c.db, fmt.Sprintf("__ducklake_metadata_%s", c.lakeName))
+}
+
+// verifySnapshotInvariants checks the two properties whose violation makes
+// DuckLake abort every query. DuckLake resolves the current snapshot with
+// "WHERE snapshot_id = (SELECT MAX(snapshot_id) ...)" and fails when that matches
+// more than one row.
+//
+// Current catalog schemas declare snapshot_id as a primary key, so an exact
+// duplicate is already rejected by SQLite. This stays as a cheap net for the
+// variants that slip past it — most notably an id written with a different
+// storage class, which the unique index treats as a distinct value while DuckLake
+// reads the column as BIGINT and sees two rows (see RepairCatalogSnapshots).
+func verifySnapshotInvariants(db *sql.DB, metadataSchema string) error {
+	var latestRows int64
+	if err := db.QueryRow(fmt.Sprintf(
+		`SELECT COUNT(*) FROM %[1]s.ducklake_snapshot
+		  WHERE CAST(snapshot_id AS BIGINT) =
+		        (SELECT MAX(CAST(snapshot_id AS BIGINT)) FROM %[1]s.ducklake_snapshot)`,
+		metadataSchema)).Scan(&latestRows); err != nil {
+		return fmt.Errorf("read latest snapshot rows: %w", err)
+	}
+	if latestRows != 1 {
+		return fmt.Errorf("latest snapshot matches %d rows, want exactly 1", latestRows)
+	}
+
+	var dupes int64
+	if err := db.QueryRow(fmt.Sprintf(
+		`SELECT COUNT(*) FROM (
+		    SELECT CAST(snapshot_id AS BIGINT) AS sid FROM %s.ducklake_snapshot
+		     GROUP BY sid HAVING COUNT(*) > 1)`,
+		metadataSchema)).Scan(&dupes); err != nil {
+		return fmt.Errorf("count duplicate snapshots: %w", err)
+	}
+	if dupes != 0 {
+		return fmt.Errorf("%d duplicated snapshot_id values", dupes)
+	}
 	return nil
 }
 
