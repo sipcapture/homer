@@ -251,6 +251,24 @@ func verifyRoundTrip(src *schema.Schema, outSchema *arrow.Schema, props *parquet
 	return nil
 }
 
+// maxRowGroupBytes returns the uncompressed size of the file's largest row group,
+// which is what the merge has to hold in memory at once. Reading it costs one
+// footer read, no column data.
+func maxRowGroupBytes(path string) (int64, error) {
+	rdr, err := file.OpenParquetFile(path, false)
+	if err != nil {
+		return 0, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer rdr.Close()
+	var largest int64
+	for rg := 0; rg < rdr.NumRowGroups(); rg++ {
+		if b := rdr.MetaData().RowGroup(rg).TotalByteSize(); b > largest {
+			largest = b
+		}
+	}
+	return largest, nil
+}
+
 // mergeParquetFiles concatenates the row groups of srcPaths into a single new
 // parquet file at outPath, copying one row group at a time so peak memory is
 // bounded by the largest single row group rather than the whole partition.

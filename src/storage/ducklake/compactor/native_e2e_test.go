@@ -327,12 +327,16 @@ func TestCompactionSkipsInlinedData(t *testing.T) {
 	t.Logf("skipped as expected: %s", res.SkipReason)
 }
 
-// TestCompactionSkipsTableWithRowLevelDeletes guards the case the old engine got
-// wrong: a partition-wide retirement cannot preserve row-level deletes.
-func TestCompactionSkipsTableWithRowLevelDeletes(t *testing.T) {
+// TestCompactionLeavesPartitionWithRowLevelDeletes guards the case the old engine
+// got wrong: a partition-wide retirement cannot preserve row-level deletes, so the
+// affected partition must be left alone — and only that partition, so one deleted
+// row cannot stop the whole table from compacting.
+func TestCompactionLeavesPartitionWithRowLevelDeletes(t *testing.T) {
 	f := newLakeFixture(t)
-	f.insertBatch(t, "2026-05-30", 0, 10)
-	f.insertBatch(t, "2026-05-30", 10, 20)
+	for i := int64(0); i < 3; i++ {
+		f.insertBatch(t, "2026-05-30", i*10, i*10+10)
+		f.insertBatch(t, "2026-05-31", 100+i*10, 100+i*10+10)
+	}
 	// Delete a subset of one file so DuckLake records a row-level delete file.
 	f.mustExec(t, `DELETE FROM lake.calls WHERE id = 3`)
 
@@ -345,13 +349,32 @@ func TestCompactionSkipsTableWithRowLevelDeletes(t *testing.T) {
 	if deleteFiles == 0 {
 		t.Skip("this DuckLake build did not create a row-level delete file")
 	}
+	rowsBefore := f.count(t)
 
 	res, err := CompactTable(context.Background(), f.options(), f.table)
 	if err != nil {
 		t.Fatalf("CompactTable: %v", err)
 	}
-	if !res.Skipped {
-		t.Fatalf("expected the table to be skipped, got %+v", res)
+	if res.Skipped {
+		t.Fatalf("whole table was skipped for one partition's deletes: %s", res.SkipReason)
 	}
-	t.Logf("skipped as expected: %s", res.SkipReason)
+	if res.PartitionsSkippedDeletes != 1 {
+		t.Errorf("partition with deletes was not left alone: %+v", res)
+	}
+	// The untouched partition must still have been compacted.
+	if res.PartitionsCompacted != 1 {
+		t.Errorf("unaffected partition was not compacted: %+v", res)
+	}
+	if got := f.count(t); got != rowsBefore {
+		t.Errorf("row count = %d, want %d", got, rowsBefore)
+	}
+
+	// The deleted row must stay deleted: retiring its partition would bring it back.
+	var resurrected int64
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM lake.calls WHERE id = 3`).Scan(&resurrected); err != nil {
+		t.Fatal(err)
+	}
+	if resurrected != 0 {
+		t.Errorf("deleted row came back: %d rows with id = 3", resurrected)
+	}
 }

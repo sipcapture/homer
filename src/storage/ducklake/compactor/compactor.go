@@ -55,6 +55,15 @@ type Options struct {
 	DataPath string
 	// TargetFileSizeBytes caps each merged output file (default 512MB).
 	TargetFileSizeBytes int64
+	// MaxRowGroupBytes is the budget for a single source row group, uncompressed.
+	// A row group is the unit the merge materializes in Arrow form, so it sets the
+	// floor on memory, and parquet row groups are sized in rows regardless of how
+	// wide those rows are: real Homer files have been observed with 1.5GB row
+	// groups (10k rows of SIP payload), which cost roughly 10GB RSS to merge.
+	// Partitions containing a row group above this budget are left alone rather
+	// than risking the OOM the native engine exists to avoid. Zero disables the
+	// check.
+	MaxRowGroupBytes int64
 	// MinAge leaves a partition alone until nothing has been written to it for
 	// this long. Ingest writes to one partition at a time (Homer partitions by
 	// date), and merging that partition races the writer's flush: the swap then
@@ -98,6 +107,41 @@ type Result struct {
 	// PartitionsSkippedYoung counts partitions left alone because they were
 	// written to more recently than MinAge.
 	PartitionsSkippedYoung int
+	// PartitionsSkippedDeletes counts partitions left alone because some of their
+	// rows were deleted individually.
+	PartitionsSkippedDeletes int
+	// PartitionsSkippedLarge counts partitions left alone because a source row
+	// group exceeded MaxRowGroupBytes.
+	PartitionsSkippedLarge int
+}
+
+// largestRowGroup returns the biggest uncompressed row group across the
+// partition's files, with the file it came from.
+func largestRowGroup(opts Options, meta tableMeta, files []sourceFile) (int64, string, error) {
+	var biggest int64
+	var from string
+	for _, f := range files {
+		abs := tableFileAbs(opts.DataPath, meta.tablePath, f.path, f.pathIsRel)
+		size, err := maxRowGroupBytes(abs)
+		if err != nil {
+			return 0, "", err
+		}
+		if size > biggest {
+			biggest, from = size, abs
+		}
+	}
+	return biggest, from, nil
+}
+
+// partitionHasDeletes reports whether any of the partition's files has rows
+// deleted individually, which rules out retiring the partition as a whole.
+func partitionHasDeletes(files []sourceFile) bool {
+	for _, f := range files {
+		if f.hasDeletes {
+			return true
+		}
+	}
+	return false
 }
 
 // partitionQuietFor returns how long it has been since anything was added to the
@@ -176,13 +220,16 @@ func CompactTable(ctx context.Context, opts Options, tableName string) (Result, 
 
 		// A partition is retired with one DELETE, which cannot preserve row-level
 		// deletes, and inlined rows are invisible to the parquet merge but would
-		// be swept away by that DELETE.
-		deletes, err := hasDeleteFiles(ctx, opts.DB, opts.LakeName, meta.tableID)
+		// be swept away by that DELETE. Delete files that name a live data file
+		// are handled per partition below; only ones that cannot be placed force
+		// the whole table to be skipped.
+		orphanDeletes, err := unattributedDeleteFiles(ctx, opts.DB, opts.LakeName, meta.tableID)
 		if err != nil {
 			return err
 		}
-		if deletes {
-			skip = "table has active row-level delete files"
+		if orphanDeletes > 0 {
+			skip = fmt.Sprintf("%d row-level delete files cannot be traced to an active data file",
+				orphanDeletes)
 			return nil
 		}
 		inlined, err := hasInlinedData(ctx, opts.DB, opts.LakeName)
@@ -214,6 +261,16 @@ func CompactTable(ctx context.Context, opts Options, tableName string) (Result, 
 			// No partition value means no safe retirement predicate.
 			continue
 		}
+		if partitionHasDeletes(files) {
+			// Retiring this partition would resurrect the individually deleted
+			// rows. The rest of the table is unaffected, which matters with
+			// retention on: its cutoff lands inside one partition and would
+			// otherwise stop the whole table from ever compacting.
+			logger.Debug("native compactor: partition has row-level deletes, leaving it",
+				"table", tableName, "partition", partVal)
+			res.PartitionsSkippedDeletes++
+			continue
+		}
 		if age, ok := partitionQuietFor(files); opts.MinAge > 0 && ok && age < opts.MinAge {
 			logger.Debug("native compactor: partition still being written, leaving it",
 				"table", tableName, "partition", partVal,
@@ -228,6 +285,22 @@ func CompactTable(ctx context.Context, opts Options, tableName string) (Result, 
 		batches, worth := planPartition(sizes, target)
 		if !worth {
 			continue
+		}
+		if budget := opts.MaxRowGroupBytes; budget > 0 {
+			biggest, path, err := largestRowGroup(opts, meta, files)
+			if err != nil {
+				logger.Warn("native compactor: cannot size row groups, leaving partition alone",
+					"table", tableName, "partition", partVal, "error", err)
+				res.PartitionsSkippedLarge++
+				continue
+			}
+			if biggest > budget {
+				logger.Info("native compactor: row group too large to merge safely, leaving partition alone",
+					"table", tableName, "partition", partVal,
+					"row_group_bytes", biggest, "budget_bytes", budget, "file", path)
+				res.PartitionsSkippedLarge++
+				continue
+			}
 		}
 
 		pr, err := compactPartition(ctx, opts, meta, tableName, partVal, files, batches)

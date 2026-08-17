@@ -302,11 +302,18 @@ The `native` engine does the merge itself instead of asking DuckDB to do it:
 - groups a partition's parquet files into batches up to `target_file_size_bytes`
   (default 512MB), based on their on-disk sizes;
 - concatenates each batch by copying parquet **row groups** one at a time, so
-  peak memory is bounded by a single row group, never the whole partition.
-  Measured on a synthetic HEP-shaped table with ~1KB rows: peak Go heap was
-  870MB for a 97MB partition and 1046MB for a 779MB one — 8x the data for 1.2x
-  the memory. Note the constant is close to 1GB and lives **outside** DuckDB's
-  `memory_limit`, so budget for it on top;
+  peak memory is bounded by a single row group, never the whole partition. That
+  bound is confirmed: growing a partition 8x (97MB -> 779MB) moved peak Go heap
+  only from 870MB to 1046MB. **But a row group is sized in rows, not bytes**, so
+  wide rows make the bound itself large: real Homer files have been measured with
+  1.5GB row groups (10,568 rows of SIP payload), and merging three of them peaked
+  at ~10GB RSS. This memory is Arrow's heap and is **not** covered by DuckDB's
+  `memory_limit`;
+- refuses partitions whose largest source row group exceeds
+  `max_row_group_bytes` (default 256MB uncompressed, read from the parquet footer
+  so it costs no column reads). Expect peak RSS several times the budget. This is
+  the guard that keeps the merge from becoming the OOM it was written to avoid;
+  raise it only if the writer has the memory to spare;
 - leaves a partition alone until nothing has been written to it for
   `min_age_sec`, measured from the snapshot that added its newest file. Ingest
   targets today's partition continuously, and merging it races the writer's
@@ -337,6 +344,11 @@ the catalog exactly as it was. Tables with active row-level delete files, tables
 not partitioned by a single identity column, and lakes with un-flushed inlined
 rows are skipped entirely.
 
+Partitions are skipped individually, so one bad partition never stops the rest of
+a table: a partition is left alone when it holds row-level deletes, when it was
+written to more recently than `min_age_sec`, or when a source row group exceeds
+`max_row_group_bytes`.
+
 Two schema-level refusals are permanent for the life of the process, because
 retrying them can only repeat the same discarded work:
 
@@ -350,14 +362,11 @@ retrying them can only repeat the same discarded work:
 
 **Retention interacts with this.** `runRetention` deletes on `timestamp` while
 tables are partitioned by `date`, so a cutoff inside a day removes only part of a
-file and DuckLake records a **row-level delete file** — which makes the native
-compactor skip that table for as long as the delete file stays active. A cutoff
-that lands on a date boundary retires whole files and leaves compaction working.
-Since the cutoff is `now` minus the window, it almost never falls on midnight,
-and with `retention_unit: hours` it essentially never does. Expect the oldest
-retained partition to block native compaction of its table until the cutoff moves
-past it; the rest of the lake is unaffected, and the DuckDB engine still handles
-those tables.
+file and DuckLake records a **row-level delete file**. Since the cutoff is `now`
+minus the window it almost never falls on midnight, and with `retention_unit:
+hours` it essentially never does, so expect one such partition per table with
+retention on. Only that partition is skipped — every other partition still
+compacts — and it becomes eligible again once the cutoff moves past it.
 
 Additionally, each native cycle takes a `VACUUM INTO` copy of the catalog first
 (keeping the last 3), and verifies afterwards that the catalog still has exactly
@@ -383,7 +392,9 @@ path and would read that component as a column the table does not have.
       "compaction": {
         "enable": true,
         "engine": "native",
-        "target_file_size_bytes": 536870912
+        "target_file_size_bytes": 536870912,
+        "max_row_group_bytes": 268435456,
+        "min_age_sec": 300
       }
     }
   }
@@ -535,15 +546,17 @@ Requirements and behavior:
   while ingest targets it, and Homer partitions by `date`, this only delays the
   current day; older partitions compact on the first attempt.
 
-Memory profile: bounded by one row group regardless of partition size, so a
-512MB target safely compacts 76×77MB files on a writer capped well under the
-multi-GB working set the DuckDB merge required. Measured with
-`TestScaleMergeMemoryIsBounded`: growing the partition 8x (97MB -> 779MB, 1.6M ->
-13.1M rows) moved peak Go heap only from 870MB to 1046MB. That heap is the Arrow
-merge's own and is **not** covered by DuckDB's `memory_limit`, so size the
-container for it separately. The retirement `DELETE` reads the partition to
-confirm the files are fully covered, and runs with `threads = 1` to keep that
-scan's memory bounded too.
+Memory profile: bounded by one row group regardless of partition size.
+`TestScaleMergeMemoryIsBounded` shows the independence — growing the partition 8x
+(97MB -> 779MB, 1.6M -> 13.1M rows) moved peak Go heap from 870MB to 1046MB — but
+independence from partition size is not the same as being small. A row group is
+sized in rows, so its bytes scale with row width: real Homer files with 1.5GB row
+groups took ~10GB RSS to merge (5.3GB at `GOGC=20`, 3.7GB at
+`GOMEMLIMIT=2GiB`, at twice the wall time). `max_row_group_bytes` therefore caps
+what will be attempted, and this heap is Arrow's, outside DuckDB's
+`memory_limit`, so size the container for both. The retirement `DELETE` reads the
+partition to confirm the files are fully covered, and runs with `threads = 1` to
+keep that scan's memory bounded too.
 
 > Note: the search node picks up the new snapshot on its next periodic catalog
 > refresh, exactly as it does for a normal writer flush.

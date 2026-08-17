@@ -136,6 +136,9 @@ type CompactionConfig struct {
 	Engine string `json:"engine"`
 	// TargetFileSizeBytes caps each merged file for the native engine. 0 = 512MB.
 	TargetFileSizeBytes int64 `json:"target_file_size_bytes"`
+	// MaxRowGroupBytes bounds native merge memory by skipping partitions whose
+	// source row groups are larger than this, uncompressed. 0 = 256MB.
+	MaxRowGroupBytes int64 `json:"max_row_group_bytes"`
 }
 
 // Compaction engine identifiers.
@@ -835,6 +838,7 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			LakeName:            c.lakeName,
 			DataPath:            c.dataPath,
 			TargetFileSizeBytes: c.config.TargetFileSizeBytes,
+			MaxRowGroupBytes:    c.effectiveMaxRowGroupBytes(),
 			MinAge:              time.Duration(c.config.MinAgeSec) * time.Second,
 			Lock:                lockFn,
 			Unlock:              unlockFn,
@@ -862,7 +866,10 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			"files_merged", res.FilesMerged,
 			"files_created", res.FilesCreated,
 			"partitions", res.PartitionsCompacted,
-			"partitions_deferred", res.PartitionsDeferred)
+			"partitions_deferred", res.PartitionsDeferred,
+			"partitions_too_fresh", res.PartitionsSkippedYoung,
+			"partitions_with_deletes", res.PartitionsSkippedDeletes,
+			"partitions_row_group_too_big", res.PartitionsSkippedLarge)
 	}
 
 	// A native cycle must never leave the catalog in the state that produced
@@ -879,6 +886,22 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 
 	logger.Info("CompactionService: Native maintenance completed", "lake", c.lakeName)
 	return nil
+}
+
+// defaultCompactionMinAgeSec is how long a partition must go untouched before the
+// native engine will merge it.
+const defaultCompactionMinAgeSec = 300
+
+// defaultMaxRowGroupBytes is the native engine's row group budget when the
+// operator sets none. Peak RSS runs several times this, so it is deliberately well
+// below the memory a writer is normally given.
+const defaultMaxRowGroupBytes int64 = 256 << 20
+
+func (c *CompactionService) effectiveMaxRowGroupBytes() int64 {
+	if c.config.MaxRowGroupBytes > 0 {
+		return c.config.MaxRowGroupBytes
+	}
+	return defaultMaxRowGroupBytes
 }
 
 // unsupportedTables records, per table, why the native engine cannot be used for

@@ -57,6 +57,9 @@ type sourceFile struct {
 	fileSizeBytes int64
 	rowIDStart    sql.NullInt64
 	partitionVal  string
+	// hasDeletes marks a file some of whose rows were deleted individually. Its
+	// partition cannot be retired wholesale without resurrecting those rows.
+	hasDeletes bool
 	// ageSec is how long ago the snapshot that added this file was taken, used to
 	// tell a partition ingest is still writing from one that has settled.
 	ageSec sql.NullInt64
@@ -133,18 +136,29 @@ func (p partitionKey) usable() bool {
 		safeTypeName.MatchString(p.columnType)
 }
 
-// hasDeleteFiles reports whether the table has active row-level delete files.
-// The compactor rewrites whole partitions and cannot preserve row-level deletes,
-// so it skips such tables.
-func hasDeleteFiles(ctx context.Context, db *sql.DB, lakeName string, tableID int64) (bool, error) {
+// unattributedDeleteFiles counts the table's active row-level delete files that
+// cannot be traced to one of its active data files.
+//
+// Retiring a partition with a single DELETE cannot preserve row-level deletes, so
+// affected partitions must be left alone. Almost every delete file names the data
+// file it applies to, which places it in a partition and lets the rest of the
+// table compact (retention hits only the partition holding the cutoff). A delete
+// file that resolves to no active data file cannot be placed, so the whole table
+// is skipped instead of guessing.
+func unattributedDeleteFiles(ctx context.Context, db *sql.DB, lakeName string, tableID int64) (int64, error) {
+	md := metadataSchema(lakeName)
 	var n int64
 	err := db.QueryRowContext(ctx, fmt.Sprintf(
-		`SELECT COUNT(*) FROM %s.ducklake_delete_file
-		  WHERE table_id = ? AND end_snapshot IS NULL`, metadataSchema(lakeName)), tableID).Scan(&n)
+		`SELECT COUNT(*) FROM %[1]s.ducklake_delete_file dfx
+		  WHERE dfx.table_id = ? AND dfx.end_snapshot IS NULL
+		    AND NOT EXISTS (SELECT 1 FROM %[1]s.ducklake_data_file df
+		                     WHERE df.data_file_id = dfx.data_file_id
+		                       AND df.table_id = dfx.table_id
+		                       AND df.end_snapshot IS NULL)`, md), tableID).Scan(&n)
 	if err != nil {
-		return false, fmt.Errorf("count delete files: %w", err)
+		return 0, fmt.Errorf("count unattributed delete files: %w", err)
 	}
-	return n > 0, nil
+	return n, nil
 }
 
 // activeFilesByPartition returns the table's active parquet files grouped by
@@ -160,6 +174,10 @@ func activeFilesByPartition(ctx context.Context, db *sql.DB, lakeName string, ta
 		`SELECT df.data_file_id, df.path, df.path_is_relative,
 		        df.record_count, df.file_size_bytes, df.row_id_start,
 		        COALESCE(pv.partition_value, ''),
+		        EXISTS (SELECT 1 FROM %[1]s.ducklake_delete_file dfx
+		                 WHERE dfx.data_file_id = df.data_file_id
+		                   AND dfx.table_id = df.table_id
+		                   AND dfx.end_snapshot IS NULL),
 		        -- Computed in SQL against now(), which is exactly how DuckLake
 		        -- itself compares snapshot_time (expire_snapshots older_than =>
 		        -- NOW()). Reading the raw value into Go instead would need us to
@@ -184,7 +202,7 @@ func activeFilesByPartition(ctx context.Context, db *sql.DB, lakeName string, ta
 		if err := rows.Scan(
 			&f.dataFileID, &f.path, &f.pathIsRel,
 			&f.recordCount, &f.fileSizeBytes, &f.rowIDStart, &f.partitionVal,
-			&f.ageSec,
+			&f.hasDeletes, &f.ageSec,
 		); err != nil {
 			return nil, err
 		}

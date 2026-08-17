@@ -566,6 +566,51 @@ func TestMinAgeLeavesFreshPartitionAlone(t *testing.T) {
 	f.assertCatalogHealthy(t)
 }
 
+// TestMaxRowGroupBytesLeavesOversizedPartitionAlone covers the guard that keeps
+// the merge from being OOM-killed. A parquet row group is the unit held in memory
+// and is sized in rows, so wide rows make it arbitrarily large: real Homer files
+// with 1.5GB row groups needed ~10GB RSS to merge. Rather than synthesise such a
+// file, the budget is set below the fixture's row groups.
+func TestMaxRowGroupBytesLeavesOversizedPartitionAlone(t *testing.T) {
+	f := newLakeFixture(t)
+	for i := int64(0); i < 6; i++ {
+		f.insertBatch(t, "2026-05-30", i*10, i*10+10)
+	}
+	filesBefore := f.activeFiles(t)
+	rowsBefore := f.count(t)
+
+	opts := f.options()
+	opts.MaxRowGroupBytes = 1 // smaller than any real row group
+	res, err := CompactTable(context.Background(), opts, f.table)
+	if err != nil {
+		t.Fatalf("CompactTable: %v", err)
+	}
+	if res.PartitionsSkippedLarge != 1 {
+		t.Errorf("oversized partition was not left alone: %+v", res)
+	}
+	if res.PartitionsCompacted != 0 {
+		t.Errorf("partition was merged despite the budget: %+v", res)
+	}
+	if got := f.activeFiles(t); got != filesBefore {
+		t.Errorf("active files changed: %d -> %d", filesBefore, got)
+	}
+
+	// With the budget lifted the same partition must compact, proving the skip
+	// came from the budget and nothing else.
+	opts.MaxRowGroupBytes = 1 << 30
+	res, err = CompactTable(context.Background(), opts, f.table)
+	if err != nil {
+		t.Fatalf("second CompactTable: %v", err)
+	}
+	if res.PartitionsCompacted != 1 {
+		t.Errorf("partition was not compacted with a generous budget: %+v", res)
+	}
+	if got := f.count(t); got != rowsBefore {
+		t.Errorf("row count = %d, want %d", got, rowsBefore)
+	}
+	f.assertCatalogHealthy(t)
+}
+
 // TestPartitionQuietFor covers the age helper, including the case where the
 // catalog gives no snapshot time and the age must be reported as unknown so the
 // caller does not skip work on a guess.

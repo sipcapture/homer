@@ -39,13 +39,13 @@ func (f *lakeFixture) activeDeleteFiles(t *testing.T) int64 {
 	return n
 }
 
-// TestRetentionMidDayCutoffBlocksNativeCompaction documents how retention and the
+// TestRetentionMidDayCutoffOnlyBlocksItsOwnPartition covers how retention and the
 // native engine interact. Retention runs `DELETE ... WHERE timestamp < cutoff`
 // while the table is partitioned by date, so a cutoff inside a day removes part of
-// a file's rows. DuckLake records that as a row-level delete file, and the
-// compactor refuses tables that have one: retiring a partition wholesale cannot
-// preserve per-row deletions.
-func TestRetentionMidDayCutoffBlocksNativeCompaction(t *testing.T) {
+// a file's rows and DuckLake records a row-level delete file. That partition
+// cannot be retired wholesale, but every other partition still compacts — which is
+// what keeps retention and native compaction usable together.
+func TestRetentionMidDayCutoffOnlyBlocksItsOwnPartition(t *testing.T) {
 	f := newRetentionFixture(t)
 	if got := f.activeDeleteFiles(t); got != 0 {
 		t.Fatalf("fixture already has %d delete files", got)
@@ -56,26 +56,49 @@ func TestRetentionMidDayCutoffBlocksNativeCompaction(t *testing.T) {
 
 	deletes := f.activeDeleteFiles(t)
 	t.Logf("active row-level delete files after a mid-day cutoff: %d", deletes)
+	if deletes == 0 {
+		t.Skip("this DuckLake version retired whole files instead of recording " +
+			"row-level deletes, so there is nothing to block")
+	}
+	rowsBefore := f.countTable(t, "hep")
 
 	res, err := CompactTable(context.Background(), f.options(), "hep")
 	if err != nil {
 		t.Fatalf("CompactTable: %v", err)
 	}
-	if deletes > 0 {
-		if !res.Skipped {
-			t.Errorf("table with row-level deletes was compacted anyway: %+v", res)
-		} else {
-			t.Logf("skipped as designed: %s", res.SkipReason)
-		}
-	} else {
-		t.Log("this DuckLake version retired whole files instead of recording " +
-			"row-level deletes, so compaction is not blocked")
-		if res.Skipped {
-			t.Errorf("unexpected skip without delete files: %s", res.SkipReason)
-		}
+	if res.Skipped {
+		t.Fatalf("whole table was skipped over one partition: %s", res.SkipReason)
+	}
+	if res.PartitionsSkippedDeletes != 1 {
+		t.Errorf("the partition holding the cutoff was not left alone: %+v", res)
+	}
+	if res.PartitionsCompacted != 1 {
+		t.Errorf("the partition retention did not touch was not compacted: %+v", res)
+	}
+	if got := f.countTable(t, "hep"); got != rowsBefore {
+		t.Errorf("row count = %d, want %d", got, rowsBefore)
+	}
+	// Rows retention removed must not come back.
+	var expired int64
+	if err := f.db.QueryRow(
+		`SELECT COUNT(*) FROM lake.hep WHERE "timestamp" < TIMESTAMP '2026-05-29 01:30:00'`).
+		Scan(&expired); err != nil {
+		t.Fatal(err)
+	}
+	if expired != 0 {
+		t.Errorf("%d expired rows came back after compaction", expired)
 	}
 	// The delete file here is intentional, so only the snapshot invariants apply.
 	f.assertSnapshotsHealthy(t)
+}
+
+func (f *lakeFixture) countTable(t *testing.T, table string) int64 {
+	t.Helper()
+	var n int64
+	if err := f.db.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM lake.%s`, quoteIdent(table))).Scan(&n); err != nil {
+		t.Fatalf("count %s: %v", table, err)
+	}
+	return n
 }
 
 // TestRetentionDayAlignedCutoffKeepsCompactionWorking checks the other end: when
