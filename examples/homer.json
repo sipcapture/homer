@@ -71,6 +71,7 @@
         "enable": true,
         "check_interval_sec": 1800,
         "retention_days": 30,
+        "retention_unit": "days",
         "retention_days_by_table": {
           "hep_proto_1_registration": 14
         },

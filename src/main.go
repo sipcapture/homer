@@ -181,6 +181,7 @@ system -- System operations:
   --compaction-expire-snapshots Expire DuckLake snapshots
   --compaction-expire-older-than <dur>  Age threshold (default: 1h)
   --compaction-retention-days <n>       Delete data older than N days
+  --compaction-retention-unit <unit>    Unit for retention: days|hours (default: days)
   --compaction-merge-list       List smallest files before/after merge
   --compaction-merge-list-limit <n>     Limit for merge list (default: 50)
   --install-extensions          Install DuckDB extensions (ducklake, sqlite)

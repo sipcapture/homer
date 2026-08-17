@@ -791,6 +791,15 @@ func TestLoad_CoordinatorAuthObjectTypeInvalid(t *testing.T) {
 	}
 }
 
+func TestLoad_InvalidRetentionUnit(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "storage": { "ducklake": { "compaction": { "retention_unit": "fortnights" } } }
+}`)
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for invalid storage.ducklake.compaction.retention_unit")
+	}
+}
+
 func TestLoad_CoordinatorAuthObjectWithoutTypeDefaultsToInternal(t *testing.T) {
 	path := writeTmpConfig(t, `{
   "coordinator": {
