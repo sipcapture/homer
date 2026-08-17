@@ -331,6 +331,7 @@ func (w *Writer) Start() error {
 			CheckIntervalSec:          w.storageConfig.DuckLake.Compaction.CheckIntervalSec,
 			RetentionDays:             w.storageConfig.DuckLake.Compaction.RetentionDays,
 			RetentionDaysByTable:      w.storageConfig.DuckLake.Compaction.RetentionDaysByTable,
+			RetentionUnit:             w.storageConfig.DuckLake.Compaction.RetentionUnit,
 			SnapshotExpireIntervalSec: w.storageConfig.DuckLake.Compaction.SnapshotExpireIntervalSec,
 			MinAgeSec:                 w.storageConfig.DuckLake.Compaction.MinAgeSec,
 			MinFileSizeBytes:          w.storageConfig.DuckLake.Compaction.MinFileSizeBytes,

@@ -85,6 +85,7 @@ type SystemFlags struct {
 	CompactionExpireSnapshots bool
 	CompactionExpireOlderThan string
 	CompactionRetentionDays   int
+	CompactionRetentionUnit   string
 	CompactionMergeList       bool
 	CompactionMergeListLimit  int
 	RebuildCatalog            bool
@@ -105,6 +106,7 @@ type systemFlagRefs struct {
 	CompactionExpireSnapshots *bool
 	CompactionExpireOlderThan *string
 	CompactionRetentionDays   *int
+	CompactionRetentionUnit   *string
 	CompactionMergeList       *bool
 	CompactionMergeListLimit  *int
 	RebuildCatalog            *bool
@@ -129,6 +131,7 @@ func RegisterSystemFlags() (*flag.FlagSet, *systemFlagRefs) {
 	refs.CompactionExpireSnapshots = fs.Bool("compaction-expire-snapshots", false, "expire DuckLake snapshots and exit")
 	refs.CompactionExpireOlderThan = fs.String("compaction-expire-older-than", "1h", "age threshold for snapshot expiration (e.g., 30m, 2h, 3600s)")
 	refs.CompactionRetentionDays = fs.Int("compaction-retention-days", 0, "delete data older than N days and exit")
+	refs.CompactionRetentionUnit = fs.String("compaction-retention-unit", "days", "unit for --compaction-retention-days: \"days\" or \"hours\"")
 	refs.CompactionMergeList = fs.Bool("compaction-merge-list", false, "list smallest DuckLake files before/after merge")
 	refs.CompactionMergeListLimit = fs.Int("compaction-merge-list-limit", 50, "limit for compaction-merge-list output")
 	refs.RebuildCatalog = fs.Bool("rebuild-catalog", false, "fix a corrupt catalog: back up the existing catalog and rebuild it by registering the on-disk parquet files in place (no rewrite), then exit")
@@ -153,6 +156,7 @@ func ParseSystemFlags(refs *systemFlagRefs) SystemFlags {
 		CompactionExpireSnapshots: *refs.CompactionExpireSnapshots,
 		CompactionExpireOlderThan: *refs.CompactionExpireOlderThan,
 		CompactionRetentionDays:   *refs.CompactionRetentionDays,
+		CompactionRetentionUnit:   *refs.CompactionRetentionUnit,
 		CompactionMergeList:       *refs.CompactionMergeList,
 		CompactionMergeListLimit:  *refs.CompactionMergeListLimit,
 		RebuildCatalog:            *refs.RebuildCatalog,
@@ -226,12 +230,17 @@ func runCompaction(f SystemFlags) error {
 
 	// Retention
 	if f.CompactionRetentionDays > 0 {
+		unit, err := config.NormalizeRetentionUnit(f.CompactionRetentionUnit)
+		if err != nil {
+			return fmt.Errorf("--compaction-retention-unit: %w", err)
+		}
+
 		tables, err := discoverDuckLakeTables(db, lakeName)
 		if err != nil {
 			return fmt.Errorf("failed to discover DuckLake tables: %w", err)
 		}
 
-		cutoff := time.Now().AddDate(0, 0, -f.CompactionRetentionDays)
+		cutoff := config.RetentionCutoff(time.Now(), f.CompactionRetentionDays, unit)
 		cutoffStr := cutoff.UTC().Format("2006-01-02 15:04:05")
 		var totalRowsDeleted int64
 		for _, table := range tables {
@@ -247,7 +256,7 @@ func runCompaction(f SystemFlags) error {
 				totalRowsDeleted += rowsAffected
 			}
 		}
-		logger.Info("Retention completed", "total_rows_deleted", totalRowsDeleted)
+		logger.Info("Retention completed", "total_rows_deleted", totalRowsDeleted, "retention_unit", unit)
 	}
 
 	// Expire duration

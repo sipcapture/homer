@@ -771,6 +771,12 @@ type CompactionConfig struct {
 	// of 0 disables TTL for that table. When RetentionDays is 0, positive
 	// overrides still run retention for the listed tables only.
 	RetentionDaysByTable map[string]int `json:"retention_days_by_table" mapstructure:"retention_days_by_table"`
+	// RetentionUnit selects how RetentionDays / RetentionDaysByTable values
+	// are interpreted: "days" (default) uses calendar-day arithmetic
+	// (matches legacy behavior exactly); "hours" reinterprets the same
+	// integer fields as hours. Applies globally to both the default and
+	// every per-table override.
+	RetentionUnit string `json:"retention_unit" mapstructure:"retention_unit" default:"days"`
 	// SnapshotExpireIntervalSec controls how long to keep DuckLake snapshots (seconds).
 	SnapshotExpireIntervalSec int `json:"snapshot_expire_interval_sec" mapstructure:"snapshot_expire_interval_sec" default:"3600"`
 	// MinAgeSec controls how old data must be before compaction runs.
@@ -1260,6 +1266,10 @@ func Load(configPath string) (*Config, error) {
 		return nil, err
 	}
 
+	if err := validateRetentionUnits(&cfg); err != nil {
+		return nil, err
+	}
+
 	MainConfig = &cfg
 	return &cfg, nil
 }
@@ -1335,6 +1345,18 @@ func validateDuckLakeCatalogTypes(cfg *Config) error {
 		if err := check(fmt.Sprintf("node.ducklake.volumes[%d].catalog_type", i), v.CatalogType); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// validateRetentionUnits fails fast on an unrecognized retention_unit so a
+// typo doesn't silently reinterpret retention windows.
+func validateRetentionUnits(cfg *Config) error {
+	if _, err := NormalizeRetentionUnit(cfg.Storage.DuckLake.Compaction.RetentionUnit); err != nil {
+		return fmt.Errorf("storage.ducklake.compaction.retention_unit: %w", err)
+	}
+	if _, err := NormalizeRetentionUnit(cfg.Node.DuckLake.Compaction.RetentionUnit); err != nil {
+		return fmt.Errorf("node.ducklake.compaction.retention_unit: %w", err)
 	}
 	return nil
 }

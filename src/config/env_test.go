@@ -68,6 +68,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		"HOMER_STORAGE_DUCKLAKE_COMPACTION_ENABLE":                       "true",
 		"HOMER_STORAGE_DUCKLAKE_COMPACTION_CHECK_INTERVAL_SEC":           "1800",
 		"HOMER_STORAGE_DUCKLAKE_COMPACTION_RETENTION_DAYS":               "30",
+		"HOMER_STORAGE_DUCKLAKE_COMPACTION_RETENTION_UNIT":               "days",
 		"HOMER_STORAGE_DUCKLAKE_COMPACTION_SNAPSHOT_EXPIRE_INTERVAL_SEC": "3600",
 		"HOMER_STORAGE_DUCKLAKE_COMPACTION_MIN_AGE_SEC":                  "3600",
 		"HOMER_STORAGE_DUCKLAKE_COMPACTION_MIN_FILE_SIZE_BYTES":          "0",
@@ -161,6 +162,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		{"Compaction.Enable", cfg.Storage.DuckLake.Compaction.Enable, true},
 		{"Compaction.CheckIntervalSec", cfg.Storage.DuckLake.Compaction.CheckIntervalSec, 1800},
 		{"Compaction.RetentionDays", cfg.Storage.DuckLake.Compaction.RetentionDays, 30},
+		{"Compaction.RetentionUnit", cfg.Storage.DuckLake.Compaction.RetentionUnit, "days"},
 		{"Compaction.MaxFileSizeBytes", cfg.Storage.DuckLake.Compaction.MaxFileSizeBytes, int64(134217728)},
 		{"Compaction.MaxCompactedFiles", cfg.Storage.DuckLake.Compaction.MaxCompactedFiles, 100},
 
