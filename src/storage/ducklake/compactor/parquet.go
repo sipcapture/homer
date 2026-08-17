@@ -7,11 +7,15 @@ import (
 	"io"
 	"os"
 
+	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/apache/arrow-go/v18/arrow/array"
+	"github.com/apache/arrow-go/v18/arrow/extensions"
 	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/apache/arrow-go/v18/parquet"
 	"github.com/apache/arrow-go/v18/parquet/compress"
 	"github.com/apache/arrow-go/v18/parquet/file"
 	"github.com/apache/arrow-go/v18/parquet/pqarrow"
+	"github.com/apache/arrow-go/v18/parquet/schema"
 )
 
 // mergeResult describes a freshly written compacted parquet file.
@@ -109,6 +113,98 @@ func readParquetFooterSize(path string) (int64, error) {
 	return int64(binary.LittleEndian.Uint32(tail[:4])), nil
 }
 
+// jsonLogicalColumns reports which top-level columns of a parquet file carry the
+// JSON logical type.
+//
+// The Arrow bridge is lossy in one direction: reading BYTE_ARRAY/JSON yields a
+// plain `binary` field (unlike UUID, it does not consult the extension registry),
+// and writing `binary` back emits no logical annotation. DuckLake then refuses the
+// file, because the table declares the column as JSON while the file says BLOB.
+// Re-declaring those fields with the arrow.json extension type restores the
+// annotation on write, since pqarrow honours ParquetLogicalType().
+func jsonLogicalColumns(sc *schema.Schema) map[string]bool {
+	out := make(map[string]bool)
+	for i := 0; i < sc.NumColumns(); i++ {
+		col := sc.Column(i)
+		if _, ok := col.LogicalType().(schema.JSONLogicalType); ok {
+			out[col.Name()] = true
+		}
+	}
+	return out
+}
+
+// jsonAnnotatedSchema returns schema with every field named in jsonCols redeclared
+// as the arrow.json extension type, plus the indices that were changed. Binary and
+// string arrays share a memory layout, so the storage type can be swapped without
+// touching the data.
+func jsonAnnotatedSchema(in *arrow.Schema, jsonCols map[string]bool) (*arrow.Schema, map[int]arrow.DataType, error) {
+	if len(jsonCols) == 0 {
+		return in, nil, nil
+	}
+	fields := make([]arrow.Field, len(in.Fields()))
+	changed := make(map[int]arrow.DataType)
+	for i, f := range in.Fields() {
+		fields[i] = f
+		if !jsonCols[f.Name] || f.Type.ID() != arrow.BINARY {
+			continue
+		}
+		jt, err := extensions.NewJSONType(arrow.BinaryTypes.String)
+		if err != nil {
+			return nil, nil, fmt.Errorf("json extension type for %q: %w", f.Name, err)
+		}
+		fields[i].Type = jt
+		changed[i] = jt
+	}
+	if len(changed) == 0 {
+		return in, nil, nil
+	}
+	md := in.Metadata()
+	return arrow.NewSchema(fields, &md), changed, nil
+}
+
+// retypeJSONColumns rebuilds tbl against outSchema, reinterpreting the binary
+// arrays of the given columns as arrow.json extension arrays. Binary and string
+// arrays have identical buffer layouts (validity, int32 offsets, values), so the
+// underlying data is reused rather than copied.
+func retypeJSONColumns(tbl arrow.Table, outSchema *arrow.Schema, changed map[int]arrow.DataType) (arrow.Table, error) {
+	cols := make([]arrow.Column, tbl.NumCols())
+	release := make([]func(), 0, len(changed)*2)
+	cleanup := func() {
+		for _, fn := range release {
+			fn()
+		}
+	}
+	for i := 0; i < int(tbl.NumCols()); i++ {
+		extType, needs := changed[i]
+		if !needs {
+			cols[i] = *tbl.Column(i)
+			continue
+		}
+		ext, ok := extType.(arrow.ExtensionType)
+		if !ok {
+			cleanup()
+			return nil, fmt.Errorf("column %d: %s is not an extension type", i, extType)
+		}
+		src := tbl.Column(i).Data().Chunks()
+		chunks := make([]arrow.Array, len(src))
+		for j, a := range src {
+			d := a.Data()
+			strData := array.NewData(arrow.BinaryTypes.String, d.Len(), d.Buffers(), nil, d.NullN(), d.Offset())
+			storage := array.MakeFromData(strData)
+			strData.Release()
+			chunks[j] = array.NewExtensionArrayWithStorage(ext, storage)
+			storage.Release()
+			release = append(release, chunks[j].Release)
+		}
+		chunked := arrow.NewChunked(ext, chunks)
+		release = append(release, chunked.Release)
+		cols[i] = *arrow.NewColumn(outSchema.Field(i), chunked)
+	}
+	out := array.NewTable(outSchema, cols, tbl.NumRows())
+	cleanup()
+	return out, nil
+}
+
 // mergeParquetFiles concatenates the row groups of srcPaths into a single new
 // parquet file at outPath, copying one row group at a time so peak memory is
 // bounded by the largest single row group rather than the whole partition.
@@ -135,10 +231,15 @@ func mergeParquetFiles(ctx context.Context, srcPaths []string, outPath string) (
 		_ = first.Close()
 		return mergeResult{}, fmt.Errorf("arrow reader %s: %w", srcPaths[0], err)
 	}
-	schema, err := firstReader.Schema()
+	arrowSchema, err := firstReader.Schema()
 	if err != nil {
 		_ = first.Close()
 		return mergeResult{}, fmt.Errorf("schema %s: %w", srcPaths[0], err)
+	}
+	outSchema, jsonCols, err := jsonAnnotatedSchema(arrowSchema, jsonLogicalColumns(first.MetaData().Schema))
+	if err != nil {
+		_ = first.Close()
+		return mergeResult{}, err
 	}
 
 	out, err := os.Create(outPath)
@@ -151,7 +252,7 @@ func mergeParquetFiles(ctx context.Context, srcPaths []string, outPath string) (
 		parquet.WithCompression(codec),
 		parquet.WithCreatedBy("homer-native-compactor"),
 	)
-	fw, err := pqarrow.NewFileWriter(schema, out, writerProps, pqarrow.DefaultWriterProps())
+	fw, err := pqarrow.NewFileWriter(outSchema, out, writerProps, pqarrow.DefaultWriterProps())
 	if err != nil {
 		_ = first.Close()
 		_ = out.Close()
@@ -200,13 +301,26 @@ func mergeParquetFiles(ctx context.Context, srcPaths []string, outPath string) (
 			if chunk <= 0 {
 				chunk = 1
 			}
-			if err := fw.WriteTable(tbl, chunk); err != nil {
-				tbl.Release()
+			toWrite := tbl
+			if len(jsonCols) > 0 {
+				retyped, err := retypeJSONColumns(tbl, outSchema, jsonCols)
+				if err != nil {
+					tbl.Release()
+					_ = rdr.Close()
+					return fail(fmt.Errorf("retype row group %d of %s: %w", rg, src, err))
+				}
+				toWrite = retyped
+			}
+			err = fw.WriteTable(toWrite, chunk)
+			if toWrite != tbl {
+				toWrite.Release()
+			}
+			tbl.Release()
+			if err != nil {
 				_ = rdr.Close()
 				return fail(fmt.Errorf("write row group %d of %s: %w", rg, src, err))
 			}
 			totalRows += rows
-			tbl.Release()
 		}
 		_ = rdr.Close()
 	}

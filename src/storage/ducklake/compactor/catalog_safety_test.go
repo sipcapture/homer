@@ -319,6 +319,76 @@ func TestNativeCompactionUnderConcurrentIngest(t *testing.T) {
 	f.assertCatalogHealthy(t)
 }
 
+// TestNativeCompactionPreservesLogicalTypes reproduces a failure found by running
+// a real writer: HEP tables declare data_extra as JSON, and registering a merged
+// file was rejected with `Expected type "JSON" but found type "BLOB"`.
+//
+// The Arrow bridge reads parquet BYTE_ARRAY/JSON as plain `binary` and writes it
+// back with no logical annotation, so the merged file no longer matched the table.
+// The fixture's other tables use only DATE/BIGINT/VARCHAR, which round-trip
+// cleanly and hid this entirely — hence a table with Homer's real column types.
+func TestNativeCompactionPreservesLogicalTypes(t *testing.T) {
+	f := newLakeFixture(t)
+	f.mustExec(t, `CREATE TABLE lake.rich (
+	    d DATE, id BIGINT, ts TIMESTAMP, port UINTEGER, extra JSON, txt VARCHAR)`)
+	f.mustExec(t, `ALTER TABLE lake.rich SET PARTITIONED BY (d)`)
+
+	const batches = 6
+	for i := int64(0); i < batches; i++ {
+		f.mustExec(t, fmt.Sprintf(
+			`INSERT INTO lake.rich
+			 SELECT DATE '2026-05-30', i, TIMESTAMP '2026-05-30 10:00:00' + INTERVAL (i) SECOND,
+			        5060 + (i %% 10), json_object('call_id', i::VARCHAR, 'tag', 'x'), repeat('y', 80)
+			   FROM range(%d, %d) tbl(i)`, i*10, i*10+10))
+	}
+
+	var rowsBefore int64
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM lake.rich`).Scan(&rowsBefore); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := CompactTable(context.Background(), f.options(), "rich")
+	if err != nil {
+		t.Fatalf("CompactTable: %v", err)
+	}
+	if res.Skipped {
+		t.Fatalf("table was skipped: %s", res.SkipReason)
+	}
+	if res.PartitionsCompacted != 1 {
+		t.Fatalf("partition was not compacted: %+v", res)
+	}
+
+	var rowsAfter int64
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM lake.rich`).Scan(&rowsAfter); err != nil {
+		t.Fatal(err)
+	}
+	if rowsAfter != rowsBefore {
+		t.Errorf("row count = %d, want %d", rowsAfter, rowsBefore)
+	}
+
+	// The column must still behave as JSON, not as an opaque blob: a lost
+	// annotation would either break registration or degrade the column's type.
+	var extracted int64
+	if err := f.db.QueryRow(
+		`SELECT COUNT(*) FROM lake.rich WHERE json_extract_string(extra, '$.tag') = 'x'`).Scan(&extracted); err != nil {
+		t.Fatalf("query JSON column after compaction: %v", err)
+	}
+	if extracted != rowsBefore {
+		t.Errorf("JSON extraction matched %d rows, want %d", extracted, rowsBefore)
+	}
+	f.assertCatalogHealthy(t)
+
+	// Writing must still work against the compacted partition.
+	f.mustExec(t, `INSERT INTO lake.rich VALUES
+	    (DATE '2026-05-30', 999, TIMESTAMP '2026-05-30 12:00:00', 5060, '{"call_id":"999"}', 'z')`)
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM lake.rich`).Scan(&rowsAfter); err != nil {
+		t.Fatal(err)
+	}
+	if rowsAfter != rowsBefore+1 {
+		t.Errorf("row count after insert = %d, want %d", rowsAfter, rowsBefore+1)
+	}
+}
+
 // flushOnSwapHook returns an Options.Lock hook that commits one batch on the
 // second lock acquisition, i.e. between planning and the swap of the first
 // partition. It relies on the run touching a single partition, so the second

@@ -494,6 +494,11 @@ Requirements and behavior:
   the short per-partition swap transaction, never during the slow merge, so
   flush/ingest stays responsive. Reading the catalog without the lock would make
   both the flush and the compactor fail with SQLite's `database is locked`.
+- **Column logical types are preserved.** The merge goes through Arrow, which
+  reads parquet `JSON` as plain `binary` and writes it back unannotated. Homer's
+  `data_extra` is `JSON`, so the merged file was rejected with `Expected type
+  "JSON" but found type "BLOB"`. Such columns are re-declared with the
+  `arrow.json` extension type on write, which restores the annotation.
 - If a flush commits into a partition while it is being merged, the swap's row
   count no longer matches and the partition is **deferred** to the next cycle
   rather than retired, so no row can be dropped. Because a partition is only busy
