@@ -250,6 +250,7 @@ const (
 	wfCatalogPath
 	wfDataPath
 	wfRetentionDays
+	wfRetentionUnit
 	wfBatchSize
 
 	// Node step
@@ -294,7 +295,7 @@ type wizardModel struct {
 var stepFields = [wizNumSteps][]int{
 	wizStepProfile:     {wfProfile},
 	wizStepIngest:      {wfIngestEnable, wfUDPPort, wfTCPEnable, wfHTTPPort, wfWorkerCount, wfQueueSize},
-	wizStepStorage:     {wfStorageEnable, wfCatalogPath, wfDataPath, wfRetentionDays, wfBatchSize},
+	wizStepStorage:     {wfStorageEnable, wfCatalogPath, wfDataPath, wfRetentionDays, wfRetentionUnit, wfBatchSize},
 	wizStepNode:        {wfNodeEnable, wfFlightPort, wfAuthToken},
 	wizStepCoordinator: {wfCoordEnable, wfCoordPort, wfNodeHost, wfNodePort, wfJWTSecret, wfAdminUser, wfAdminPass, wfSettingsDB},
 	wizStepSystem:      {wfLogLevel, wfPrometheusEnable, wfPrometheusPort},
@@ -374,6 +375,10 @@ func newWizardModel(outputPath string) wizardModel {
 	inputs[wfRetentionDays].Prompt = "Retention Days:  "
 	inputs[wfRetentionDays].Placeholder = "30 (0 = unlimited)"
 	inputs[wfRetentionDays].SetValue("30")
+
+	inputs[wfRetentionUnit].Prompt = "Retention Unit:  "
+	inputs[wfRetentionUnit].Placeholder = "days or hours"
+	inputs[wfRetentionUnit].SetValue("days")
 
 	inputs[wfBatchSize].Prompt = "Batch Size:      "
 	inputs[wfBatchSize].Placeholder = "10000"
@@ -704,6 +709,7 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 	queueSize := parseInt(m.inputs[wfQueueSize].Value(), 80000)
 	batchSize := parseInt(m.inputs[wfBatchSize].Value(), 10000)
 	retentionDays := parseInt(m.inputs[wfRetentionDays].Value(), 30)
+	retentionUnit := parseRetentionUnit(m.inputs[wfRetentionUnit].Value())
 	flightPort := parseInt(m.inputs[wfFlightPort].Value(), 50051)
 	coordPort := parseInt(m.inputs[wfCoordPort].Value(), 8080)
 	nodePort := parseInt(m.inputs[wfNodePort].Value(), 50051)
@@ -784,6 +790,7 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 					Enable:              true,
 					CheckIntervalSec:    1800,
 					RetentionDays:       retentionDays,
+					RetentionUnit:       retentionUnit,
 					Engine:              "native",
 					TargetFileSizeBytes: 536870912, // 512MB
 				},
@@ -891,6 +898,17 @@ func parseInt(s string, def int) int {
 		return def
 	}
 	return v
+}
+
+// parseRetentionUnit is deliberately permissive — unlike config-file loading,
+// the interactive wizard shouldn't hard-fail on a typo; it falls back to the
+// safe default "days". config.Load()'s strict validation is the backstop.
+func parseRetentionUnit(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "hours" || s == "hour" || s == "h" {
+		return config.RetentionUnitHours
+	}
+	return config.RetentionUnitDays
 }
 
 func randomHex(n int) string {

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"github.com/sipcapture/homer-core/src/storage/ducklake/compactor"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
@@ -115,6 +116,9 @@ type CompactionConfig struct {
 	// RetentionDaysByTable overrides RetentionDays per bare table name
 	// (e.g. "hep_proto_1_registration"). Override 0 disables TTL for that table.
 	RetentionDaysByTable map[string]int `json:"retention_days_by_table"`
+	// RetentionUnit selects how RetentionDays / RetentionDaysByTable are
+	// interpreted: "days" (default) or "hours". See config.RetentionUnit*.
+	RetentionUnit string `json:"retention_unit"`
 	// SnapshotExpireIntervalSec controls how long to keep DuckLake snapshots (seconds).
 	SnapshotExpireIntervalSec int `json:"snapshot_expire_interval_sec"`
 	// MinAgeSec leaves a partition alone until nothing has been written to it for
@@ -440,16 +444,16 @@ func (c *CompactionService) runCompaction() {
 	// Lock per table so flush is not blocked for the whole cycle.
 	if c.retentionEnabled() {
 		for _, table := range c.tables {
-			days := c.retentionDaysForTable(table)
-			if days <= 0 {
+			value := c.retentionValueForTable(table)
+			if value <= 0 {
 				continue
 			}
 			c.withCatalogLock(func() {
-				deleted, err := c.runRetention(table, days)
+				deleted, err := c.runRetention(table, value)
 				if err != nil {
-					logger.Error("CompactionService: Retention failed", "table", table, "retention_days", days, "error", err)
+					logger.Error("CompactionService: Retention failed", "table", table, "retention_value", value, "retention_unit", c.config.RetentionUnit, "error", err)
 				} else if deleted > 0 {
-					logger.Info("CompactionService: Retention completed", "table", table, "retention_days", days, "rows_deleted", deleted)
+					logger.Info("CompactionService: Retention completed", "table", table, "retention_value", value, "retention_unit", c.config.RetentionUnit, "rows_deleted", deleted)
 					totalRowsDeleted += deleted
 				}
 			})
@@ -523,10 +527,11 @@ func (c *CompactionService) retentionEnabled() bool {
 	return false
 }
 
-// retentionDaysForTable returns the TTL in days for a catalog table.
-// Bare table names in RetentionDaysByTable win over the global RetentionDays.
-// An explicit override of 0 disables TTL for that table.
-func (c *CompactionService) retentionDaysForTable(table string) int {
+// retentionValueForTable returns the raw TTL value for a catalog table, in
+// whatever unit c.config.RetentionUnit specifies. Bare table names in
+// RetentionDaysByTable win over the global RetentionDays. An explicit
+// override of 0 disables TTL for that table.
+func (c *CompactionService) retentionValueForTable(table string) int {
 	name := tableNameFromFQN(table)
 	if name == "" {
 		name = table
@@ -537,14 +542,15 @@ func (c *CompactionService) retentionDaysForTable(table string) int {
 	return c.config.RetentionDays
 }
 
-// runRetention deletes data older than retentionDays for one table.
-// Missing parquet files are silently skipped — they will be cleaned up
-// by ducklake_delete_orphaned_files in the maintenance phase.
-func (c *CompactionService) runRetention(table string, retentionDays int) (int64, error) {
-	if retentionDays <= 0 {
+// runRetention deletes data older than retentionValue (interpreted per
+// c.config.RetentionUnit) for one table. Missing parquet files are silently
+// skipped — they will be cleaned up by ducklake_delete_orphaned_files in the
+// maintenance phase.
+func (c *CompactionService) runRetention(table string, retentionValue int) (int64, error) {
+	if retentionValue <= 0 {
 		return 0, nil
 	}
-	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	cutoff := config.RetentionCutoff(time.Now(), retentionValue, c.config.RetentionUnit)
 	cutoffStr := cutoff.UTC().Format("2006-01-02 15:04:05")
 
 	query := fmt.Sprintf(`DELETE FROM %s WHERE timestamp < TIMESTAMP '%s'`,
