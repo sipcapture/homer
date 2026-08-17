@@ -353,8 +353,11 @@ tables are partitioned by `date`, so a cutoff inside a day removes only part of 
 file and DuckLake records a **row-level delete file** — which makes the native
 compactor skip that table for as long as the delete file stays active. A cutoff
 that lands on a date boundary retires whole files and leaves compaction working.
-With `retention_days` set, expect the affected tables to stop compacting
-natively until the cutoff moves past the partially deleted partition.
+Since the cutoff is `now` minus the window, it almost never falls on midnight,
+and with `retention_unit: hours` it essentially never does. Expect the oldest
+retained partition to block native compaction of its table until the cutoff moves
+past it; the rest of the lake is unaffected, and the DuckDB engine still handles
+those tables.
 
 Additionally, each native cycle takes a `VACUUM INTO` copy of the catalog first
 (keeping the last 3), and verifies afterwards that the catalog still has exactly
