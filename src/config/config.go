@@ -779,8 +779,18 @@ type CompactionConfig struct {
 	RetentionUnit string `json:"retention_unit" mapstructure:"retention_unit" default:"days"`
 	// SnapshotExpireIntervalSec controls how long to keep DuckLake snapshots (seconds).
 	SnapshotExpireIntervalSec int `json:"snapshot_expire_interval_sec" mapstructure:"snapshot_expire_interval_sec" default:"3600"`
-	// MinAgeSec controls how old data must be before compaction runs.
-	MinAgeSec int `json:"min_age_sec" mapstructure:"min_age_sec" default:"3600"`
+	// MinAgeSec leaves a partition alone until nothing has been written to it for
+	// this long, measured from the snapshot that added its newest file. Ingest
+	// targets one date partition at a time, and compacting it races the writer's
+	// flush: the merged file is then discarded, so the work is repeated every
+	// cycle. Enforced by the "native" engine only; ducklake_merge_adjacent_files
+	// offers no equivalent control.
+	//
+	// The default is a few minutes rather than an hour so that a busy writer still
+	// consolidates during the day: partitions are keyed by date, so an hour-long
+	// quiet period never arrives under continuous ingest and today's files would
+	// pile up until midnight.
+	MinAgeSec int `json:"min_age_sec" mapstructure:"min_age_sec" default:"300"`
 	// MinFileSizeBytes: minimum file size for merge (smaller files will be merged). 0 = no limit.
 	MinFileSizeBytes int64 `json:"min_file_size_bytes" mapstructure:"min_file_size_bytes" default:"0"`
 	// MaxFileSizeBytes: maximum size of merged file. 0 = no limit (DuckLake default).
@@ -792,20 +802,26 @@ type CompactionConfig struct {
 	// Engine selects the compaction implementation:
 	//   "duckdb" — DuckLake's ducklake_merge_adjacent_files (default). Loads a
 	//              whole partition into memory, which can OOM on wide SIP data.
-	//   "native" — DuckDB-free Go compactor that concatenates a partition's
-	//              parquet row groups (peak memory ≈ one row group) and writes
-	//              the SQLite catalog directly. Safe to run alongside the live
-	//              DuckDB writer: every commit/reap runs under the catalog lock
-	//              and, while still holding it, the compactor refreshes the
-	//              writer's DuckLake metadata cache (DETACH/ATTACH) so the
-	//              writer re-reads the latest snapshot and never reuses a
-	//              snapshot id the compactor allocated. Requires a local
-	//              data_path and a SQLite catalog; otherwise it falls back to
-	//              the DuckDB merge automatically.
+	//   "native" — Go compactor that concatenates a partition's parquet row
+	//              groups itself (peak memory ≈ one row group), then swaps each
+	//              partition in with one short DuckDB transaction: a DELETE over
+	//              the partition column retires the old files and
+	//              ducklake_add_data_files registers the merged output. DuckLake
+	//              allocates every snapshot and file id, so the live writer's
+	//              cache cannot go stale. Requires a local data_path and a
+	//              DuckLake build providing ducklake_add_data_files; otherwise it
+	//              falls back to the DuckDB merge automatically.
 	Engine string `json:"engine" mapstructure:"engine" default:"duckdb"`
 	// TargetFileSizeBytes caps each merged output file for the native engine.
 	// 0 = engine default (512MB).
 	TargetFileSizeBytes int64 `json:"target_file_size_bytes" mapstructure:"target_file_size_bytes" default:"0"`
+	// MaxRowGroupBytes bounds the native engine's memory use. A parquet row group
+	// is the unit the merge holds in memory, and row groups are sized in rows
+	// regardless of how wide those rows are: files with 1.5GB row groups (10k rows
+	// of SIP payload) have been measured needing ~10GB RSS to merge. Partitions
+	// containing a row group above this budget are left alone instead. Expect peak
+	// RSS several times the budget. 0 = engine default (256MB).
+	MaxRowGroupBytes int64 `json:"max_row_group_bytes" mapstructure:"max_row_group_bytes" default:"0"`
 }
 
 // S3Config configures S3 storage for DuckLake

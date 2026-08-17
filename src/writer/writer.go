@@ -351,7 +351,10 @@ func (w *Writer) Start() error {
 			compactionCfg.SnapshotExpireIntervalSec = 3600 // default 1 hour
 		}
 		if compactionCfg.MinAgeSec <= 0 {
-			compactionCfg.MinAgeSec = 3600 // default 1 hour
+			// Short enough that a continuously busy writer still consolidates
+			// during the day: partitions are keyed by date, so an hour of quiet
+			// never arrives under steady ingest.
+			compactionCfg.MinAgeSec = defaultCompactionMinAgeSec
 		}
 		if compactionCfg.MaxCompactedFiles <= 0 {
 			// Unbounded merge rewrites every small parquet of a table in one
