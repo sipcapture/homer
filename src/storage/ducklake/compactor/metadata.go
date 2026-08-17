@@ -57,6 +57,9 @@ type sourceFile struct {
 	fileSizeBytes int64
 	rowIDStart    sql.NullInt64
 	partitionVal  string
+	// ageSec is how long ago the snapshot that added this file was taken, used to
+	// tell a partition ingest is still writing from one that has settled.
+	ageSec sql.NullInt64
 }
 
 // readTableMeta resolves the active table id, its data path and its partition
@@ -150,15 +153,25 @@ func hasDeleteFiles(ctx context.Context, db *sql.DB, lakeName string, tableID in
 // grouped under "" and are never compacted (no safe retirement predicate).
 func activeFilesByPartition(ctx context.Context, db *sql.DB, lakeName string, tableID int64) (map[string][]sourceFile, error) {
 	md := metadataSchema(lakeName)
+	// The age of a file comes from the snapshot that added it, not from its mtime:
+	// storage_policy moves parquet between volumes, which rewrites mtime and would
+	// make old data look freshly written.
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(
 		`SELECT df.data_file_id, df.path, df.path_is_relative,
 		        df.record_count, df.file_size_bytes, df.row_id_start,
-		        COALESCE(pv.partition_value, '')
+		        COALESCE(pv.partition_value, ''),
+		        -- Computed in SQL against now(), which is exactly how DuckLake
+		        -- itself compares snapshot_time (expire_snapshots older_than =>
+		        -- NOW()). Reading the raw value into Go instead would need us to
+		        -- guess whether the catalog stores local or UTC wall clock.
+		        date_diff('second', TRY_CAST(s.snapshot_time AS TIMESTAMP), now()::TIMESTAMP)
 		   FROM %[1]s.ducklake_data_file df
 		   LEFT JOIN %[1]s.ducklake_file_partition_value pv
 		          ON pv.data_file_id = df.data_file_id
 		         AND pv.table_id = df.table_id
 		         AND pv.partition_key_index = 0
+		   LEFT JOIN %[1]s.ducklake_snapshot s
+		          ON s.snapshot_id = df.begin_snapshot
 		  WHERE df.table_id = ? AND df.end_snapshot IS NULL`, md), tableID)
 	if err != nil {
 		return nil, fmt.Errorf("read active files: %w", err)
@@ -171,6 +184,7 @@ func activeFilesByPartition(ctx context.Context, db *sql.DB, lakeName string, ta
 		if err := rows.Scan(
 			&f.dataFileID, &f.path, &f.pathIsRel,
 			&f.recordCount, &f.fileSizeBytes, &f.rowIDStart, &f.partitionVal,
+			&f.ageSec,
 		); err != nil {
 			return nil, err
 		}

@@ -302,8 +302,16 @@ The `native` engine does the merge itself instead of asking DuckDB to do it:
 - groups a partition's parquet files into batches up to `target_file_size_bytes`
   (default 512MB), based on their on-disk sizes;
 - concatenates each batch by copying parquet **row groups** one at a time, so
-  peak memory is bounded by a single row group (a few hundred MB), never the
-  whole partition;
+  peak memory is bounded by a single row group, never the whole partition.
+  Measured on a synthetic HEP-shaped table with ~1KB rows: peak Go heap was
+  870MB for a 97MB partition and 1046MB for a 779MB one — 8x the data for 1.2x
+  the memory. Note the constant is close to 1GB and lives **outside** DuckDB's
+  `memory_limit`, so budget for it on top;
+- leaves a partition alone until nothing has been written to it for
+  `min_age_sec`, measured from the snapshot that added its newest file. Ingest
+  targets today's partition continuously, and merging it races the writer's
+  flush: the swap then finds a changed row count and discards the merged file,
+  repeating the same wasted work every cycle;
 - swaps each partition in with **one short DuckDB transaction**: a `DELETE` over
   the partition column retires the old files (the predicate covers every row of
   every file, so DuckLake drops whole files instead of writing row-level delete
@@ -328,6 +336,25 @@ rolls the transaction back and defers the partition to the next cycle, leaving
 the catalog exactly as it was. Tables with active row-level delete files, tables
 not partitioned by a single identity column, and lakes with un-flushed inlined
 rows are skipped entirely.
+
+Two schema-level refusals are permanent for the life of the process, because
+retrying them can only repeat the same discarded work:
+
+- a column type that the parquet -> Arrow -> parquet round trip cannot reproduce;
+- a column type DuckLake will not accept from an added file at all. Some DuckDB
+  types have no exact parquet form — `HUGEINT` is stored as `DOUBLE` — and
+  `ducklake_add_data_files` then rejects the file against the table's declared
+  type, even though DuckLake wrote the sources the same way. Homer's schema uses
+  only `VARCHAR`, `UINTEGER`, `BIGINT`, `DOUBLE`, `TIMESTAMP`, `DATE` and `JSON`,
+  all of which round-trip; this guards a column added later.
+
+**Retention interacts with this.** `runRetention` deletes on `timestamp` while
+tables are partitioned by `date`, so a cutoff inside a day removes only part of a
+file and DuckLake records a **row-level delete file** — which makes the native
+compactor skip that table for as long as the delete file stays active. A cutoff
+that lands on a date boundary retires whole files and leaves compaction working.
+With `retention_days` set, expect the affected tables to stop compacting
+natively until the cutoff moves past the partially deleted partition.
 
 Additionally, each native cycle takes a `VACUUM INTO` copy of the catalog first
 (keeping the last 3), and verifies afterwards that the catalog still has exactly
@@ -507,9 +534,13 @@ Requirements and behavior:
 
 Memory profile: bounded by one row group regardless of partition size, so a
 512MB target safely compacts 76×77MB files on a writer capped well under the
-multi-GB working set the DuckDB merge required. The retirement `DELETE` reads the
-partition to confirm the files are fully covered, and runs with `threads = 1` to
-keep that scan's memory bounded too.
+multi-GB working set the DuckDB merge required. Measured with
+`TestScaleMergeMemoryIsBounded`: growing the partition 8x (97MB -> 779MB, 1.6M ->
+13.1M rows) moved peak Go heap only from 870MB to 1046MB. That heap is the Arrow
+merge's own and is **not** covered by DuckDB's `memory_limit`, so size the
+container for it separately. The retirement `DELETE` reads the partition to
+confirm the files are fully covered, and runs with `threads = 1` to keep that
+scan's memory bounded too.
 
 > Note: the search node picks up the new snapshot on its next periodic catalog
 > refresh, exactly as it does for a normal writer flush.

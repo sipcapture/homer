@@ -773,7 +773,12 @@ type CompactionConfig struct {
 	RetentionDaysByTable map[string]int `json:"retention_days_by_table" mapstructure:"retention_days_by_table"`
 	// SnapshotExpireIntervalSec controls how long to keep DuckLake snapshots (seconds).
 	SnapshotExpireIntervalSec int `json:"snapshot_expire_interval_sec" mapstructure:"snapshot_expire_interval_sec" default:"3600"`
-	// MinAgeSec controls how old data must be before compaction runs.
+	// MinAgeSec leaves a partition alone until nothing has been written to it for
+	// this long, measured from the snapshot that added its newest file. Ingest
+	// targets one date partition at a time, and compacting it races the writer's
+	// flush: the merged file is then discarded, so the work is repeated every
+	// cycle. Enforced by the "native" engine only; ducklake_merge_adjacent_files
+	// offers no equivalent control.
 	MinAgeSec int `json:"min_age_sec" mapstructure:"min_age_sec" default:"3600"`
 	// MinFileSizeBytes: minimum file size for merge (smaller files will be merged). 0 = no limit.
 	MinFileSizeBytes int64 `json:"min_file_size_bytes" mapstructure:"min_file_size_bytes" default:"0"`

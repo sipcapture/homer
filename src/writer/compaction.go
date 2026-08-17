@@ -117,7 +117,8 @@ type CompactionConfig struct {
 	RetentionDaysByTable map[string]int `json:"retention_days_by_table"`
 	// SnapshotExpireIntervalSec controls how long to keep DuckLake snapshots (seconds).
 	SnapshotExpireIntervalSec int `json:"snapshot_expire_interval_sec"`
-	// MinAgeSec controls how old data must be before compaction runs.
+	// MinAgeSec leaves a partition alone until nothing has been written to it for
+	// this long. Enforced by the native engine only.
 	MinAgeSec int `json:"min_age_sec"`
 	// MinFileSizeBytes: minimum file size for merge (smaller files will be merged). 0 = no limit.
 	MinFileSizeBytes int64 `json:"min_file_size_bytes"`
@@ -172,16 +173,16 @@ const nativeCatalogBackupsKept = 3
 // Nil or empty AccessKeyID means skip (ApplyDuckDBS3ClientSettings is a no-op).
 type CompactionS3Client struct {
 	Region, AccessKeyID, SecretAccessKey, Endpoint string
-	UseSSL                                           bool
-	URLStyle                                         string
+	UseSSL                                         bool
+	URLStyle                                       string
 }
 
 // CompactionService handles periodic compaction and retention
 type CompactionService struct {
 	db            *sql.DB
 	lakeName      string
-	dataPath      string       // root dir for parquet files; catalog paths are relative to this
-	catalogPath   string       // DuckLake SQLite catalog file (used by the native engine)
+	dataPath      string // root dir for parquet files; catalog paths are relative to this
+	catalogPath   string // DuckLake SQLite catalog file (used by the native engine)
 	config        CompactionConfig
 	tables        []string
 	catalogLocker CatalogLocker // serializes catalog access with writer flush
@@ -195,6 +196,11 @@ type CompactionService struct {
 	// nativeDisabled latches when a native cycle leaves the catalog failing its
 	// invariants, so the process stops using the native engine until restart.
 	nativeDisabled atomic.Bool
+
+	// nativeUnsupported remembers tables DuckLake will not accept merged files
+	// for, keyed by table name with the reason as value. Retrying them would
+	// rewrite the same partitions every cycle only to discard the result.
+	nativeUnsupported unsupportedTables
 
 	// Stats
 	lastCompactionTime time.Time
@@ -812,12 +818,18 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			logger.Warn("CompactionService: Skipping table with invalid name", "table", table)
 			continue
 		}
+		if reason, unsupported := c.nativeUnsupported.Load(tableName); unsupported {
+			logger.Debug("CompactionService: native merge not possible for this table",
+				"table", tableName, "reason", reason)
+			continue
+		}
 		logger.Info("CompactionService: native merge starting", "table", tableName)
 		res, err := compactor.CompactTable(c.ctx, compactor.Options{
 			DB:                  c.db,
 			LakeName:            c.lakeName,
 			DataPath:            c.dataPath,
 			TargetFileSizeBytes: c.config.TargetFileSizeBytes,
+			MinAge:              time.Duration(c.config.MinAgeSec) * time.Second,
 			Lock:                lockFn,
 			Unlock:              unlockFn,
 		}, tableName)
@@ -826,6 +838,15 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			continue
 		}
 		if res.Skipped {
+			if res.Unsupported {
+				// Caused by the table's schema, so every later cycle would repeat
+				// the same merge just to discard it. Remember and stop trying.
+				c.nativeUnsupported.Store(tableName, res.SkipReason)
+				logger.Warn("CompactionService: table cannot be compacted natively, "+
+					"not retrying until restart",
+					"table", tableName, "reason", res.SkipReason)
+				continue
+			}
 			logger.Info("CompactionService: native merge skipped", "table", tableName, "reason", res.SkipReason)
 			continue
 		}
@@ -852,6 +873,30 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 
 	logger.Info("CompactionService: Native maintenance completed", "lake", c.lakeName)
 	return nil
+}
+
+// unsupportedTables records, per table, why the native engine cannot be used for
+// it. Compaction cycles run from a single goroutine, but the mutex keeps it safe
+// if that ever changes and makes the intent explicit.
+type unsupportedTables struct {
+	mu     sync.Mutex
+	byName map[string]string
+}
+
+func (u *unsupportedTables) Store(table, reason string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.byName == nil {
+		u.byName = make(map[string]string)
+	}
+	u.byName[table] = reason
+}
+
+func (u *unsupportedTables) Load(table string) (string, bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	reason, ok := u.byName[table]
+	return reason, ok
 }
 
 // checkCatalogInvariants verifies the catalog is still queryable after a native
@@ -938,14 +983,14 @@ func (c *CompactionService) GetStats() map[string]interface{} {
 	defer c.mu.RUnlock()
 
 	return map[string]interface{}{
-		"enabled":                c.config.Enable,
-		"check_interval_sec":     c.config.CheckIntervalSec,
-		"retention_days":         c.config.RetentionDays,
+		"enabled":                 c.config.Enable,
+		"check_interval_sec":      c.config.CheckIntervalSec,
+		"retention_days":          c.config.RetentionDays,
 		"retention_days_by_table": c.config.RetentionDaysByTable,
-		"tables":                 len(c.tables),
-		"last_compaction_time":   c.lastCompactionTime,
-		"total_compactions":      c.totalCompactions,
-		"total_rows_deleted":     c.totalRowsDeleted,
+		"tables":                  len(c.tables),
+		"last_compaction_time":    c.lastCompactionTime,
+		"total_compactions":       c.totalCompactions,
+		"total_rows_deleted":      c.totalRowsDeleted,
 	}
 }
 

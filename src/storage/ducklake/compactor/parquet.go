@@ -205,6 +205,52 @@ func retypeJSONColumns(tbl arrow.Table, outSchema *arrow.Schema, changed map[int
 	return out, nil
 }
 
+// errUnsupportedSchema means the parquet -> Arrow -> parquet round trip would not
+// reproduce the source column types, so the merged file would not match the table.
+type errUnsupportedSchema struct {
+	column   string
+	from, to string
+}
+
+func (e *errUnsupportedSchema) Error() string {
+	return fmt.Sprintf("column %q would change type from %s to %s through the arrow round trip",
+		e.column, e.from, e.to)
+}
+
+// verifyRoundTrip checks that writing outSchema reproduces src's column types.
+//
+// The Arrow bridge silently degrades types it cannot represent exactly — HUGEINT
+// comes back as DOUBLE, for example — and DuckLake then rejects the merged file at
+// registration. Checking up front turns that into a clean skip with a readable
+// reason instead of a merge that is thrown away on every cycle. It also needs no
+// allowlist, so a column type added later is handled without touching this code.
+func verifyRoundTrip(src *schema.Schema, outSchema *arrow.Schema, props *parquet.WriterProperties) error {
+	got, err := pqarrow.ToParquet(outSchema, props, pqarrow.DefaultWriterProps())
+	if err != nil {
+		return fmt.Errorf("derive output parquet schema: %w", err)
+	}
+	if got.NumColumns() != src.NumColumns() {
+		return &errUnsupportedSchema{
+			column: "<all>",
+			from:   fmt.Sprintf("%d columns", src.NumColumns()),
+			to:     fmt.Sprintf("%d columns", got.NumColumns()),
+		}
+	}
+	for i := 0; i < src.NumColumns(); i++ {
+		want, have := src.Column(i), got.Column(i)
+		if want.PhysicalType() == have.PhysicalType() &&
+			want.LogicalType().Equals(have.LogicalType()) {
+			continue
+		}
+		return &errUnsupportedSchema{
+			column: want.Name(),
+			from:   fmt.Sprintf("%s/%s", want.PhysicalType(), want.LogicalType()),
+			to:     fmt.Sprintf("%s/%s", have.PhysicalType(), have.LogicalType()),
+		}
+	}
+	return nil
+}
+
 // mergeParquetFiles concatenates the row groups of srcPaths into a single new
 // parquet file at outPath, copying one row group at a time so peak memory is
 // bounded by the largest single row group rather than the whole partition.
@@ -242,16 +288,22 @@ func mergeParquetFiles(ctx context.Context, srcPaths []string, outPath string) (
 		return mergeResult{}, err
 	}
 
+	writerProps := parquet.NewWriterProperties(
+		parquet.WithCompression(codec),
+		parquet.WithCreatedBy("homer-native-compactor"),
+	)
+	// Checked before anything is written, so an unsupported column costs nothing.
+	if err := verifyRoundTrip(first.MetaData().Schema, outSchema, writerProps); err != nil {
+		_ = first.Close()
+		return mergeResult{}, err
+	}
+
 	out, err := os.Create(outPath)
 	if err != nil {
 		_ = first.Close()
 		return mergeResult{}, fmt.Errorf("create %s: %w", outPath, err)
 	}
 
-	writerProps := parquet.NewWriterProperties(
-		parquet.WithCompression(codec),
-		parquet.WithCreatedBy("homer-native-compactor"),
-	)
 	fw, err := pqarrow.NewFileWriter(outSchema, out, writerProps, pqarrow.DefaultWriterProps())
 	if err != nil {
 		_ = first.Close()

@@ -117,11 +117,29 @@ func (f *lakeFixture) activeFiles(t *testing.T) int64 {
 	return n
 }
 
-// assertCatalogHealthy checks the invariants whose violation produced
-// "Corrupt DuckLake - multiple snapshots returned from database".
+// assertCatalogHealthy checks the snapshot invariants and additionally requires
+// that compaction produced no row-level delete files, since it retires whole
+// files. Tests that deliberately create delete files (retention) use
+// assertSnapshotsHealthy instead.
 func (f *lakeFixture) assertCatalogHealthy(t *testing.T) {
 	t.Helper()
-	var latest, dupes, deleteFiles int64
+	f.assertSnapshotsHealthy(t)
+	var deleteFiles int64
+	if err := f.db.QueryRow(
+		`SELECT COUNT(*) FROM __ducklake_metadata_lake.ducklake_delete_file WHERE end_snapshot IS NULL`).
+		Scan(&deleteFiles); err != nil {
+		t.Fatalf("delete files: %v", err)
+	}
+	if deleteFiles != 0 {
+		t.Errorf("row-level delete files = %d, want 0 (partition retirement must drop whole files)", deleteFiles)
+	}
+}
+
+// assertSnapshotsHealthy checks the invariants whose violation produced
+// "Corrupt DuckLake - multiple snapshots returned from database".
+func (f *lakeFixture) assertSnapshotsHealthy(t *testing.T) {
+	t.Helper()
+	var latest, dupes int64
 	if err := f.db.QueryRow(
 		`SELECT COUNT(*) FROM __ducklake_metadata_lake.ducklake_snapshot
 		  WHERE snapshot_id = (SELECT MAX(snapshot_id) FROM __ducklake_metadata_lake.ducklake_snapshot)`).
@@ -138,14 +156,6 @@ func (f *lakeFixture) assertCatalogHealthy(t *testing.T) {
 	}
 	if dupes != 0 {
 		t.Errorf("duplicate snapshot_id groups = %d, want 0", dupes)
-	}
-	if err := f.db.QueryRow(
-		`SELECT COUNT(*) FROM __ducklake_metadata_lake.ducklake_delete_file WHERE end_snapshot IS NULL`).
-		Scan(&deleteFiles); err != nil {
-		t.Fatalf("delete files: %v", err)
-	}
-	if deleteFiles != 0 {
-		t.Errorf("row-level delete files = %d, want 0 (partition retirement must drop whole files)", deleteFiles)
 	}
 }
 

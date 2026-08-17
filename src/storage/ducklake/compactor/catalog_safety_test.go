@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -386,6 +387,214 @@ func TestNativeCompactionPreservesLogicalTypes(t *testing.T) {
 	}
 	if rowsAfter != rowsBefore+1 {
 		t.Errorf("row count after insert = %d, want %d", rowsAfter, rowsBefore+1)
+	}
+}
+
+// TestNativeCompactionCoversEveryColumnType exercises every column type Homer's
+// DuckLake tables actually declare, across tables.go, otlp_storage.go and
+// vqrtcp_storage.go: VARCHAR, UINTEGER, TIMESTAMP, JSON, DATE, BIGINT and DOUBLE.
+//
+// The JSON breakage was only found by running a real writer, because the fixtures
+// used none of the types the production schema relies on.
+func TestNativeCompactionCoversEveryColumnType(t *testing.T) {
+	f := newLakeFixture(t)
+	f.mustExec(t, `CREATE TABLE lake.every_type (
+	    d DATE,
+	    id BIGINT,
+	    port UINTEGER,
+	    dbl DOUBLE,
+	    ts TIMESTAMP,
+	    extra JSON,
+	    txt VARCHAR)`)
+	f.mustExec(t, `ALTER TABLE lake.every_type SET PARTITIONED BY (d)`)
+
+	for i := int64(0); i < 6; i++ {
+		f.mustExec(t, fmt.Sprintf(
+			`INSERT INTO lake.every_type
+			 SELECT DATE '2026-05-30',
+			        i,
+			        (5060 + i %% 10)::UINTEGER,
+			        i * 1.5,
+			        TIMESTAMP '2026-05-30 10:00:00' + INTERVAL (i) SECOND,
+			        json_object('call_id', i::VARCHAR, 'tag', 'x'),
+			        repeat('y', 80)
+			   FROM range(%d, %d) tbl(i)`, i*10, i*10+10))
+	}
+
+	before := scalarRow(t, f, `SELECT COUNT(*), SUM(hash(to_json(t)::VARCHAR)::HUGEINT)::VARCHAR FROM lake.every_type t`)
+
+	res, err := CompactTable(context.Background(), f.options(), "every_type")
+	if err != nil {
+		t.Fatalf("CompactTable: %v", err)
+	}
+	if res.Skipped {
+		t.Fatalf("table was skipped: %s", res.SkipReason)
+	}
+	if res.PartitionsCompacted != 1 {
+		t.Fatalf("partition was not compacted: %+v", res)
+	}
+
+	after := scalarRow(t, f, `SELECT COUNT(*), SUM(hash(to_json(t)::VARCHAR)::HUGEINT)::VARCHAR FROM lake.every_type t`)
+	if after[0] != before[0] {
+		t.Errorf("row count = %s, want %s", after[0], before[0])
+	}
+	// An order-insensitive digest over every column: a type that silently lost
+	// precision or was reinterpreted would change it even if the count matched.
+	if after[1] != before[1] {
+		t.Errorf("contents digest changed: %s -> %s", before[1], after[1])
+	}
+
+	// Types must still behave as their declared type, not as opaque bytes.
+	var typed int64
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM lake.every_type
+	     WHERE json_extract_string(extra, '$.tag') = 'x'
+	       AND port BETWEEN 5060 AND 5069
+	       AND ts >= TIMESTAMP '2026-05-30 10:00:00'
+	       AND dbl >= 0`).Scan(&typed); err != nil {
+		t.Fatalf("typed query after compaction: %v", err)
+	}
+	if typed != 60 {
+		t.Errorf("typed predicates matched %d rows, want 60", typed)
+	}
+	f.assertCatalogHealthy(t)
+}
+
+// TestCompactionSkipsUnsupportedColumnType covers a type the Arrow round trip
+// cannot reproduce. HUGEINT comes back as DOUBLE, which DuckLake rejects at
+// registration — so without an up-front check the compactor would rewrite the
+// whole partition every cycle only to throw it away. Homer's schema uses no such
+// type today; this guards a column added later.
+func TestCompactionSkipsUnsupportedColumnType(t *testing.T) {
+	f := newLakeFixture(t)
+	f.mustExec(t, `CREATE TABLE lake.wide (d DATE, id BIGINT, big HUGEINT)`)
+	f.mustExec(t, `ALTER TABLE lake.wide SET PARTITIONED BY (d)`)
+	for i := int64(0); i < 6; i++ {
+		f.mustExec(t, fmt.Sprintf(
+			`INSERT INTO lake.wide
+			 SELECT DATE '2026-05-30', i, (i * 170141183460469231731687303715)::HUGEINT
+			   FROM range(%d, %d) tbl(i)`, i*10, i*10+10))
+	}
+	filesBefore := f.activeFiles(t)
+
+	res, err := CompactTable(context.Background(), f.options(), "wide")
+	if err != nil {
+		t.Fatalf("CompactTable should skip, not fail: %v", err)
+	}
+	if !res.Skipped {
+		t.Fatalf("expected a skip, got %+v", res)
+	}
+	// Unsupported tells the writer to stop offering this table, so it does not
+	// rewrite the partition on every cycle just to discard it.
+	if !res.Unsupported {
+		t.Errorf("skip was not marked as unsupported: %+v", res)
+	}
+	if !strings.Contains(res.SkipReason, "big") {
+		t.Errorf("skip reason does not name the offending column: %q", res.SkipReason)
+	}
+	t.Logf("skipped as expected: %s", res.SkipReason)
+
+	// Nothing may be retired or rewritten when the table is refused.
+	if got := f.activeFiles(t); got != filesBefore {
+		t.Errorf("active files changed on a skipped table: %d -> %d", filesBefore, got)
+	}
+	var rows int64
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM lake.wide`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 60 {
+		t.Errorf("row count = %d, want 60", rows)
+	}
+	f.assertCatalogHealthy(t)
+}
+
+// scalarRow runs a query returning one row of strings, for comparing digests.
+func scalarRow(t *testing.T, f *lakeFixture, q string) []string {
+	t.Helper()
+	var count int64
+	var digest sql.NullString
+	if err := f.db.QueryRow(q).Scan(&count, &digest); err != nil {
+		t.Fatalf("query %s: %v", q, err)
+	}
+	return []string{fmt.Sprint(count), digest.String}
+}
+
+// TestMinAgeLeavesFreshPartitionAlone covers the setting that keeps the compactor
+// off the partition ingest is currently writing. Without it every cycle merges the
+// hot partition and then discards the result when the swap sees a changed row
+// count, which is pure wasted I/O.
+func TestMinAgeLeavesFreshPartitionAlone(t *testing.T) {
+	f := newLakeFixture(t)
+	for i := int64(0); i < 6; i++ {
+		f.insertBatch(t, "2026-05-30", i*10, i*10+10)
+	}
+	filesBefore := f.activeFiles(t)
+
+	opts := f.options()
+	opts.MinAge = time.Hour
+	res, err := CompactTable(context.Background(), opts, f.table)
+	if err != nil {
+		t.Fatalf("CompactTable: %v", err)
+	}
+	if res.PartitionsSkippedYoung != 1 {
+		t.Errorf("fresh partition was not left alone: %+v", res)
+	}
+	if res.PartitionsCompacted != 0 {
+		t.Errorf("fresh partition was compacted: %+v", res)
+	}
+	if got := f.activeFiles(t); got != filesBefore {
+		t.Errorf("active files changed: %d -> %d", filesBefore, got)
+	}
+
+	// Once the partition has actually settled it must be compacted. Snapshot age
+	// has one-second resolution, so let real time pass rather than asserting on a
+	// sub-second threshold that can never be met.
+	time.Sleep(2 * time.Second)
+	opts.MinAge = time.Second
+	res, err = CompactTable(context.Background(), opts, f.table)
+	if err != nil {
+		t.Fatalf("second CompactTable: %v", err)
+	}
+	if res.PartitionsSkippedYoung != 0 {
+		t.Errorf("settled partition was still treated as fresh: %+v", res)
+	}
+	if res.PartitionsCompacted != 1 {
+		t.Errorf("settled partition was not compacted: %+v", res)
+	}
+	if got := f.count(t); got != 60 {
+		t.Errorf("row count = %d, want 60", got)
+	}
+	f.assertCatalogHealthy(t)
+}
+
+// TestPartitionQuietFor covers the age helper, including the case where the
+// catalog gives no snapshot time and the age must be reported as unknown so the
+// caller does not skip work on a guess.
+func TestPartitionQuietFor(t *testing.T) {
+	age, ok := partitionQuietFor([]sourceFile{
+		{ageSec: sql.NullInt64{Int64: 3600, Valid: true}},
+		{ageSec: sql.NullInt64{Int64: 60, Valid: true}},
+		{ageSec: sql.NullInt64{Valid: false}},
+	})
+	if !ok {
+		t.Fatal("expected a known age")
+	}
+	// Must follow the newest file, not the oldest.
+	if age != time.Minute {
+		t.Errorf("age = %s, want 1m", age)
+	}
+
+	if _, ok := partitionQuietFor([]sourceFile{{ageSec: sql.NullInt64{Valid: false}}}); ok {
+		t.Error("age reported as known when no file carries a snapshot time")
+	}
+	if _, ok := partitionQuietFor(nil); ok {
+		t.Error("age reported as known for an empty partition")
+	}
+
+	// A snapshot timestamped in the future must read as "just written", never as
+	// an old partition that is safe to merge.
+	future, ok := partitionQuietFor([]sourceFile{{ageSec: sql.NullInt64{Int64: -30, Valid: true}}})
+	if !ok || future != 0 {
+		t.Errorf("future snapshot: age = %s, ok = %v; want 0 and true", future, ok)
 	}
 }
 

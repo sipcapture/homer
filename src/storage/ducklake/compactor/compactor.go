@@ -27,9 +27,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -53,6 +55,13 @@ type Options struct {
 	DataPath string
 	// TargetFileSizeBytes caps each merged output file (default 512MB).
 	TargetFileSizeBytes int64
+	// MinAge leaves a partition alone until nothing has been written to it for
+	// this long. Ingest writes to one partition at a time (Homer partitions by
+	// date), and merging that partition races the writer's flush: the swap then
+	// finds a changed row count and throws the merged file away. Waiting until the
+	// partition is quiet avoids paying for a merge that cannot commit. Zero
+	// disables the check.
+	MinAge time.Duration
 	// Lock/Unlock serialize catalog access with the DuckLake writer (flush).
 	// They are held only for the short swap transaction — never during the slow
 	// parquet merge — so ingestion is not blocked for minutes. Both may be nil
@@ -75,13 +84,42 @@ func (o Options) unlock() {
 
 // Result summarizes one CompactTable call.
 type Result struct {
-	Skipped             bool
-	SkipReason          string
+	Skipped    bool
+	SkipReason string
+	// Unsupported marks a skip caused by the table's schema rather than by its
+	// current contents, so retrying can only waste the same work again. Callers
+	// should stop offering the table for the lifetime of the process.
+	Unsupported         bool
 	FilesBefore         int
 	FilesMerged         int
 	FilesCreated        int
 	PartitionsCompacted int
 	PartitionsDeferred  int
+	// PartitionsSkippedYoung counts partitions left alone because they were
+	// written to more recently than MinAge.
+	PartitionsSkippedYoung int
+}
+
+// partitionQuietFor returns how long it has been since anything was added to the
+// partition, i.e. the age of its newest file. ok is false when no file carries a
+// snapshot time, in which case the age is unknown and the caller must not use it
+// to skip work.
+func partitionQuietFor(files []sourceFile) (time.Duration, bool) {
+	newest := int64(math.MaxInt64)
+	for _, f := range files {
+		if f.ageSec.Valid && f.ageSec.Int64 < newest {
+			newest = f.ageSec.Int64
+		}
+	}
+	if newest == math.MaxInt64 {
+		return 0, false
+	}
+	// A clock adjustment can make the newest snapshot look like the future; treat
+	// that as "just written" rather than as an ancient partition.
+	if newest < 0 {
+		return 0, true
+	}
+	return time.Duration(newest) * time.Second, true
 }
 
 const defaultTargetFileSizeBytes int64 = 512 << 20 // 512MB
@@ -176,6 +214,13 @@ func CompactTable(ctx context.Context, opts Options, tableName string) (Result, 
 			// No partition value means no safe retirement predicate.
 			continue
 		}
+		if age, ok := partitionQuietFor(files); opts.MinAge > 0 && ok && age < opts.MinAge {
+			logger.Debug("native compactor: partition still being written, leaving it",
+				"table", tableName, "partition", partVal,
+				"quiet_for", age.Round(time.Second), "min_age", opts.MinAge)
+			res.PartitionsSkippedYoung++
+			continue
+		}
 		sizes := make([]int64, len(files))
 		for i, f := range files {
 			sizes[i] = f.fileSizeBytes
@@ -192,6 +237,16 @@ func CompactTable(ctx context.Context, opts Options, tableName string) (Result, 
 					"table", tableName, "partition", partVal, "reason", err)
 				res.PartitionsDeferred++
 				continue
+			}
+			// Both of these are properties of the table's schema rather than
+			// transient failures, so the cycle continues with the other tables and
+			// the caller is told not to come back.
+			var unsupported *errUnsupportedSchema
+			if errors.As(err, &unsupported) {
+				return Result{Skipped: true, Unsupported: true, SkipReason: unsupported.Error()}, nil
+			}
+			if errors.Is(err, errTableNotRegisterable) {
+				return Result{Skipped: true, Unsupported: true, SkipReason: err.Error()}, nil
 			}
 			return res, err
 		}

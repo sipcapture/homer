@@ -3,6 +3,7 @@ package compactor
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,21 @@ import (
 
 // addDataFilesProc is the DuckLake procedure used to register merged parquet.
 const addDataFilesProc = "ducklake_add_data_files"
+
+// errTableNotRegisterable reports that DuckLake will not accept a merged file for
+// this table because of its column types, no matter how the file is produced.
+var errTableNotRegisterable = errors.New("table columns cannot be registered from a parquet file")
+
+// isColumnMappingErr recognises DuckLake's column type mapping refusal, e.g.
+// `Failed to map column "big" ... Expected HUGEINT, found type DOUBLE`.
+func isColumnMappingErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "Failed to map column") ||
+		(strings.Contains(msg, "Expected type") && strings.Contains(msg, "but found type"))
+}
 
 // SwapSupported reports whether the loaded DuckLake extension exposes the
 // procedure the native compactor needs to register merged files. When it does
@@ -161,6 +177,15 @@ func swapPartition(ctx context.Context, db *sql.DB, lakeName string, req swapReq
 		quoteLiteral(req.tableName),
 		strings.Join(fileList, ", "))
 	if _, err := tx.ExecContext(ctx, addSQL); err != nil {
+		if isColumnMappingErr(err) {
+			// DuckLake refuses to register a file whose column types do not map to
+			// the table's declared types — and it can refuse a file that is
+			// type-identical to the ones it wrote itself, because some DuckDB types
+			// have no exact parquet representation (HUGEINT is stored as DOUBLE).
+			// This is a property of the table, so report it as such: the caller
+			// stops offering the table instead of rewriting it every cycle.
+			return fmt.Errorf("%w: %v", errTableNotRegisterable, err)
+		}
 		return fmt.Errorf("register merged files for partition %s: %w", req.partitionVal, err)
 	}
 
