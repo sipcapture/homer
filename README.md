@@ -247,6 +247,19 @@ homer system --generate-example-config > homer.json
 homer system --reload
 ```
 
+### Catalog backup / restore
+
+The DuckLake SQLite catalog is metadata only (parquet is not copied). Backup is
+safe while Homer is running; restore requires the writer to be stopped.
+
+```bash
+homer catalog backup --config-path /etc/homer/homer.json
+homer catalog list --config-path /etc/homer/homer.json
+homer catalog restore --config-path /etc/homer/homer.json
+```
+
+See [docs/CATALOG.md](docs/CATALOG.md) for flags, `--out`, and when to use restore vs `--rebuild-catalog`.
+
 ### Wizard (Config Generator)
 
 Interactive wizard that generates a complete `homer.json` config:
@@ -293,6 +306,7 @@ python3 -m venv .venv-docs && .venv-docs/bin/pip install -r docs-requirements.tx
 ```
 
 - [Search CLI](docs/SEARCH.md) - Search from the command line (examples, formats, call flow)
+- [Catalog backup / restore](docs/CATALOG.md) - Snapshot and rewind the DuckLake SQLite catalog
 - [Config Wizard](docs/WIZARD.md) - Interactive config generator (TUI + presets)
 - [Ingest performance tuning](docs/INGEST_PERFORMANCE.md) - multicore, DuckLake batch size, Prometheus flush interval; **`scripts/profile_ingest_load.sh`** / **`make profile-ingest`** for repeatable CPU profiles
 - [Coordinator Module](docs/COORDINATOR.md) - REST API gateway

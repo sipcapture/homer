@@ -169,10 +169,6 @@ type CatalogLocker interface {
 	CatalogUnlock()
 }
 
-// nativeCatalogBackupsKept is how many VACUUM INTO copies of the catalog the
-// native engine retains before each cycle.
-const nativeCatalogBackupsKept = 3
-
 // CompactionS3Client holds DuckDB httpfs S3 settings for maintenance calls that
 // read s3:// objects (ducklake_cleanup_old_files / ducklake_delete_orphaned_files).
 // Some DuckLake versions appear to evaluate read_blob without inheriting prior
@@ -802,7 +798,7 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 	// metadata only, so a copy costs little and makes a bad cycle recoverable.
 	if path := strings.TrimSpace(c.catalogPath); path != "" {
 		c.withCatalogLock(func() {
-			dest, err := ducklake.BackupCatalog(path, nativeCatalogBackupsKept)
+			dest, err := ducklake.BackupCatalog(path, ducklake.DefaultCatalogBackupKeep)
 			if err != nil {
 				logger.Warn("CompactionService: catalog backup before native merge failed",
 					"lake", c.lakeName, "error", err)
