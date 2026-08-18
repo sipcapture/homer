@@ -41,13 +41,13 @@ import (
 	"github.com/sipcapture/homer-core/src/node"
 	"github.com/sipcapture/homer-core/src/otlpreceiver"
 	otlpsink "github.com/sipcapture/homer-core/src/otlpreceiver/sink"
-	"github.com/sipcapture/homer-core/src/siprecreceiver"
-	"github.com/sipcapture/homer-core/src/vqrtcpreceiver"
 	input "github.com/sipcapture/homer-core/src/server"
+	"github.com/sipcapture/homer-core/src/siprecreceiver"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"github.com/sipcapture/homer-core/src/stream/hepstream"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"github.com/sipcapture/homer-core/src/utils/metrics"
+	"github.com/sipcapture/homer-core/src/vqrtcpreceiver"
 	"github.com/sipcapture/homer-core/src/writer"
 
 	_ "net/http/pprof" // register /debug/pprof on DefaultServeMux when --pprof is set
@@ -121,6 +121,8 @@ func printUsage() {
 
 Usage:
   homer                         Run the server (default)
+  homer catalog [action] [flags]
+                                DuckLake catalog snapshot / restore / list
   homer search [flags]          Search Homer data via coordinator API
   homer cli [flags]             Interactive DuckLake SQL shell
   homer system [flags]          System operations (compaction, extensions, reload)
@@ -169,6 +171,15 @@ search -- Search Homer data via coordinator API:
   --exclude <pattern>           Post-filter: exclude rows matching pattern (e.g. "100,183")
   --interactive                 Launch interactive TUI mode
   --debug                       Print request/response to stderr
+
+catalog -- Snapshot / restore the DuckLake SQLite catalog (metadata only):
+  backup                        Consistent VACUUM INTO snapshot (safe while Homer is running)
+  restore                       Replace the live catalog from a backup (stop Homer first)
+  list                          List rotating backups and pre-restore copies
+  --config-path <path>          Path to config file or directory
+  --keep <n>                    Rotating `.bak-*` copies to retain (backup; default: 3; 0 = all)
+  --out <path>                  Write backup to this path instead of a rotating copy
+  --from <path>                 Backup to restore (default: newest copy next to the catalog)
 
 cli -- Interactive DuckLake SQL shell:
   --config-path <path>          Path to config file or directory
@@ -398,6 +409,22 @@ func main() {
 		sf := cli.ParseSearchFlags(refs)
 		if err := cli.RunSearch(sf); err != nil {
 			fmt.Fprintf(os.Stderr, "Search error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "catalog":
+		action := ""
+		args := os.Args[2:]
+		if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+			action = args[0]
+			args = args[1:]
+		}
+		fs, refs := cli.RegisterCatalogFlags()
+		fs.Parse(args)
+		cf := cli.ParseCatalogFlags(refs)
+		cf.Action = action
+		if err := cli.RunCatalogCmd(cf); err != nil {
+			fmt.Fprintf(os.Stderr, "Catalog error: %v\n", err)
 			os.Exit(1)
 		}
 

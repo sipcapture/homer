@@ -369,10 +369,17 @@ retention on. Only that partition is skipped — every other partition still
 compacts — and it becomes eligible again once the cutoff moves past it.
 
 Additionally, each native cycle takes a `VACUUM INTO` copy of the catalog first
-(keeping the last 3), and verifies afterwards that the catalog still has exactly
-one latest snapshot and no duplicate `snapshot_id`. If that check fails the
-native engine **switches itself off** until the process restarts and falls back
-to the DuckDB merge.
+(keeping the last 3 as `<catalog>.bak-<timestamp>`), and verifies afterwards that
+the catalog still has exactly one latest snapshot and no duplicate `snapshot_id`.
+If that check fails the native engine **switches itself off** until the process
+restarts and falls back to the DuckDB merge. To take an extra snapshot or rewind
+metadata from one of those copies, see [Catalog backup and restore](CATALOG.md):
+
+```bash
+homer catalog backup --config-path /etc/homer/config.json
+# stop the writer, then:
+homer catalog restore --config-path /etc/homer/config.json
+```
 
 ### Configuration
 
@@ -438,8 +445,18 @@ with:
 "storage": { "ducklake": { "auto_repair_catalog": false } }
 ```
 
-**If the autofix cannot recover it** (e.g. corruption beyond duplicate metadata
-rows), rebuild the catalog from disk. Stop the Homer writer, then run:
+**If a recent catalog snapshot is still valid** (compaction or `homer catalog backup`
+wrote a `.bak-*` copy before the bad cycle), stop the writer and restore it.
+See [Catalog backup and restore](CATALOG.md).
+
+```bash
+homer catalog list --config-path /etc/homer/config.json
+homer catalog restore --config-path /etc/homer/config.json --from homer_catalog.sqlite.bak-YYYYMMDDTHHMMSSZ
+```
+
+**If the autofix cannot recover it** and there is no usable backup (e.g. corruption
+beyond duplicate metadata rows), rebuild the catalog from disk. Stop the Homer
+writer, then run:
 
 ```bash
 homer system --config-path /etc/homer/config.json --rebuild-catalog

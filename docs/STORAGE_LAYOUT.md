@@ -69,6 +69,11 @@ SELECT column_name, partition_type FROM ducklake_partition_column WHERE table_id
 -- date, identity
 ```
 
+### Catalog backup and restore
+
+See **[Catalog backup and restore](CATALOG.md)** (`homer catalog backup` / `restore` / `list`).
+The catalog is metadata only; parquet is not copied.
+
 ## Tables by Protocol Type
 
 ### SIP (proto_type=1)
@@ -343,6 +348,7 @@ At 1000 SIP msg/sec:
 
 ## See Also
 
+- [Catalog backup and restore](CATALOG.md) — `homer catalog backup` / `restore` / `list`
 - [DuckLake README](../src/storage/ducklake/README.md) — DuckLake integration details
 - [STORAGE_ARCHITECTURE.md](STORAGE_ARCHITECTURE.md) — General architecture
 - [DuckLake Documentation](https://ducklake.select/docs/) — Official documentation
