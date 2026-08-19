@@ -50,6 +50,34 @@ export interface UseFlowFiltersResult {
   filteredItems: RawMessage[]
 }
 
+export function applyFlowFilters(items: RawMessage[], filters: FlowFilters): RawMessage[] {
+  return items.filter((m) => {
+    const payloadType = payloadTypeOf(m)
+    if (!filters.showRtcp && payloadType === 'RTCP') return false
+
+    const src = m.src_ip || ''
+    const dst = m.dst_ip || ''
+    if (filters.ipExcluded.size > 0 && filters.ipExcluded.has(src) && filters.ipExcluded.has(dst))
+      return false
+    if (
+      filters.ipExcluded.size > 0 &&
+      (filters.ipExcluded.has(src) || filters.ipExcluded.has(dst))
+    )
+      return false
+
+    const method =
+      (m.sip_method as string) || (m.method as string) || (m.event as string) || ''
+    if (filters.methodExcluded.has(method)) return false
+
+    if (filters.payloadTypeExcluded.has(payloadType)) return false
+
+    const callid = (m.session_id as string) || (m.cid as string) || ''
+    if (filters.callIdExcluded.has(callid)) return false
+
+    return true
+  })
+}
+
 export function useFlowFilters(items: RawMessage[] | null | undefined): UseFlowFiltersResult {
   const [filters, setFilters] = useState<FlowFilters>(initialFlowFilters)
 
@@ -62,41 +90,20 @@ export function useFlowFilters(items: RawMessage[] | null | undefined): UseFlowF
     filters.isHighContrast,
     filters.isConsolidateCaptureIds,
     filters.consolidationTimeThresholdMs,
+    filters.showRtcp,
   ])
 
   const { filterIP, filterMethod, filterPayloadType, filterCallId, filteredItems } = useMemo(() => {
     const safe = items ?? []
-    const ips = collectUnique(safe, (m) => [m.src_ip || '', m.dst_ip || ''])
-    const methods = collectUnique(safe, (m) => [
+    const filteredItems = applyFlowFilters(safe, filters)
+    const ips = collectUnique(filteredItems, (m) => [m.src_ip || '', m.dst_ip || ''])
+    const methods = collectUnique(filteredItems, (m) => [
       (m.sip_method as string) || (m.method as string) || (m.event as string) || '',
     ])
-    const payloadTypes = collectUnique(safe, (m) => [payloadTypeOf(m)])
-    const callIds = collectUnique(safe, (m) => [
+    const payloadTypes = collectUnique(filteredItems, (m) => [payloadTypeOf(m)])
+    const callIds = collectUnique(filteredItems, (m) => [
       (m.session_id as string) || (m.cid as string) || '',
     ])
-
-    const filteredItems = safe.filter((m) => {
-      const src = m.src_ip || ''
-      const dst = m.dst_ip || ''
-      if (filters.ipExcluded.size > 0 && filters.ipExcluded.has(src) && filters.ipExcluded.has(dst))
-        return false
-      if (
-        filters.ipExcluded.size > 0 &&
-        (filters.ipExcluded.has(src) || filters.ipExcluded.has(dst))
-      )
-        return false
-
-      const method =
-        (m.sip_method as string) || (m.method as string) || (m.event as string) || ''
-      if (filters.methodExcluded.has(method)) return false
-
-      if (filters.payloadTypeExcluded.has(payloadTypeOf(m))) return false
-
-      const callid = (m.session_id as string) || (m.cid as string) || ''
-      if (filters.callIdExcluded.has(callid)) return false
-
-      return true
-    })
 
     return {
       filterIP: toTokens(ips, filters.ipExcluded),

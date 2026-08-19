@@ -7,6 +7,8 @@ import {
   displaySrcIp,
   qosRouteArrow,
 } from '@/lib/ipAliasDisplay'
+import { hepProtoTypeOf } from './hep-proto'
+import { computeRtcpFlowLabels } from './rtcp-flow-label'
 import { computeSipFlowLabels } from './sip-flow-label'
 
 export interface RawMessage {
@@ -170,18 +172,20 @@ export function protoLabelOf(proto: string | number | undefined): string {
   return ''
 }
 
+/**
+ * Ladder payload kind from HEP proto_type (tagged `hep_proto_type` / data_extra).
+ * The `protocol` column is IP transport (UDP=17) and must not be used here.
+ * Untagged rows default to SIP so existing SIP-only ladders keep working.
+ */
 export function payloadTypeOf(msg: RawMessage): string {
-  const p = String(msg.protocol ?? '')
-  if (p === '1' || p === 'sip' || p === 'SIP' || p === '17') return 'SIP'
-  if (p === '6' || p === '2') return 'TCP'
-  if (p === '3') return 'WSS'
-  if (p === '22') return 'TLS'
-  if (p === '5') return 'RTP'
-  if (p === '34' || p === '35') return 'RTCP'
-  if (p === '38') return 'DTMF'
-  if (p === '100') return 'LOG'
-  if (msg.sip_method || msg.method) return 'SIP'
-  return 'OTHER'
+  const hep = hepProtoTypeOf(msg)
+  if (hep === 5 || hep === 34) return 'RTCP'
+  if (hep === 35) return 'RTP'
+  if (hep === 38) return 'DTMF'
+  if (hep === 100) return 'LOG'
+  if (hep === 1) return 'SIP'
+  if (hep != null) return 'OTHER'
+  return 'SIP'
 }
 
 function parseJSONLike(value: unknown): Record<string, unknown> | null {
@@ -559,6 +563,7 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
 
     let method = msg.sip_method || msg.method || msg.event || ''
     const proto = msg.protocol
+    const payloadType = payloadTypeOf(msg)
 
     const srcIdx = indexOfHost(hosts, msg, 'src', grouping)
     const dstIdx = indexOfHost(hosts, msg, 'dst', grouping)
@@ -574,10 +579,7 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
     const direction = isLastHost || a > b
     const rightEnd = singleHost ? 0 : hosts.length - 1 - Math.max(a, b)
 
-    const protoStr = String(proto ?? '')
-    const isSIP =
-      !protoStr || protoStr === '1' || protoStr === '17' || protoStr === 'sip' || protoStr === 'SIP'
-    const arrowStyleSolid = isSIP
+    const arrowStyleSolid = payloadType === 'SIP'
 
     const date = parseTs(msg.timestamp ?? msg.create_ts)
     const ts = date ? date.getTime() : 0
@@ -593,7 +595,11 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
       qosRouteArrow(msg as Record<string, unknown>) ||
       `${displaySrcIp(msg as Record<string, unknown>)} \u2192 ${displayDstIp(msg as Record<string, unknown>)}`
 
-    if (payloadTypeOf(msg) === 'SIP') {
+    if (payloadType === 'RTCP') {
+      const rtcpLabels = computeRtcpFlowLabels(msg)
+      method = rtcpLabels.method
+      description = rtcpLabels.description
+    } else if (payloadType === 'SIP') {
       const sipLabels = computeSipFlowLabels(msg as Record<string, unknown>)
       if (sipLabels) {
         method = sipLabels.method
@@ -617,7 +623,7 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
       fullDateStr,
       diffStr,
       protoLabel: protoLabelOf(proto),
-      payloadType: payloadTypeOf(msg),
+      payloadType,
       start,
       middle,
       rightEnd,

@@ -10,6 +10,7 @@ export interface FlowFilters {
   isHighContrast: boolean
   isConsolidateCaptureIds: boolean
   consolidationTimeThresholdMs: number
+  showRtcp: boolean
   hostGrouping: HostGrouping
   ipExcluded: Set<string>
   methodExcluded: Set<string>
@@ -23,6 +24,7 @@ export const DEFAULT_FILTERS: FlowFilters = {
   isHighContrast: false,
   isConsolidateCaptureIds: false,
   consolidationTimeThresholdMs: 500,
+  showRtcp: false,
   hostGrouping: 'ungrouped',
   ipExcluded: new Set(),
   methodExcluded: new Set(),
@@ -37,6 +39,7 @@ export interface StoredFlowPrefs {
   isHighContrast?: boolean
   isConsolidateCaptureIds?: boolean
   consolidationTimeThresholdMs?: number
+  showRtcp?: boolean
 }
 
 export function isHostGrouping(value: unknown): value is HostGrouping {
@@ -58,6 +61,7 @@ export function loadStoredFlowPrefs(): StoredFlowPrefs {
     if (typeof parsed.isConsolidateCaptureIds === 'boolean') {
       out.isConsolidateCaptureIds = parsed.isConsolidateCaptureIds
     }
+    if (typeof parsed.showRtcp === 'boolean') out.showRtcp = parsed.showRtcp
     if (
       typeof parsed.consolidationTimeThresholdMs === 'number' &&
       Number.isFinite(parsed.consolidationTimeThresholdMs)
@@ -79,6 +83,7 @@ export function saveStoredFlowPrefs(filters: FlowFilters): void {
     isHighContrast: filters.isHighContrast,
     isConsolidateCaptureIds: filters.isConsolidateCaptureIds,
     consolidationTimeThresholdMs: filters.consolidationTimeThresholdMs,
+    showRtcp: filters.showRtcp,
   }
   try {
     localStorage.setItem(FLOW_FILTER_PREFS_LS_KEY, JSON.stringify(payload))

@@ -96,6 +96,14 @@ export function FilterPanel({
                   onCheckedChange={(v) => setFilters((p) => ({ ...p, isHighContrast: !!v }))}
                 />
               </div>
+              <div className="callflow-filter-row">
+                <Label htmlFor="flow-rtcp">RTCP</Label>
+                <Switch
+                  id="flow-rtcp"
+                  checked={filters.showRtcp}
+                  onCheckedChange={(v) => setFilters((p) => ({ ...p, showRtcp: !!v }))}
+                />
+              </div>
               {canConsolidateCaptureIds ? (
                 <>
                   <div className="callflow-filter-row">
