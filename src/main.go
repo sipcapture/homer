@@ -177,7 +177,7 @@ catalog -- Snapshot / restore the DuckLake SQLite catalog (metadata only):
   restore                       Replace the live catalog from a backup (stop Homer first)
   list                          List rotating backups and pre-restore copies
   --config-path <path>          Path to config file or directory
-  --keep <n>                    Rotating `.bak-*` copies to retain (backup; default: 3; 0 = all)
+  --keep <n>                    Rotating .bak-* copies to retain (backup; default: 3; 0 = all)
   --out <path>                  Write backup to this path instead of a rotating copy
   --from <path>                 Backup to restore (default: newest copy next to the catalog)
 

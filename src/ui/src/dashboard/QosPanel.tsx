@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { qosRouteArrow } from '@/lib/ipAliasDisplay'
 import { useLocale } from '@/components/locale/locale-provider'
+import { makeDateTimeFormatter } from '@/lib/datetime'
 
 const METRIC_COLORS_RTCP = {
   packets:       { bg: 'rgba(244, 67, 54, 0.5)',  border: 'rgba(244, 67, 54, 1)' },
@@ -110,7 +111,7 @@ function eventTimeMs(row) {
   return 0
 }
 
-function formatAxisTime(unixSec, timeZone, locale) {
+export function formatAxisTime(unixSec, timeZone, locale) {
   const ms = unixSec * 1000
   if (!Number.isFinite(ms)) return '—'
   const opts = {
@@ -119,11 +120,7 @@ function formatAxisTime(unixSec, timeZone, locale) {
     second: 'numeric',
   }
   try {
-    if (timeZone && timeZone !== 'local') {
-      return new Intl.DateTimeFormat(locale, { ...opts, timeZone }).format(new Date(ms))
-    }
-    const d = new Date(ms)
-    return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}:${String(d.getUTCSeconds()).padStart(2, '0')}`
+    return makeDateTimeFormatter(locale, opts, timeZone).format(new Date(ms))
   } catch {
     return '—'
   }
