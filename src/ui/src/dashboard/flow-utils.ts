@@ -98,6 +98,8 @@ export function getMethodColor(str: unknown): string {
     color = 'hsla(227.5, 82.4%, 51%, 1)'
   } else if (raw === 'BYE' || raw === 'CANCEL') {
     color = 'hsla(120, 100%, 25%, 1)'
+  } else if (raw.startsWith('RTCP')) {
+    color = 'hsla(187, 72%, 38%, 1)'
   } else {
     const code = Number(raw)
     if (Number.isFinite(code)) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildFlow, buildHosts, endpointAlias, hostKey, hostKeyFromMessage,
   runtimeFingerprintOf, captureIdOf, consolidateFlowItems, canConsolidateFlowItems,
+  payloadTypeOf,
 } from './flow-data'
 import type { FlowItemData, RawMessage } from './flow-data'
 
@@ -235,5 +236,49 @@ describe('canConsolidateFlowItems', () => {
       makeFlowItem({ id: 'a', captureId: '', runtimeFingerprint: 'fp1' }),
       makeFlowItem({ id: 'b', captureId: '1002', runtimeFingerprint: '' }),
     ])).toBe(false)
+  })
+})
+
+describe('payloadTypeOf', () => {
+  it('treats untagged UDP SIP (IP protocol 17) as SIP', () => {
+    expect(payloadTypeOf({ protocol: 17, method: 'INVITE' })).toBe('SIP')
+  })
+
+  it('classifies HEP proto 5 as RTCP even when protocol is UDP 17', () => {
+    expect(payloadTypeOf({ protocol: 17, hep_proto_type: 5 })).toBe('RTCP')
+  })
+
+  it('reads proto_type from data_extra', () => {
+    expect(payloadTypeOf({ protocol: 17, data_extra: { proto_type: 5 } })).toBe('RTCP')
+  })
+})
+
+describe('buildFlow RTCP rows', () => {
+  it('uses compact RTCP labels and a dotted arrow', () => {
+    const { flowItems } = buildFlow(
+      [
+        {
+          uuid: 'sr1',
+          src_ip: '10.0.0.1',
+          dst_ip: '10.0.0.2',
+          src_port: 4000,
+          dst_port: 4001,
+          protocol: 17,
+          session_id: 'c1',
+          timestamp: new Date('2026-01-01T12:00:00.000Z').getTime(),
+          hep_proto_type: 5,
+          payload: JSON.stringify({
+            type: 200,
+            report_blocks: [{ ia_jitter: 9, fraction_lost: 0 }],
+          }),
+        },
+      ],
+      { grouping: 'ungrouped' },
+    )
+    expect(flowItems).toHaveLength(1)
+    expect(flowItems[0].method).toBe('RTCP SR')
+    expect(flowItems[0].description).toBe('jitter=9 loss=0%')
+    expect(flowItems[0].payloadType).toBe('RTCP')
+    expect(flowItems[0].arrowStyleSolid).toBe(false)
   })
 })

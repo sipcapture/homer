@@ -27,6 +27,7 @@ describe('flowFilterPrefs', () => {
       isHighContrast: true,
       isConsolidateCaptureIds: false,
       consolidationTimeThresholdMs: 500,
+      showRtcp: false,
     })
   })
 
@@ -67,5 +68,21 @@ describe('flowFilterPrefs', () => {
   it('ignores non-finite consolidationTimeThresholdMs', () => {
     localStorage.setItem(FLOW_FILTER_PREFS_LS_KEY, JSON.stringify({ consolidationTimeThresholdMs: null }))
     expect(loadStoredFlowPrefs().consolidationTimeThresholdMs).toBeUndefined()
+  })
+
+  it('round-trips showRtcp', () => {
+    saveStoredFlowPrefs({ ...DEFAULT_FILTERS, showRtcp: true })
+    expect(loadStoredFlowPrefs()).toMatchObject({ showRtcp: true })
+    expect(initialFlowFilters().showRtcp).toBe(true)
+  })
+
+  it('defaults showRtcp to false', () => {
+    expect(DEFAULT_FILTERS.showRtcp).toBe(false)
+    expect(initialFlowFilters().showRtcp).toBe(false)
+  })
+
+  it('ignores non-boolean showRtcp', () => {
+    localStorage.setItem(FLOW_FILTER_PREFS_LS_KEY, JSON.stringify({ showRtcp: 'yes' }))
+    expect(loadStoredFlowPrefs().showRtcp).toBeUndefined()
   })
 })

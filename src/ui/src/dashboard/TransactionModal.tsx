@@ -35,6 +35,7 @@ import { useLocale } from '@/components/locale/locale-provider'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { getMethodColor } from './flow-utils'
 import { resolveTimeRange } from './utils/resolveTimeRange'
+import { hepProtoTypeOf, mergeFlowMessagesByTimestamp, tagHepProtoType } from './flow/hep-proto'
 
 /** SIP / transaction message row: DuckLake uses method + response_code, not `event`. */
 function messageCallId(row) {
@@ -620,6 +621,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
   const [messageModals, setMessageModals] = React.useState([])
   const [msgSortCol, setMsgSortCol] = React.useState(null)
   const [msgSortDir, setMsgSortDir] = React.useState('asc')
+  const [rtcpItems, setRtcpItems] = React.useState([])
 
   // reset per-tab state whenever a new transaction is opened
   React.useEffect(() => {
@@ -632,6 +634,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     setMessageModals([])
     setMsgSortCol(null)
     setMsgSortDir('asc')
+    setRtcpItems([])
   }, [modal?.modalKey])
 
   React.useEffect(() => {
@@ -647,6 +650,33 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
   const sessionIdsForApi = (Array.isArray(sessionIds) && sessionIds.length)
     ? sessionIds.map((s) => String(s).trim()).filter(Boolean)
     : (primaryId ? [String(primaryId).trim()] : [])
+
+  const sipProtoType = Number(modal?.protoType || 1) || 1
+  const sessionKey = sessionIdsForApi.join('\0')
+
+  React.useEffect(() => {
+    if (sipProtoType !== 1 || loading || !sessionKey) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone, {
+          proto_type: 5,
+          event_type: 'default',
+        })
+        const data = await apiPost('/transactions/messages', body)
+        if (!cancelled) setRtcpItems(data?.data?.items || [])
+      } catch {
+        if (!cancelled) setRtcpItems([])
+      }
+    })()
+    return () => { cancelled = true }
+  }, [modalKey, loading, sipProtoType, items, timeRange, timeZone, sessionKey])
+
+  const flowItems = React.useMemo(() => {
+    const sipTagged = tagHepProtoType(items || [], sipProtoType)
+    if (sipProtoType !== 1) return sipTagged
+    return mergeFlowMessagesByTimestamp(sipTagged, tagHepProtoType(rtcpItems, 5))
+  }, [items, rtcpItems, sipProtoType])
 
   const messageRowsIndexed = React.useMemo(
     () => (items || []).map((row, orig) => ({ row, orig })),
@@ -758,9 +788,11 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
       : (flowItem.captureId != null && String(flowItem.captureId).trim() !== ''
         ? String(flowItem.captureId).trim()
         : undefined)
+    const protoType = hepProtoTypeOf(raw) || 1
+    const eventType = protoType === 1 ? 'call' : 'default'
     const messageContext = {
-      proto_type: 1,
-      event_type: 'call',
+      proto_type: protoType,
+      event_type: eventType,
       timestamp: (() => {
         const ts = resolveTimeRange(timeRange, timeZone)
         return ts ? { from: ts.from, to: ts.to } : undefined
@@ -777,7 +809,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     }
     setMessageModals(prev => [...prev, { modalKey: nestedKey, uuid, loading: true, data: null, error: null, messageContext }])
     try {
-      const body = { uuid, proto_type: 1, event_type: 'call' }
+      const body = { uuid, proto_type: protoType, event_type: eventType }
       if (messageContext.timestamp) body.timestamp = messageContext.timestamp
       const result = await apiPost('/messages', body)
       update({ modalKey: nestedKey, uuid, loading: false, data: result?.data || raw, error: null, messageContext })
@@ -916,7 +948,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
 
               <TabsContent value="flow" className="min-h-0 min-w-0 flex-1 overflow-hidden px-4 pb-4">
                 <div className="h-full w-full min-w-0 overflow-auto border border-border bg-card/40">
-                  <CallFlow items={items} timeZone={timeZone} onClickMessage={handleFlowMessageClick} />
+                  <CallFlow items={flowItems} timeZone={timeZone} onClickMessage={handleFlowMessageClick} />
                 </div>
               </TabsContent>
 
