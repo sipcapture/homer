@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { qosRouteArrow } from '@/lib/ipAliasDisplay'
 import { useLocale } from '@/components/locale/locale-provider'
-import { makeDateTimeFormatter } from '@/lib/datetime'
+import { formatAxisTime } from '@/lib/datetime'
 
 const METRIC_COLORS_RTCP = {
   packets:       { bg: 'rgba(244, 67, 54, 0.5)',  border: 'rgba(244, 67, 54, 1)' },
@@ -109,21 +109,6 @@ function eventTimeMs(row) {
     if (ms > 0) return ms
   }
   return 0
-}
-
-export function formatAxisTime(unixSec, timeZone, locale) {
-  const ms = unixSec * 1000
-  if (!Number.isFinite(ms)) return '—'
-  const opts = {
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-  }
-  try {
-    return makeDateTimeFormatter(locale, opts, timeZone).format(new Date(ms))
-  } catch {
-    return '—'
-  }
 }
 
 function calculateMOS(jitter, numPL, rtt = 10) {

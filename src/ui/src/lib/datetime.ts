@@ -21,6 +21,30 @@ export function makeDateTimeFormatter(
   return new Intl.DateTimeFormat(locale, withTimeZone(opts, timeZone))
 }
 
+const AXIS_TIME_OPTIONS: DateTimeFormatOptions = {
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+}
+
+/**
+ * Format a Unix timestamp in seconds for chart axis labels.
+ * Dashboard timezone `local` uses the runtime zone; any other value is treated as IANA.
+ */
+export function formatAxisTime(
+  unixSec: number,
+  timeZone?: string,
+  locale?: string,
+): string {
+  const ms = unixSec * 1000
+  if (!Number.isFinite(ms)) return '—'
+  try {
+    return makeDateTimeFormatter(locale, AXIS_TIME_OPTIONS, timeZone).format(new Date(ms))
+  } catch {
+    return '—'
+  }
+}
+
 /** Hook returning a memoized Intl.DateTimeFormat that follows the user's locale preference. */
 export function useDateTimeFormatter(
   opts: DateTimeFormatOptions = {},
