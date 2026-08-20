@@ -164,6 +164,7 @@ homer search [flags]          Search Homer data via coordinator API
 homer cli [flags]             Interactive DuckLake SQL shell
 homer system [flags]          System operations (compaction, extensions, reload)
 homer wizard [flags]          Interactive config generator wizard
+homer config show [flags]     Print effective config (file + env + defaults)
 homer mcp [flags]             Start MCP stdio server
 homer version                 Show version
 homer help                    Show full help with all flags
@@ -259,6 +260,25 @@ homer catalog restore --config-path /etc/homer/homer.json
 ```
 
 See [docs/CATALOG.md](docs/CATALOG.md) for flags, `--out`, and when to use restore vs `--rebuild-catalog`.
+
+### Config show
+
+Print the **effective** config Homer would start with (JSON file + `HOMER_*`
+environment variables + struct defaults). This does not attach to a live
+process. Secrets (passwords, tokens, keys) are redacted unless
+`--include-secrets` is set.
+
+```bash
+homer config show --config-path /etc/homer/homer.json
+homer config show --config-path /etc/homer/homer.json --section storage.ducklake.compaction
+```
+
+| Flag | Description |
+|------|-------------|
+| `--config-path <path>` | Path to config file or directory |
+| `--section <path>` | Dotted JSON path only |
+| `--include-secrets` | Do not redact credentials |
+| `--compact` | Single-line JSON |
 
 ### Wizard (Config Generator)
 
