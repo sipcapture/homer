@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	"github.com/sipcapture/golua/lua"
+	"github.com/sipcapture/homer-core/src/scripting"
 	"github.com/sipcapture/homer-core/src/scripting/luar"
 )
 
@@ -42,7 +43,7 @@ func runScript(ctx context.Context, e *CorrelationEngine, scr *compiledScript, i
 		return nil, fmt.Errorf("correlation: failed to create Lua state")
 	}
 	defer L.Close()
-	L.OpenLibs()
+	scripting.OpenSandbox(L)
 
 	bridge := newSQLBridge(ctx, e, in)
 	result := &CorrelationResult{}

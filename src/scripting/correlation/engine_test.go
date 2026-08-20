@@ -109,6 +109,19 @@ end
 	}
 }
 
+func TestCorrelateOsExecuteBlocked(t *testing.T) {
+	script := `
+function correlate(data, nodes)
+  os.execute("true")
+  return {"leaked"}
+end
+`
+	e := newTestEngine(t, script, nil)
+	if res := e.Correlate(context.Background(), CorrelationInput{HepID: 1, Profile: "call"}); res != nil {
+		t.Fatalf("expected nil when os.execute is used, got %#v", res)
+	}
+}
+
 func TestCorrelateMissingCorrelateFunction(t *testing.T) {
 	// DoString succeeds but `correlate` is absent — must not crash.
 	e := newTestEngine(t, `local x = 1`, nil)
