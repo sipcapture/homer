@@ -17,6 +17,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/flight"
 	"github.com/apache/arrow-go/v18/arrow/flight/flightsql"
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -57,6 +58,9 @@ func (p *flightSQLProxy) GetFlightInfoStatement(
 	query := cmd.GetQuery()
 	if query == "" {
 		return nil, status.Error(codes.InvalidArgument, "empty SQL query")
+	}
+	if err := sqlvalidator.ValidateRawSQL(query); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "SQL validation failed: %v", err)
 	}
 	ticketBytes, err := json.Marshal(flightSQLProxyTicket{Query: query})
 	if err != nil {
@@ -122,6 +126,9 @@ func (p *flightSQLProxy) DoGetStatement(
 	query := payload.Query
 	if query == "__tables__" {
 		query = "SHOW ALL TABLES"
+	}
+	if err := sqlvalidator.ValidateRawSQL(query); err != nil {
+		return nil, nil, status.Errorf(codes.InvalidArgument, "SQL validation failed: %v", err)
 	}
 	nodes := p.flightSQLNodes()
 	if len(nodes) == 0 {

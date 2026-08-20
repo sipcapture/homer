@@ -1863,6 +1863,31 @@ func applyDefaults(cfg *Config) {
 		if err == nil {
 			cfg.Node.FlightServer.AuthToken = tok
 		}
+		if cfg.Node.FlightSQLServer.Enable {
+			fsqlTok := strings.TrimSpace(cfg.Node.FlightSQLServer.AuthToken)
+			if fsqlTok == "" {
+				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
+			}
+			tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, catalogPath)
+			if err == nil {
+				cfg.Node.FlightSQLServer.AuthToken = tok
+			}
+		}
+	}
+
+	if cfg.Coordinator.Enable && cfg.Coordinator.FlightSQLServer.Enable {
+		fsqlTok := strings.TrimSpace(cfg.Coordinator.FlightSQLServer.AuthToken)
+		if fsqlTok == "" && cfg.Node.Enable {
+			fsqlTok = strings.TrimSpace(cfg.Node.FlightSQLServer.AuthToken)
+			if fsqlTok == "" {
+				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
+			}
+		}
+		settingsPath := strings.TrimSpace(cfg.Coordinator.SettingsDBPath)
+		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath)
+		if err == nil {
+			cfg.Coordinator.FlightSQLServer.AuthToken = tok
+		}
 	}
 
 	// If no nodes configured but node is enabled locally, add local node

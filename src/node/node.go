@@ -106,6 +106,10 @@ func New(cfg *config.NodeConfig) (*Node, error) {
 		db.Close()
 		return nil, fmt.Errorf("node auth token: %w", err)
 	}
+	if err := ensureFlightSQLAuthToken(cfg); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("node flightsql auth token: %w", err)
+	}
 
 	// Build airport config
 	airportConfig := airport.ServerConfig{
@@ -1348,7 +1352,7 @@ func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 // sqlKeywordsAfterTableRef are keywords that may legally follow a table
 // reference in a FROM clause; anything else there is an explicit alias.
 var sqlKeywordsAfterTableRef = map[string]bool{
-	"AS": false, // handled separately: AS always introduces an alias
+	"AS":    false, // handled separately: AS always introduces an alias
 	"WHERE": true, "ORDER": true, "GROUP": true, "LIMIT": true, "OFFSET": true,
 	"UNION": true, "EXCEPT": true, "INTERSECT": true, "HAVING": true,
 	"JOIN": true, "LEFT": true, "RIGHT": true, "INNER": true, "OUTER": true,

@@ -48,6 +48,36 @@ func ensureFlightAuthToken(cfg *config.NodeConfig) error {
 	return nil
 }
 
+// ensureFlightSQLAuthToken always assigns a Bearer token when Arrow FlightSQL
+// is enabled, including loopback binds (GHSA-w9hq-83jw-w7h9).
+func ensureFlightSQLAuthToken(cfg *config.NodeConfig) error {
+	if cfg == nil || !cfg.FlightSQLServer.Enable {
+		return nil
+	}
+	catalogPath := strings.TrimSpace(cfg.DuckLake.CatalogPath)
+	if catalogPath == "" && len(cfg.DuckLake.Volumes) > 0 {
+		catalogPath = strings.TrimSpace(cfg.DuckLake.Volumes[0].CatalogPath)
+	}
+	configured := strings.TrimSpace(cfg.FlightSQLServer.AuthToken)
+	if configured == "" {
+		configured = strings.TrimSpace(cfg.FlightServer.AuthToken)
+	}
+	tok, autoGen, tokenFile, err := config.ResolveRequiredAuthToken(configured, catalogPath)
+	if err != nil {
+		return err
+	}
+	cfg.FlightSQLServer.AuthToken = tok
+	if autoGen {
+		logger.Warn("node: flightsql_server.auth_token was empty; generated and persisted a Bearer token",
+			"auth_token_file", tokenFile,
+			"host", cfg.FlightSQLServer.Host,
+			"hint", "set node.flightsql_server.auth_token (Grafana FlightSQL) explicitly")
+	} else if tok != "" {
+		logger.Info("node: Arrow FlightSQL requires Authorization Bearer token")
+	}
+	return nil
+}
+
 // withBearerAuth wraps an HTTP handler so that when expectedToken is non-empty,
 // requests must present Authorization: Bearer <token>. Empty expectedToken
 // disables auth (loopback / trusted deployments).
