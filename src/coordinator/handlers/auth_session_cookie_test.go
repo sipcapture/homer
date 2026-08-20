@@ -73,6 +73,30 @@ func TestV4CreateSession_SetsHttpOnlyCookie(t *testing.T) {
 	if !strings.Contains(setCookie, "HttpOnly") {
 		t.Fatalf("expected HttpOnly cookie, got %q", setCookie)
 	}
+	if strings.Contains(setCookie, "Max-Age=") && !strings.Contains(setCookie, "Max-Age=0") {
+		t.Fatalf("expected session cookie (no persistent Max-Age) without remember, got %q", setCookie)
+	}
+}
+
+func TestV4CreateSession_RememberSetsPersistentCookie(t *testing.T) {
+	h := newCookieAuthHandler(t)
+	e := echo.New()
+	body := `{"username":"admin","password":"sipcapture","remember":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v4/auth/sessions", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.V4CreateSession(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status: got %d want 201", rec.Code)
+	}
+	setCookie := rec.Header().Get("Set-Cookie")
+	if !strings.Contains(setCookie, "Max-Age=86400") {
+		t.Fatalf("expected Max-Age=86400 for remember, got %q", setCookie)
+	}
 }
 
 func TestJWTMiddlewareV4_AcceptsSessionCookie(t *testing.T) {
