@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import fs from 'node:fs'
 import path from "path"
 import tailwindcss from "@tailwindcss/vite"
+import { UI_CONTENT_SECURITY_POLICY } from "./src/lib/csp"
 
 function readHomerAppVersion(): string {
   try {
@@ -24,7 +25,21 @@ export default defineConfig(({ mode }) => {
   define: {
     __HOMER_APP_VERSION__: JSON.stringify(readHomerAppVersion()),
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: 'html-csp',
+      apply: 'build',
+      transformIndexHtml(html) {
+        if (html.includes('Content-Security-Policy')) return html
+        return html.replace(
+          '<head>',
+          `<head>\n    <meta http-equiv="Content-Security-Policy" content="${UI_CONTENT_SECURITY_POLICY}" />`,
+        )
+      },
+    },
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
