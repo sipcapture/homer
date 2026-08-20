@@ -10,6 +10,13 @@ import (
 	"github.com/sipcapture/homer-core/src/config"
 )
 
+func TestRunShowConfigCmd_unknownAction(t *testing.T) {
+	err := RunShowConfigCmd(ShowConfigFlags{Action: "dump"})
+	if err == nil || !strings.Contains(err.Error(), `unknown config action "dump"`) {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestIsSecretJSONKey(t *testing.T) {
 	if !isSecretJSONKey("secret_access_key") {
 		t.Fatal("secret_access_key should be redacted")

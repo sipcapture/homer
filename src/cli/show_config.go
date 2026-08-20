@@ -13,7 +13,7 @@ import (
 const redactedSecret = "********"
 
 // secretJSONKeys are exact JSON object keys that must not appear in
-// show-running-config output unless --include-secrets is set.
+// `homer config show` output unless --include-secrets is set.
 var secretJSONKeys = map[string]struct{}{
 	"admin_password_hash":  {},
 	"access_key_id":        {},
@@ -32,8 +32,9 @@ var secretJSONKeys = map[string]struct{}{
 	"token":                {},
 }
 
-// ShowConfigFlags holds flags for "homer show-running-config".
+// ShowConfigFlags holds flags for "homer config show".
 type ShowConfigFlags struct {
+	Action         string
 	ConfigPath     string
 	Section        string
 	IncludeSecrets bool
@@ -47,9 +48,9 @@ type showConfigFlagRefs struct {
 	Compact        *bool
 }
 
-// RegisterShowConfigFlags creates a FlagSet for "homer show-running-config".
+// RegisterShowConfigFlags creates a FlagSet for "homer config show".
 func RegisterShowConfigFlags() (*flag.FlagSet, *showConfigFlagRefs) {
-	fs := flag.NewFlagSet("show-running-config", flag.ExitOnError)
+	fs := flag.NewFlagSet("config", flag.ExitOnError)
 	refs := &showConfigFlagRefs{}
 	refs.ConfigPath = fs.String("config-path", "", "path to config file or directory (same as the server)")
 	refs.Section = fs.String("section", "", "print a dotted JSON path only, e.g. storage.ducklake.compaction")
@@ -71,6 +72,15 @@ func ParseShowConfigFlags(refs *showConfigFlagRefs) ShowConfigFlags {
 // RunShowConfigCmd prints the effective config after file + env + defaults.
 // This is not attached to a live process: it is what Homer would start with.
 func RunShowConfigCmd(f ShowConfigFlags) error {
+	action := strings.TrimSpace(f.Action)
+	if action == "" {
+		action = "show"
+	}
+	switch action {
+	case "show":
+	default:
+		return fmt.Errorf("unknown config action %q (supported: show)", action)
+	}
 	cfg, err := config.Load(f.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
