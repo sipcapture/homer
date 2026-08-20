@@ -21,6 +21,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/flight/flightsql"
 	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	"github.com/sipcapture/homer-core/src/sqlrewrite"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"google.golang.org/grpc"
@@ -74,6 +75,9 @@ func (s *fsqlServer) GetFlightInfoStatement(
 	if query == "" {
 		return nil, status.Error(codes.InvalidArgument, "empty SQL query")
 	}
+	if err := sqlvalidator.ValidateRawSQL(query); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "SQL validation failed: %v", err)
+	}
 	ticketBytes, err := json.Marshal(fsqlTicketPayload{Query: query})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to encode ticket payload: %v", err)
@@ -100,7 +104,10 @@ func (s *fsqlServer) GetSchemaStatement(
 	if query == "" {
 		return nil, status.Error(codes.InvalidArgument, "empty SQL query")
 	}
-	rewritten := s.prepareSQL(query)
+	rewritten, err := s.prepareSQL(query)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "SQL validation failed: %v", err)
+	}
 	limitedQuery := fmt.Sprintf("SELECT * FROM (%s) _q LIMIT 0", rewritten)
 	db := s.node.queryDB()
 	rows, err := db.QueryContext(ctx, limitedQuery)
@@ -125,7 +132,10 @@ func (s *fsqlServer) DoGetStatement(
 	if payload.Query == "" {
 		return nil, nil, status.Error(codes.InvalidArgument, "empty query in ticket")
 	}
-	query := s.prepareSQL(payload.Query)
+	query, err := s.prepareSQL(payload.Query)
+	if err != nil {
+		return nil, nil, status.Errorf(codes.InvalidArgument, "SQL validation failed: %v", err)
+	}
 	db := s.node.queryDB()
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
@@ -153,10 +163,19 @@ func (s *fsqlServer) DoGetStatement(
 	return schema, ch, nil
 }
 
-func (s *fsqlServer) prepareSQL(original string) string {
+func (s *fsqlServer) prepareSQL(original string) (string, error) {
+	if err := sqlvalidator.ValidateRawSQL(original); err != nil {
+		return "", err
+	}
 	rw := &sqlrewrite.Rewriter{LakeName: s.lakeName, DB: s.node.queryDB()}
 	q, _ := rw.Rewrite(original)
-	return s.node.prepareFlightSQLDataSQL(q)
+	if s.node != nil {
+		q = s.node.prepareFlightSQLDataSQL(q)
+	}
+	if err := sqlvalidator.ValidateRawSQL(q); err != nil {
+		return "", err
+	}
+	return q, nil
 }
 
 func (s *fsqlServer) Start() error {

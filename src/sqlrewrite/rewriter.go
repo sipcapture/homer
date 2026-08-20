@@ -50,8 +50,8 @@ func (r *Rewriter) Rewrite(original string) (rewritten string, rule string) {
 		strings.Contains(upper, "TABLE_SCHEMA") &&
 		strings.Contains(upper, "'IOX'") {
 		tableName := extractQuotedValue(original, "table_name")
-		if tableName != "" && r.LakeName != "" {
-			fqn := r.LakeName + ".main." + tableName
+		if validSQLIdent(tableName) && validSQLIdent(r.LakeName) {
+			fqn := quoteSQLIdent(r.LakeName) + ".main." + quoteSQLIdent(tableName)
 			var q string
 			if tblCfg, ok := r.TableSettings[strings.ToLower(tableName)]; ok && tblCfg.TimeColumn != "" {
 				q = fmt.Sprintf(
@@ -146,4 +146,23 @@ func extractQuotedValue(s, key string) string {
 		return ""
 	}
 	return rest[:end]
+}
+
+func validSQLIdent(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r == '_':
+		case i > 0 && r >= '0' && r <= '9':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func quoteSQLIdent(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
