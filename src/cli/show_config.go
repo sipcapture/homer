@@ -72,14 +72,12 @@ func ParseShowConfigFlags(refs *showConfigFlagRefs) ShowConfigFlags {
 // RunShowConfigCmd prints the effective config after file + env + defaults.
 // This is not attached to a live process: it is what Homer would start with.
 func RunShowConfigCmd(f ShowConfigFlags) error {
-	action := strings.TrimSpace(f.Action)
-	if action == "" {
-		action = "show"
-	}
-	switch action {
+	switch strings.ToLower(strings.TrimSpace(f.Action)) {
 	case "show":
+	case "":
+		return fmt.Errorf("no config action specified; use show")
 	default:
-		return fmt.Errorf("unknown config action %q (supported: show)", action)
+		return fmt.Errorf("unknown config action %q (supported: show)", f.Action)
 	}
 	cfg, err := config.Load(f.ConfigPath)
 	if err != nil {

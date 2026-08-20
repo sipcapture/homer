@@ -17,6 +17,13 @@ func TestRunShowConfigCmd_unknownAction(t *testing.T) {
 	}
 }
 
+func TestRunShowConfigCmd_missingAction(t *testing.T) {
+	err := RunShowConfigCmd(ShowConfigFlags{})
+	if err == nil || !strings.Contains(err.Error(), "no config action specified") {
+		t.Fatalf("got %v", err)
+	}
+}
+
 func TestIsSecretJSONKey(t *testing.T) {
 	if !isSecretJSONKey("secret_access_key") {
 		t.Fatal("secret_access_key should be redacted")

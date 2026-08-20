@@ -164,7 +164,7 @@ homer search [flags]          Search Homer data via coordinator API
 homer cli [flags]             Interactive DuckLake SQL shell
 homer system [flags]          System operations (compaction, extensions, reload)
 homer wizard [flags]          Interactive config generator wizard
-homer config [show] [flags]   Print effective config (file + env + defaults)
+homer config show [flags]     Print effective config (file + env + defaults)
 homer mcp [flags]             Start MCP stdio server
 homer version                 Show version
 homer help                    Show full help with all flags
@@ -272,8 +272,6 @@ process. Secrets (passwords, tokens, keys) are redacted unless
 homer config show --config-path /etc/homer/homer.json
 homer config show --config-path /etc/homer/homer.json --section storage.ducklake.compaction
 ```
-
-`homer config` without an action is the same as `show`.
 
 | Flag | Description |
 |------|-------------|

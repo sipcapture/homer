@@ -128,7 +128,7 @@ Usage:
   homer system [flags]          System operations (compaction, extensions, reload)
   homer agent [action] [flags]  Query heplify agent API (stats, health, watch)
   homer wizard [flags]          Interactive config generator wizard
-  homer config [show] [flags]   Print effective config (file + env + defaults)
+  homer config show [flags]     Print effective config (file + env + defaults)
   homer mcp [flags]             Start MCP stdio server
   homer migrate [action] [flags]
                                 Migrate data from Homer 7 (homer-app PostgreSQL).
@@ -217,7 +217,7 @@ wizard -- Interactive config generator:
   --profile <name>              Non-interactive preset: all-in-one, writer, edge, coordinator, node
 
 config show -- Print effective config after file + env + defaults.
-  Not attached to a live process. `homer config` defaults to show.
+  Not attached to a live process.
   --config-path <path>          Path to config file or directory
   --section <path>              Dotted JSON path, e.g. storage.ducklake.compaction
   --include-secrets             Do not redact passwords, tokens, and keys
@@ -480,7 +480,7 @@ func main() {
 		}
 
 	case "config":
-		action := "show"
+		action := ""
 		args := os.Args[2:]
 		if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 			action = args[0]
