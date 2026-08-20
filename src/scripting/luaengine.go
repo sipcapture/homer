@@ -37,7 +37,7 @@ func NewLuaEngine(cfg *ScriptConfig) (*LuaEngine, error) {
 		lokiAllow: remotelog.LokiCustomLabelAllowlist(cfg.LokiCustomLabels),
 	}
 	d.LuaState = lua.NewState()
-	d.LuaState.OpenLibs()
+	OpenSandbox(d.LuaState)
 
 	// Register functions available in Lua scripts
 	luar.Register(d.LuaState, "", luar.Map{
