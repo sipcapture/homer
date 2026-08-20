@@ -7,12 +7,12 @@ Homer 11.0.282–11.0.284 closes three coordinator security issues. **11.0.313**
 | Issue | Risk (before) | Fix | Typical upgrade impact |
 |-------|----------------|-----|-------------------------|
 | Empty `coordinator.jwt.secret` | Protected API routes were **unauthenticated** | JWT middleware always enforced; empty secret → auto-generated persisted secret | Installs with explicit JWT env/config: **no change**. Installs with empty secret: API now requires login or `Auth-Token` |
-| Default admin `sipcapture` | Predictable first-login password | No auto-filled hash; random bootstrap password logged once when hash omitted | Docker examples with explicit `ADMIN_PASSWORD_HASH`: **no change**. Existing `users` row with old hash: **login still works** |
+| Default admin `sipcapture` | Predictable first-login password | No compose hash; random bcrypt at first boot; login refuses the well-known SHA-256 digest | Existing `users` row with sipcapture hash: **login fails** until `--reset-admin-password` |
 | `POST /api/v4/statistics/query` `rawquery` | Unvalidated SQL passthrough | Same `ValidateRawSQL` rules as `/api/v4/query` | Legitimate `SELECT` / `WITH` / `SHOW` queries: **no change** |
 | Node `POST /query` (port+1) | Unauthenticated arbitrary DuckDB SQL / file read | `ValidateRawSQL` always; Bearer auth when `flight_server.auth_token` set; auto-token on non-loopback bind | All-in-one with default `0.0.0.0`: token auto-persisted; coordinator local node gets `token` automatically |
 | `sqlite_scan` / external scanners | Authenticated bypass of SQL denylist | Blocked in `ValidateRawSQL` | Legitimate lake `SELECT`s: **no change** |
 
-GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv).
+GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv), [GHSA-263f-5xrw-c34r](https://github.com/sipcapture/homer/security/advisories/GHSA-263f-5xrw-c34r).
 
 ---
 
@@ -52,9 +52,9 @@ Environment: `HOMER_COORDINATOR_JWT_SECRET`.
 |--------|--------------------------------|----------------------|
 | Explicit `admin_password_hash` or env | Uses configured hash | Unchanged if row already has a password |
 | Empty hash | Random password generated; **logged once** at startup | Unchanged if row already has a password |
-| Docker example env with sipcapture hash | Inserts configured hash | Login `admin` / `sipcapture` still works |
+| Docker examples | Hash omitted; random password in coordinator logs | Existing sipcapture hash in `users` **no longer logs in** |
 
-Legacy SHA-256 rows (including migrated homer-app users and explicit sipcapture hash in env) **still authenticate** at login.
+Legacy SHA-256 rows from **migrated homer-app users** still authenticate, except the well-known **`sipcapture`** digest, which is refused. Reset with `homer --reset-admin-password`.
 
 **Wizard:** empty admin password field → random password (bcrypt in JSON) shown once after save.
 

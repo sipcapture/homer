@@ -895,10 +895,12 @@ type JWTConfig struct {
 	CookieSecure *bool `json:"cookie_secure,omitempty" mapstructure:"cookie_secure"`
 }
 
-// LegacySHA256SipcaptureHash is the SHA-256 hex digest of the historical
-// default password "sipcapture". Used only in tests and legacy hash migration;
-// production bootstrap no longer applies this value automatically.
-const LegacySHA256SipcaptureHash = "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
+const (
+	// LegacySHA256SipcaptureHash is the SHA-256 hex digest of the historical
+	// default password "sipcapture". Tests and docs may reference it; login
+	// and bootstrap refuse this value (see passwordhash.IsDisallowedDefaultHash).
+	LegacySHA256SipcaptureHash = passwordhash.LegacySHA256SipcaptureHash
+)
 
 // AuthConfig configures authentication
 type AuthConfig struct {

@@ -11,8 +11,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
-	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 
 	_ "github.com/duckdb/duckdb-go/v2"
 )
@@ -107,7 +107,10 @@ func newTestAuthHandlerWithUsers(t *testing.T) (*AuthHandler, *services.UserServ
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h := config.LegacySHA256SipcaptureHash
+	h, err := passwordhash.Hash("testpass")
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('admin', '`+h+`', 'admin@example.com', 'Admin', true, true, current_timestamp, current_timestamp)`)
