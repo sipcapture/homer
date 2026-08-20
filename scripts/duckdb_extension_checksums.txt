@@ -1,0 +1,18 @@
+# SHA-256 of DuckDB core extension .gz blobs from https://extensions.duckdb.org
+# (GHSA-vqh9-j3rh-cj62). Fail the download script on mismatch.
+#
+# Format: <sha256>  <DUCKDB_VERSION>/<EXT_PLATFORM>/<name>.duckdb_extension.gz
+#
+# Refresh when DUCKDB_VERSION changes:
+#   curl -fsSL "https://extensions.duckdb.org/${VER}/${PLAT}/${NAME}.duckdb_extension.gz" | sha256sum
+#
+# Recorded 2026-08-20 from extensions.duckdb.org for v1.5.5.
+
+733ccf19fedcfd5e0bfaf85993219145181099cc411076cabf14933ea16ab452  v1.5.5/linux_amd64/ducklake.duckdb_extension.gz
+7cdd52a3135388718884a9b71e3987ba723002121e8e9de399c4ed619d824a05  v1.5.5/linux_amd64/httpfs.duckdb_extension.gz
+7454a7830b21e678f1700c6cc428540be3a688e959c81515fd1bfc0a538db3b3  v1.5.5/linux_amd64/aws.duckdb_extension.gz
+01292812092200c2d0b76324df9568d336ddaa5a198e7cc8fed124e84088e14e  v1.5.5/linux_amd64/sqlite_scanner.duckdb_extension.gz
+1813f74b24060d6ae97187b87d221c7ecbae67e5321929bc543bc5fdb1dc95b4  v1.5.5/linux_arm64/ducklake.duckdb_extension.gz
+0820e0b5b74efaa23608c239df8e744a68943318d530b483a529eace19cb5475  v1.5.5/linux_arm64/httpfs.duckdb_extension.gz
+c0c2ff813d07a1f69a3c06fb69663b93299f1145dbaab9aaeee1be4003da7170  v1.5.5/linux_arm64/aws.duckdb_extension.gz
+59e3d3197d8767e51c3df10157d4423f4df58f97d85ffe0eb0bf752325f76641  v1.5.5/linux_arm64/sqlite_scanner.duckdb_extension.gz
