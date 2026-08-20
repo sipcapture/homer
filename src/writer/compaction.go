@@ -275,8 +275,11 @@ func (c *CompactionService) Start() error {
 	}
 
 	logger.Info("CompactionService starting",
+		"engine", c.resolvedEngine(),
 		"interval", fmt.Sprintf("%ds", c.config.CheckIntervalSec),
 		"min_age_sec", c.config.MinAgeSec,
+		"max_compacted_files", c.effectiveMaxCompactedFiles(),
+		"max_file_size_bytes", c.effectiveMaxFileSizeBytes(),
 		"retention_days", c.config.RetentionDays,
 		"retention_days_by_table", len(c.config.RetentionDaysByTable),
 		"tables", len(c.tables))
@@ -430,7 +433,8 @@ func (c *CompactionService) inlineFlushOnlyLoop() {
 // per-table for retention and merge, then per-call for expire/cleanup.
 func (c *CompactionService) runCompaction() {
 	start := time.Now()
-	logger.Info("CompactionService: Starting compaction cycle")
+	logger.Info("CompactionService: Starting compaction cycle",
+		"engine", c.resolvedEngine())
 
 	// Refresh table list (read-only, no lock needed)
 	if err := c.discoverTables(); err != nil {
@@ -1017,6 +1021,13 @@ func (c *CompactionService) GetStats() map[string]interface{} {
 		"total_compactions":       c.totalCompactions,
 		"total_rows_deleted":      c.totalRowsDeleted,
 	}
+}
+
+func (c *CompactionService) resolvedEngine() string {
+	if c.config.Engine == EngineNativeGo {
+		return EngineNativeGo
+	}
+	return EngineDuckDB
 }
 
 func (c *CompactionService) effectiveMaxCompactedFiles() int {
