@@ -45,6 +45,13 @@ The image bakes in writer defaults (`HOMER_STORAGE_DUCKLAKE_TUNING_*`):
 Compose repeats the same variables so they are visible and easy to
 override without rebuilding. The all-in-one container needs **~8GB RAM**.
 
+## Non-root runtime
+
+The image runs as uid/gid **1000** (`USER homer`). Named volumes from older
+root images need a one-shot chown; both compose files include `homer-init`
+for that. Homer listens on ports >1024, so the compose services use
+`cap_drop: ALL` and `no-new-privileges`.
+
 ```bash
 # docker run
 docker run -e HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT=8GB ghcr.io/sipcapture/homer:latest
