@@ -5,6 +5,27 @@ import (
 	"testing"
 )
 
+func TestResolvedEngine(t *testing.T) {
+	tests := []struct {
+		name   string
+		engine string
+		want   string
+	}{
+		{"empty is duckdb", "", EngineDuckDB},
+		{"explicit duckdb", EngineDuckDB, EngineDuckDB},
+		{"native", EngineNativeGo, EngineNativeGo},
+		{"unknown treated as duckdb", "other", EngineDuckDB},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &CompactionService{config: CompactionConfig{Engine: tt.engine}}
+			if got := svc.resolvedEngine(); got != tt.want {
+				t.Fatalf("resolvedEngine()=%q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestEffectiveMaxCompactedFiles(t *testing.T) {
 	tests := []struct {
 		name   string
