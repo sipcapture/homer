@@ -3,11 +3,12 @@
 *Shipped in `11.0.74`. Source: `src/storage/ducklake/tuning.go`,
 `src/config/config.go` (`DuckDBTuning`).*
 
-`homer-core` embeds DuckDB as the query engine on both the writer
-(ingest) and the node (FlightSQL reader) sides. By default DuckDB
-sizes its buffer pool at 80% of host RAM and uses `NumCPU` worker
-threads, which is fine for a dedicated box but is dangerous in shared
-deployments (containers, multi-tenant nodes, K8s with limits).
+`homer-core` embeds DuckDB as the query engine on the writer (ingest),
+the tiered-storage manager (volume attach, maintenance, and partition
+moves), and the node (FlightSQL reader) sides. By default DuckDB sizes
+its buffer pool at 80% of host RAM and uses `NumCPU` worker threads,
+which is fine for a dedicated box but is dangerous in shared deployments
+(containers, multi-tenant nodes, K8s with limits).
 
 `11.0.74` adds a tuning section that maps directly to the
 per-connection DuckDB SET statements:
@@ -46,20 +47,31 @@ per-connection DuckDB SET statements:
   on every fresh connection, so the limits are in effect during
   startup too.
 - A bad value (e.g. `"memory_limit": "8 angstrom"`) only logs a WARN
-  and leaves DuckDB on its default. The writer / node still come up.
-- The same knobs are honoured on both sides:
+  and leaves DuckDB on its default. The writer, tiered-storage manager,
+  and node still come up.
+- The same knobs are honoured by every DuckDB role:
   - writer connection — opened in `src/storage/ducklake/ducklake.go`,
     reads `storage.ducklake.tuning`.
+  - tiered-storage manager connection — opened in
+    `src/storage/ducklake/tiered_storage.go`, also reads
+    `storage.ducklake.tuning`.
   - node connection — opened in `src/node/node.go`,
     reads `node.ducklake.tuning`.
 
 ## Recommended values per role
 
-| Role            | `memory_limit`       | `threads`              | `temp_directory`              |
-|-----------------|----------------------|------------------------|-------------------------------|
-| Ingest writer   | 50–60% of container  | `min(NumCPU, 8)`       | Fast SSD volume (≠ catalog)   |
-| Read-only node  | 50–60% of container  | `min(NumCPU, 4)`       | Fast SSD volume               |
-| Single-node lab | leave empty          | leave 0                | leave empty                   |
+| Role                   | `memory_limit`             | `threads`                    | `temp_directory`            |
+|------------------------|----------------------------|------------------------------|-----------------------------|
+| Ingest writer          | Storage tuning cap          | Storage tuning setting       | Fast SSD volume (≠ catalog) |
+| Tiered-storage manager | Same cap (separate instance) | Same storage tuning setting | Fast, durable SSD volume    |
+| Read-only node         | Separate node tuning cap    | `min(NumCPU, 4)`             | Fast SSD volume             |
+| Single-node lab        | leave empty                | leave 0                      | leave empty                 |
+
+The writer and tiered-storage manager are separate DuckDB instances. If
+both are active, size `storage.ducklake.tuning.memory_limit` so that two
+such caps, the node cap (when present), Go memory, and the kernel cache
+fit within the container or cgroup limit. A temporary spill directory
+should be on durable storage rather than a RAM-backed `/tmp`.
 
 ## Why "before extension load"?
 

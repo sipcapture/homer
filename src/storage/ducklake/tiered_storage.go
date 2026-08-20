@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -66,6 +67,13 @@ type TieredStorageConfig struct {
 	// Base config for catalog
 	CatalogType CatalogType
 	CatalogPath string
+
+	// DuckDB engine tuning for the manager's dedicated DuckDB instance.
+	// This must mirror the writer settings: tier moves and DuckLake
+	// maintenance can otherwise claim DuckDB's unconstrained host defaults.
+	TuningThreads       int
+	TuningMemoryLimit   string
+	TuningTempDirectory string
 
 	// CatalogLocker serializes hot-catalog writes with the writer flush path.
 	CatalogLocker CatalogLocker
@@ -132,6 +140,7 @@ func (tsm *TieredStorageManager) Start() error {
 	// (pool growth would otherwise yield connections without credentials).
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
+	tsm.applyDuckDBTuning(db)
 
 	// Load DuckLake extension
 	if _, err := db.Exec("LOAD ducklake;"); err != nil {
@@ -173,6 +182,42 @@ func (tsm *TieredStorageManager) Start() error {
 		"primary_volume", tsm.primaryVolume.Name)
 
 	return nil
+}
+
+// applyDuckDBTuning applies the same resource safety settings used by the
+// writer to the TieredStorageManager's dedicated DuckDB instance. Tier moves
+// can scan and rewrite large partitions, so leaving this connection on
+// DuckDB's defaults (all CPUs and about 80% of host memory) can starve the
+// writer and trigger an OOM restart.
+//
+// It runs before LOAD/ATTACH, ensuring catalog bring-up and S3 maintenance are
+// constrained too. Errors are logged by the shared helpers and deliberately do
+// not prevent Homer from starting, matching the writer's behavior.
+func (tsm *TieredStorageManager) applyDuckDBTuning(db *sql.DB) {
+	threads := tsm.config.TuningThreads
+	memLimit := tsm.config.TuningMemoryLimit
+	tempDir := tsm.config.TuningTempDirectory
+
+	if threads == 0 {
+		threads = AutoThreads()
+		logger.Info("TieredStorageManager: auto-limiting DuckDB threads (operator did not set tuning.threads)",
+			"threads", threads, "host_cpus", runtime.NumCPU())
+	}
+	if strings.TrimSpace(memLimit) == "" {
+		memLimit = "2GB"
+		logger.Info("TieredStorageManager: auto-limiting DuckDB memory (operator did not set tuning.memory_limit)",
+			"memory_limit", memLimit)
+	}
+	if strings.TrimSpace(tempDir) == "" {
+		tempDir = DefaultSpillDirectory(tsm.config.CatalogPath)
+		if tempDir != "" {
+			logger.Info("TieredStorageManager: defaulting DuckDB spill directory (operator did not set tuning.temp_directory)",
+				"temp_directory", tempDir)
+		}
+	}
+
+	ApplyDuckDBTuning(db, threads, memLimit, tempDir, "tiering")
+	ApplyDuckDBMemorySafety(db, "tiering")
 }
 
 // attachVolume attaches a volume as a DuckLake database

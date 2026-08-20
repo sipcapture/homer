@@ -959,15 +959,18 @@ func (w *Writer) startTieringService() error {
 
 	// Create tiered storage manager
 	tsmConfig := ducklake.TieredStorageConfig{
-		Enable:             policy.Enable,
-		Volumes:            volumes,
-		TTLMoveIntervalSec: policy.TTLMoveIntervalSec,
-		MoveFactor:         policy.MoveFactor,
-		ConcurrentMoves:    policy.ConcurrentMoves,
-		MoveOnStartup:      policy.MoveOnStartup,
-		CatalogType:        ducklake.CatalogType(w.storageConfig.DuckLake.CatalogType),
-		CatalogPath:        w.storageConfig.DuckLake.CatalogPath,
-		CatalogLocker:      w.ducklakeManager,
+		Enable:               policy.Enable,
+		Volumes:              volumes,
+		TTLMoveIntervalSec:   policy.TTLMoveIntervalSec,
+		MoveFactor:           policy.MoveFactor,
+		ConcurrentMoves:      policy.ConcurrentMoves,
+		MoveOnStartup:        policy.MoveOnStartup,
+		CatalogType:          ducklake.CatalogType(w.storageConfig.DuckLake.CatalogType),
+		CatalogPath:          w.storageConfig.DuckLake.CatalogPath,
+		TuningThreads:        w.storageConfig.DuckLake.Tuning.Threads,
+		TuningMemoryLimit:    w.storageConfig.DuckLake.Tuning.MemoryLimit,
+		TuningTempDirectory: w.storageConfig.DuckLake.Tuning.TempDirectory,
+		CatalogLocker:        w.ducklakeManager,
 	}
 
 	tsm, err := ducklake.NewTieredStorageManager(tsmConfig)
