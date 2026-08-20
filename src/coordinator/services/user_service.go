@@ -379,14 +379,15 @@ func escapeSQL(s string) string {
 	return sqlvalidator.SafeString(s)
 }
 
-// escapeJSONData escapes a JSON blob for safe embedding in a SQL single-quoted
-// string. Unlike escapeSQL it does NOT truncate the string, because structured
-// data such as fields_mapping arrays can exceed the SafeString length limit.
-// escapeJSONData sanitises a JSON string for embedding inside a DuckDB
-// single-quoted SQL string literal.  DuckDB (standard SQL mode) does NOT
-// treat backslash as an escape character inside '...' literals, so only
-// single-quotes need to be doubled.  Escaping backslashes here would
-// corrupt JSON escape sequences such as \n, \t, \uXXXX.
+// escapeJSONData escapes a JSON/script blob for embedding in a DuckDB
+// single-quoted SQL string. Unlike escapeSQL/SafeString it does NOT truncate,
+// because fields_mapping and Lua scripts can exceed the SafeString length limit.
+//
+// DuckDB does not treat backslash as an escape inside '...' literals (only ''
+// doubles a quote). GHSA-vxc3-v6h9-8856 recommended also doubling backslashes
+// to match SafeString; that would store extra backslashes and corrupt JSON \n,
+// \t, \uXXXX and Windows paths. Do not apply that change unless the parser
+// starts interpreting \ as an escape. Prefer bound parameters (?) for new code.
 func escapeJSONData(s string) string {
 	var b strings.Builder
 	b.Grow(len(s) + 16)
