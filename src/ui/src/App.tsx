@@ -85,9 +85,9 @@ function App() {
   const role = useMemo(() => detectRole(me), [me])
   const usersPerms = useMemo(() => getSectionPerms(role, 'users'), [role])
 
-  const persistToken = (next: string, remember = false) => {
-    setAuthToken(next, remember)
-    setToken(remember ? next : COOKIE_SESSION_MARKER)
+  const persistToken = (next: string, _remember = false) => {
+    setAuthToken(next, false)
+    setToken(COOKIE_SESSION_MARKER)
   }
 
   // One-shot migration from legacy 'theme' key to shadcn ThemeProvider's 'vite-ui-theme' key.
@@ -493,8 +493,7 @@ function App() {
       try {
         await exchangeOAuthOneTimeAndPersist(oneTime, apiBase)
         if (cancelled) return
-        const remembered = getAuthToken()
-        setToken(remembered || COOKIE_SESSION_MARKER)
+        setToken(COOKIE_SESSION_MARKER)
         toast.success('Logged in via OAuth2')
       } catch (err) {
         if (cancelled) return

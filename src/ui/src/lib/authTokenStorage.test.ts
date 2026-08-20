@@ -20,10 +20,10 @@ describe('authTokenStorage', () => {
     localStorage.clear()
   })
 
-  it('stores remembered token in localStorage only', () => {
+  it('never writes the JWT to localStorage, even when remember is true', () => {
     setAuthToken('jwt-abc', true)
-    expect(getAuthToken()).toBe('jwt-abc')
-    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBe('jwt-abc')
+    expect(getAuthToken()).toBe('')
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
     expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
   })
 
@@ -33,15 +33,17 @@ describe('authTokenStorage', () => {
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
   })
 
-  it('migrates legacy sessionStorage token to localStorage', () => {
+  it('purges leftover sessionStorage and localStorage JWTs', () => {
     sessionStorage.setItem(AUTH_TOKEN_KEY, 'legacy-jwt')
+    localStorage.setItem(AUTH_TOKEN_KEY, 'legacy-ls')
     migrateLegacyAuthToken()
-    expect(getAuthToken()).toBe('legacy-jwt')
+    expect(getAuthToken()).toBe('')
     expect(sessionStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
+    expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()
   })
 
-  it('clearAuthToken removes persisted token', () => {
-    setAuthToken('x', true)
+  it('clearAuthToken removes any leftover token', () => {
+    localStorage.setItem(AUTH_TOKEN_KEY, 'x')
     clearAuthToken()
     expect(getAuthToken()).toBe('')
     expect(localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull()

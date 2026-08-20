@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { resolveTimeRange, type CalendarPreset } from './utils/resolveTimeRange'
 import { useDashboard } from './context/DashboardContext'
-import { getAuthToken } from '@/lib/authTokenStorage'
+import { getAuthToken, isCookieSessionMarker } from '@/lib/authTokenStorage'
 import MultiSelectInput from './components/MultiSelectInput'
 import { useExportExclusionHosts } from './useExportExclusionHosts'
 
@@ -46,9 +46,10 @@ async function downloadBlob(url: string, body: object, filename: string) {
   const token = getToken()
   const res = await fetch(url, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token && !isCookieSessionMarker(token) ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
   })
@@ -281,9 +282,10 @@ function ShareExportCard({ getRequestBody }: ShareExportCardProps) {
       const token = getToken()
       const res = await fetch('/api/v4/transactions/export/link', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(token && !isCookieSessionMarker(token) ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(getRequestBody()),
       })
