@@ -173,6 +173,7 @@ func (c *Coordinator) setupEcho() {
 
 	// Middleware
 	c.echo.Use(middleware.Recover())
+	c.echo.Use(securityHeaders())
 	c.echo.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOriginFunc: func(origin string) (bool, error) {
 			return strings.HasPrefix(origin, "http://127.0.0.1:") ||
