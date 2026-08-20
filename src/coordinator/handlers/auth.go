@@ -26,19 +26,19 @@ import (
 
 // AuthHandler handles authentication-related API endpoints
 type AuthHandler struct {
-	jwtSecret    string
-	expireHours  int
-	cookieEnable bool
-	cookieName   string
+	jwtSecret      string
+	expireHours    int
+	cookieEnable   bool
+	cookieName     string
 	cookieSameSite string
 	cookieSecure   *bool
-	userService  *services.UserService
-	ldapAuth     *services.LDAPAuthService
-	sessionStore *SessionStore
-	oneTimeStore *OneTimeTokenStore
-	avatarStore  *AvatarStore
-	providers    []OAuthProvider
-	oauthState   *OAuthStateStore
+	userService    *services.UserService
+	ldapAuth       *services.LDAPAuthService
+	sessionStore   *SessionStore
+	oneTimeStore   *OneTimeTokenStore
+	avatarStore    *AvatarStore
+	providers      []OAuthProvider
+	oauthState     *OAuthStateStore
 
 	authTokenSvc *services.AuthTokenService
 	apiSettings  config.APISettingsConfig
@@ -171,7 +171,9 @@ type LoginRequest struct {
 	// Type selects the password backend: "internal" (default) or "ldap" when LDAP is enabled.
 	// If login fails, coordinator.auth.fallback_auth_type may be tried server-side.
 	Type string `json:"type"`
-	// Remember asks the UI to persist the JWT in localStorage (optional; HttpOnly cookie is always set when enabled).
+	// Remember, when true, sets a persistent HttpOnly session cookie (Max-Age =
+	// jwt.expire_hours). When false the cookie is session-scoped. The JWT is
+	// never stored in browser script-visible storage (GHSA-rqwc-fmx3-95j8).
 	Remember bool `json:"remember"`
 }
 

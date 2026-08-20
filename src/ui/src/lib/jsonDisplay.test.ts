@@ -38,6 +38,18 @@ describe('jsonDisplay', () => {
     expect(isJsonDisplayable('plain text')).toBe(false)
   })
 
+  it('HTML-escapes attacker-controlled JSON before highlight spans', () => {
+    const html = highlightJSON({
+      note: '<script>alert(1)</script>',
+      img: '<img src=x onerror=alert(1)>',
+    })
+    expect(html).not.toMatch(/<script[\s>/]/i)
+    expect(html).not.toMatch(/<img[\s>]/i)
+    expect(html).toContain('&lt;script&gt;')
+    expect(html).toContain('&lt;img')
+    expect(html).toContain('json-hl-key')
+  })
+
   it('emits syntax-highlight markup with stable CSS classes', () => {
     const html = highlightJSON('{"level":"INFO","count":3,"ok":true,"x":null}')
     expect(html).toContain('json-hl-key')

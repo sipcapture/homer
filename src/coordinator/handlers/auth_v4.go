@@ -129,7 +129,7 @@ func (h *AuthHandler) V4CreateSession(c echo.Context) error {
 	resp.Data.User.Admin = user.IsAdmin
 	resp.Meta = buildMeta(c, "")
 
-	h.setSessionCookie(c, token)
+	h.setSessionCookie(c, token, req.Remember)
 	return c.JSON(http.StatusCreated, resp)
 }
 
@@ -265,7 +265,7 @@ func (h *AuthHandler) V4OAuth2TokenExchange(c echo.Context) error {
 	resp.Data.User.Admin = isAdmin
 	resp.Meta = buildMeta(c, "")
 
-	h.setSessionCookie(c, jwtToken)
+	h.setSessionCookie(c, jwtToken, true)
 	return c.JSON(http.StatusCreated, resp)
 }
 

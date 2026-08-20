@@ -58,13 +58,16 @@ func parseSameSiteMode(raw string) http.SameSite {
 	}
 }
 
-func (h *AuthHandler) setSessionCookie(c echo.Context, jwtToken string) {
+func (h *AuthHandler) setSessionCookie(c echo.Context, jwtToken string, persistent bool) {
 	if !h.cookieAuthEnabled() || jwtToken == "" {
 		return
 	}
-	maxAge := h.expireHours * 3600
-	if maxAge <= 0 {
-		maxAge = 24 * 3600
+	maxAge := 0 // session cookie (dropped when the browser closes)
+	if persistent {
+		maxAge = h.expireHours * 3600
+		if maxAge <= 0 {
+			maxAge = 24 * 3600
+		}
 	}
 	c.SetCookie(&http.Cookie{
 		Name:     h.sessionCookieName(),

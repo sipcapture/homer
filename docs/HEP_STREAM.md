@@ -181,8 +181,9 @@ const client = openHepStream(
 client.close()
 ```
 
-Reconnects use exponential backoff up to 30s with small jitter. The
-The HttpOnly `homer_session` cookie is sent on the WebSocket handshake automatically. If **Remember me** stored a JWT in `localStorage`, it is also attached as `?access_token=` when needed.
+Reconnects use exponential backoff up to 30s with small jitter.
+
+The HttpOnly `homer_session` cookie is sent on the WebSocket handshake automatically. The bundled UI does not attach `?access_token=` (the JWT is not stored in JavaScript). API clients may still pass `?access_token=<jwt>`.
 
 ## Example clients
 
