@@ -148,13 +148,7 @@ jobs:
         if: matrix.goarch == 'amd64'
         run: |
           set -euo pipefail
-          docker run --rm \
-            -e GITHUB_OUTPUT=/dev/null \
-            -e INPUT_TARGET=/work/homer \
-            -e INPUT_GLIBC=2.34 \
-            -e INPUT_INSTALL= \
-            -v "${{ github.workspace }}:/work" \
-            ghcr.io/lmangani/polyfill-glibc-action:latest
+          bash scripts/apply_glibc_polyfill.sh homer 2.34
 
       - name: Verify glibc polyfill (amd64)
         if: matrix.goarch == 'amd64'
