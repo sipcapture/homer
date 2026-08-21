@@ -193,6 +193,9 @@ func (s *UserService) CreateUser(ctx context.Context, username, password, email,
 	if s.db == nil {
 		return 0, fmt.Errorf("settings db not available")
 	}
+	if passwordhash.IsDefaultSipcapturePassword(password) {
+		return 0, passwordhash.ErrDefaultSipcapturePassword
+	}
 
 	passwordHash, err := passwordhash.Hash(password)
 	if err != nil {
@@ -229,6 +232,9 @@ func (s *UserService) UpdateUser(ctx context.Context, id int64, email, password,
 		set = append(set, fmt.Sprintf("email = '%s'", sqlvalidator.SafeString(*email)))
 	}
 	if password != nil {
+		if passwordhash.IsDefaultSipcapturePassword(*password) {
+			return false, passwordhash.ErrDefaultSipcapturePassword
+		}
 		passwordHash, err := passwordhash.Hash(*password)
 		if err != nil {
 			return false, err
@@ -383,7 +389,7 @@ func escapeSQL(s string) string {
 // single-quoted SQL string. Unlike escapeSQL/SafeString it does NOT truncate,
 // because fields_mapping and Lua scripts can exceed the SafeString length limit.
 //
-// DuckDB does not treat backslash as an escape inside '...' literals (only ''
+// DuckDB does not treat backslash as an escape inside '...' literals (only ”
 // doubles a quote). GHSA-vxc3-v6h9-8856 recommended also doubling backslashes
 // to match SafeString; that would store extra backslashes and corrupt JSON \n,
 // \t, \uXXXX and Windows paths. Do not apply that change unless the parser

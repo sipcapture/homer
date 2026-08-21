@@ -21,6 +21,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 	"golang.org/x/oauth2"
 )
 
@@ -182,15 +183,17 @@ type LoginResponse struct {
 	Token string `json:"token"`
 	Scope string `json:"scope"`
 	User  struct {
-		Admin    bool   `json:"admin"`
-		Username string `json:"username"`
+		Admin              bool   `json:"admin"`
+		Username           string `json:"username"`
+		MustChangePassword bool   `json:"must_change_password,omitempty"`
 	} `json:"user"`
 }
 
 // JWTClaims represents the JWT claims
 type JWTClaims struct {
-	Username string `json:"username"`
-	Admin    bool   `json:"admin"`
+	Username           string `json:"username"`
+	Admin              bool   `json:"admin"`
+	MustChangePassword bool   `json:"must_change_password,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -228,7 +231,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Generate JWT token
-	token, _, err := h.generateToken(user.Username, user.IsAdmin)
+	token, _, err := h.generateToken(user.Username, user.IsAdmin, passwordhash.IsDisallowedDefaultHash(user.PasswordHash))
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
 			"error": "Failed to generate token",
@@ -247,11 +250,13 @@ func (h *AuthHandler) Login(c echo.Context) error {
 			Token: token,
 			Scope: scope,
 			User: struct {
-				Admin    bool   `json:"admin"`
-				Username string `json:"username"`
+				Admin              bool   `json:"admin"`
+				Username           string `json:"username"`
+				MustChangePassword bool   `json:"must_change_password,omitempty"`
 			}{
-				Admin:    user.IsAdmin,
-				Username: user.Username,
+				Admin:              user.IsAdmin,
+				Username:           user.Username,
+				MustChangePassword: passwordhash.IsDisallowedDefaultHash(user.PasswordHash),
 			},
 		},
 	})
@@ -335,17 +340,21 @@ func (h *AuthHandler) JWTMiddleware() echo.MiddlewareFunc {
 			}
 
 			c.Set("user", token)
+			if err := h.rejectIfPasswordChangeRequired(c, claims, false); err != nil {
+				return err
+			}
 			return next(c)
 		}
 	}
 }
 
 // generateToken generates a JWT token and returns token + sessionId
-func (h *AuthHandler) generateToken(username string, admin bool) (string, string, error) {
+func (h *AuthHandler) generateToken(username string, admin bool, mustChangePassword bool) (string, string, error) {
 	sessionID := newSessionID()
 	claims := &JWTClaims{
-		Username: username,
-		Admin:    admin,
+		Username:           username,
+		Admin:              admin,
+		MustChangePassword: mustChangePassword,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        sessionID,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(h.expireHours) * time.Hour)),

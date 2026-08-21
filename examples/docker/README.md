@@ -65,8 +65,9 @@ high ingest. Details: [OOM.md](../../docs/OOM.md), [DUCKDB_TUNING.md](../../docs
 ## First login
 
 Omit `HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`. On first start the coordinator
-creates `admin` with a random bcrypt password and logs it once. Do not use the
-historical password `sipcapture` — that hash is refused at login.
+creates `admin` with a random bcrypt password and logs it once. Existing installs
+that still have the historical `sipcapture` hash can sign in, then must set a
+new password in the UI before using the rest of the API.
 
 ## Endpoints
 

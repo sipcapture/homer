@@ -7,7 +7,7 @@ Homer 11.0.282–11.0.284 closes three coordinator security issues. **11.0.313**
 | Issue | Risk (before) | Fix | Typical upgrade impact |
 |-------|----------------|-----|-------------------------|
 | Empty `coordinator.jwt.secret` | Protected API routes were **unauthenticated** | JWT middleware always enforced; empty secret → auto-generated persisted secret | Installs with explicit JWT env/config: **no change**. Installs with empty secret: API now requires login or `Auth-Token` |
-| Default admin `sipcapture` | Predictable first-login password | No compose hash; random bcrypt at first boot; login refuses the well-known SHA-256 digest | Existing `users` row with sipcapture hash: **login fails** until `--reset-admin-password` |
+| Default admin `sipcapture` | Predictable first-login password | No compose hash; random bcrypt at first boot; JWT `must_change_password` until a new password is set | Existing `users` row with sipcapture hash: **login works**, then the UI/API require a password change |
 | `POST /api/v4/statistics/query` `rawquery` | Unvalidated SQL passthrough | Same `ValidateRawSQL` rules as `/api/v4/query` | Legitimate `SELECT` / `WITH` / `SHOW` queries: **no change** |
 | Node `POST /query` (port+1) | Unauthenticated arbitrary DuckDB SQL / file read | `ValidateRawSQL` always; Bearer auth when `flight_server.auth_token` set; auto-token on non-loopback bind | All-in-one with default `0.0.0.0`: token auto-persisted; coordinator local node gets `token` automatically |
 | `sqlite_scan` / external scanners | Authenticated bypass of SQL denylist | Blocked in `ValidateRawSQL` | Legitimate lake `SELECT`s: **no change** |
@@ -52,9 +52,9 @@ Environment: `HOMER_COORDINATOR_JWT_SECRET`.
 |--------|--------------------------------|----------------------|
 | Explicit `admin_password_hash` or env | Uses configured hash | Unchanged if row already has a password |
 | Empty hash | Random password generated; **logged once** at startup | Unchanged if row already has a password |
-| Docker examples | Hash omitted; random password in coordinator logs | Existing sipcapture hash in `users` **no longer logs in** |
+| Docker examples | Hash omitted; random password in coordinator logs | Existing sipcapture hash in `users`: login then **forced password change** |
 
-Legacy SHA-256 rows from **migrated homer-app users** still authenticate, except the well-known **`sipcapture`** digest, which is refused. Reset with `homer --reset-admin-password`.
+Legacy SHA-256 rows from **migrated homer-app users** still authenticate. The well-known **`sipcapture`** digest still logs in, but the session is limited to `GET/PATCH /api/v4/me` and logout until the password is changed. `--reset-admin-password` still refuses that digest as a *new* hash.
 
 **Wizard:** empty admin password field → random password (bcrypt in JSON) shown once after save.
 

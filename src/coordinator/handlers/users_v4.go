@@ -15,6 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 )
 
 type UsersHandler struct {
@@ -137,6 +138,9 @@ func (h *UsersHandler) V4UsersCreate(c echo.Context) error {
 
 	id, err := h.userService.CreateUser(c.Request().Context(), req.Username, req.Password, req.Email, strings.TrimSpace(req.Name), isAdmin, enabled)
 	if err != nil {
+		if err == passwordhash.ErrDefaultSipcapturePassword {
+			return writeError(c, http.StatusBadRequest, "Bad Request", "Choose a password other than the historical default")
+		}
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to create user")
 	}
 
@@ -207,6 +211,9 @@ func (h *UsersHandler) V4UsersUpdate(c echo.Context) error {
 	if err != nil {
 		if err.Error() == "no fields to update" {
 			return writeError(c, http.StatusBadRequest, "Bad Request", "No fields to update")
+		}
+		if err == passwordhash.ErrDefaultSipcapturePassword {
+			return writeError(c, http.StatusBadRequest, "Bad Request", "Choose a password other than the historical default")
 		}
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to update user")
 	}

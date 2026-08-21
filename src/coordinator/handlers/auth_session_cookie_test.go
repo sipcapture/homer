@@ -105,7 +105,7 @@ func TestV4CreateSession_RememberSetsPersistentCookie(t *testing.T) {
 
 func TestJWTMiddlewareV4_AcceptsSessionCookie(t *testing.T) {
 	h := newCookieAuthHandler(t)
-	token, _, err := h.generateToken("admin", true)
+	token, _, err := h.generateToken("admin", true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestJWTMiddlewareV4_AcceptsSessionCookie(t *testing.T) {
 
 func TestV4LogoutCurrentSession_ClearsCookie(t *testing.T) {
 	h := newCookieAuthHandler(t)
-	token, _, err := h.generateToken("admin", true)
+	token, _, err := h.generateToken("admin", true, false)
 	if err != nil {
 		t.Fatal(err)
 	}

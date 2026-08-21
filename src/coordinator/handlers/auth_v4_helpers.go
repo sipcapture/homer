@@ -199,7 +199,35 @@ func (h *AuthHandler) JWTMiddlewareV4() echo.MiddlewareFunc {
 			}
 			c.Set("user", token)
 			c.Set("auth_source", src)
+			if err := h.rejectIfPasswordChangeRequired(c, claims, true); err != nil {
+				return err
+			}
 			return next(c)
 		}
 	}
+}
+
+func allowedWhilePasswordChangeRequired(c echo.Context) bool {
+	path := strings.TrimSuffix(c.Request().URL.Path, "/")
+	switch c.Request().Method {
+	case http.MethodGet:
+		return path == "/api/v4/me" || path == "/api/v3/auth/me"
+	case http.MethodPatch:
+		return path == "/api/v4/me"
+	case http.MethodDelete:
+		return path == "/api/v4/auth/sessions/current" || strings.HasPrefix(path, "/api/v4/auth/sessions/")
+	default:
+		return false
+	}
+}
+
+func (h *AuthHandler) rejectIfPasswordChangeRequired(c echo.Context, claims *JWTClaims, v4 bool) error {
+	if claims == nil || !claims.MustChangePassword || allowedWhilePasswordChangeRequired(c) {
+		return nil
+	}
+	const msg = "Password change required"
+	if v4 {
+		return writeError(c, http.StatusForbidden, "Forbidden", msg)
+	}
+	return c.JSON(http.StatusForbidden, map[string]interface{}{"error": msg})
 }

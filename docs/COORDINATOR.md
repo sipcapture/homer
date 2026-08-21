@@ -294,7 +294,7 @@ homer --config-path /path/to/homer.json --reset-admin-password
 
 The process opens **`coordinator.settings_db_path`**, ensures schema, updates or inserts the **`users`** row for `admin_user`, and **exits** (no HTTP server). Details, JSON examples, and env overrides: [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password).
 
-**Password hashes:** Users created or updated via the API store **bcrypt** in `users.password_hash`. Login also accepts legacy **SHA-256 hex** (migrated homer-app users), except the well-known digest of **`sipcapture`**, which is refused. **`--reset-admin-password`** still expects **SHA-256 hex** or bcrypt in `admin_password_hash` (see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password)).
+**Password hashes:** Users created or updated via the API store **bcrypt** in `users.password_hash`. Login also accepts legacy **SHA-256 hex** (migrated homer-app users). The well-known digest of **`sipcapture`** still verifies so existing installs can sign in, then the session requires a password change (`must_change_password`). **`--reset-admin-password`** still expects **SHA-256 hex** or bcrypt in `admin_password_hash` (see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password)).
 
 **Generating a SHA-256 hex hash (for `admin_password_hash` / reset only):**
 
@@ -303,7 +303,7 @@ The process opens **`coordinator.settings_db_path`**, ensures schema, updates or
 echo -n "your-password" | sha256sum | cut -d' ' -f1
 ```
 
-Do not use the historical password `sipcapture`; that hash is blocked.
+Do not use the historical password `sipcapture`; bootstrap and password updates refuse that value. Existing sipcapture hashes require a UI password change after login.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|

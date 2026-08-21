@@ -162,7 +162,7 @@ func TestGetUserByUsername_CaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestAuthenticate_RejectsSipcaptureDefaultHash(t *testing.T) {
+func TestAuthenticate_AcceptsSipcaptureDefaultHash(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.duckdb")
 	db, err := OpenSettingsDB(path)
@@ -182,7 +182,8 @@ func TestAuthenticate_RejectsSipcaptureDefaultHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := NewUserService(db)
-	if _, err := svc.Authenticate(ctx, "admin", "sipcapture"); err == nil {
-		t.Fatal("sipcapture default hash must not authenticate")
+	u, err := svc.Authenticate(ctx, "admin", "sipcapture")
+	if err != nil || u == nil {
+		t.Fatalf("sipcapture default hash should authenticate so the UI can force a change: err=%v", err)
 	}
 }

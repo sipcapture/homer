@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package passwordhash provides password hashing and verification for Homer.
-// New passwords use bcrypt; legacy SHA-256 hex hashes (homer-app) remain
-// verifiable except the well-known sipcapture digest.
+// New passwords use bcrypt; legacy SHA-256 hex hashes (homer-app) remain verifiable.
 package passwordhash
 
 import (
+	"errors"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -16,12 +16,21 @@ import (
 const bcryptCost = bcrypt.DefaultCost
 
 // LegacySHA256SipcaptureHash is SHA-256("sipcapture"), the historical default
-// admin password. Login and bootstrap refuse this digest (GHSA-263f-5xrw-c34r).
+// admin password (GHSA-263f-5xrw-c34r).
 const LegacySHA256SipcaptureHash = "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
+
+// ErrDefaultSipcapturePassword is returned when creating or updating a user
+// with the historical default password.
+var ErrDefaultSipcapturePassword = errors.New("password cannot be the historical default sipcapture")
 
 // IsDisallowedDefaultHash reports the well-known sipcapture SHA-256 hex.
 func IsDisallowedDefaultHash(stored string) bool {
 	return strings.EqualFold(strings.TrimSpace(stored), LegacySHA256SipcaptureHash)
+}
+
+// IsDefaultSipcapturePassword reports the historical cleartext default.
+func IsDefaultSipcapturePassword(password string) bool {
+	return strings.TrimSpace(password) == "sipcapture"
 }
 
 // Hash returns a bcrypt hash for a new password.
@@ -50,9 +59,6 @@ func Verify(password, stored string) bool {
 	}
 	if isBcryptHash(stored) {
 		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil
-	}
-	if IsDisallowedDefaultHash(stored) {
-		return false
 	}
 	return legacySHA256HexEqual(password, stored)
 }
