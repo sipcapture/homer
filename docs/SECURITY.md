@@ -54,6 +54,17 @@ Environment: `HOMER_COORDINATOR_JWT_SECRET`.
 | Empty hash | Random password generated; **logged once** at startup | Unchanged if row already has a password |
 | Docker examples | Hash omitted; random password in coordinator logs | Existing sipcapture hash in `users`: login then **forced password change** |
 
+**How to read the Docker password (fresh volume):**
+
+```bash
+docker compose -f examples/docker/docker-compose.yaml logs homer 2>&1 | grep bootstrap_password
+# or: docker logs <homer-container> 2>&1 | grep bootstrap_password
+```
+
+The warning looks like `generated one-time bootstrap admin password` with field
+`bootstrap_password`. It is printed only on first insert of the admin row, not
+on later restarts. See [examples/docker/README.md](../examples/docker/README.md#first-login).
+
 Legacy SHA-256 rows from **migrated homer-app users** still authenticate. The well-known **`sipcapture`** digest still logs in, but the session is limited to `GET/PATCH /api/v4/me` and logout until the password is changed. `--reset-admin-password` still refuses that digest as a *new* hash.
 
 **Wizard:** empty admin password field → random password (bcrypt in JSON) shown once after save.

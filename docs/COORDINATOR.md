@@ -284,7 +284,7 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 | **Omitted** (`coordinator` without `auth`) | Same as **`{"type":"internal"}`** (default admin bootstrap with random password when hash omitted). |
 | **Object** without `type` (or empty `type`) | Same as **`{"type":"internal"}`**: internal bootstrap applies; unset `admin_user` defaults to `admin`; empty `admin_password_hash` triggers a one-time random password in logs. |
 
-**First login (`type` internal or string `"internal"`):** username `admin`. Password is either from **`admin_password_hash`** (SHA-256 hex for `--reset-admin-password`, or bcrypt from the setup wizard), or the **random bootstrap password** printed in coordinator logs on first startup when no hash is configured.
+**First login (`type` internal or string `"internal"`):** username `admin`. Password is either from **`admin_password_hash`** (SHA-256 hex for `--reset-admin-password`, or bcrypt from the setup wizard), or the **random bootstrap password** printed in coordinator logs on first startup when no hash is configured. In Docker, grep logs for `bootstrap_password` — [examples/docker/README.md](../examples/docker/README.md#first-login).
 
 **Reset admin password** — set `coordinator.auth.admin_password_hash` (and optional `admin_user`) in modular `homer.json` or via **`HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`**, then run:
 
