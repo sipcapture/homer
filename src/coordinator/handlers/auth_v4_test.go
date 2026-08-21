@@ -314,8 +314,12 @@ func TestJWTMiddlewareV4_BlocksUntilPasswordChanged(t *testing.T) {
 	e := echo.New()
 	g := e.Group("/api/v4")
 	g.Use(h.JWTMiddlewareV4())
+	handlerRan := false
 	g.GET("/me", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
-	g.GET("/dashboards", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	g.GET("/dashboards", func(c echo.Context) error {
+		handlerRan = true
+		return c.JSON(http.StatusOK, map[string]any{"items": []int{1}})
+	})
 
 	token, _, err := h.generateToken("admin", true, true)
 	if err != nil {
@@ -328,6 +332,12 @@ func TestJWTMiddlewareV4_BlocksUntilPasswordChanged(t *testing.T) {
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("dashboards: got %d want 403 body=%s", rec.Code, rec.Body.String())
+	}
+	if handlerRan {
+		t.Fatal("dashboards handler must not run while password change is required")
+	}
+	if strings.Contains(rec.Body.String(), "items") {
+		t.Fatalf("dashboards body leaked handler response: %s", rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v4/me", nil)

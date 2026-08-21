@@ -199,8 +199,8 @@ func (h *AuthHandler) JWTMiddlewareV4() echo.MiddlewareFunc {
 			}
 			c.Set("user", token)
 			c.Set("auth_source", src)
-			if err := h.rejectIfPasswordChangeRequired(c, claims, true); err != nil {
-				return err
+			if passwordChangeRequiredBlocks(c, claims) {
+				return writeError(c, http.StatusForbidden, "Forbidden", "Password change required")
 			}
 			return next(c)
 		}
@@ -221,13 +221,6 @@ func allowedWhilePasswordChangeRequired(c echo.Context) bool {
 	}
 }
 
-func (h *AuthHandler) rejectIfPasswordChangeRequired(c echo.Context, claims *JWTClaims, v4 bool) error {
-	if claims == nil || !claims.MustChangePassword || allowedWhilePasswordChangeRequired(c) {
-		return nil
-	}
-	const msg = "Password change required"
-	if v4 {
-		return writeError(c, http.StatusForbidden, "Forbidden", msg)
-	}
-	return c.JSON(http.StatusForbidden, map[string]interface{}{"error": msg})
+func passwordChangeRequiredBlocks(c echo.Context, claims *JWTClaims) bool {
+	return claims != nil && claims.MustChangePassword && !allowedWhilePasswordChangeRequired(c)
 }
