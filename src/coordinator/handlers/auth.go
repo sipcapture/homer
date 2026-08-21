@@ -340,8 +340,10 @@ func (h *AuthHandler) JWTMiddleware() echo.MiddlewareFunc {
 			}
 
 			c.Set("user", token)
-			if err := h.rejectIfPasswordChangeRequired(c, claims, false); err != nil {
-				return err
+			if passwordChangeRequiredBlocks(c, claims) {
+				return c.JSON(http.StatusForbidden, map[string]interface{}{
+					"error": "Password change required",
+				})
 			}
 			return next(c)
 		}
