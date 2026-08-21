@@ -74,6 +74,7 @@ func (ts *TieringService) Start() error {
 	logger.Info("TieringService: Starting",
 		"interval", interval.String(),
 		"concurrent_moves", ts.config.ConcurrentMoves,
+		"move_engine", ts.tieredStorage.MoveEngine(),
 		"volumes", len(volumes))
 
 	// Run initial tiering if configured

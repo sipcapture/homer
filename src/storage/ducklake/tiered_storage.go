@@ -10,7 +10,9 @@
 package ducklake
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -18,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sipcapture/homer-core/src/storage/ducklake/mover"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -62,6 +65,7 @@ type TieredStorageConfig struct {
 	MoveFactor         float64
 	ConcurrentMoves    int
 	MoveOnStartup      bool
+	MoveEngine         string
 
 	// Base config for catalog
 	CatalogType CatalogType
@@ -344,6 +348,10 @@ func (tsm *TieredStorageManager) QueryAllVolumes(tableName, whereClause string, 
 // MovePartition moves a partition (date) from source to destination volume.
 // DuckDB does not support transactions across multiple attached databases, so
 // INSERT and DELETE run as separate operations with idempotency on the destination.
+//
+// The default path is DuckDB INSERT…SELECT. Set move_engine=native to copy
+// parquet files outside DuckDB so a large S3 copy does not hold the writer
+// catalog lock (sipcapture/homer#969). Native falls back to INSERT…SELECT.
 func (tsm *TieredStorageManager) MovePartition(tableName string, date string, srcVol, dstVol *Volume) error {
 	srcTable := fmt.Sprintf("%s.main.%s", srcVol.LakeName, tableName)
 	dstTable := fmt.Sprintf("%s.main.%s", dstVol.LakeName, tableName)
@@ -352,7 +360,8 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 		"table", tableName,
 		"date", date,
 		"from", srcVol.Name,
-		"to", dstVol.Name)
+		"to", dstVol.Name,
+		"engine", tsm.moveEngine())
 
 	hotLocker := tsm.hotCatalogLocker(srcVol)
 
@@ -390,23 +399,111 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 				"date", date,
 				"rows", dstCount)
 		}
-	} else {
-		insertSQL := fmt.Sprintf(
-			"INSERT INTO %s SELECT * FROM %s WHERE date = ?",
-			dstTable, srcTable,
-		)
-		if _, err := execWithRetry(
-			tsm.db,
-			tieringMaxRetries,
-			tieringBaseBackoff,
-			hotLocker,
-			insertSQL,
-			date,
-		); err != nil {
-			return fmt.Errorf("failed to insert into destination: %w", err)
+		return tsm.deleteSourcePartition(srcTable, date, tableName, srcCount, dstCount, hotLocker)
+	}
+
+	if tsm.useNativeMove(srcVol, dstVol) {
+		err := tsm.movePartitionNative(tableName, date, srcVol, dstVol)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, mover.ErrFallback) {
+			return err
+		}
+		logger.Info("TieredStorageManager: native file move unavailable, using duckdb INSERT",
+			"table", tableName,
+			"date", date,
+			"reason", err)
+	}
+
+	return tsm.movePartitionDuckDB(srcTable, dstTable, tableName, date, srcCount, hotLocker)
+}
+
+func (tsm *TieredStorageManager) MoveEngine() string {
+	if tsm == nil {
+		return "duckdb"
+	}
+	if strings.EqualFold(strings.TrimSpace(tsm.config.MoveEngine), "native") {
+		return "native"
+	}
+	return "duckdb"
+}
+
+func (tsm *TieredStorageManager) moveEngine() string {
+	return tsm.MoveEngine()
+}
+
+func (tsm *TieredStorageManager) useNativeMove(srcVol, dstVol *Volume) bool {
+	if tsm.moveEngine() != "native" {
+		return false
+	}
+	if srcVol == nil || dstVol == nil {
+		return false
+	}
+	if IsRemoteLakeDataPath(srcVol.Path) {
+		return false
+	}
+	return true
+}
+
+func (tsm *TieredStorageManager) movePartitionNative(tableName, date string, srcVol, dstVol *Volume) error {
+	opts := mover.Options{
+		DB:          tsm.db,
+		SrcLake:     srcVol.LakeName,
+		DstLake:     dstVol.LakeName,
+		SrcDataPath: srcVol.Path,
+		DstDataPath: dstVol.Path,
+		TableName:   tableName,
+		Partition:   date,
+	}
+	if locker := tsm.hotCatalogLocker(srcVol); locker != nil {
+		opts.Lock = locker.CatalogLock
+		opts.Unlock = locker.CatalogUnlock
+	}
+	if dstVol.Type == VolumeTypeS3 || IsRemoteLakeDataPath(dstVol.Path) {
+		opts.S3 = &mover.S3Config{
+			Region:    dstVol.S3Region,
+			AccessKey: dstVol.S3AccessKey,
+			SecretKey: dstVol.S3SecretKey,
+			Endpoint:  dstVol.S3Endpoint,
+			URLStyle:  dstVol.S3URLStyle,
+			UseSSL:    dstVol.S3UseSSL,
 		}
 	}
 
+	res, err := mover.Move(context.Background(), opts)
+	if err != nil {
+		return err
+	}
+	logger.Info("TieredStorageManager: Partition moved",
+		"table", tableName,
+		"date", date,
+		"rows", res.RowsMoved,
+		"files", res.FilesCopied,
+		"bytes", res.BytesCopied,
+		"engine", "native")
+	return nil
+}
+
+func (tsm *TieredStorageManager) movePartitionDuckDB(srcTable, dstTable, tableName, date string, srcCount int64, hotLocker CatalogLocker) error {
+	insertSQL := fmt.Sprintf(
+		"INSERT INTO %s SELECT * FROM %s WHERE date = ?",
+		dstTable, srcTable,
+	)
+	if _, err := execWithRetry(
+		tsm.db,
+		tieringMaxRetries,
+		tieringBaseBackoff,
+		hotLocker,
+		insertSQL,
+		date,
+	); err != nil {
+		return fmt.Errorf("failed to insert into destination: %w", err)
+	}
+	return tsm.deleteSourcePartition(srcTable, date, tableName, srcCount, 0, hotLocker)
+}
+
+func (tsm *TieredStorageManager) deleteSourcePartition(srcTable, date, tableName string, srcCount, dstCount int64, hotLocker CatalogLocker) error {
 	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE date = ?", srcTable)
 	if _, err := execWithRetry(
 		tsm.db,
@@ -428,11 +525,10 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 		return fmt.Errorf("source delete failed after copy: %w", err)
 	}
 
-	rowsMoved := srcCount
 	logger.Info("TieredStorageManager: Partition moved",
 		"table", tableName,
 		"date", date,
-		"rows", rowsMoved)
+		"rows", srcCount)
 
 	return nil
 }

@@ -429,4 +429,5 @@ curl -i -XPOST 'http://homer-node:8086/api/v2/write?bucket=apps&precision=s' \
 - [STORAGE_LAYOUT.md](./STORAGE_LAYOUT.md) — DuckLake on-disk layout.
 - [RETENTION.md](./RETENTION.md) — data TTL and compaction retention.
 - [STORAGE_POLICIES.md](./STORAGE_POLICIES.md) — hot/cold tiering.
+- [NATIVE_TIER_MOVE.md](./NATIVE_TIER_MOVE.md) — opt-in parquet file copy between volumes.
 - [FLIGHTSQL.md](./FLIGHTSQL.md) — the FlightSQL transport used by the discovery and statistics endpoints.

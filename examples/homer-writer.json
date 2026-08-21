@@ -85,6 +85,7 @@
         "move_factor": 0.8,
         "concurrent_moves": 2,
         "move_on_startup": false,
+        "move_engine": "duckdb",
         "volumes": [
           {
             "name": "hot",

@@ -43,6 +43,7 @@ Add the `storage_policy` section to your `storage.ducklake` configuration:
         "move_factor": 0.8,
         "concurrent_moves": 2,
         "move_on_startup": false,
+        "move_engine": "duckdb",
         "volumes": [
           {
             "name": "hot",
@@ -82,6 +83,7 @@ Add the `storage_policy` section to your `storage.ducklake` configuration:
 | `move_factor` | float | 0.8 | Move data when volume fill ratio exceeds this value (0.0-1.0) |
 | `concurrent_moves` | int | 2 | Maximum concurrent partition moves |
 | `move_on_startup` | bool | false | Run tiering check on server startup |
+| `move_engine` | string | `duckdb` | How a partition is copied. Default is `INSERT … SELECT`. Set `native` for a file copy that does not hold the writer lock — see [NATIVE_TIER_MOVE.md](NATIVE_TIER_MOVE.md). |
 
 #### move_factor Explained
 
@@ -271,7 +273,7 @@ The `move_factor` parameter works similar to ClickHouse storage policies. It con
 
 1. **Write**: All new data is written to the primary (hot) volume (lowest priority number)
 2. **Tiering**: The TieringService periodically checks for old partitions
-3. **Copy**: On intermediate volumes, data older than `max_data_age_days` is copied to the next volume (new parquet files created)
+3. **Copy**: On intermediate volumes, data older than `max_data_age_days` is copied to the next volume. Default is DuckDB `INSERT … SELECT`; opt-in native file copy is documented in [NATIVE_TIER_MOVE.md](NATIVE_TIER_MOVE.md).
 4. **Delete from source**: After successful copy, data is deleted from the source volume
 5. **Final-volume expiry**: On the last volume, `max_data_age_days > 0` deletes matching partitions (no next tier)
 6. **Cleanup**: Empty partition directories are automatically removed
@@ -302,7 +304,7 @@ Expired data disappears from S3 after the snapshot window passes (default 1 hour
 
 ### Partition Movement Process
 
-Data is partitioned by date (`date` column). The tiering service copies entire date partitions to cold storage:
+Data is partitioned by date (`date` column). The default **duckdb** engine rewrites the partition:
 
 ```sql
 -- Step 1: Copy data to cold storage (creates new parquet files in S3)
@@ -313,14 +315,12 @@ WHERE date = '2026-01-15';
 -- Step 2: Delete from hot storage (marks records as deleted in DuckLake catalog)
 DELETE FROM hot_lake.main.hep_proto_1_call 
 WHERE date = '2026-01-15';
-
--- Step 3: Cleanup empty partition directories (automatic)
--- /data/homer/parquet/main/hep_proto_1_call/date=2026-01-15/ removed if empty
 ```
 
+To copy parquet files *without* rewriting them through DuckDB (no catalog lock during S3 PUT), set `move_engine: native`. Details, fallbacks, and logs: [NATIVE_TIER_MOVE.md](NATIVE_TIER_MOVE.md).
+
 **Important notes:**
-- This is a **copy + delete** operation, not physical file movement
-- New parquet files are created in cold storage (S3/R2)
+- This is a **copy + delete** operation, not a rename of files in place
 - Original parquet files in hot storage are marked for deletion (GC removes them later)
 - If copy succeeds but delete fails, data exists in both places temporarily (no data loss)
 - A failed source delete is **not** reported as `Partition moved`; the tiering cycle logs `Partition copied, source delete pending` and does not increment `partitions_moved`

@@ -168,6 +168,6 @@ When migrating from Homer 7/10, align **`retention_days`** / **`retention_days_b
 
 1. **Single-node / all-in-one:** `retention_days: 30`, compaction enabled, `check_interval_sec: 1800`.
 2. **Calls longer than REGISTERs:** keep a long default (e.g. `retention_days: 120`) and shorten high-volume tables via `retention_days_by_table` (e.g. `hep_proto_1_registration: 30`). Prefer this over different TTLs on LB backends that shard the same calls.
-3. **Hot + S3 tiering:** short `max_data_age_days` on hot (e.g. 2–7); set a positive `max_data_age_days` on cold to expire final-tier partitions, or `0` to keep cold forever (optionally trim with bucket lifecycle / writer `retention_days`).
+3. **Hot + S3 tiering:** short `max_data_age_days` on hot (e.g. 2–7); set a positive `max_data_age_days` on cold to expire final-tier partitions, or `0` to keep cold forever (optionally trim with bucket lifecycle / writer `retention_days`). Large live moves: [NATIVE_TIER_MOVE.md](NATIVE_TIER_MOVE.md).
 4. **Compliance / legal hold:** set `retention_days: 0` (disabled) and manage expiry outside Homer (bucket lifecycle, offline archive). Use a per-table override of `0` only when you need to disable TTL for selected tables while keeping a global default.
 For OOM or runaway file counts, see [OOM.md](OOM.md) and [INGEST_PERFORMANCE.md](INGEST_PERFORMANCE.md).

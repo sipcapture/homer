@@ -171,6 +171,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		{"StoragePolicy.TTLMoveIntervalSec", cfg.Storage.DuckLake.StoragePolicy.TTLMoveIntervalSec, 3600},
 		{"StoragePolicy.MoveFactor", cfg.Storage.DuckLake.StoragePolicy.MoveFactor, 0.8},
 		{"StoragePolicy.ConcurrentMoves", cfg.Storage.DuckLake.StoragePolicy.ConcurrentMoves, 2},
+		{"StoragePolicy.MoveEngine", cfg.Storage.DuckLake.StoragePolicy.MoveEngine, "duckdb"},
 
 		// node
 		{"Node.FlightServer.Port", cfg.Node.FlightServer.Port, 50051},
@@ -770,6 +771,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 		{"StoragePolicy.MoveFactor", cfg.Storage.DuckLake.StoragePolicy.MoveFactor, 0.8},
 		{"StoragePolicy.ConcurrentMoves", cfg.Storage.DuckLake.StoragePolicy.ConcurrentMoves, 2},
 		{"StoragePolicy.MoveOnStartup", cfg.Storage.DuckLake.StoragePolicy.MoveOnStartup, false},
+		{"StoragePolicy.MoveEngine", cfg.Storage.DuckLake.StoragePolicy.MoveEngine, "duckdb"},
 
 		// node
 		{"Node.FlightServer.Host", cfg.Node.FlightServer.Host, "0.0.0.0"},

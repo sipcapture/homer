@@ -731,6 +731,11 @@ type StoragePolicyConfig struct {
 	MoveFactor         float64        `json:"move_factor" mapstructure:"move_factor" default:"0.8"`                      // Move when volume is X% full
 	ConcurrentMoves    int            `json:"concurrent_moves" mapstructure:"concurrent_moves" default:"2"`              // Max concurrent partition moves
 	MoveOnStartup      bool           `json:"move_on_startup" mapstructure:"move_on_startup" default:"false"`            // Run tiering on startup
+	// MoveEngine selects how a partition is copied to the next volume:
+	// "duckdb" (default) is INSERT…SELECT; "native" copies parquet bytes outside
+	// DuckDB and registers them with ducklake_add_data_files. Native is opt-in
+	// so existing deployments keep the proven rewrite. See sipcapture/homer#969.
+	MoveEngine string `json:"move_engine" mapstructure:"move_engine" default:"duckdb"`
 }
 
 // VolumeConfig configures a storage volume (hot or cold)

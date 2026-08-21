@@ -965,6 +965,7 @@ func (w *Writer) startTieringService() error {
 		MoveFactor:         policy.MoveFactor,
 		ConcurrentMoves:    policy.ConcurrentMoves,
 		MoveOnStartup:      policy.MoveOnStartup,
+		MoveEngine:         policy.MoveEngine,
 		CatalogType:        ducklake.CatalogType(w.storageConfig.DuckLake.CatalogType),
 		CatalogPath:        w.storageConfig.DuckLake.CatalogPath,
 		CatalogLocker:      w.ducklakeManager,

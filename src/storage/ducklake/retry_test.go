@@ -70,6 +70,37 @@ func TestExecWithRetryUsesLockerAroundExec(t *testing.T) {
 	}
 }
 
+func TestUseNativeMove(t *testing.T) {
+	hot := &Volume{LakeName: "hot", Path: "/data/hot", Type: VolumeTypeLocal}
+	cold := &Volume{LakeName: "cold", Path: "s3://bucket/cold", Type: VolumeTypeS3}
+
+	t.Run("default is duckdb", func(t *testing.T) {
+		tsm := &TieredStorageManager{}
+		if tsm.useNativeMove(hot, cold) {
+			t.Fatal("default engine should be duckdb")
+		}
+	})
+	t.Run("native engine enables native", func(t *testing.T) {
+		tsm := &TieredStorageManager{config: TieredStorageConfig{MoveEngine: "native"}}
+		if !tsm.useNativeMove(hot, cold) {
+			t.Fatal("native engine should use native")
+		}
+	})
+	t.Run("explicit duckdb disables native", func(t *testing.T) {
+		tsm := &TieredStorageManager{config: TieredStorageConfig{MoveEngine: "duckdb"}}
+		if tsm.useNativeMove(hot, cold) {
+			t.Fatal("duckdb engine should not use native")
+		}
+	})
+	t.Run("remote source disables native", func(t *testing.T) {
+		tsm := &TieredStorageManager{config: TieredStorageConfig{MoveEngine: "native"}}
+		src := &Volume{Path: "s3://bucket/hot", Type: VolumeTypeS3}
+		if tsm.useNativeMove(src, cold) {
+			t.Fatal("s3 source should fall back")
+		}
+	})
+}
+
 func TestHotCatalogLockerOnlyForPrimaryVolume(t *testing.T) {
 	tsm := &TieredStorageManager{
 		primaryVolume: &Volume{LakeName: "homer_lake_hot"},
