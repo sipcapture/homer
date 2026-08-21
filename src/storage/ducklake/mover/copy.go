@@ -58,12 +58,13 @@ func (f CopierFunc) Copy(ctx context.Context, srcPath, dstPath string, size int6
 	return f(ctx, srcPath, dstPath, size)
 }
 
-func defaultCopier(dstDataPath string, s3 *S3Config) (Copier, error) {
+func defaultCopier(dstDataPath string, s3cfg *S3Config) (Copier, error) {
 	if isS3Path(dstDataPath) {
-		if s3 == nil {
-			return nil, fmt.Errorf("s3 destination %s needs S3 credentials/endpoint", dstDataPath)
+		cfg := S3Config{}
+		if s3cfg != nil {
+			cfg = *s3cfg
 		}
-		return newS3Copier(*s3)
+		return newS3Copier(cfg)
 	}
 	return LocalCopier{}, nil
 }

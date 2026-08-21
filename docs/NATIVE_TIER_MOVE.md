@@ -35,9 +35,15 @@ has crashed DuckDB with SIGSEGV on the next flush ([#969](https://github.com/sip
 
 Env: `HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_MOVE_ENGINE=native`
 
-Native copies parquet **bytes** (local `io.Copy` or S3 `PutObject`) and only
+Native copies parquet **bytes** (local `io.Copy` or S3 multipart upload) and only
 asks DuckLake to register the copies. SIP payloads are not decoded. The writer
 catalog lock is **not** held during the copy.
+
+Empty `s3_access_key_id` uses the AWS default credential chain (env, shared
+config, instance/task role) via `LoadDefaultConfig`. Static keys from the volume
+override that chain. Custom endpoints (RustFS / MinIO / R2) use path-style unless
+`s3_url_style` is `vhost`. Uploads go through the AWS SDK uploader: files larger
+than 8MB use multipart.
 
 ```
 1. Catalog lock (milliseconds)
@@ -118,11 +124,25 @@ retries next cycle.
 | Config | `storage.ducklake.compaction.engine` | `storage.ducklake.storage_policy.move_engine` |
 | Default | `duckdb` | `duckdb` |
 | Job | Merge small parquet *in one lake* | Copy a date partition *to the next volume* |
-| I/O | Concatenate row groups (Arrow) | Byte copy / S3 PUT |
+| I/O | Concatenate row groups (Arrow) | Byte copy / S3 multipart upload |
 | Remote `data_path` | Refused | Destination may be `s3://` |
 | Row-level deletes | Skip that partition | Fall back to `INSERT … SELECT` |
 
 You can run DuckDB compaction and native tier move independently.
+
+## Testing against RustFS / MinIO
+
+The mover package has an integration test that talks to an S3 clone. It skips when
+nothing is listening.
+
+```bash
+# defaults match examples/docker/docker-compose_s3direct.yaml
+go test ./storage/ducklake/mover/ -count=1 -timeout 5m \
+  -run 'TestS3CopierMultipartRoundTripRustFS|TestNativeMoveLocalToRustFS'
+```
+
+Override with `HOMER_TEST_S3_ENDPOINT`, `HOMER_TEST_S3_ACCESS_KEY`,
+`HOMER_TEST_S3_SECRET_KEY`, `HOMER_TEST_S3_BUCKET`.
 
 ## Check effective setting
 
