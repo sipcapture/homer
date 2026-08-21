@@ -205,6 +205,13 @@ type CompactionService struct {
 	// rewrite the same partitions every cycle only to discard the result.
 	nativeUnsupported unsupportedTables
 
+	// cycleRunning is single-flight for runCompaction. Startup (T+5s) and the
+	// first scheduled run (T+5min) are separate goroutines; native merge of a
+	// wide table can exceed that gap, and native holds CatalogLock only for the
+	// short per-partition swap. A second cycle would then DELETE (retention)
+	// while the first is still rewriting the same parquet (sipcapture/homer#945).
+	cycleRunning atomic.Bool
+
 	// Stats
 	lastCompactionTime time.Time
 	totalCompactions   int64
@@ -427,11 +434,25 @@ func (c *CompactionService) inlineFlushOnlyLoop() {
 	}
 }
 
+func (c *CompactionService) beginCycle() bool {
+	return c.cycleRunning.CompareAndSwap(false, true)
+}
+
+func (c *CompactionService) endCycle() {
+	c.cycleRunning.Store(false)
+}
+
 // runCompaction performs a single compaction cycle.
 // Instead of holding the catalog lock for the entire cycle (which can take
 // minutes and block flush + queries), the lock is acquired and released
 // per-table for retention and merge, then per-call for expire/cleanup.
 func (c *CompactionService) runCompaction() {
+	if !c.beginCycle() {
+		logger.Info("CompactionService: cycle already running, skipping")
+		return
+	}
+	defer c.endCycle()
+
 	start := time.Now()
 	logger.Info("CompactionService: Starting compaction cycle",
 		"engine", c.resolvedEngine())

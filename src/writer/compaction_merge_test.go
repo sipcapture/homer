@@ -2,8 +2,61 @@ package writer
 
 import (
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
+
+func TestBeginCycleSingleFlight(t *testing.T) {
+	svc := &CompactionService{}
+	if !svc.beginCycle() {
+		t.Fatal("first beginCycle() must start")
+	}
+	if svc.beginCycle() {
+		t.Fatal("second beginCycle() must skip while the first is running")
+	}
+	svc.endCycle()
+	if !svc.beginCycle() {
+		t.Fatal("beginCycle() after endCycle() must start")
+	}
+}
+
+func TestBeginCycleConcurrentSkip(t *testing.T) {
+	svc := &CompactionService{}
+	var started atomic.Int32
+	var wg sync.WaitGroup
+	holding := make(chan struct{})
+	release := make(chan struct{})
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if !svc.beginCycle() {
+				return
+			}
+			if started.Add(1) == 1 {
+				close(holding)
+			}
+			<-release
+			svc.endCycle()
+		}()
+	}
+	select {
+	case <-holding:
+	case <-time.After(2 * time.Second):
+		close(release)
+		wg.Wait()
+		t.Fatal("timed out waiting for a cycle to start")
+	}
+	if got := started.Load(); got != 1 {
+		close(release)
+		wg.Wait()
+		t.Fatalf("concurrent beginCycle started %d cycles, want 1", got)
+	}
+	close(release)
+	wg.Wait()
+}
 
 func TestResolvedEngine(t *testing.T) {
 	tests := []struct {
