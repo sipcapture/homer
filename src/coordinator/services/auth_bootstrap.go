@@ -45,7 +45,7 @@ func EnsureBootstrapAdminUser(ctx context.Context, db *sql.DB, username, passwor
 		username = "admin"
 	}
 	passwordHash = strings.TrimSpace(passwordHash)
-	if passwordHash == "" {
+	if passwordHash == "" || passwordhash.IsDisallowedDefaultHash(passwordHash) {
 		bootstrapPassword, passwordHash, err = generateBootstrapPassword()
 		if err != nil {
 			return "", err
@@ -105,6 +105,9 @@ func ResetOrInsertAdminPassword(ctx context.Context, db *sql.DB, username, passw
 	passwordHash = strings.TrimSpace(passwordHash)
 	if passwordHash == "" {
 		return fmt.Errorf("admin_password_hash is required")
+	}
+	if passwordhash.IsDisallowedDefaultHash(passwordHash) {
+		return fmt.Errorf("refusing well-known sipcapture password hash; set a unique bcrypt or SHA-256 hash")
 	}
 
 	u := sqlvalidator.SafeString(username)

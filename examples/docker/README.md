@@ -62,6 +62,12 @@ docker run -e HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT=8GB ghcr.io/sipcapture/
 Raise `MEMORY_LIMIT` toward 50% of the container budget under SIPREC /
 high ingest. Details: [OOM.md](../../docs/OOM.md), [DUCKDB_TUNING.md](../../docs/DUCKDB_TUNING.md).
 
+## First login
+
+Omit `HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`. On first start the coordinator
+creates `admin` with a random bcrypt password and logs it once. Do not use the
+historical password `sipcapture` — that hash is refused at login.
+
 ## Endpoints
 
 - **Coordinator UI:** http://localhost:8080

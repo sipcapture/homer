@@ -5,6 +5,7 @@
 package passwordhash
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -25,9 +26,20 @@ func TestHashAndVerifyBcrypt(t *testing.T) {
 }
 
 func TestVerifyLegacySHA256(t *testing.T) {
-	// Default homer-app admin digest (sha256 hex of "sipcapture").
-	legacy := "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
-	if !Verify("sipcapture", legacy) {
+	legacy := "13d249f2cb4127b40cfa757866850278793f814ded3c587fe5889e889a7a9f6c" // sha256("testpass")
+	if !Verify("testpass", legacy) {
 		t.Fatal("legacy sha256 verify failed")
+	}
+	if Verify("wrong", legacy) {
+		t.Fatal("verify should fail")
+	}
+}
+
+func TestVerifyRejectsSipcaptureDefault(t *testing.T) {
+	if Verify("sipcapture", LegacySHA256SipcaptureHash) {
+		t.Fatal("well-known sipcapture hash must not authenticate")
+	}
+	if Verify("sipcapture", strings.ToUpper(LegacySHA256SipcaptureHash)) {
+		t.Fatal("uppercase sipcapture hash must not authenticate")
 	}
 }

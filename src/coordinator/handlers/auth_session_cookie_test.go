@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 
 	_ "github.com/duckdb/duckdb-go/v2"
 )
@@ -28,7 +29,10 @@ func newCookieAuthHandler(t *testing.T) *AuthHandler {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h := config.LegacySHA256SipcaptureHash
+	h, err := passwordhash.Hash("testpass")
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('admin', '`+h+`', 'admin@example.com', 'Admin', true, true, current_timestamp, current_timestamp)`)
@@ -54,7 +58,7 @@ func newCookieAuthHandler(t *testing.T) *AuthHandler {
 func TestV4CreateSession_SetsHttpOnlyCookie(t *testing.T) {
 	h := newCookieAuthHandler(t)
 	e := echo.New()
-	body := `{"username":"admin","password":"sipcapture"}`
+	body := `{"username":"admin","password":"testpass"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v4/auth/sessions", strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
@@ -81,7 +85,7 @@ func TestV4CreateSession_SetsHttpOnlyCookie(t *testing.T) {
 func TestV4CreateSession_RememberSetsPersistentCookie(t *testing.T) {
 	h := newCookieAuthHandler(t)
 	e := echo.New()
-	body := `{"username":"admin","password":"sipcapture","remember":true}`
+	body := `{"username":"admin","password":"testpass","remember":true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v4/auth/sessions", strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()

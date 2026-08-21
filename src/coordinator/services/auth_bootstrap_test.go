@@ -26,7 +26,7 @@ func TestEnsureBootstrapAdminUser_Idempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	hash := config.LegacySHA256SipcaptureHash
+	hash := testLegacySHA256
 	if _, err := EnsureBootstrapAdminUser(ctx, db, "admin", hash); err != nil {
 		t.Fatalf("first: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestResetOrInsertAdminPassword_UpdateThenInsert(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h1 := config.LegacySHA256SipcaptureHash
+	h1 := testLegacySHA256
 	if _, err := EnsureBootstrapAdminUser(ctx, db, "admin", h1); err != nil {
 		t.Fatal(err)
 	}
@@ -125,29 +125,80 @@ func TestEnsureBootstrapAdminUser_RepairsEmptyPasswordHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	hash := config.LegacySHA256SipcaptureHash
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('admin', NULL, '', '', true, true, current_timestamp, current_timestamp)`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := EnsureBootstrapAdminUser(ctx, db, "admin", hash); err != nil {
+	pwd, err := EnsureBootstrapAdminUser(ctx, db, "admin", config.LegacySHA256SipcaptureHash)
+	if err != nil {
 		t.Fatalf("bootstrap repair: %v", err)
+	}
+	if pwd == "" {
+		t.Fatal("expected generated password when repairing with sipcapture hash")
 	}
 	var got string
 	if err := db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE username = 'admin'`).Scan(&got); err != nil {
 		t.Fatal(err)
 	}
-	if got != hash {
-		t.Fatalf("password_hash: want %s, got %s", hash, got)
+	if got == config.LegacySHA256SipcaptureHash {
+		t.Fatal("must not store sipcapture hash")
 	}
 	svc := NewUserService(db)
-	u, err := svc.Authenticate(ctx, "admin", "sipcapture")
+	if _, err := svc.Authenticate(ctx, "admin", "sipcapture"); err == nil {
+		t.Fatal("sipcapture must not authenticate")
+	}
+	u, err := svc.Authenticate(ctx, "admin", pwd)
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
 	if u == nil || u.Username != "admin" {
 		t.Fatalf("user %+v", u)
+	}
+}
+
+func TestEnsureBootstrapAdminUser_RejectsSipcaptureHashOnInsert(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.duckdb")
+	db, err := OpenSettingsDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := EnsureSettingsSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	pwd, err := EnsureBootstrapAdminUser(ctx, db, "admin", config.LegacySHA256SipcaptureHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pwd == "" {
+		t.Fatal("expected generated bootstrap password")
+	}
+	svc := NewUserService(db)
+	if _, err := svc.Authenticate(ctx, "admin", "sipcapture"); err == nil {
+		t.Fatal("sipcapture must not authenticate")
+	}
+	if _, err := svc.Authenticate(ctx, "admin", pwd); err != nil {
+		t.Fatalf("generated password: %v", err)
+	}
+}
+
+func TestResetOrInsertAdminPassword_RejectsSipcaptureHash(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.duckdb")
+	db, err := OpenSettingsDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := EnsureSettingsSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	err = ResetOrInsertAdminPassword(context.Background(), db, "admin", config.LegacySHA256SipcaptureHash)
+	if err == nil {
+		t.Fatal("expected error refusing sipcapture hash")
 	}
 }
