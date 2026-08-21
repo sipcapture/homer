@@ -35,11 +35,20 @@ func TestVerifyLegacySHA256(t *testing.T) {
 	}
 }
 
-func TestVerifyRejectsSipcaptureDefault(t *testing.T) {
-	if Verify("sipcapture", LegacySHA256SipcaptureHash) {
-		t.Fatal("well-known sipcapture hash must not authenticate")
+func TestVerifyAcceptsSipcaptureDefaultHash(t *testing.T) {
+	if !Verify("sipcapture", LegacySHA256SipcaptureHash) {
+		t.Fatal("sipcapture SHA-256 should still verify so upgrades can force a password change")
 	}
-	if Verify("sipcapture", strings.ToUpper(LegacySHA256SipcaptureHash)) {
-		t.Fatal("uppercase sipcapture hash must not authenticate")
+	if !Verify("sipcapture", strings.ToUpper(LegacySHA256SipcaptureHash)) {
+		t.Fatal("uppercase sipcapture SHA-256 should still verify")
+	}
+}
+
+func TestIsDisallowedDefaultHash(t *testing.T) {
+	if !IsDisallowedDefaultHash(LegacySHA256SipcaptureHash) {
+		t.Fatal("expected sipcapture digest")
+	}
+	if IsDisallowedDefaultHash("13d249f2cb4127b40cfa757866850278793f814ded3c587fe5889e889a7a9f6c") {
+		t.Fatal("other SHA-256 hashes must not be treated as the default")
 	}
 }

@@ -70,7 +70,7 @@ Meaning (string or `{"type":"internal"}` without custom hash):
 - If a row for that username **already** exists with a non-empty `password_hash`, bootstrap does not change the password (upgrade-safe). Empty `password_hash` on an existing row may be repaired from config hash or a new random password when hash is omitted.
 - After first login, operators should **change the password** (Settings → Users, or `PATCH /me`). Updates store a **bcrypt** hash. Further logins use the stored hash only.
 
-**Docker / explicit bootstrap:** `examples/docker/docker-compose.yaml` sets `HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH` to the SHA-256 hex of **`sipcapture`** — that path is unchanged and still yields first login **`admin` / `sipcapture`** on fresh installs using those examples.
+**Docker / explicit bootstrap:** `examples/docker/docker-compose.yaml` omits `HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`. Fresh installs get a random admin password in coordinator logs. Existing `users` rows with the historical **`sipcapture`** SHA-256 hash can still log in, then must change the password in the UI.
 
 ### Legacy object: only `admin_user` / `admin_password_hash` (no `type`)
 
@@ -83,7 +83,7 @@ You may still use an object **without** `type` (for environment overrides, confi
 }
 ```
 
-- If **`admin_user`** is unset or **`admin`** and **`admin_password_hash`** is empty, the loader treats this as **`internal`** with random bootstrap password when no `users` row exists. If **`admin_password_hash`** is set (including the legacy sipcapture SHA-256 hex from docker examples), bootstrap uses that hash.
+- If **`admin_user`** is unset or **`admin`** and **`admin_password_hash`** is empty, the loader treats this as **`internal`** with random bootstrap password when no `users` row exists. If **`admin_password_hash`** is set, bootstrap uses that hash (except the well-known sipcapture digest, which is treated as empty and replaced with a random bcrypt password).
 - For **`--reset-admin-password`**, the config field **`admin_password_hash`** remains **SHA-256 hex** (see [Reset admin password](#reset-admin-password)). User records created or updated through the API use **bcrypt** instead.
 
 ### Reset admin password

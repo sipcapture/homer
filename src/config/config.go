@@ -897,8 +897,9 @@ type JWTConfig struct {
 
 const (
 	// LegacySHA256SipcaptureHash is the SHA-256 hex digest of the historical
-	// default password "sipcapture". Tests and docs may reference it; login
-	// and bootstrap refuse this value (see passwordhash.IsDisallowedDefaultHash).
+	// default password "sipcapture". Tests and docs may reference it; bootstrap
+	// and --reset-admin-password refuse this value. Login still verifies it so
+	// existing installs can be forced to change the password in the UI.
 	LegacySHA256SipcaptureHash = passwordhash.LegacySHA256SipcaptureHash
 )
 

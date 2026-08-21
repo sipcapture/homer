@@ -32,6 +32,7 @@ import { LocaleProvider } from "@/components/locale/locale-provider"
 import { WindowDock } from "@/components/ui/window-dock"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { LoginPage } from './LoginPage'
+import { ForcePasswordChange } from './ForcePasswordChange'
 import { parseLoginProvidersPayload, type PasswordAuthMethodRow } from './loginProviders'
 import { toast } from 'sonner'
 import {
@@ -84,6 +85,7 @@ function App() {
   const [autoOAuthProvider, setAutoOAuthProvider] = useState<string | null>(null)
   const role = useMemo(() => detectRole(me), [me])
   const usersPerms = useMemo(() => getSectionPerms(role, 'users'), [role])
+  const mustChangePassword = !!me?.must_change_password
 
   const persistToken = (next: string, _remember = false) => {
     setAuthToken(next, false)
@@ -195,7 +197,7 @@ function App() {
     }
   }
 
-  const logout = async () => {
+  const endSession = async (message: string) => {
     try {
       await apiDelete('/auth/sessions/current')
     } catch {
@@ -209,7 +211,11 @@ function App() {
     setUsers([])
     setSettingsOpen(false)
     setActiveSection('about')
-    toast.success('Logged out')
+    toast.success(message)
+  }
+
+  const logout = async () => {
+    await endSession('Logged out')
   }
 
   const openSettings = () => {
@@ -602,6 +608,15 @@ function App() {
               autoOAuthProvider={autoOAuthProvider}
               onLogin={persistToken}
               onOAuth2={loginOAuth2}
+            />
+          ) : loadingMe && me === null ? (
+            <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+              Loading…
+            </div>
+          ) : mustChangePassword ? (
+            <ForcePasswordChange
+              onChanged={() => endSession('Password updated. Sign in with the new password.')}
+              onLogout={logout}
             />
           ) : (
             <>
