@@ -66,11 +66,27 @@ services:
     networks:
       - homer-compose
 
+  homer-init:
+    image: alpine:3.20
+    volumes:
+      - homer_data:/data/homer
+    command: sh -c "chown -R 1000:1000 /data/homer && echo homer data volume ok"
+    restart: "no"
+    networks:
+      - homer-compose
+
   homer:
     image: ghcr.io/sipcapture/homer:latest
+    user: "1000:1000"
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
     depends_on:
       rustfs:
         condition: service_healthy
+      homer-init:
+        condition: service_completed_successfully
     volumes:
       - homer_data:/data/homer
     ports:
@@ -190,7 +206,6 @@ services:
       HOMER_COORDINATOR_JWT_SECRET: change-this-to-a-secure-random-string-in-production
       HOMER_COORDINATOR_JWT_EXPIRE_HOURS: "24"
       HOMER_COORDINATOR_AUTH_ADMIN_USER: admin
-      HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH: 883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90
 
       HOMER_LOG_LEVEL: info
       HOMER_LOG_JSON: "false"

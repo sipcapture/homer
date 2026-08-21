@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CrudModal, Field } from './CrudTable'
-import { getAuthToken } from '@/lib/authTokenStorage'
+import { getAuthToken, isCookieSessionMarker } from '@/lib/authTokenStorage'
 
 interface ExportModalProps {
   searchPayload: Record<string, unknown>
@@ -96,7 +96,7 @@ export default function ExportModal({ searchPayload, onClose }: ExportModalProps
     link.download = `export.${format}`
     const token = getAuthToken()
     if (token && downloadUrl.startsWith('/')) {
-      fetch(downloadUrl, { headers: { Authorization: `Bearer ${token}` } })
+      fetch(downloadUrl, { credentials: 'include', headers: token && !isCookieSessionMarker(token) ? { Authorization: `Bearer ${token}` } : {} })
         .then((r) => {
           if (r.status === 401) {
             handleUnauthorized()

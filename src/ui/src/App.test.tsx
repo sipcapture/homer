@@ -70,6 +70,49 @@ describe('App smoke/integration', () => {
     })
   })
 
+  it('forces a password change when the session requires it', async () => {
+    let sessionActive = false
+    vi.stubGlobal('fetch', vi.fn(async (url, opts: { method?: string } = {}) => {
+      const asString = String(url)
+      if (asString.endsWith('/auth/providers')) {
+        return { ok: true, status: 200, json: async () => ({ data: { internal: { enable: true } } }) }
+      }
+      if (asString.endsWith('/auth/sessions') && opts.method === 'POST') {
+        sessionActive = true
+        return { ok: true, status: 201, json: async () => ({ data: { token: 'test-token' } }) }
+      }
+      if (asString.endsWith('/me') && opts.method !== 'PATCH') {
+        if (!sessionActive) {
+          return { ok: false, status: 401, json: async () => ({}) }
+        }
+        return { ok: true, status: 200, json: async () => ({ data: { username: 'admin', admin: true, must_change_password: true } }) }
+      }
+      return { ok: true, status: 200, json: async () => ({ data: {} }) }
+    }))
+
+    renderApp()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Login')).toBeInTheDocument()
+    })
+    fireEvent.change(screen.getByLabelText('Login'), { target: { value: 'admin' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'sipcapture' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Change default password')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('No dashboards available. Create one above or reset to defaults.')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('New password'), { target: { value: 'newsecret' } })
+    fireEvent.change(screen.getByPlaceholderText('Confirm password'), { target: { value: 'newsecret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save and sign in again' }))
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Login')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Change default password')).not.toBeInTheDocument()
+  })
+
   it('defaults to system theme and follows prefers-color-scheme when storage is empty', async () => {
     vi.stubGlobal(
       'matchMedia',

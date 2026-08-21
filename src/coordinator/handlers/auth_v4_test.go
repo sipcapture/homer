@@ -11,8 +11,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
-	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 
 	_ "github.com/duckdb/duckdb-go/v2"
 )
@@ -107,7 +107,10 @@ func newTestAuthHandlerWithUsers(t *testing.T) (*AuthHandler, *services.UserServ
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	h := config.LegacySHA256SipcaptureHash
+	h, err := passwordhash.Hash("testpass")
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
 		VALUES ('admin', '`+h+`', 'admin@example.com', 'Admin', true, true, current_timestamp, current_timestamp)`)
@@ -124,8 +127,12 @@ func newTestAuthHandlerWithUsers(t *testing.T) (*AuthHandler, *services.UserServ
 }
 
 func setJWTOnContext(t *testing.T, c echo.Context, h *AuthHandler, username string, admin bool) {
+	setJWTOnContextWithMustChange(t, c, h, username, admin, false)
+}
+
+func setJWTOnContextWithMustChange(t *testing.T, c echo.Context, h *AuthHandler, username string, admin, mustChange bool) {
 	t.Helper()
-	tokenStr, _, err := h.generateToken(username, admin)
+	tokenStr, _, err := h.generateToken(username, admin, mustChange)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,5 +246,139 @@ func TestJWTTokenFromAuthTokenItem_NonAdminUserGroup(t *testing.T) {
 	}
 	if claims.Admin {
 		t.Fatal("admin: got true want false")
+	}
+}
+
+func newTestAuthHandlerWithSipcaptureHash(t *testing.T) *AuthHandler {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.duckdb")
+	db, err := services.OpenSettingsDB(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := services.EnsureSettingsSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO users (username, password_hash, email, full_name, is_admin, is_active, created_at, updated_at)
+		VALUES ('admin', '`+passwordhash.LegacySHA256SipcaptureHash+`', '', '', true, true, current_timestamp, current_timestamp)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &AuthHandler{
+		jwtSecret:   "test-secret-minimum-32-characters-long",
+		expireHours: 24,
+		userService: services.NewUserService(db),
+	}
+}
+
+func TestV4CreateSession_SipcaptureSetsMustChangePassword(t *testing.T) {
+	h := newTestAuthHandlerWithSipcaptureHash(t)
+	e := echo.New()
+	body := `{"username":"admin","password":"sipcapture","type":"internal"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v4/auth/sessions", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.V4CreateSession(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status: got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp LoginResponseV4
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.Data.User.MustChangePassword {
+		t.Fatal("must_change_password: want true")
+	}
+	tok, err := jwt.ParseWithClaims(resp.Data.Token, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(h.jwtSecret), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims := tok.Claims.(*JWTClaims)
+	if !claims.MustChangePassword {
+		t.Fatal("JWT must_change_password: want true")
+	}
+}
+
+func TestJWTMiddlewareV4_BlocksUntilPasswordChanged(t *testing.T) {
+	h := newTestAuthHandler(false)
+	e := echo.New()
+	g := e.Group("/api/v4")
+	g.Use(h.JWTMiddlewareV4())
+	handlerRan := false
+	g.GET("/me", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	g.GET("/dashboards", func(c echo.Context) error {
+		handlerRan = true
+		return c.JSON(http.StatusOK, map[string]any{"items": []int{1}})
+	})
+
+	token, _, err := h.generateToken("admin", true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v4/dashboards", nil)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("dashboards: got %d want 403 body=%s", rec.Code, rec.Body.String())
+	}
+	if handlerRan {
+		t.Fatal("dashboards handler must not run while password change is required")
+	}
+	if strings.Contains(rec.Body.String(), "items") {
+		t.Fatalf("dashboards body leaked handler response: %s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v4/me", nil)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec = httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("me: got %d want 200 body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestV4PatchMe_MustChangeRequiresPassword(t *testing.T) {
+	h, _ := newTestAuthHandlerWithUsers(t)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPatch, "/api/v4/me", strings.NewReader(`{"email":"x@example.com"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	setJWTOnContextWithMustChange(t, c, h, "admin", true, true)
+
+	if err := h.V4PatchMe(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status: got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestV4PatchMe_RejectsSipcapturePassword(t *testing.T) {
+	h, _ := newTestAuthHandlerWithUsers(t)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPatch, "/api/v4/me", strings.NewReader(`{"password":"sipcapture"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	setJWTOnContext(t, c, h, "admin", true)
+
+	if err := h.V4PatchMe(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status: got %d body=%s", rec.Code, rec.Body.String())
 	}
 }

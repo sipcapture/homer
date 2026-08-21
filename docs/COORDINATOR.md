@@ -284,7 +284,7 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 | **Omitted** (`coordinator` without `auth`) | Same as **`{"type":"internal"}`** (default admin bootstrap with random password when hash omitted). |
 | **Object** without `type` (or empty `type`) | Same as **`{"type":"internal"}`**: internal bootstrap applies; unset `admin_user` defaults to `admin`; empty `admin_password_hash` triggers a one-time random password in logs. |
 
-**First login (`type` internal or string `"internal"`):** username `admin`. Password is either from **`admin_password_hash`** (SHA-256 hex for `--reset-admin-password`, or bcrypt from the setup wizard), or the **random bootstrap password** printed in coordinator logs on first startup when no hash is configured.
+**First login (`type` internal or string `"internal"`):** username `admin`. Password is either from **`admin_password_hash`** (SHA-256 hex for `--reset-admin-password`, or bcrypt from the setup wizard), or the **random bootstrap password** printed in coordinator logs on first startup when no hash is configured. In Docker, grep logs for `bootstrap_password` — [examples/docker/README.md](../examples/docker/README.md#first-login).
 
 **Reset admin password** — set `coordinator.auth.admin_password_hash` (and optional `admin_user`) in modular `homer.json` or via **`HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`**, then run:
 
@@ -294,17 +294,16 @@ homer --config-path /path/to/homer.json --reset-admin-password
 
 The process opens **`coordinator.settings_db_path`**, ensures schema, updates or inserts the **`users`** row for `admin_user`, and **exits** (no HTTP server). Details, JSON examples, and env overrides: [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password).
 
-**Password hashes:** Users created or updated via the API store **bcrypt** in `users.password_hash`. Login also accepts legacy **SHA-256 hex** (default bootstrap admin, migrated homer-app users). **`--reset-admin-password`** still expects **SHA-256 hex** in `admin_password_hash` (see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password)).
+**Password hashes:** Users created or updated via the API store **bcrypt** in `users.password_hash`. Login also accepts legacy **SHA-256 hex** (migrated homer-app users). The well-known digest of **`sipcapture`** still verifies so existing installs can sign in, then the session requires a password change (`must_change_password`). **`--reset-admin-password`** still expects **SHA-256 hex** or bcrypt in `admin_password_hash` (see [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#reset-admin-password)).
 
 **Generating a SHA-256 hex hash (for `admin_password_hash` / reset only):**
 
 ```bash
 # Linux/macOS
 echo -n "your-password" | sha256sum | cut -d' ' -f1
-
-# Example: password "sipcapture" produces:
-# 883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90
 ```
+
+Do not use the historical password `sipcapture`; bootstrap and password updates refuse that value. Existing sipcapture hashes require a UI password change after login.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|

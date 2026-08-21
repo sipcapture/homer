@@ -5,6 +5,7 @@
 package passwordhash
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -25,9 +26,29 @@ func TestHashAndVerifyBcrypt(t *testing.T) {
 }
 
 func TestVerifyLegacySHA256(t *testing.T) {
-	// Default homer-app admin digest (sha256 hex of "sipcapture").
-	legacy := "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
-	if !Verify("sipcapture", legacy) {
+	legacy := "13d249f2cb4127b40cfa757866850278793f814ded3c587fe5889e889a7a9f6c" // sha256("testpass")
+	if !Verify("testpass", legacy) {
 		t.Fatal("legacy sha256 verify failed")
+	}
+	if Verify("wrong", legacy) {
+		t.Fatal("verify should fail")
+	}
+}
+
+func TestVerifyAcceptsSipcaptureDefaultHash(t *testing.T) {
+	if !Verify("sipcapture", LegacySHA256SipcaptureHash) {
+		t.Fatal("sipcapture SHA-256 should still verify so upgrades can force a password change")
+	}
+	if !Verify("sipcapture", strings.ToUpper(LegacySHA256SipcaptureHash)) {
+		t.Fatal("uppercase sipcapture SHA-256 should still verify")
+	}
+}
+
+func TestIsDisallowedDefaultHash(t *testing.T) {
+	if !IsDisallowedDefaultHash(LegacySHA256SipcaptureHash) {
+		t.Fatal("expected sipcapture digest")
+	}
+	if IsDisallowedDefaultHash("13d249f2cb4127b40cfa757866850278793f814ded3c587fe5889e889a7a9f6c") {
+		t.Fatal("other SHA-256 hashes must not be treated as the default")
 	}
 }

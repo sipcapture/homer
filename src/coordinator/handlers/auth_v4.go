@@ -16,6 +16,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 )
 
 type LoginResponseV4 struct {
@@ -23,7 +24,8 @@ type LoginResponseV4 struct {
 		Token string `json:"token"`
 		Scope string `json:"scope"`
 		User  struct {
-			Admin bool `json:"admin"`
+			Admin              bool `json:"admin"`
+			MustChangePassword bool `json:"must_change_password,omitempty"`
 		} `json:"user"`
 	} `json:"data"`
 	Meta Meta `json:"meta"`
@@ -62,15 +64,16 @@ type OAuth2TokenExchangeRequest struct {
 }
 
 type UserProfileV4 struct {
-	GUID            string `json:"guid,omitempty"`
-	Username        string `json:"username,omitempty"`
-	DisplayName     string `json:"display_name,omitempty"`
-	Email           string `json:"email,omitempty"`
-	Avatar          string `json:"avatar,omitempty"`
-	Group           string `json:"group,omitempty"`
-	Admin           bool   `json:"admin,omitempty"`
-	ExternalAuth    bool   `json:"external_auth,omitempty"`
-	ExternalProfile string `json:"external_profile,omitempty"`
+	MustChangePassword bool   `json:"must_change_password,omitempty"`
+	GUID               string `json:"guid,omitempty"`
+	Username           string `json:"username,omitempty"`
+	DisplayName        string `json:"display_name,omitempty"`
+	Email              string `json:"email,omitempty"`
+	Avatar             string `json:"avatar,omitempty"`
+	Group              string `json:"group,omitempty"`
+	Admin              bool   `json:"admin,omitempty"`
+	ExternalAuth       bool   `json:"external_auth,omitempty"`
+	ExternalProfile    string `json:"external_profile,omitempty"`
 }
 
 // MePatchRequest is the body for PATCH /api/v4/me (Profile panel).
@@ -113,7 +116,8 @@ func (h *AuthHandler) V4CreateSession(c echo.Context) error {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Invalid credentials")
 	}
 
-	token, _, err := h.generateToken(user.Username, user.IsAdmin)
+	mustChange := passwordhash.IsDisallowedDefaultHash(user.PasswordHash)
+	token, _, err := h.generateToken(user.Username, user.IsAdmin, mustChange)
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to generate token")
 	}
@@ -127,9 +131,10 @@ func (h *AuthHandler) V4CreateSession(c echo.Context) error {
 	resp.Data.Token = token
 	resp.Data.Scope = scope
 	resp.Data.User.Admin = user.IsAdmin
+	resp.Data.User.MustChangePassword = mustChange
 	resp.Meta = buildMeta(c, "")
 
-	h.setSessionCookie(c, token)
+	h.setSessionCookie(c, token, req.Remember)
 	return c.JSON(http.StatusCreated, resp)
 }
 
@@ -249,7 +254,7 @@ func (h *AuthHandler) V4OAuth2TokenExchange(c echo.Context) error {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Invalid or expired token")
 	}
 
-	jwtToken, _, err := h.generateToken(username, isAdmin)
+	jwtToken, _, err := h.generateToken(username, isAdmin, false)
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to generate token")
 	}
@@ -265,7 +270,7 @@ func (h *AuthHandler) V4OAuth2TokenExchange(c echo.Context) error {
 	resp.Data.User.Admin = isAdmin
 	resp.Meta = buildMeta(c, "")
 
-	h.setSessionCookie(c, jwtToken)
+	h.setSessionCookie(c, jwtToken, true)
 	return c.JSON(http.StatusCreated, resp)
 }
 
@@ -312,6 +317,12 @@ func (h *AuthHandler) V4PatchMe(c echo.Context) error {
 	if email == nil && password == nil && name == nil {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "No fields to update")
 	}
+	if claims.MustChangePassword && password == nil {
+		return writeError(c, http.StatusBadRequest, "Bad Request", "Password change is required")
+	}
+	if password != nil && passwordhash.IsDefaultSipcapturePassword(*password) {
+		return writeError(c, http.StatusBadRequest, "Bad Request", "Choose a password other than the historical default")
+	}
 
 	dbUser, err := h.userService.GetUserByUsername(c.Request().Context(), claims.Username)
 	if err != nil {
@@ -326,10 +337,29 @@ func (h *AuthHandler) V4PatchMe(c echo.Context) error {
 		if err.Error() == "no fields to update" {
 			return writeError(c, http.StatusBadRequest, "Bad Request", "No fields to update")
 		}
+		if err == passwordhash.ErrDefaultSipcapturePassword {
+			return writeError(c, http.StatusBadRequest, "Bad Request", "Choose a password other than the historical default")
+		}
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to update profile")
 	}
 	if !updated {
 		return writeError(c, http.StatusNotFound, "Not Found", "User not found")
+	}
+
+	if password != nil {
+		if claims.ID != "" && h.sessionStore != nil {
+			exp := time.Now().Add(time.Duration(h.expireHours) * time.Hour)
+			if claims.ExpiresAt != nil {
+				exp = claims.ExpiresAt.Time
+			}
+			h.sessionStore.Revoke(claims.ID, exp)
+		}
+		newToken, _, err := h.generateToken(claims.Username, claims.Admin, false)
+		if err != nil {
+			return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to generate token")
+		}
+		h.setSessionCookie(c, newToken, true)
+		claims.MustChangePassword = false
 	}
 
 	profile := h.buildUserProfileV4(c, claims)
@@ -378,10 +408,11 @@ func v4ContextError(c echo.Context, err error) error {
 
 func (h *AuthHandler) buildUserProfileV4(c echo.Context, claims *JWTClaims) UserProfileV4 {
 	profile := UserProfileV4{
-		Username:    claims.Username,
-		DisplayName: claims.Username,
-		Admin:       claims.Admin,
-		Group:       "user",
+		Username:           claims.Username,
+		DisplayName:        claims.Username,
+		Admin:              claims.Admin,
+		MustChangePassword: claims.MustChangePassword,
+		Group:              "user",
 	}
 	if claims.Admin {
 		profile.Group = "admin"

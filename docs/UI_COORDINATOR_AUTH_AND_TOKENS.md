@@ -9,7 +9,7 @@ For full LDAP and OAuth2 configuration field tables and examples, see **[AUTH_LD
 ## Architecture
 
 - The **coordinator** is the authority: it serves `GET /api/v4/auth/providers`, creates sessions, validates requests, and issues JWTs.
-- The **bundled UI** (`src/ui`) calls the v4 API under `import.meta.env.VITE_API_BASE` or the default **`/api/v4`**. On login the coordinator sets an **HttpOnly** session cookie **`homer_session`** (Path `/api/v4`, `SameSite=Lax` by default) so the session is **shared across browser tabs** without putting the JWT in JavaScript. The UI sends `credentials: include` on API calls. Optional **Remember me** stores the JWT in **`localStorage`** (`homer_v4_token`) for Bearer/WebSocket fallback — less safe on shared machines. See `src/ui/src/lib/authTokenStorage.ts`.
+- The **bundled UI** (`src/ui`) calls the v4 API under `import.meta.env.VITE_API_BASE` or the default **`/api/v4`**. On login the coordinator sets an **HttpOnly** session cookie **`homer_session`** (Path `/api/v4`, `SameSite=Lax` by default) so the session is **shared across browser tabs** without putting the JWT in JavaScript. The UI sends `credentials: include` on API calls. Optional **Remember me** makes that cookie persistent (`Max-Age` = `jwt.expire_hours`); without it the cookie is session-scoped. The JWT is **not** stored in `localStorage`. See `src/ui/src/lib/authTokenStorage.ts`.
 
 There is no separate “auth mode” flag in the UI alone: available methods are **entirely determined by coordinator configuration** after restart.
 
@@ -75,7 +75,7 @@ API clients and SPAs should **exchange** the query `token` for the JWT and then 
 - **Usage (pick one per request):**
   - **Browser UI (recommended):** HttpOnly cookie — automatic on same-origin `/api/v4` with `credentials: include`; not readable from JS (mitigates XSS token theft).
   - **Scripts / API clients:** `Authorization: Bearer <jwt>` (unchanged).
-  - **WebSocket:** cookie on the handshake when using the UI; otherwise `?access_token=<jwt>` (browsers cannot set `Authorization` on WS upgrade).
+  - **WebSocket:** cookie on the handshake when using the UI; API clients may pass `?access_token=<jwt>` (browsers cannot set `Authorization` on WS upgrade).
 - **Lifetime:** `coordinator.jwt.expire_hours` (default 24) and `coordinator.jwt.secret`. If `secret` is empty in config, Homer generates and persists **`/.homer_jwt_secret`** beside `settings_db_path` at startup ([SECURITY.md](./SECURITY.md)).
 - **Cookie settings** (`coordinator.jwt`): `cookie_enable` (default true), `cookie_name` (default `homer_session`), `cookie_same_site` (`Lax` | `Strict` | `None`), `cookie_secure` (optional; auto from TLS / `X-Forwarded-Proto`).
 - **CSRF:** Cookie-authenticated **POST/PUT/PATCH/DELETE** requests validate `Origin` / `Referer` against the request host (defense in depth with `SameSite=Lax`).
@@ -87,7 +87,7 @@ Homer 11.0.229+ briefly stored the JWT in **`sessionStorage`** (tab-scoped) afte
 
 ### Remember me (optional, UI)
 
-Login body may include `"remember": true`. The UI then keeps `data.token` in **`localStorage`** so Bearer headers and WebSocket `access_token` work without relying on the cookie alone. Skip on shared workstations.
+Login body may include `"remember": true`. The coordinator then sets a **persistent** HttpOnly cookie (`Max-Age` = `jwt.expire_hours`). Without `remember`, the cookie is **session-scoped** (cleared when the browser closes). The bundled UI never writes the JWT to `localStorage`.
 
 ---
 

@@ -185,11 +185,10 @@ export function apiDownloadUrl(path: string): string {
 
 /**
  * Build a WebSocket URL rooted at the same origin as the REST API.
- * When a Bearer JWT is stored (Remember me), it is appended as
- * `?access_token=...` because browsers can't attach Authorization headers
- * to a WS handshake. With HttpOnly cookie auth the cookie is sent on the
- * handshake automatically. Extra query params
- * (e.g. `?proto=1`, `?method=INVITE`) are merged on top of the caller's.
+ * API clients may pass `?access_token=...` because browsers can't attach
+ * Authorization headers to a WS handshake. The bundled UI uses HttpOnly
+ * cookie auth; that cookie is sent on the handshake automatically. Extra
+ * query params (e.g. `?proto=1`, `?method=INVITE`) are merged on top.
  */
 export function buildWsURL(path: string, params?: QueryParams): string {
   const base = new URL(apiBase, window.location.origin)

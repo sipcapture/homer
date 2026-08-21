@@ -45,6 +45,13 @@ The image bakes in writer defaults (`HOMER_STORAGE_DUCKLAKE_TUNING_*`):
 Compose repeats the same variables so they are visible and easy to
 override without rebuilding. The all-in-one container needs **~8GB RAM**.
 
+## Non-root runtime
+
+The image runs as uid/gid **1000** (`USER homer`). Named volumes from older
+root images need a one-shot chown; both compose files include `homer-init`
+for that. Homer listens on ports >1024, so the compose services use
+`cap_drop: ALL` and `no-new-privileges`.
+
 ```bash
 # docker run
 docker run -e HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT=8GB ghcr.io/sipcapture/homer:latest
@@ -54,6 +61,42 @@ docker run -e HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT=8GB ghcr.io/sipcapture/
 
 Raise `MEMORY_LIMIT` toward 50% of the container budget under SIPREC /
 high ingest. Details: [OOM.md](../../docs/OOM.md), [DUCKDB_TUNING.md](../../docs/DUCKDB_TUNING.md).
+
+## First login
+
+New installs do **not** use `admin` / `sipcapture`. Omit
+`HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH`. On first start the coordinator
+creates user `admin` with a **random** bcrypt password and prints it **once**
+in the Homer logs.
+
+```bash
+# Compose (from this directory)
+docker compose -f docker-compose.yaml logs homer 2>&1 | grep bootstrap_password
+
+# Named container (docker run)
+docker logs homer 2>&1 | grep bootstrap_password
+```
+
+Look for:
+
+```text
+WRN coordinator: generated one-time bootstrap admin password — change after first login
+    admin_user=admin bootstrap_password=<value>
+```
+
+Username is `admin` (or `HOMER_COORDINATOR_AUTH_ADMIN_USER` if you set it). Open
+http://localhost:8080 and sign in with that password, then change it in the UI.
+
+The line appears only when the `users` row is created (empty volume / first
+boot). Restarts do not print it again. If you missed it, set a new
+`HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH` (SHA-256 hex of your password)
+and run `homer --reset-admin-password` inside the container, or recreate the
+`homer_data` volume (destroys settings).
+
+Existing installs that still store the historical `sipcapture` hash can sign
+in, then must set a new password in the UI before the rest of the API works.
+See [SECURITY.md](../../docs/SECURITY.md#bootstrap-admin-password-coordinatorauth).
+
 
 ## Endpoints
 

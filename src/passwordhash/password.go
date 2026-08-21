@@ -7,12 +7,31 @@
 package passwordhash
 
 import (
+	"errors"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 const bcryptCost = bcrypt.DefaultCost
+
+// LegacySHA256SipcaptureHash is SHA-256("sipcapture"), the historical default
+// admin password (GHSA-263f-5xrw-c34r).
+const LegacySHA256SipcaptureHash = "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
+
+// ErrDefaultSipcapturePassword is returned when creating or updating a user
+// with the historical default password.
+var ErrDefaultSipcapturePassword = errors.New("password cannot be the historical default sipcapture")
+
+// IsDisallowedDefaultHash reports the well-known sipcapture SHA-256 hex.
+func IsDisallowedDefaultHash(stored string) bool {
+	return strings.EqualFold(strings.TrimSpace(stored), LegacySHA256SipcaptureHash)
+}
+
+// IsDefaultSipcapturePassword reports the historical cleartext default.
+func IsDefaultSipcapturePassword(password string) bool {
+	return strings.TrimSpace(password) == "sipcapture"
+}
 
 // Hash returns a bcrypt hash for a new password.
 func Hash(password string) (string, error) {

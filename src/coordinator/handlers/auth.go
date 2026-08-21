@@ -21,24 +21,25 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/passwordhash"
 	"golang.org/x/oauth2"
 )
 
 // AuthHandler handles authentication-related API endpoints
 type AuthHandler struct {
-	jwtSecret    string
-	expireHours  int
-	cookieEnable bool
-	cookieName   string
+	jwtSecret      string
+	expireHours    int
+	cookieEnable   bool
+	cookieName     string
 	cookieSameSite string
 	cookieSecure   *bool
-	userService  *services.UserService
-	ldapAuth     *services.LDAPAuthService
-	sessionStore *SessionStore
-	oneTimeStore *OneTimeTokenStore
-	avatarStore  *AvatarStore
-	providers    []OAuthProvider
-	oauthState   *OAuthStateStore
+	userService    *services.UserService
+	ldapAuth       *services.LDAPAuthService
+	sessionStore   *SessionStore
+	oneTimeStore   *OneTimeTokenStore
+	avatarStore    *AvatarStore
+	providers      []OAuthProvider
+	oauthState     *OAuthStateStore
 
 	authTokenSvc *services.AuthTokenService
 	apiSettings  config.APISettingsConfig
@@ -171,7 +172,9 @@ type LoginRequest struct {
 	// Type selects the password backend: "internal" (default) or "ldap" when LDAP is enabled.
 	// If login fails, coordinator.auth.fallback_auth_type may be tried server-side.
 	Type string `json:"type"`
-	// Remember asks the UI to persist the JWT in localStorage (optional; HttpOnly cookie is always set when enabled).
+	// Remember, when true, sets a persistent HttpOnly session cookie (Max-Age =
+	// jwt.expire_hours). When false the cookie is session-scoped. The JWT is
+	// never stored in browser script-visible storage (GHSA-rqwc-fmx3-95j8).
 	Remember bool `json:"remember"`
 }
 
@@ -180,15 +183,17 @@ type LoginResponse struct {
 	Token string `json:"token"`
 	Scope string `json:"scope"`
 	User  struct {
-		Admin    bool   `json:"admin"`
-		Username string `json:"username"`
+		Admin              bool   `json:"admin"`
+		Username           string `json:"username"`
+		MustChangePassword bool   `json:"must_change_password,omitempty"`
 	} `json:"user"`
 }
 
 // JWTClaims represents the JWT claims
 type JWTClaims struct {
-	Username string `json:"username"`
-	Admin    bool   `json:"admin"`
+	Username           string `json:"username"`
+	Admin              bool   `json:"admin"`
+	MustChangePassword bool   `json:"must_change_password,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -226,7 +231,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	}
 
 	// Generate JWT token
-	token, _, err := h.generateToken(user.Username, user.IsAdmin)
+	token, _, err := h.generateToken(user.Username, user.IsAdmin, passwordhash.IsDisallowedDefaultHash(user.PasswordHash))
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
 			"error": "Failed to generate token",
@@ -245,11 +250,13 @@ func (h *AuthHandler) Login(c echo.Context) error {
 			Token: token,
 			Scope: scope,
 			User: struct {
-				Admin    bool   `json:"admin"`
-				Username string `json:"username"`
+				Admin              bool   `json:"admin"`
+				Username           string `json:"username"`
+				MustChangePassword bool   `json:"must_change_password,omitempty"`
 			}{
-				Admin:    user.IsAdmin,
-				Username: user.Username,
+				Admin:              user.IsAdmin,
+				Username:           user.Username,
+				MustChangePassword: passwordhash.IsDisallowedDefaultHash(user.PasswordHash),
 			},
 		},
 	})
@@ -333,17 +340,23 @@ func (h *AuthHandler) JWTMiddleware() echo.MiddlewareFunc {
 			}
 
 			c.Set("user", token)
+			if passwordChangeRequiredBlocks(c, claims) {
+				return c.JSON(http.StatusForbidden, map[string]interface{}{
+					"error": "Password change required",
+				})
+			}
 			return next(c)
 		}
 	}
 }
 
 // generateToken generates a JWT token and returns token + sessionId
-func (h *AuthHandler) generateToken(username string, admin bool) (string, string, error) {
+func (h *AuthHandler) generateToken(username string, admin bool, mustChangePassword bool) (string, string, error) {
 	sessionID := newSessionID()
 	claims := &JWTClaims{
-		Username: username,
-		Admin:    admin,
+		Username:           username,
+		Admin:              admin,
+		MustChangePassword: mustChangePassword,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        sessionID,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(h.expireHours) * time.Hour)),

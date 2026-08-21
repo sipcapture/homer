@@ -895,10 +895,13 @@ type JWTConfig struct {
 	CookieSecure *bool `json:"cookie_secure,omitempty" mapstructure:"cookie_secure"`
 }
 
-// LegacySHA256SipcaptureHash is the SHA-256 hex digest of the historical
-// default password "sipcapture". Used only in tests and legacy hash migration;
-// production bootstrap no longer applies this value automatically.
-const LegacySHA256SipcaptureHash = "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"
+const (
+	// LegacySHA256SipcaptureHash is the SHA-256 hex digest of the historical
+	// default password "sipcapture". Tests and docs may reference it; bootstrap
+	// and --reset-admin-password refuse this value. Login still verifies it so
+	// existing installs can be forced to change the password in the UI.
+	LegacySHA256SipcaptureHash = passwordhash.LegacySHA256SipcaptureHash
+)
 
 // AuthConfig configures authentication
 type AuthConfig struct {
@@ -1862,6 +1865,31 @@ func applyDefaults(cfg *Config) {
 		)
 		if err == nil {
 			cfg.Node.FlightServer.AuthToken = tok
+		}
+		if cfg.Node.FlightSQLServer.Enable {
+			fsqlTok := strings.TrimSpace(cfg.Node.FlightSQLServer.AuthToken)
+			if fsqlTok == "" {
+				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
+			}
+			tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, catalogPath)
+			if err == nil {
+				cfg.Node.FlightSQLServer.AuthToken = tok
+			}
+		}
+	}
+
+	if cfg.Coordinator.Enable && cfg.Coordinator.FlightSQLServer.Enable {
+		fsqlTok := strings.TrimSpace(cfg.Coordinator.FlightSQLServer.AuthToken)
+		if fsqlTok == "" && cfg.Node.Enable {
+			fsqlTok = strings.TrimSpace(cfg.Node.FlightSQLServer.AuthToken)
+			if fsqlTok == "" {
+				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
+			}
+		}
+		settingsPath := strings.TrimSpace(cfg.Coordinator.SettingsDBPath)
+		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath)
+		if err == nil {
+			cfg.Coordinator.FlightSQLServer.AuthToken = tok
 		}
 	}
 

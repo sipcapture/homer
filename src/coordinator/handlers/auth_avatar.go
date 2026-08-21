@@ -42,6 +42,9 @@ func oauthAvatarURLs(profile map[string]interface{}, provider *OAuthProvider) []
 		if u == "" {
 			return
 		}
+		if err := validateAvatarURL(u, provider); err != nil {
+			return
+		}
 		if _, ok := seen[u]; ok {
 			return
 		}
@@ -69,7 +72,7 @@ func fetchOAuthProfilePhoto(ctx context.Context, client *http.Client, profile ma
 	}
 	var lastErr error
 	for _, u := range oauthAvatarURLs(profile, provider) {
-		data, ctype, err := fetchAuthenticatedImage(ctx, client, u)
+		data, ctype, err := fetchAuthenticatedImage(ctx, client, u, provider)
 		if err != nil {
 			lastErr = err
 			continue
@@ -84,12 +87,36 @@ func fetchOAuthProfilePhoto(ctx context.Context, client *http.Client, profile ma
 	return nil, "", fmt.Errorf("no profile photo available")
 }
 
-func fetchAuthenticatedImage(ctx context.Context, client *http.Client, rawURL string) ([]byte, string, error) {
+func avatarHTTPClient(base *http.Client, provider *OAuthProvider) *http.Client {
+	if base == nil {
+		base = http.DefaultClient
+	}
+	c := *base
+	prev := c.CheckRedirect
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if err := validateAvatarURL(req.URL.String(), provider); err != nil {
+			return err
+		}
+		if prev != nil {
+			return prev(req, via)
+		}
+		if len(via) >= 5 {
+			return fmt.Errorf("stopped after 5 redirects")
+		}
+		return nil
+	}
+	return &c
+}
+
+func fetchAuthenticatedImage(ctx context.Context, client *http.Client, rawURL string, provider *OAuthProvider) ([]byte, string, error) {
+	if err := validateAvatarURL(rawURL, provider); err != nil {
+		return nil, "", err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, "", err
 	}
-	resp, err := client.Do(req)
+	resp, err := avatarHTTPClient(client, provider).Do(req)
 	if err != nil {
 		return nil, "", err
 	}
