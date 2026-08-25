@@ -178,9 +178,9 @@ func (n *Node) Start() error {
 	n.running = true
 
 	go func() {
-		logger.Info("Node: FlightSQL server started", "addr", grpcAddr)
+		logger.Info("Node: Airport (DuckDB Flight) server started", "addr", grpcAddr)
 		if err := n.grpcServer.Serve(listener); err != nil {
-			logger.Error(fmt.Sprintf("Node: FlightSQL server error: %v", err))
+			logger.Error(fmt.Sprintf("Node: Airport server error: %v", err))
 		}
 	}()
 
@@ -309,7 +309,7 @@ func (n *Node) Stop() error {
 		n.db.Close()
 	}
 
-	logger.Info("Node: FlightSQL server stopped")
+	logger.Info("Node: Airport server stopped")
 	return nil
 }
 

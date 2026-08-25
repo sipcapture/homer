@@ -975,3 +975,33 @@ func TestEnsureNodeDuckLakeVolumes_S3CopiesCredentials(t *testing.T) {
 		t.Fatalf("s3 volume credentials: %+v", v)
 	}
 }
+
+func TestLoad_CoordinatorBareFlightSQLPortEnablesProxy(t *testing.T) {
+	dir := t.TempDir()
+	path := writeTmpConfig(t, `{
+  "node": {
+    "enable": true,
+    "flight_server": { "host": "127.0.0.1", "port": 50051 },
+    "flightsql_server": { "enable": true, "host": "127.0.0.1", "port": 50055, "auth_token": "fsql-token" },
+    "ducklake": { "catalog_path": "`+dir+`/cat.sqlite" }
+  },
+  "coordinator": {
+    "enable": true,
+    "flightsql_port": 50055,
+    "settings_db_path": "`+dir+`/settings.duckdb"
+  }
+}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Coordinator.FlightSQLServer.Enable {
+		t.Fatal("coordinator.flightsql_port should enable flightsql_server")
+	}
+	if cfg.Coordinator.FlightSQLServer.Port != 50055 {
+		t.Fatalf("port=%d", cfg.Coordinator.FlightSQLServer.Port)
+	}
+	if len(cfg.Coordinator.Nodes) == 0 || cfg.Coordinator.Nodes[0].FlightSQLPort != 50055 {
+		t.Fatalf("local node flightsql_port not wired: %+v", cfg.Coordinator.Nodes)
+	}
+}

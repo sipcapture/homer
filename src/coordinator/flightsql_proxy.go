@@ -9,15 +9,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/apache/arrow-go/v18/arrow"
+	"github.com/apache/arrow-go/v18/arrow/array"
 	"github.com/apache/arrow-go/v18/arrow/flight"
 	"github.com/apache/arrow-go/v18/arrow/flight/flightsql"
+	"github.com/apache/arrow-go/v18/arrow/flight/flightsql/schema_ref"
+	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
+	"github.com/sipcapture/homer-core/src/fsqlauth"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -33,6 +36,7 @@ type flightSQLProxy struct {
 
 	cfg        config.FlightSQLServerConfig
 	nodes      []config.NodeEndpoint
+	lakeName   string
 	grpcServer *grpc.Server
 	listener   net.Listener
 	mu         sync.RWMutex
@@ -43,13 +47,72 @@ type flightSQLProxyTicket struct {
 	Query string `json:"q"`
 }
 
-func newFlightSQLProxy(cfg config.FlightSQLServerConfig, nodes []config.NodeEndpoint) *flightSQLProxy {
-	p := &flightSQLProxy{cfg: cfg, nodes: nodes}
+func newFlightSQLProxy(cfg config.FlightSQLServerConfig, nodes []config.NodeEndpoint, lakeName string) *flightSQLProxy {
+	if lakeName == "" {
+		lakeName = "homer_lake"
+	}
+	p := &flightSQLProxy{cfg: cfg, nodes: nodes, lakeName: lakeName}
 	p.RegisterSqlInfo(flightsql.SqlInfoFlightSqlServerName, "homer-core-coordinator")
 	p.RegisterSqlInfo(flightsql.SqlInfoFlightSqlServerVersion, "1.0")
 	p.RegisterSqlInfo(flightsql.SqlInfoFlightSqlServerArrowVersion, "1.3")
 	p.RegisterSqlInfo(flightsql.SqlInfoFlightSqlServerReadOnly, true)
 	return p
+}
+
+func (p *flightSQLProxy) GetFlightInfoCatalogs(_ context.Context, desc *flight.FlightDescriptor) (*flight.FlightInfo, error) {
+	return &flight.FlightInfo{
+		Endpoint:         []*flight.FlightEndpoint{{Ticket: &flight.Ticket{Ticket: desc.Cmd}}},
+		FlightDescriptor: desc,
+		TotalRecords:     -1,
+		TotalBytes:       -1,
+		Schema:           flight.SerializeSchema(schema_ref.Catalogs, memory.DefaultAllocator),
+	}, nil
+}
+
+func (p *flightSQLProxy) DoGetCatalogs(context.Context) (*arrow.Schema, <-chan flight.StreamChunk, error) {
+	schema := schema_ref.Catalogs
+	bldr := array.NewStringBuilder(memory.DefaultAllocator)
+	defer bldr.Release()
+	bldr.Append(p.lakeName)
+	arr := bldr.NewArray()
+	defer arr.Release()
+	batch := array.NewRecord(schema, []arrow.Array{arr}, 1)
+	ch := make(chan flight.StreamChunk, 1)
+	ch <- flight.StreamChunk{Data: batch}
+	close(ch)
+	return schema, ch, nil
+}
+
+func (p *flightSQLProxy) GetFlightInfoSchemas(_ context.Context, _ flightsql.GetDBSchemas, desc *flight.FlightDescriptor) (*flight.FlightInfo, error) {
+	return &flight.FlightInfo{
+		Endpoint:         []*flight.FlightEndpoint{{Ticket: &flight.Ticket{Ticket: desc.Cmd}}},
+		FlightDescriptor: desc,
+		TotalRecords:     -1,
+		TotalBytes:       -1,
+		Schema:           flight.SerializeSchema(schema_ref.DBSchemas, memory.DefaultAllocator),
+	}, nil
+}
+
+func (p *flightSQLProxy) DoGetDBSchemas(_ context.Context, cmd flightsql.GetDBSchemas) (*arrow.Schema, <-chan flight.StreamChunk, error) {
+	schema := schema_ref.DBSchemas
+	ch := make(chan flight.StreamChunk, 1)
+	if pat := cmd.GetDBSchemaFilterPattern(); pat != nil && *pat != "" && *pat != "%" && *pat != "main" {
+		close(ch)
+		return schema, ch, nil
+	}
+	cb := array.NewStringBuilder(memory.DefaultAllocator)
+	sb := array.NewStringBuilder(memory.DefaultAllocator)
+	cb.Append(p.lakeName)
+	sb.Append("main")
+	ca, sa := cb.NewArray(), sb.NewArray()
+	cb.Release()
+	sb.Release()
+	batch := array.NewRecord(schema, []arrow.Array{ca, sa}, 1)
+	ca.Release()
+	sa.Release()
+	ch <- flight.StreamChunk{Data: batch}
+	close(ch)
+	return schema, ch, nil
 }
 
 func (p *flightSQLProxy) GetFlightInfoStatement(
@@ -302,14 +365,7 @@ func (p *flightSQLProxy) Start() error {
 		return fmt.Errorf("FlightSQL proxy already running")
 	}
 	addr := fmt.Sprintf("%s:%d", p.cfg.Host, p.cfg.Port)
-	var opts []grpc.ServerOption
-	if p.cfg.AuthToken != "" {
-		opts = append(opts,
-			grpc.ChainUnaryInterceptor(p.requireAuthUnary),
-			grpc.ChainStreamInterceptor(p.requireAuthStream),
-		)
-	}
-	p.grpcServer = grpc.NewServer(opts...)
+	p.grpcServer = grpc.NewServer(fsqlauth.ServerOptions(p.cfg.AuthToken)...)
 	flight.RegisterFlightServiceServer(p.grpcServer, flightsql.NewFlightServer(p))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -350,35 +406,4 @@ func (p *flightSQLProxy) Stop() {
 	}
 	p.running = false
 	logger.Info("Coordinator: FlightSQL proxy stopped")
-}
-
-func (p *flightSQLProxy) requireAuthUnary(
-	ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler,
-) (interface{}, error) {
-	if err := p.checkToken(ctx); err != nil {
-		return nil, err
-	}
-	return handler(ctx, req)
-}
-
-func (p *flightSQLProxy) requireAuthStream(
-	srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler,
-) error {
-	if err := p.checkToken(ss.Context()); err != nil {
-		return err
-	}
-	return handler(srv, ss)
-}
-
-func (p *flightSQLProxy) checkToken(ctx context.Context) error {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return status.Error(codes.Unauthenticated, "missing metadata")
-	}
-	for _, v := range md.Get("authorization") {
-		if strings.HasPrefix(v, "Bearer ") && strings.TrimPrefix(v, "Bearer ") == p.cfg.AuthToken {
-			return nil
-		}
-	}
-	return status.Error(codes.Unauthenticated, "invalid or missing Bearer token")
 }
