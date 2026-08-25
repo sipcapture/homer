@@ -1,6 +1,6 @@
 module github.com/sipcapture/homer-core/src
 
-go 1.26.6
+go 1.27.0
 
 require (
 	github.com/Jeffail/gabs/v2 v2.7.0
