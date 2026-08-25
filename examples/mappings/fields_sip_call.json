@@ -45,7 +45,7 @@
   },
   {
     "id": "to_user",
-    "name": "To user (callee)",
+    "name": "RURI/To user (callee)",
     "type": "string",
     "index": "none",
     "form_type": "input",

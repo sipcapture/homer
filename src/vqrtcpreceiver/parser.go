@@ -58,8 +58,10 @@ func ParseBody(body []byte) Report {
 		}
 		s := string(line)
 		switch {
-		case strings.HasPrefix(s, "Call-ID:"):
-			r.CallID = strings.TrimSpace(s[len("Call-ID:"):])
+		// RFC 6035 SessionInfo uses "CallID:" (the measured dialog).
+		// "Call-ID:" is the SIP header of the PUBLISH/MESSAGE itself — do not use it.
+		case strings.HasPrefix(s, "CallID:"):
+			r.CallID = strings.TrimSpace(s[len("CallID:"):])
 		case strings.HasPrefix(s, "VQSessionReport:"):
 			r.HasSessionReport = true
 		case strings.HasPrefix(s, "VQIntervalReport:"):
@@ -118,11 +120,15 @@ func parsePort(s string) (uint16, bool) {
 	return uint16(p), true
 }
 
-// SplitHostPort parses "IP PORT" or "IP:PORT" style LocalAddr/RemoteAddr.
+// SplitHostPort parses LocalAddr/RemoteAddr values.
+// RFC 6035 uses "IP=<addr> PORT=<port> SSRC=<ssrc>"; legacy "IP PORT" and "IP:PORT" are also accepted.
 func SplitHostPort(addr string) (host string, port uint16) {
 	addr = strings.TrimSpace(addr)
 	if addr == "" {
 		return "", 0
+	}
+	if h, p, ok := splitRFC6035HostPort(addr); ok {
+		return h, p
 	}
 	if i := strings.LastIndex(addr, ":"); i > 0 && strings.Count(addr, ":") == 1 {
 		host = addr[:i]
@@ -137,4 +143,28 @@ func SplitHostPort(addr string) (host string, port uint16) {
 		}
 	}
 	return addr, 0
+}
+
+// splitRFC6035HostPort parses "IP=<addr> PORT=<port> [SSRC=<ssrc>]" (RFC 6035 §4.6).
+func splitRFC6035HostPort(addr string) (host string, port uint16, ok bool) {
+	var portRaw string
+	for _, part := range strings.Fields(addr) {
+		k, v, found := strings.Cut(part, "=")
+		if !found {
+			continue
+		}
+		switch strings.ToUpper(k) {
+		case "IP":
+			host = strings.Trim(v, "[]")
+		case "PORT":
+			portRaw = v
+		}
+	}
+	if host == "" {
+		return "", 0, false
+	}
+	if p, valid := parsePort(portRaw); valid {
+		return host, p, true
+	}
+	return host, 0, true
 }

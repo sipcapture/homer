@@ -35,12 +35,14 @@ Transaction modal → **QoS** tab → **VQRTCP** sub-tab (when data exists). API
 
 ## Example body
 
+RFC 6035 `LocalAddr` / `RemoteAddr` use `IP=` / `PORT=` / `SSRC=` (legacy `IP PORT` and `IP:PORT` are still accepted):
+
 ```
-Call-ID: abc@host
+CallID: abc@host
 VQIntervalReport:
 QualityEst:MOSLQ=4.20 MOSCQ=4.10
-LocalAddr: 10.0.0.1 5060
-RemoteAddr: 10.0.0.2 5070
+LocalAddr: IP=10.10.1.100 PORT=5000 SSRC=1a3b5c7d
+RemoteAddr:IP=11.1.1.150 PORT=5002 SSRC=0x2468abcd
 JitterBuffer:JBA=0 JBR=0 JBN=10 JBM=0 JBX=0
 PacketLoss:NLR=0.5 JDR=0.1
 ```
