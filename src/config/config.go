@@ -443,6 +443,11 @@ type CoordinatorConfig struct {
 	// to node flightsql_port endpoints (Grafana single entrypoint).
 	FlightSQLServer FlightSQLServerConfig `json:"flightsql_server" mapstructure:"flightsql_server"`
 
+	// DeprecatedListenPort is the mistaken coordinator.flightsql_port integer
+	// (not coordinator.nodes[].flightsql_port). It does not start a listener by
+	// itself; applyDefaults copies it onto flightsql_server and enables the proxy.
+	DeprecatedListenPort int `json:"flightsql_port,omitempty" mapstructure:"flightsql_port"`
+
 	// LineProtoTablePrefix mirrors ingest.line_protocol.table_prefix for
 	// GET /api/v4/line_protocol/tables default ?prefix=; set at load from Ingest
 	// (not read from JSON).
@@ -1689,6 +1694,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.Coordinator.LakeName == "" {
 		cfg.Coordinator.LakeName = "homer_lake"
 	}
+	if cfg.Coordinator.DeprecatedListenPort > 0 {
+		slog.Warn("config: coordinator.flightsql_port is not a listen key; use coordinator.flightsql_server.enable and coordinator.flightsql_server.port. Enabling the FlightSQL proxy on that port.",
+			"port", cfg.Coordinator.DeprecatedListenPort)
+		cfg.Coordinator.FlightSQLServer.Enable = true
+		cfg.Coordinator.FlightSQLServer.Port = cfg.Coordinator.DeprecatedListenPort
+	}
 	if cfg.Coordinator.FlightSQLServer.CatalogRefreshIntervalSec <= 0 {
 		cfg.Coordinator.FlightSQLServer.CatalogRefreshIntervalSec = 30
 	}
@@ -1900,14 +1911,19 @@ func applyDefaults(cfg *Config) {
 
 	// If no nodes configured but node is enabled locally, add local node
 	if cfg.Coordinator.Enable && len(cfg.Coordinator.Nodes) == 0 && cfg.Node.Enable {
-		cfg.Coordinator.Nodes = []NodeEndpoint{
-			{
-				Name:  "local",
-				Host:  "127.0.0.1",
-				Port:  cfg.Node.FlightServer.Port,
-				Token: cfg.Node.FlightServer.AuthToken,
-			},
+		local := NodeEndpoint{
+			Name:  "local",
+			Host:  "127.0.0.1",
+			Port:  cfg.Node.FlightServer.Port,
+			Token: cfg.Node.FlightServer.AuthToken,
 		}
+		if cfg.Node.FlightSQLServer.Enable {
+			local.FlightSQLPort = cfg.Node.FlightSQLServer.Port
+			if local.Token == "" {
+				local.Token = cfg.Node.FlightSQLServer.AuthToken
+			}
+		}
+		cfg.Coordinator.Nodes = []NodeEndpoint{local}
 	}
 
 	// Same-process local nodes: copy flight_server.auth_token into empty node tokens
@@ -1920,6 +1936,27 @@ func applyDefaults(cfg *Config) {
 			}
 			if IsLoopbackBindHost(n.Host) && n.Port == cfg.Node.FlightServer.Port {
 				n.Token = cfg.Node.FlightServer.AuthToken
+			}
+		}
+	}
+
+	// Same-process: point coordinator FlightSQL proxy at the local node listener.
+	if cfg.Node.Enable && cfg.Node.FlightSQLServer.Enable {
+		port := cfg.Node.FlightSQLServer.Port
+		if port == 0 {
+			port = 50055
+		}
+		tok := strings.TrimSpace(cfg.Node.FlightSQLServer.AuthToken)
+		for i := range cfg.Coordinator.Nodes {
+			n := &cfg.Coordinator.Nodes[i]
+			if !IsLoopbackBindHost(n.Host) || n.Port != cfg.Node.FlightServer.Port {
+				continue
+			}
+			if n.FlightSQLPort == 0 {
+				n.FlightSQLPort = port
+			}
+			if n.Token == "" && tok != "" {
+				n.Token = tok
 			}
 		}
 	}

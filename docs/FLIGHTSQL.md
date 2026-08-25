@@ -9,14 +9,43 @@ Homer exposes **two different gRPC stacks** on the node:
 
 The coordinator REST API still talks to nodes over **HTTP** `POST /query` on `node.flight_server.port + 1`. Optional **`coordinator.flightsql_server`** (default **32010** when enabled with port `0`) is a **FlightSQL proxy** that fans out to each `coordinator.nodes[].flightsql_port` (must match the node’s FlightSQL listener).
 
+## Listen keys
+
+| What you want | Config | Default port |
+|---|---|---|
+| Node serves SQL to Grafana | `node.flightsql_server.enable: true` | `50055` |
+| Coordinator proxies Grafana to nodes | `coordinator.flightsql_server.enable: true` | `32010` |
+| Which node port the proxy dials | `coordinator.nodes[].flightsql_port` | `0` (unused) |
+
+`coordinator.flightsql_port` (a bare integer under `coordinator`) is **not** a listen key. Docker's published port can show `LISTEN` via `docker-proxy` even when Homer has no FlightSQL server. Homer treats that integer as `coordinator.flightsql_server.enable=true` plus `.port=<value>` and logs a warning. Prefer the nested object.
+
+Auth on FlightSQL is **required**. If `flightsql_server.auth_token` is empty, Homer copies `node.flight_server.auth_token` or generates one (see logs / `.homer_node_auth_token`). Grafana must use that token, not the coordinator JWT.
+
+The Flight `Handshake` RPC does not require Bearer metadata (Grafana / GizmoSQL / ADBC send it first). Subsequent RPCs accept `Authorization: Bearer <token>`, HTTP Basic with the token as password, or the raw token.
+
+## Docker Compose
+
+`HOMER_*` environment variables **override** `homer.json`. Setting `node.flightsql_server.enable: true` in JSON has no effect while `HOMER_NODE_FLIGHTSQL_SERVER_ENABLE=false` is set. Enable via env:
+
+```yaml
+HOMER_NODE_FLIGHTSQL_SERVER_ENABLE: "true"
+HOMER_NODE_FLIGHTSQL_SERVER_PORT: "50055"
+HOMER_NODE_FLIGHTSQL_SERVER_AUTH_TOKEN: your-secret-token-here
+HOMER_COORDINATOR_NODES_0_FLIGHTSQL_PORT: "50055"
+```
+
+Publish `50055:50055/tcp` only when the process actually listens. Publishing the port without a listener makes `ss` show `LISTEN` (docker-proxy) while every FlightSQL client drops during handshake.
+
+TLS in Grafana must be **off** unless you terminate TLS in front of Homer. The listener is plaintext gRPC. Airport (`grpc://host:50051`) will not complete a FlightSQL handshake.
+
 ## Grafana (InfluxDB datasource, FlightSQL)
 
 Step-by-step datasource setup, proxy configuration, and troubleshooting: **[GRAFANA_INTEGRATION.md](GRAFANA_INTEGRATION.md)**.
 
-1. Enable `node.flightsql_server.enable` and set `auth_token` if you want Bearer auth (same header pattern as Airport).
-2. Datasource type: **InfluxDB**, version **InfluxQL** or **SQL** / **FlightSQL** per your Grafana build (use the FlightSQL / InfluxDB 3 style URL).
-3. URL: `grpc://<node-host>:50055` (or `grpc://<coordinator-host>:32010` when using the coordinator proxy and `flightsql_port` on each node entry).
-4. If you set `auth_token`, add **Metadata** or **HTTP Headers** so requests include `Authorization: Bearer <token>` (Grafana field names vary by version).
+1. Enable `node.flightsql_server.enable` and set `auth_token` (required; Grafana uses this token, not the UI JWT).
+2. Datasource type: **InfluxDB**, version **InfluxQL** or **SQL** / **FlightSQL** per your Grafana build (use the FlightSQL / InfluxDB 3 style URL). GizmoSQL also works.
+3. URL: `grpc://<node-host>:50055` (or `grpc://<coordinator-host>:32010` when using the coordinator proxy and `flightsql_port` on each node entry). Leave TLS disabled.
+4. Add **Metadata** or **HTTP Headers** so requests include `Authorization: Bearer <token>` (Grafana field names vary by version). Username/password with the token as password is also accepted.
 
 FlightSQL is a protocol for high-performance SQL database access built on Apache Arrow Flight.
 

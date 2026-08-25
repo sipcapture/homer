@@ -178,7 +178,12 @@ services:
       HOMER_NODE_FLIGHT_SERVER_PORT: "50051"
       HOMER_NODE_FLIGHT_SERVER_AUTH_TOKEN: your-secret-token-here
       HOMER_NODE_FLIGHT_SERVER_MAX_MESSAGE_SIZE: "16777216"
-      HOMER_NODE_FLIGHTSQL_SERVER_ENABLE: "false"
+      # Arrow FlightSQL (Grafana). Off by default. Do not pin ENABLE=false here
+      # if you enable node.flightsql_server in a mounted homer.json — env wins.
+      # Also add "50055:50055/tcp" to ports when enabling.
+      # HOMER_NODE_FLIGHTSQL_SERVER_ENABLE: "true"
+      # HOMER_NODE_FLIGHTSQL_SERVER_PORT: "50055"
+      # HOMER_NODE_FLIGHTSQL_SERVER_AUTH_TOKEN: your-secret-token-here
 
       HOMER_NODE_DUCKLAKE_LAKE_NAME: homer_lake
 
@@ -213,7 +218,9 @@ services:
       HOMER_COORDINATOR_NODES_0_PRIORITY: "1"
 
       HOMER_COORDINATOR_SETTINGS_DB_PATH: /data/homer/homer_settings.duckdb
-      HOMER_COORDINATOR_FLIGHTSQL_SERVER_ENABLE: "false"
+      # HOMER_COORDINATOR_FLIGHTSQL_SERVER_ENABLE: "true"
+      # HOMER_COORDINATOR_FLIGHTSQL_SERVER_PORT: "32010"
+      # HOMER_COORDINATOR_NODES_0_FLIGHTSQL_PORT: "50055"
 
       HOMER_COORDINATOR_JWT_SECRET: change-this-to-a-secure-random-string-in-production
       HOMER_COORDINATOR_JWT_EXPIRE_HOURS: "24"

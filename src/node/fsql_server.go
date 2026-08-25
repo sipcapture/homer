@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,11 +21,11 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
+	"github.com/sipcapture/homer-core/src/fsqlauth"
 	"github.com/sipcapture/homer-core/src/sqlrewrite"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -185,14 +184,7 @@ func (s *fsqlServer) Start() error {
 		return fmt.Errorf("FlightSQL server already running")
 	}
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
-	var opts []grpc.ServerOption
-	if s.cfg.AuthToken != "" {
-		opts = append(opts,
-			grpc.ChainUnaryInterceptor(s.requireAuthUnary),
-			grpc.ChainStreamInterceptor(s.requireAuthStream),
-		)
-	}
-	s.grpcServer = grpc.NewServer(opts...)
+	s.grpcServer = grpc.NewServer(fsqlauth.ServerOptions(s.cfg.AuthToken)...)
 	flight.RegisterFlightServiceServer(s.grpcServer, flightsql.NewFlightServer(s))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -260,35 +252,4 @@ func (s *fsqlServer) Stop() {
 	}
 	s.running = false
 	logger.Info("Node: Arrow FlightSQL server stopped")
-}
-
-func (s *fsqlServer) requireAuthUnary(
-	ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler,
-) (interface{}, error) {
-	if err := s.checkToken(ctx); err != nil {
-		return nil, err
-	}
-	return handler(ctx, req)
-}
-
-func (s *fsqlServer) requireAuthStream(
-	srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler,
-) error {
-	if err := s.checkToken(ss.Context()); err != nil {
-		return err
-	}
-	return handler(srv, ss)
-}
-
-func (s *fsqlServer) checkToken(ctx context.Context) error {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return status.Error(codes.Unauthenticated, "missing metadata")
-	}
-	for _, v := range md.Get("authorization") {
-		if strings.HasPrefix(v, "Bearer ") && strings.TrimPrefix(v, "Bearer ") == s.cfg.AuthToken {
-			return nil
-		}
-	}
-	return status.Error(codes.Unauthenticated, "invalid or missing Bearer token")
 }

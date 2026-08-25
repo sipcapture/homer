@@ -86,7 +86,7 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 		flightService: flightService,
 	}
 	if cfg.FlightSQLServer.Enable {
-		c.fsqlProxy = newFlightSQLProxy(cfg.FlightSQLServer, cfg.Nodes)
+		c.fsqlProxy = newFlightSQLProxy(cfg.FlightSQLServer, cfg.Nodes, cfg.LakeName)
 	}
 
 	// Open settings DuckDB
