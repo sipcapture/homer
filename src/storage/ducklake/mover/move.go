@@ -33,6 +33,10 @@ type Options struct {
 	// for metadata reads and the source DELETE — never during the byte copy.
 	Lock   func()
 	Unlock func()
+	// BeforeRegister runs after parquet bytes are on the destination and
+	// before ducklake_add_data_files. Native S3 copies can outlive an IMDS
+	// token; this is how Homer recreates the DuckDB credential_chain secret.
+	BeforeRegister func() error
 }
 
 func (o Options) lock() {
@@ -154,6 +158,12 @@ func Move(ctx context.Context, opts Options) (Result, error) {
 		}
 		copied = append(copied, dst)
 		bytesCopied += f.fileSizeBytes
+	}
+
+	if opts.BeforeRegister != nil {
+		if err := opts.BeforeRegister(); err != nil {
+			return Result{}, fmt.Errorf("refresh destination credentials before register: %w", err)
+		}
 	}
 
 	// Destination catalog is a different SQLite file than the writer hot catalog.

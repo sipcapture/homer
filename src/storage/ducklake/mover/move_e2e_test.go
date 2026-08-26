@@ -14,8 +14,8 @@ import (
 )
 
 type twoLakeFixture struct {
-	db      *sql.DB
-	hotData string
+	db       *sql.DB
+	hotData  string
 	coldData string
 	hotLake  string
 	coldLake string
@@ -253,5 +253,38 @@ func TestNativeMoveDoesNotHoldLockDuringCopy(t *testing.T) {
 	}
 	if got := f.count(t, "cold", day); got != 15 {
 		t.Errorf("cold = %d", got)
+	}
+}
+
+func TestNativeMoveBeforeRegisterRunsAfterCopy(t *testing.T) {
+	f := newTwoLakeFixture(t)
+	if ok, reason := addDataFilesSupported(context.Background(), f.db); !ok {
+		t.Skip(reason)
+	}
+	day := "2026-07-18"
+	f.insert(t, day, 0, 12)
+
+	var copiedBeforeRegister atomic.Bool
+	var registerCalled atomic.Bool
+	opts := f.options(day)
+	opts.BeforeRegister = func() error {
+		registerCalled.Store(true)
+		if f.count(t, "cold", day) != 0 {
+			t.Error("destination catalog must still be empty before register")
+		}
+		copiedBeforeRegister.Store(true)
+		return nil
+	}
+	if _, err := Move(context.Background(), opts); err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	if !registerCalled.Load() {
+		t.Fatal("BeforeRegister was not called")
+	}
+	if !copiedBeforeRegister.Load() {
+		t.Fatal("BeforeRegister ran without a successful copy")
+	}
+	if got := f.count(t, "cold", day); got != 12 {
+		t.Errorf("cold after register = %d, want 12", got)
 	}
 }

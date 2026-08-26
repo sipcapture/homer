@@ -101,6 +101,26 @@ func TestUseNativeMove(t *testing.T) {
 	})
 }
 
+func TestNativeMoveOptionsRefreshesChainSecretBeforeRegister(t *testing.T) {
+	hot := &Volume{Name: "hot", LakeName: "hot", Path: "/data/hot", Type: VolumeTypeLocal}
+	chain := &Volume{Name: "cold", LakeName: "cold", Path: "s3://bucket/cold", Type: VolumeTypeS3, S3Region: "us-east-1"}
+	tsm := &TieredStorageManager{config: TieredStorageConfig{MoveEngine: "native"}}
+
+	opts := tsm.nativeMoveOptions("hep_proto_1_call", "2026-08-25", hot, chain)
+	if opts.BeforeRegister == nil {
+		t.Fatal("S3 destination must set BeforeRegister to refresh the DuckDB secret after PUT")
+	}
+	if err := opts.BeforeRegister(); err != nil {
+		t.Fatalf("nil-db refresh must be a no-op: %v", err)
+	}
+
+	localDst := &Volume{Name: "warm", LakeName: "warm", Path: "/data/warm", Type: VolumeTypeLocal}
+	opts = tsm.nativeMoveOptions("hep_proto_1_call", "2026-08-25", hot, localDst)
+	if opts.BeforeRegister != nil {
+		t.Fatal("local destination does not need BeforeRegister")
+	}
+}
+
 func TestHotCatalogLockerOnlyForPrimaryVolume(t *testing.T) {
 	tsm := &TieredStorageManager{
 		primaryVolume: &Volume{LakeName: "homer_lake_hot"},

@@ -179,40 +179,104 @@ func (tsm *TieredStorageManager) Start() error {
 	return nil
 }
 
-// attachVolume attaches a volume as a DuckLake database
-func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
-	// Configure S3 if needed
-	if vol.Type == VolumeTypeS3 {
-		// For S3-compatible storage (RustFS, MinIO, R2), create a secret
-		// This is required for DuckLake to use custom S3 endpoints
-		secretName := fmt.Sprintf("s3_secret_%s", vol.Name)
+func s3SecretName(volumeName string) string {
+	return fmt.Sprintf("s3_secret_%s", volumeName)
+}
 
-		// Drop existing secret if any
+func volumeS3EndpointHost(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	endpoint = strings.TrimPrefix(endpoint, "http://")
+	endpoint = strings.TrimPrefix(endpoint, "https://")
+	return endpoint
+}
+
+// usesS3CredentialChain is the native-AWS branch of buildS3SecretSQL: empty
+// static key and no custom endpoint, so DuckDB resolves IMDS / IRSA / env.
+func usesS3CredentialChain(accessKey, endpoint string) bool {
+	return strings.TrimSpace(accessKey) == "" && strings.TrimSpace(endpoint) == ""
+}
+
+func s3SecretSQLForVolume(vol *Volume, replace bool) string {
+	endpoint := volumeS3EndpointHost(vol.S3Endpoint)
+	region := strings.TrimSpace(vol.S3Region)
+	if region == "" && endpoint != "" {
+		region = "us-east-1"
+	}
+	sql := buildS3SecretSQL(s3SecretName(vol.Name), vol.S3AccessKey, vol.S3SecretKey, region, endpoint, vol.S3UseSSL, vol.S3URLStyle)
+	if replace {
+		sql = strings.Replace(sql, "CREATE SECRET", "CREATE OR REPLACE SECRET", 1)
+	}
+	return sql
+}
+
+func (tsm *TieredStorageManager) createVolumeS3Secret(vol *Volume, replace bool) error {
+	secretName := s3SecretName(vol.Name)
+	if !replace {
 		dropSecret := fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName)
 		if _, err := tsm.db.Exec(dropSecret); err != nil {
 			logger.Warn("TieredStorageManager: Failed to drop existing secret", "secret", secretName, "error", err)
 		}
+	}
 
-		// Build endpoint URL
-		endpoint := vol.S3Endpoint
-		if endpoint != "" {
-			endpoint = strings.TrimPrefix(endpoint, "http://")
-			endpoint = strings.TrimPrefix(endpoint, "https://")
-		}
-		region := strings.TrimSpace(vol.S3Region)
-		if region == "" && endpoint != "" {
-			region = "us-east-1"
-		}
-
-		createSecret := buildS3SecretSQL(secretName, vol.S3AccessKey, vol.S3SecretKey, region, endpoint, vol.S3UseSSL, vol.S3URLStyle)
-
+	endpoint := volumeS3EndpointHost(vol.S3Endpoint)
+	createSecret := s3SecretSQLForVolume(vol, replace)
+	if replace {
+		logger.Debug("TieredStorageManager: Refreshing credential_chain S3 secret",
+			"volume", vol.Name)
+	} else {
 		logger.Info("TieredStorageManager: Creating S3 secret",
 			"volume", vol.Name,
 			"endpoint", endpoint,
 			"use_ssl", vol.S3UseSSL)
+	}
 
-		if _, err := tsm.db.Exec(createSecret); err != nil {
-			return fmt.Errorf("failed to create S3 secret for volume %s: %w", vol.Name, err)
+	if _, err := tsm.db.Exec(createSecret); err != nil {
+		return fmt.Errorf("failed to create S3 secret for volume %s: %w", vol.Name, err)
+	}
+	return nil
+}
+
+// refreshCredentialChainSecret re-resolves a role-based S3 secret so DuckDB
+// does not keep the session token captured at CREATE SECRET / process start.
+// REFRESH auto is the DuckDB-side counterpart, but S3 ExpiredToken is HTTP 400
+// and may not trigger that retry; native register and volume maintenance
+// therefore recreate the secret explicitly. No-op for static keys / MinIO.
+func (tsm *TieredStorageManager) refreshCredentialChainSecret(vol *Volume) error {
+	if tsm == nil || tsm.db == nil || vol == nil || vol.Type != VolumeTypeS3 {
+		return nil
+	}
+	if !usesS3CredentialChain(vol.S3AccessKey, volumeS3EndpointHost(vol.S3Endpoint)) {
+		return nil
+	}
+	return tsm.createVolumeS3Secret(vol, true)
+}
+
+// RefreshCredentialChainSecrets re-creates DuckDB S3 secrets that use
+// PROVIDER credential_chain. Call at the start of a tiering cycle so COUNT,
+// expire, native register, and volume maintenance do not use a token resolved
+// at process start (sipcapture/homer#980).
+func (tsm *TieredStorageManager) RefreshCredentialChainSecrets() {
+	tsm.refreshCredentialChainSecrets()
+}
+
+func (tsm *TieredStorageManager) refreshCredentialChainSecrets() {
+	if tsm == nil {
+		return
+	}
+	for _, vol := range tsm.volumes {
+		if err := tsm.refreshCredentialChainSecret(vol); err != nil {
+			logger.Warn("TieredStorageManager: failed to refresh credential_chain S3 secret",
+				"volume", vol.Name, "error", err)
+		}
+	}
+}
+
+// attachVolume attaches a volume as a DuckLake database
+func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
+	// Configure S3 if needed
+	if vol.Type == VolumeTypeS3 {
+		if err := tsm.createVolumeS3Secret(vol, false); err != nil {
+			return err
 		}
 	}
 
@@ -363,6 +427,13 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 		"to", dstVol.Name,
 		"engine", tsm.moveEngine())
 
+	// DuckDB COUNT / INSERT / add_data_files on the cold lake use the session
+	// secret, not the AWS SDK copier. Re-resolve role credentials first.
+	if err := tsm.refreshCredentialChainSecret(dstVol); err != nil {
+		logger.Warn("TieredStorageManager: failed to refresh destination S3 secret",
+			"volume", dstVol.Name, "error", err)
+	}
+
 	hotLocker := tsm.hotCatalogLocker(srcVol)
 
 	srcCount, err := tsm.partitionRowCount(srcTable, date)
@@ -446,7 +517,7 @@ func (tsm *TieredStorageManager) useNativeMove(srcVol, dstVol *Volume) bool {
 	return true
 }
 
-func (tsm *TieredStorageManager) movePartitionNative(tableName, date string, srcVol, dstVol *Volume) error {
+func (tsm *TieredStorageManager) nativeMoveOptions(tableName, date string, srcVol, dstVol *Volume) mover.Options {
 	opts := mover.Options{
 		DB:          tsm.db,
 		SrcLake:     srcVol.LakeName,
@@ -469,7 +540,19 @@ func (tsm *TieredStorageManager) movePartitionNative(tableName, date string, src
 			URLStyle:  dstVol.S3URLStyle,
 			UseSSL:    dstVol.S3UseSSL,
 		}
+		// PUT uses the AWS SDK (auto-refresh). Register is DuckDB read_blob /
+		// add_data_files against the secret captured at start — recreate it
+		// after a long copy so ExpiredToken cannot land on register.
+		dst := dstVol
+		opts.BeforeRegister = func() error {
+			return tsm.refreshCredentialChainSecret(dst)
+		}
 	}
+	return opts
+}
+
+func (tsm *TieredStorageManager) movePartitionNative(tableName, date string, srcVol, dstVol *Volume) error {
+	opts := tsm.nativeMoveOptions(tableName, date, srcVol, dstVol)
 
 	res, err := mover.Move(context.Background(), opts)
 	if err != nil {
@@ -600,6 +683,11 @@ func volumeMaintenanceSQL(lakeName string, snapshotOlderThanSec int) []string {
 // (issue #882 follow-up: cold physical space was never reclaimed because
 // the writer CompactionService only maintains the writer lake).
 func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlderThanSec int) error {
+	if err := tsm.refreshCredentialChainSecret(vol); err != nil {
+		logger.Warn("TieredStorageManager: failed to refresh S3 secret before maintenance",
+			"volume", vol.Name, "error", err)
+	}
+
 	locker := tsm.hotCatalogLocker(vol)
 
 	logger.Info("TieredStorageManager: Running volume maintenance",
@@ -836,10 +924,14 @@ func sortResultsByTimestamp(results []map[string]interface{}) {
 // When accessKey is empty and endpoint is empty (native AWS S3), the secret
 // uses PROVIDER credential_chain so DuckDB resolves credentials through the
 // AWS SDK default chain (env, container/Pod Identity, instance profile).
+// REFRESH auto re-runs that chain when the cached session token expires
+// (EC2 instance-profile tokens last ~6h; IRSA / Pod Identity are shorter);
+// without it the secret is resolved once at CREATE SECRET and every later
+// cold-volume operation fails with ExpiredToken until homer-core restarts.
 // Static keys and custom endpoints (MinIO / R2) use explicit KEY_ID/SECRET.
 func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string, useSSL bool, urlStyle string) string {
 	switch {
-	case strings.TrimSpace(accessKey) == "" && endpoint == "":
+	case usesS3CredentialChain(accessKey, endpoint):
 		// Default region for native AWS S3 so the secret signs correctly even
 		// when no s3_region is set (the SDK can also resolve it from the
 		// environment / instance metadata, but an explicit value is safer).
@@ -850,6 +942,7 @@ func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string,
 			CREATE SECRET %s (
 				TYPE S3,
 				PROVIDER credential_chain,
+				REFRESH auto,
 				REGION '%s'
 			);
 		`, secretName, region)

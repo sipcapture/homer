@@ -131,6 +131,7 @@ func (ts *TieringService) runTieringCycle() {
 	logger.Info("TieringService: Starting tiering cycle")
 
 	volumes := ts.tieredStorage.GetVolumes()
+	ts.tieredStorage.RefreshCredentialChainSecrets()
 	var totalMoved int64
 	var totalExpired int64
 
