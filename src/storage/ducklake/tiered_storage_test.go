@@ -150,6 +150,14 @@ func TestBuildS3SecretSQL_Branches(t *testing.T) {
 			if tc.denySubstr != "" && strings.Contains(sql, tc.denySubstr) {
 				t.Errorf("SQL should not contain %q:\n%s", tc.denySubstr, sql)
 			}
+			chain := strings.Contains(sql, "PROVIDER credential_chain")
+			refresh := strings.Contains(sql, "REFRESH auto")
+			if chain && !refresh {
+				t.Errorf("credential_chain SQL must include REFRESH auto:\n%s", sql)
+			}
+			if !chain && refresh {
+				t.Errorf("non-chain SQL must not include REFRESH auto:\n%s", sql)
+			}
 		})
 	}
 }
@@ -158,5 +166,54 @@ func TestBuildS3SecretSQL_CustomEndpointURLStyle(t *testing.T) {
 	sql := buildS3SecretSQL("test_secret", "AKIA...", "secret", "cn-hangzhou", "oss-cn-hangzhou.aliyuncs.com", true, "vhost")
 	if !strings.Contains(sql, "URL_STYLE 'vhost'") {
 		t.Fatalf("SQL should contain vhost URL_STYLE:\n%s", sql)
+	}
+}
+
+func TestUsesS3CredentialChain(t *testing.T) {
+	if !usesS3CredentialChain("", "") {
+		t.Fatal("empty key + empty endpoint is credential_chain")
+	}
+	if !usesS3CredentialChain("  ", "") {
+		t.Fatal("whitespace key is still credential_chain")
+	}
+	if usesS3CredentialChain("AKIA...", "") {
+		t.Fatal("static key is not credential_chain")
+	}
+	if usesS3CredentialChain("", "minio.local:9000") {
+		t.Fatal("custom endpoint is not credential_chain")
+	}
+}
+
+func TestS3SecretSQLForVolume_ReplaceKeepsRefreshAuto(t *testing.T) {
+	vol := &Volume{Name: "cold", Type: VolumeTypeS3, S3Region: "us-east-1"}
+	sql := s3SecretSQLForVolume(vol, true)
+	if !strings.Contains(sql, "CREATE OR REPLACE SECRET") {
+		t.Fatalf("refresh SQL must REPLACE, got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "PROVIDER credential_chain") || !strings.Contains(sql, "REFRESH auto") {
+		t.Fatalf("refresh SQL must keep credential_chain + REFRESH auto:\n%s", sql)
+	}
+	static := s3SecretSQLForVolume(&Volume{
+		Name: "cold", Type: VolumeTypeS3, S3AccessKey: "AKIA...", S3Region: "us-east-1",
+	}, true)
+	if strings.Contains(static, "credential_chain") {
+		t.Fatalf("static-key refresh SQL must not use credential_chain:\n%s", static)
+	}
+}
+
+func TestRefreshCredentialChainSecret_NoOpWithoutDBOrStaticKeys(t *testing.T) {
+	tsm := &TieredStorageManager{}
+	if err := tsm.refreshCredentialChainSecret(&Volume{Type: VolumeTypeS3, Name: "cold"}); err != nil {
+		t.Fatalf("nil db: %v", err)
+	}
+	if err := tsm.refreshCredentialChainSecret(&Volume{
+		Type: VolumeTypeS3, Name: "cold", S3AccessKey: "AKIA...",
+	}); err != nil {
+		t.Fatalf("static keys: %v", err)
+	}
+	if err := tsm.refreshCredentialChainSecret(&Volume{
+		Type: VolumeTypeLocal, Name: "hot",
+	}); err != nil {
+		t.Fatalf("local volume: %v", err)
 	}
 }
