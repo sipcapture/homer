@@ -57,6 +57,43 @@ func TestGamedataRouteDisabledWhenDirUnset(t *testing.T) {
 	}
 }
 
+func TestStaticRouteRejectsEncodedSlashBypass(t *testing.T) {
+	dir := t.TempDir()
+	adminDir := filepath.Join(dir, "admin")
+	if err := os.MkdirAll(adminDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(adminDir, "secret.txt"), []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := newStaticTestCoordinator(config.CoordinatorHTTPServerConfig{StaticPath: dir})
+	protected := c.echo.Group("/admin", func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(ctx echo.Context) error {
+			return ctx.NoContent(http.StatusForbidden)
+		}
+	})
+	protected.GET("/*", func(ctx echo.Context) error {
+		return ctx.String(http.StatusOK, "should not reach")
+	})
+	c.setupStaticRoutes()
+
+	rec := httptest.NewRecorder()
+	c.echo.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/admin/secret.txt", nil))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("plain /admin/secret.txt: want 403, got %d", rec.Code)
+	}
+
+	// CVE-2026-55677 / GHSA-vfp3-v2gw-7wfq: encoded slash must not skip
+	// the group middleware and leak a file from Static("/").
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin%2Fsecret.txt", nil)
+	c.echo.ServeHTTP(rec, req)
+	if rec.Code == http.StatusOK && rec.Body.String() == "secret" {
+		t.Fatal("encoded slash bypassed route protection and leaked static file")
+	}
+}
+
 func TestGamedataRouteRejectsPathTraversal(t *testing.T) {
 	dir := t.TempDir()
 	secret := filepath.Join(dir, "..", "secret.txt")
