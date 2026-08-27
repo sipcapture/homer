@@ -114,6 +114,21 @@ const maxPktLen = 65507
 // defaultWorkerMetricsFlushPackets is used when ingest.worker_metrics_flush_packets is 0.
 const defaultWorkerMetricsFlushPackets = 128
 
+// applyAzureDuckLakeConfig copies storage.ducklake.azure into duckCfg when
+// any Azure field is set — including the Managed Identity case where only
+// AccountName is set (no key, no connection string). Extracted out of New
+// so this specific gate is unit-testable without running the full writer
+// constructor, which immediately does real DuckLake I/O.
+func applyAzureDuckLakeConfig(duckCfg *ducklake.Config, az config.AzureConfig) {
+	if az.AccountName == "" && az.AccountKey == "" && az.ConnectionString == "" {
+		return
+	}
+	duckCfg.AzureAccountName = az.AccountName
+	duckCfg.AzureAccountKey = az.AccountKey
+	duckCfg.AzureConnectionString = az.ConnectionString
+	duckCfg.AzureEndpoint = az.Endpoint
+}
+
 // New creates a new Writer module
 func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promCfg *config.PrometheusConfig, remoteLogCfg *config.RemoteLogConfig) (*Writer, error) {
 	queueSize := ingestCfg.QueueSize
@@ -278,12 +293,7 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 	}
 
 	// Azure config
-	if az := storageCfg.DuckLake.Azure; az.AccountName != "" || az.AccountKey != "" || az.ConnectionString != "" {
-		duckCfg.AzureAccountName = az.AccountName
-		duckCfg.AzureAccountKey = az.AccountKey
-		duckCfg.AzureConnectionString = az.ConnectionString
-		duckCfg.AzureEndpoint = az.Endpoint
-	}
+	applyAzureDuckLakeConfig(&duckCfg, storageCfg.DuckLake.Azure)
 
 	duckMgr, err := ducklake.NewManager(duckCfg)
 	if err != nil {

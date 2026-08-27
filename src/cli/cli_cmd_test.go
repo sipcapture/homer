@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 )
 
@@ -38,6 +39,32 @@ func assertWriterSecret(t *testing.T, db *sql.DB, name string, wantExists bool) 
 	exists := count > 0
 	if exists != wantExists {
 		t.Errorf("secret %q exists=%v, want %v", name, exists, wantExists)
+	}
+}
+
+// TestDuckLakeConfigFromModular_AzureAccountNameOnly is a regression test
+// for PR review should-fix (github.com/sipcapture/homer/pull/983): "no
+// writer/CLI wiring test that Azure is copied when only account_name is set
+// (MI)". The Managed Identity case has no account_key and no
+// connection_string — only account_name — so a gate checking the wrong
+// fields could silently drop it.
+func TestDuckLakeConfigFromModular_AzureAccountNameOnly(t *testing.T) {
+	cfg := &config.Config{
+		Storage: config.StorageConfig{
+			Enable: true,
+			DuckLake: config.DuckLakeConfig{
+				DataPath: "az://container/lake/",
+				Azure:    config.AzureConfig{AccountName: "myaccount"},
+			},
+		},
+	}
+	got := duckLakeConfigFromModular(cfg)
+	if got.AzureAccountName != "myaccount" {
+		t.Errorf("AzureAccountName = %q, want %q", got.AzureAccountName, "myaccount")
+	}
+	if got.AzureAccountKey != "" || got.AzureConnectionString != "" {
+		t.Errorf("expected no key/connection string, got key=%q connstr=%q",
+			got.AzureAccountKey, got.AzureConnectionString)
 	}
 }
 
