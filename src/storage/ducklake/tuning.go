@@ -215,7 +215,13 @@ const writerLakeAzureSecret = "homer_writer_azure"
 // Unlike S3, DuckDB's azure extension has no global SET azure_* session
 // settings — it is secret-driven only — so there is no ApplyDuckDBAzure...
 // counterpart to ApplyDuckDBS3ClientSettings; this is the only step needed.
-// No-op if accountName, accountKey, and connectionString are all empty.
+// Every caller only reaches this function once it already knows Azure is
+// meant to be configured (gated on an az:// data_path or an already-nil-
+// checked azure client), so accountName, accountKey, and connectionString
+// all being empty is a config error, not a valid "Azure not in use" case —
+// returns an error instead of silently no-opping, so an operator who set
+// data_path to az:// but forgot the azure block gets a clear message here
+// instead of an opaque ATTACH failure on first write.
 //
 // Safe to call repeatedly: DROP+CREATE each time, so callers can also use
 // this to refresh a credential_chain secret before its Managed Identity
@@ -229,7 +235,7 @@ func EnsureWriterAzureSecret(db *sql.DB, accountName, accountKey, connectionStri
 	accountKey = strings.TrimSpace(accountKey)
 	accountName = strings.TrimSpace(accountName)
 	if connectionString == "" && accountKey == "" && accountName == "" {
-		return nil
+		return fmt.Errorf("no Azure credentials configured: set account_name (Managed Identity/ambient identity), account_key, or connection_string")
 	}
 	drop := fmt.Sprintf("DROP SECRET IF EXISTS %s;", writerLakeAzureSecret)
 	if _, err := db.Exec(drop); err != nil {

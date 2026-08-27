@@ -170,6 +170,36 @@ func TestS3ClientSettingsSQL_CustomURLStyle(t *testing.T) {
 	}
 }
 
+// TestEnsureWriterAzureSecret_EmptyCredsFailsFast is a regression test for
+// PR review nit (github.com/sipcapture/homer/pull/983): data_path is az://
+// but the azure config block is entirely empty used to silently no-op here,
+// so the ATTACH that follows failed with an opaque DuckDB error instead of
+// a clear message pointing at the missing config. Every caller only reaches
+// this function once it already knows Azure is meant to be configured, so
+// this is now an error, not a no-op. The check runs before any db.Exec
+// call (verified: passing a real, open connection and confirming it is
+// still usable afterwards, not just that an error came back).
+func TestEnsureWriterAzureSecret_EmptyCredsFailsFast(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	err = EnsureWriterAzureSecret(db, "", "", "", "")
+	if err == nil {
+		t.Fatal("expected an error for entirely empty Azure config, got nil")
+	}
+	if !strings.Contains(err.Error(), "no Azure credentials configured") {
+		t.Errorf("error should explain what's missing, got: %v", err)
+	}
+	// The check must run before touching the DB (no DROP/CREATE SECRET
+	// attempted), so the connection stays perfectly usable afterwards.
+	if _, err := db.Exec("SELECT 1"); err != nil {
+		t.Fatalf("connection broken after empty-config error: %v", err)
+	}
+}
+
 func getSetting(t *testing.T, db *sql.DB, name string) string {
 	t.Helper()
 	var v string
