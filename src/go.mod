@@ -3,6 +3,8 @@ module github.com/sipcapture/homer-core/src
 go 1.27.0
 
 require (
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.7.0
 	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/VictoriaMetrics/fastcache v1.13.2
 	github.com/apache/arrow-go/v18 v18.5.1
@@ -56,9 +58,7 @@ require (
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.7.0 // indirect
 	github.com/Azure/go-ntlmssp v0.1.1 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.7.2 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
