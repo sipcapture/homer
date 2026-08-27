@@ -206,44 +206,26 @@ const writerLakeAzureSecret = "homer_writer_azure"
 // settings — it is secret-driven only — so there is no ApplyDuckDBAzure...
 // counterpart to ApplyDuckDBS3ClientSettings; this is the only step needed.
 // No-op if accountName, accountKey, and connectionString are all empty.
+//
+// Safe to call repeatedly: DROP+CREATE each time, so callers can also use
+// this to refresh a credential_chain secret before its Managed Identity
+// token (~1h lifetime, no REFRESH clause exists for azure secrets) goes
+// stale — see CompactionService.ensureAzureClientSettings.
 func EnsureWriterAzureSecret(db *sql.DB, accountName, accountKey, connectionString string) error {
 	if db == nil {
 		return nil
 	}
-	connStr := strings.TrimSpace(connectionString)
+	connectionString = strings.TrimSpace(connectionString)
 	accountKey = strings.TrimSpace(accountKey)
 	accountName = strings.TrimSpace(accountName)
-	if connStr == "" && accountKey == "" && accountName == "" {
+	if connectionString == "" && accountKey == "" && accountName == "" {
 		return nil
 	}
-	if connStr == "" && accountKey != "" {
-		connStr = fmt.Sprintf(
-			"DefaultEndpointsProtocol=https;AccountName=%s;AccountKey=%s;EndpointSuffix=core.windows.net",
-			accountName, accountKey,
-		)
-	}
-	sqlQuote := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
-
 	drop := fmt.Sprintf("DROP SECRET IF EXISTS %s;", writerLakeAzureSecret)
 	if _, err := db.Exec(drop); err != nil {
 		return fmt.Errorf("duckdb DROP SECRET %s: %w", writerLakeAzureSecret, err)
 	}
-	var create string
-	if connStr != "" {
-		create = fmt.Sprintf(`
-CREATE SECRET %s (
-	TYPE azure,
-	CONNECTION_STRING '%s'
-);`, writerLakeAzureSecret, sqlQuote(connStr))
-	} else {
-		create = fmt.Sprintf(`
-CREATE SECRET %s (
-	TYPE azure,
-	PROVIDER credential_chain,
-	CHAIN 'env;managed_identity;cli',
-	ACCOUNT_NAME '%s'
-);`, writerLakeAzureSecret, sqlQuote(accountName))
-	}
+	create := BuildAzureSecretSQL(writerLakeAzureSecret, accountName, accountKey, connectionString)
 	if _, err := db.Exec(create); err != nil {
 		return fmt.Errorf("duckdb CREATE SECRET %s: %w", writerLakeAzureSecret, err)
 	}

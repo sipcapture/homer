@@ -224,7 +224,7 @@ func TestRefreshCredentialChainSecret_NoOpWithoutDBOrStaticKeys(t *testing.T) {
 }
 
 // azureSecretProvider executes the CREATE SECRET produced by
-// buildAzureSecretSQL on a real DuckDB and returns the provider recorded in
+// BuildAzureSecretSQL on a real DuckDB and returns the provider recorded in
 // duckdb_secrets(). Skips (rather than fails) when the azure extension is
 // unavailable, matching secretProvider's convention above.
 func azureSecretProvider(t *testing.T, accountName, accountKey, connectionString string) string {
@@ -240,7 +240,7 @@ func azureSecretProvider(t *testing.T, accountName, accountKey, connectionString
 		t.Skipf("azure extension unavailable: %v", err)
 	}
 
-	if _, err := db.Exec(buildAzureSecretSQL("azure_secret_test", accountName, accountKey, connectionString)); err != nil {
+	if _, err := db.Exec(BuildAzureSecretSQL("azure_secret_test", accountName, accountKey, connectionString)); err != nil {
 		t.Skipf("CREATE SECRET unavailable (extension/version): %v", err)
 	}
 
@@ -266,7 +266,7 @@ func TestCreateAzureSecret_ConnectionString(t *testing.T) {
 }
 
 // TestCreateAzureSecret_AccountKey: account name + key with no raw connection
-// string is synthesized into one by buildAzureSecretSQL (DuckDB's azure
+// string is synthesized into one by BuildAzureSecretSQL (DuckDB's azure
 // extension has no ACCOUNT_KEY parameter under PROVIDER config — verified
 // directly against v1.5.5) and still resolves to provider config.
 func TestCreateAzureSecret_AccountKey(t *testing.T) {
@@ -286,7 +286,7 @@ func TestCreateAzureSecret_CredentialChain(t *testing.T) {
 	}
 }
 
-// TestBuildAzureSecretSQL_Branches is a pure unit test of buildAzureSecretSQL
+// TestBuildAzureSecretSQL_Branches is a pure unit test of BuildAzureSecretSQL
 // — no DuckDB required, so it always runs.
 func TestBuildAzureSecretSQL_Branches(t *testing.T) {
 	cases := []struct {
@@ -327,7 +327,7 @@ func TestBuildAzureSecretSQL_Branches(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			sql := buildAzureSecretSQL("test_secret", tc.accountName, tc.accountKey, tc.connectionString)
+			sql := BuildAzureSecretSQL("test_secret", tc.accountName, tc.accountKey, tc.connectionString)
 			if !strings.Contains(sql, tc.wantSubstr) {
 				t.Errorf("SQL should contain %q:\n%s", tc.wantSubstr, sql)
 			}
@@ -342,16 +342,16 @@ func TestBuildAzureSecretSQL_Branches(t *testing.T) {
 }
 
 func TestUsesAzureCredentialChain(t *testing.T) {
-	if !usesAzureCredentialChain("", "") {
+	if !UsesAzureCredentialChain("", "") {
 		t.Fatal("empty key + empty connection string is credential_chain")
 	}
-	if !usesAzureCredentialChain("  ", "  ") {
+	if !UsesAzureCredentialChain("  ", "  ") {
 		t.Fatal("whitespace-only values are still credential_chain")
 	}
-	if usesAzureCredentialChain("key", "") {
+	if UsesAzureCredentialChain("key", "") {
 		t.Fatal("account key is not credential_chain")
 	}
-	if usesAzureCredentialChain("", "conn-string") {
+	if UsesAzureCredentialChain("", "conn-string") {
 		t.Fatal("connection string is not credential_chain")
 	}
 }

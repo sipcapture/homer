@@ -377,6 +377,7 @@ func (w *Writer) Start() error {
 			compactionCfg.MaxFileSizeBytes = defaultDuckDBMaxFileSizeBytes
 		}
 		var compactionS3 *CompactionS3Client
+		var compactionAzure *CompactionAzureClient
 		if ducklake.IsRemoteLakeDataPath(w.storageConfig.DuckLake.DataPath) {
 			s := w.storageConfig.DuckLake.S3
 			if ak := strings.TrimSpace(s.AccessKeyID); ak != "" {
@@ -389,6 +390,14 @@ func (w *Writer) Start() error {
 					URLStyle:        s.URLStyle,
 				}
 			}
+			az := w.storageConfig.DuckLake.Azure
+			if az.AccountName != "" || az.AccountKey != "" || az.ConnectionString != "" {
+				compactionAzure = &CompactionAzureClient{
+					AccountName:      az.AccountName,
+					AccountKey:       az.AccountKey,
+					ConnectionString: az.ConnectionString,
+				}
+			}
 		}
 		w.compactionService = NewCompactionService(
 			w.ducklakeManager.GetDB(),
@@ -398,6 +407,7 @@ func (w *Writer) Start() error {
 			compactionCfg,
 			w.ducklakeManager,
 			compactionS3,
+			compactionAzure,
 		)
 		if err := w.compactionService.Start(); err != nil {
 			logger.Error(fmt.Sprintf("Writer: Failed to start compaction service: %v", err))

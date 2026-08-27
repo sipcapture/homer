@@ -224,7 +224,21 @@ type MultiTableWriter struct {
 	// operations go through a single goroutine, eliminating catalog contention.
 	flushQueueCh chan centralFlushJob
 	flushQueueWg sync.WaitGroup
+
+	// lastAzureSecretRefresh tracks when the az:// credential_chain secret
+	// was last recreated (see ensureAzureSecretFresh). Only touched by the
+	// single flushLoop goroutine, so no lock needed.
+	lastAzureSecretRefresh time.Time
 }
+
+// azureCredentialChainRefreshInterval bounds how often flushLoop recreates a
+// credential_chain Azure secret. Independent of compaction (which only runs
+// when compaction.enable is true and has its own, often longer, cadence) —
+// this is the one path that always runs for a live single-volume writer, so
+// it is what keeps a Managed Identity token (~1h IMDS lifetime) from going
+// stale on a deployment that has compaction disabled. Well under an hour to
+// leave margin.
+const azureCredentialChainRefreshInterval = 20 * time.Minute
 
 // Writer is a deprecated single-table writer kept only for type compatibility
 // with legacy code in api.go, hep_adapter.go, and timetravel.go.
@@ -670,9 +684,34 @@ func (mtw *MultiTableWriter) flushLoop() {
 			mtw.flushAll()
 			return
 		case <-ticker.C:
+			mtw.ensureAzureSecretFresh()
 			mtw.flushAll()
 		}
 	}
+}
+
+// ensureAzureSecretFresh recreates the single-volume writer's az:// secret
+// once azureCredentialChainRefreshInterval has elapsed, when it is a
+// PROVIDER credential_chain secret (Managed Identity / ambient identity —
+// the case that actually goes stale; static keys are left alone). This is
+// what keeps flush working on a deployment with compaction disabled — see
+// CompactionService.ensureAzureClientSettings for the compaction-side half
+// of this same fix.
+func (mtw *MultiTableWriter) ensureAzureSecretFresh() {
+	if mtw == nil || mtw.db == nil || !isAzurePath(mtw.config.DataPath) {
+		return
+	}
+	if !UsesAzureCredentialChain(mtw.config.AzureAccountKey, mtw.config.AzureConnectionString) {
+		return
+	}
+	if time.Since(mtw.lastAzureSecretRefresh) < azureCredentialChainRefreshInterval {
+		return
+	}
+	if err := EnsureWriterAzureSecret(mtw.db, mtw.config.AzureAccountName, mtw.config.AzureAccountKey, mtw.config.AzureConnectionString); err != nil {
+		logger.Warn("DuckLake writer: failed to refresh Azure credential_chain secret", "error", err)
+		return
+	}
+	mtw.lastAzureSecretRefresh = time.Now()
 }
 
 // flushAll triggers a double-buffer swap for every table.

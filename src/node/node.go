@@ -1826,45 +1826,13 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 		}
 	}
 
-	// Configure Azure secret for this volume if needed. DuckDB's azure
-	// extension has no ACCOUNT_KEY parameter (verified against v1.5.5) — a
-	// static account name + key can only authenticate via a full
-	// CONNECTION_STRING, so one is assembled here when the operator supplied
-	// a key instead of a raw connection string.
+	// Configure Azure secret for this volume if needed. Shared with the
+	// writer/CLI path (ducklake.BuildAzureSecretSQL) so a CHAIN/endpoint
+	// change only needs to happen in one place.
 	if vol.Type == "azure" {
 		secretName := fmt.Sprintf("azure_secret_%s", vol.Name)
-
 		db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
-
-		connStr := strings.TrimSpace(vol.AzureConnectionString)
-		if connStr == "" && strings.TrimSpace(vol.AzureAccountKey) != "" {
-			connStr = fmt.Sprintf(
-				"DefaultEndpointsProtocol=https;AccountName=%s;AccountKey=%s;EndpointSuffix=core.windows.net",
-				vol.AzureAccountName, vol.AzureAccountKey,
-			)
-		}
-
-		var createSecret string
-		if connStr != "" {
-			createSecret = fmt.Sprintf(`
-				CREATE SECRET %s (
-					TYPE azure,
-					CONNECTION_STRING '%s'
-				);
-			`, secretName, strings.ReplaceAll(connStr, "'", "''"))
-		} else {
-			// No key, no connection string: ambient identity via DuckDB's
-			// Azure credential chain (resolves Managed Identity on an Azure VM).
-			createSecret = fmt.Sprintf(`
-				CREATE SECRET %s (
-					TYPE azure,
-					PROVIDER credential_chain,
-					CHAIN 'env;managed_identity;cli',
-					ACCOUNT_NAME '%s'
-				);
-			`, secretName, strings.ReplaceAll(vol.AzureAccountName, "'", "''"))
-		}
-
+		createSecret := ducklake.BuildAzureSecretSQL(secretName, vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString)
 		if _, err := db.Exec(createSecret); err != nil {
 			return VolumeInfo{}, fmt.Errorf("failed to create Azure secret: %w", err)
 		}

@@ -253,16 +253,16 @@ func azureSecretName(volumeName string) string {
 	return fmt.Sprintf("azure_secret_%s", volumeName)
 }
 
-// usesAzureCredentialChain is the ambient-identity branch of
-// buildAzureSecretSQL: no static account key and no connection string, so
+// UsesAzureCredentialChain is the ambient-identity branch of
+// BuildAzureSecretSQL: no static account key and no connection string, so
 // DuckDB resolves credentials through the Azure SDK default chain (env,
 // workload identity, managed identity, Azure CLI).
-func usesAzureCredentialChain(accountKey, connectionString string) bool {
+func UsesAzureCredentialChain(accountKey, connectionString string) bool {
 	return strings.TrimSpace(accountKey) == "" && strings.TrimSpace(connectionString) == ""
 }
 
 func azureSecretSQLForVolume(vol *Volume, replace bool) string {
-	sql := buildAzureSecretSQL(azureSecretName(vol.Name), vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString)
+	sql := BuildAzureSecretSQL(azureSecretName(vol.Name), vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString)
 	if replace {
 		sql = strings.Replace(sql, "CREATE SECRET", "CREATE OR REPLACE SECRET", 1)
 	}
@@ -310,7 +310,7 @@ func (tsm *TieredStorageManager) refreshCredentialChainSecret(vol *Volume) error
 		}
 		return tsm.createVolumeS3Secret(vol, true)
 	case VolumeTypeAzure:
-		if !usesAzureCredentialChain(vol.AzureAccountKey, vol.AzureConnectionString) {
+		if !UsesAzureCredentialChain(vol.AzureAccountKey, vol.AzureConnectionString) {
 			return nil
 		}
 		return tsm.createVolumeAzureSecret(vol, true)
@@ -1057,7 +1057,7 @@ func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string,
 	}
 }
 
-// buildAzureSecretSQL returns the CREATE SECRET SQL for an Azure Blob volume.
+// BuildAzureSecretSQL returns the CREATE SECRET SQL for an Azure Blob volume.
 //
 // Verified against DuckDB's azure extension directly (v1.5.5, the version
 // this repo bundles): the PROVIDER config secret has no ACCOUNT_KEY
@@ -1069,7 +1069,7 @@ func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string,
 // credential_chain secrets: by dropping and re-CREATE-ing them before each
 // tiering cycle (see refreshCredentialChainSecret), not by a SQL-level
 // REFRESH clause.
-func buildAzureSecretSQL(secretName, accountName, accountKey, connectionString string) string {
+func BuildAzureSecretSQL(secretName, accountName, accountKey, connectionString string) string {
 	connStr := strings.TrimSpace(connectionString)
 	if connStr == "" && strings.TrimSpace(accountKey) != "" {
 		connStr = fmt.Sprintf(
