@@ -258,6 +258,11 @@ func (c *CompactionService) warnMaintenanceS3Failure(op string, err error) {
 		logger.Warn("CompactionService: NoSuchBucket — bucket missing or wrong name for data_path; create it on storage.ducklake.s3.endpoint or fix data_path",
 			"data_path", c.dataPath)
 	}
+	if (strings.Contains(err.Error(), "ContainerNotFound") || strings.Contains(err.Error(), "BlobNotFound")) &&
+		ducklake.IsRemoteLakeDataPath(c.dataPath) {
+		logger.Warn("CompactionService: ContainerNotFound/BlobNotFound — Azure container missing or wrong name for data_path; create it or fix data_path",
+			"data_path", c.dataPath)
+	}
 }
 
 // Start begins the compaction service

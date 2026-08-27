@@ -151,6 +151,105 @@ CREATE SECRET %s (
 	return nil
 }
 
+// redhatCACertPath and debianCACertPath are the two most common Linux CA
+// bundle locations. See EnsureAzureCACertPath.
+const (
+	redhatCACertPath = "/etc/pki/tls/certs/ca-bundle.crt"
+	debianCACertPath = "/etc/ssl/certs/ca-certificates.crt"
+)
+
+// EnsureAzureCACertPath works around a bug in DuckDB's azure extension: its
+// bundled Azure C++ SDK / libcurl only defaults to the RedHat-family CA
+// bundle path (redhatCACertPath), unlike Go's crypto/x509 (which checks both
+// RedHat and Debian paths). On Debian/Ubuntu — including Homer's own
+// debian:bookworm-slim image — the RedHat path never exists, so every HTTPS
+// request to *.blob.core.windows.net fails with "Problem with the SSL CA
+// cert (path? access rights?)", regardless of auth method (static key,
+// connection string, or Managed Identity all hit this identically —
+// verified against a real Azure storage account and a real Azure VM).
+// Reported upstream: https://github.com/duckdb/duckdb-azure/issues/185
+// Remove this workaround once that's fixed and the fix has shipped in a
+// released azure extension build.
+//
+// No-op if the RedHat path already exists (RedHat-family host, container
+// already fixed, or a prior call already symlinked it) or if the Debian
+// path is missing (nothing to link from — not a Debian/Ubuntu host).
+// Failures are logged, not fatal: this is best-effort defense-in-depth: the
+// Dockerfile also creates this symlink directly for the official image.
+func EnsureAzureCACertPath() {
+	if _, err := os.Stat(redhatCACertPath); err == nil {
+		return
+	}
+	if _, err := os.Stat(debianCACertPath); err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(redhatCACertPath), 0o755); err != nil {
+		logger.Warn("EnsureAzureCACertPath: failed to create directory", "path", filepath.Dir(redhatCACertPath), "error", err)
+		return
+	}
+	if err := os.Symlink(debianCACertPath, redhatCACertPath); err != nil {
+		logger.Warn("EnsureAzureCACertPath: failed to symlink CA bundle (Azure HTTPS access may fail with 'SSL CA cert' errors)",
+			"src", debianCACertPath, "dst", redhatCACertPath, "error", err)
+		return
+	}
+	logger.Info("EnsureAzureCACertPath: symlinked CA bundle for DuckDB azure extension (works around duckdb-azure CA path bug)",
+		"src", debianCACertPath, "dst", redhatCACertPath)
+}
+
+// writerLakeAzureSecret is the DuckDB secret name for storage.ducklake
+// single-volume Azure data_path, mirroring writerLakeS3Secret.
+const writerLakeAzureSecret = "homer_writer_azure"
+
+// EnsureWriterAzureSecret creates a session-scoped DuckDB TYPE azure secret
+// for the single-volume writer/CLI path, mirroring EnsureWriterS3Secret.
+// Unlike S3, DuckDB's azure extension has no global SET azure_* session
+// settings — it is secret-driven only — so there is no ApplyDuckDBAzure...
+// counterpart to ApplyDuckDBS3ClientSettings; this is the only step needed.
+// No-op if accountName, accountKey, and connectionString are all empty.
+func EnsureWriterAzureSecret(db *sql.DB, accountName, accountKey, connectionString string) error {
+	if db == nil {
+		return nil
+	}
+	connStr := strings.TrimSpace(connectionString)
+	accountKey = strings.TrimSpace(accountKey)
+	accountName = strings.TrimSpace(accountName)
+	if connStr == "" && accountKey == "" && accountName == "" {
+		return nil
+	}
+	if connStr == "" && accountKey != "" {
+		connStr = fmt.Sprintf(
+			"DefaultEndpointsProtocol=https;AccountName=%s;AccountKey=%s;EndpointSuffix=core.windows.net",
+			accountName, accountKey,
+		)
+	}
+	sqlQuote := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
+
+	drop := fmt.Sprintf("DROP SECRET IF EXISTS %s;", writerLakeAzureSecret)
+	if _, err := db.Exec(drop); err != nil {
+		return fmt.Errorf("duckdb DROP SECRET %s: %w", writerLakeAzureSecret, err)
+	}
+	var create string
+	if connStr != "" {
+		create = fmt.Sprintf(`
+CREATE SECRET %s (
+	TYPE azure,
+	CONNECTION_STRING '%s'
+);`, writerLakeAzureSecret, sqlQuote(connStr))
+	} else {
+		create = fmt.Sprintf(`
+CREATE SECRET %s (
+	TYPE azure,
+	PROVIDER credential_chain,
+	CHAIN 'env;managed_identity;cli',
+	ACCOUNT_NAME '%s'
+);`, writerLakeAzureSecret, sqlQuote(accountName))
+	}
+	if _, err := db.Exec(create); err != nil {
+		return fmt.Errorf("duckdb CREATE SECRET %s: %w", writerLakeAzureSecret, err)
+	}
+	return nil
+}
+
 // ApplyDuckDBTuning issues the per-connection DuckDB SET statements
 // implied by the operator-supplied DuckDBTuning config block:
 //

@@ -9,7 +9,7 @@ Homer Server uses **DuckLake** for HEP packet storage. DuckLake is a lakehouse f
 - **Time travel** queries and snapshots
 - **ACID transactions** for data integrity
 
-Parquet data may live on local disk or on S3 (`data_path`).
+Parquet data may live on local disk, S3, or Azure Blob Storage (`data_path`).
 
 ## Architecture
 
@@ -61,7 +61,7 @@ DuckDB Query Engine
 
 ## Catalog
 
-DuckLake catalog — sqlite. Scale Parquet storage with `data_path` on local disk or S3 (`s3` block), or tiered volumes under `storage_policy`.
+DuckLake catalog — sqlite. Scale Parquet storage with `data_path` on local disk, S3 (`s3` block), or Azure Blob Storage (`azure` block), or tiered volumes under `storage_policy`.
 
 ## Configuration
 
@@ -103,6 +103,28 @@ The catalog stays on disk (SQLite); only Parquet objects are stored in the bucke
   }
 }
 ```
+
+### SQLite catalog + Azure Blob Storage Parquet data
+
+The catalog stays on disk (SQLite); only Parquet objects are stored in the container. With no `account_key`/`connection_string` set, Homer authenticates via DuckDB's Azure credential chain — this resolves **Managed Identity** automatically when running on an Azure VM:
+
+```json
+{
+  "storage": {
+    "enable": true,
+    "ducklake": {
+      "catalog_type": "sqlite",
+      "catalog_path": "/data/homer_catalog.sqlite",
+      "data_path": "az://my-container/homer-parquet/",
+      "azure": {
+        "account_name": "homerstorage"
+      }
+    }
+  }
+}
+```
+
+To use a static account key instead, add `"account_key": "..."` to the `azure` block (or a full `"connection_string"`, which takes precedence over `account_key`).
 
 ## Time Travel
 

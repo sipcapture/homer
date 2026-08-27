@@ -1,0 +1,208 @@
+# Homer 11 + Azurite (Azure Storage emulator). All Homer settings are in
+# `homer.environment` below (HOMER_*). See ../../docs/ENVIRONMENT_VARIABLES.md
+# and ../../docs/STORAGE_POLICIES.md.
+#
+# Azurite has no built-in health endpoint, so azurite-init retries the
+# container-create call (same idiom rustfs-init-volume uses in
+# docker-compose_s3direct.yaml) instead of a docker healthcheck.
+#
+# Credentials below are Azurite's well-known, fixed development account —
+# not secret, never use them against a real Azure account.
+services:
+  azurite-init:
+    image: alpine:3.20
+    volumes:
+      - azurite_data:/data
+    command: sh -c "chown -R 1000:1000 /data && echo azurite data volume ok"
+    restart: "no"
+    networks:
+      - homer-compose
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: azurite
+    user: "1000:1000"
+    security_opt:
+      - "no-new-privileges:true"
+    command: >
+      azurite-blob --blobHost 0.0.0.0 --blobPort 10000 -l /data
+    volumes:
+      - azurite_data:/data
+    ports:
+      - "10000:10000"
+    depends_on:
+      azurite-init:
+        condition: service_completed_successfully
+    networks:
+      - homer-compose
+    restart: unless-stopped
+
+  azurite-create-container:
+    image: mcr.microsoft.com/azure-cli:latest
+    container_name: azurite-create-container
+    depends_on:
+      - azurite
+    environment:
+      AZURE_STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+    entrypoint: >
+      /bin/sh -c "
+      until az storage container create --name homer-data-cold >/dev/null 2>&1; do echo '...waiting for azurite...' && sleep 1; done;
+      echo 'Azurite container homer-data-cold ready';
+      "
+    restart: "no"
+    networks:
+      - homer-compose
+
+  homer-init:
+    image: alpine:3.20
+    volumes:
+      - homer_data:/data/homer
+    command: sh -c "chown -R 1000:1000 /data/homer && echo homer data volume ok"
+    restart: "no"
+    networks:
+      - homer-compose
+
+  homer:
+    image: ghcr.io/sipcapture/homer:latest
+    user: "1000:1000"
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    depends_on:
+      azurite-create-container:
+        condition: service_completed_successfully
+      homer-init:
+        condition: service_completed_successfully
+    volumes:
+      - homer_data:/data/homer
+    ports:
+      - "9060:9060/tcp"
+      - "9060:9060/udp"
+      - "9080:9080/tcp"
+      - "8080:8080/tcp"
+      - "50051:50051/tcp"
+      - "9090:9090/tcp"
+    networks:
+      - homer-compose
+    restart: unless-stopped
+    environment:
+      HOMER_INGEST_ENABLE: "true"
+      HOMER_STORAGE_ENABLE: "true"
+      HOMER_NODE_ENABLE: "true"
+      HOMER_COORDINATOR_ENABLE: "true"
+
+      HOMER_INGEST_WORKER_COUNT: "8"
+      HOMER_INGEST_QUEUE_SIZE: "80000"
+      HOMER_INGEST_UDP_ENABLE: "true"
+      HOMER_INGEST_UDP_HOST: 0.0.0.0
+      HOMER_INGEST_UDP_PORT: "9060"
+      HOMER_INGEST_UDP_MULTICORE: "true"
+      HOMER_INGEST_TCP_ENABLE: "true"
+      HOMER_INGEST_TCP_HOST: 0.0.0.0
+      HOMER_INGEST_TCP_PORT: "9060"
+      HOMER_INGEST_TCP_MULTICORE: "true"
+      HOMER_INGEST_TLS_ENABLE: "false"
+      HOMER_INGEST_HTTP_ENABLE: "true"
+      HOMER_INGEST_HTTP_HOST: 0.0.0.0
+      HOMER_INGEST_HTTP_PORT: "9080"
+      HOMER_INGEST_HTTP_READ_TIMEOUT: "30"
+      HOMER_INGEST_HTTP_WRITE_TIMEOUT: "30"
+      HOMER_INGEST_HTTP_WEBSOCKET_ENABLE: "false"
+      HOMER_INGEST_HTTPS_ENABLE: "false"
+      HOMER_INGEST_HEP_HEPV3_ENABLE: "true"
+      HOMER_INGEST_HEP_PROTOBUF_ENABLE: "true"
+
+      HOMER_STORAGE_DUCKLAKE_CATALOG_TYPE: sqlite
+      HOMER_STORAGE_DUCKLAKE_CATALOG_PATH: /data/homer/homer_catalog.sqlite
+      HOMER_STORAGE_DUCKLAKE_DATA_PATH: az://homer-data-cold/
+      HOMER_STORAGE_DUCKLAKE_LAKE_NAME: homer_lake
+      HOMER_STORAGE_DUCKLAKE_BATCH_SIZE: "10000"
+      HOMER_STORAGE_DUCKLAKE_FLUSH_INTERVAL_SEC: "30"
+      # Same DuckDB caps as the image ENV (Dockerfile). Override here without
+      # rebuilding. All-in-one needs ~8GB RAM; raise MEMORY_LIMIT toward 50%
+      # of the container budget under SIPREC / high ingest (docs/OOM.md).
+      HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT: "4GB"
+      HOMER_STORAGE_DUCKLAKE_TUNING_THREADS: "2"
+      HOMER_STORAGE_DUCKLAKE_TUNING_TEMP_DIRECTORY: /data/homer/.duckdb_spill
+      HOMER_NODE_DUCKLAKE_TUNING_THREADS: "2"
+      HOMER_NODE_DUCKLAKE_TUNING_TEMP_DIRECTORY: /data/homer/.duckdb_spill
+
+      # Azurite's well-known development account — NOT secret, never use
+      # against a real Azure storage account. Real deployments should use
+      # azure_account_name + azure_account_key, a real connection_string, or
+      # (recommended on an Azure VM) leave both empty for Managed Identity.
+      HOMER_STORAGE_DUCKLAKE_AZURE_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+
+      HOMER_STORAGE_DUCKLAKE_COMPACTION_ENABLE: "true"
+      HOMER_STORAGE_DUCKLAKE_COMPACTION_CHECK_INTERVAL_SEC: "1800"
+      HOMER_STORAGE_DUCKLAKE_COMPACTION_RETENTION_DAYS: "30"
+      HOMER_STORAGE_DUCKLAKE_COMPACTION_SNAPSHOT_EXPIRE_INTERVAL_SEC: "3600"
+      HOMER_STORAGE_DUCKLAKE_COMPACTION_MIN_AGE_SEC: "3600"
+      HOMER_STORAGE_DUCKLAKE_COMPACTION_MIN_FILE_SIZE_BYTES: "0"
+      HOMER_STORAGE_DUCKLAKE_COMPACTION_MAX_FILE_SIZE_BYTES: "134217728"
+      HOMER_STORAGE_DUCKLAKE_COMPACTION_MAX_COMPACTED_FILES: "100"
+
+      HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_ENABLE: "true"
+      HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_0_NAME: cold
+      HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_0_TYPE: azure
+      HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_0_PATH: az://homer-data-cold/
+      HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_0_PRIORITY: "0"
+      HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_0_MAX_DATA_AGE_DAYS: "0"
+      HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_0_AZURE_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+
+      HOMER_NODE_FLIGHT_SERVER_HOST: 0.0.0.0
+      HOMER_NODE_FLIGHT_SERVER_PORT: "50051"
+      HOMER_NODE_FLIGHT_SERVER_AUTH_TOKEN: your-secret-token-here
+      HOMER_NODE_FLIGHT_SERVER_MAX_MESSAGE_SIZE: "16777216"
+      # Arrow FlightSQL (Grafana). Off by default. Env overrides homer.json.
+      # HOMER_NODE_FLIGHTSQL_SERVER_ENABLE: "true"
+      # HOMER_NODE_FLIGHTSQL_SERVER_PORT: "50055"
+      # HOMER_NODE_FLIGHTSQL_SERVER_AUTH_TOKEN: your-secret-token-here
+
+      HOMER_NODE_DUCKLAKE_LAKE_NAME: homer_lake
+
+      HOMER_NODE_DUCKLAKE_VOLUMES_0_NAME: cold
+      HOMER_NODE_DUCKLAKE_VOLUMES_0_TYPE: azure
+      HOMER_NODE_DUCKLAKE_VOLUMES_0_CATALOG_TYPE: sqlite
+      HOMER_NODE_DUCKLAKE_VOLUMES_0_CATALOG_PATH: /data/homer/homer_catalog.sqlite
+      HOMER_NODE_DUCKLAKE_VOLUMES_0_PATH: az://homer-data-cold/
+      HOMER_NODE_DUCKLAKE_VOLUMES_0_AZURE_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+
+      HOMER_COORDINATOR_HTTP_SERVER_ENABLE: "true"
+      HOMER_COORDINATOR_HTTP_SERVER_HOST: 0.0.0.0
+      HOMER_COORDINATOR_HTTP_SERVER_PORT: "8080"
+      HOMER_COORDINATOR_HTTP_SERVER_STATIC_PATH: /usr/local/homer-core/dist
+
+      HOMER_COORDINATOR_NODES_0_NAME: local
+      HOMER_COORDINATOR_NODES_0_HOST: 127.0.0.1
+      HOMER_COORDINATOR_NODES_0_PORT: "50051"
+      HOMER_COORDINATOR_NODES_0_FLIGHTSQL_PORT: "0"
+      HOMER_COORDINATOR_NODES_0_USE_TLS: "false"
+      HOMER_COORDINATOR_NODES_0_TOKEN: your-secret-token-here
+      HOMER_COORDINATOR_NODES_0_PRIORITY: "1"
+
+      HOMER_COORDINATOR_SETTINGS_DB_PATH: /data/homer/homer_settings.duckdb
+      # HOMER_COORDINATOR_FLIGHTSQL_SERVER_ENABLE: "true"
+      # HOMER_COORDINATOR_NODES_0_FLIGHTSQL_PORT: "50055"
+
+      HOMER_COORDINATOR_JWT_SECRET: change-this-to-a-secure-random-string-in-production
+      HOMER_COORDINATOR_JWT_EXPIRE_HOURS: "24"
+      HOMER_COORDINATOR_AUTH_ADMIN_USER: admin
+
+      HOMER_LOG_LEVEL: info
+      HOMER_LOG_JSON: "false"
+      HOMER_LOG_OUTPUT_0: stdout
+
+      HOMER_PROMETHEUS_ENABLE: "true"
+      HOMER_PROMETHEUS_HOST: 0.0.0.0
+      HOMER_PROMETHEUS_PORT: "9090"
+      HOMER_PROMETHEUS_PATH: /metrics
+
+networks:
+  homer-compose:
+    driver: bridge
+
+volumes:
+  azurite_data:
+  homer_data:

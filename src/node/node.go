@@ -1720,6 +1720,14 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 		return nil, fmt.Errorf("failed to configure S3: %w", err)
 	}
 
+	// Best-effort load of the Azure extension so az:// volumes can attach.
+	// Same contract as the tiered-storage manager's LOAD aws: local/S3-only
+	// setups do not need it, so a load failure must not block startup.
+	ducklake.EnsureAzureCACertPath()
+	if _, err := db.Exec("LOAD azure;"); err != nil {
+		logger.Warn(fmt.Sprintf("Node: failed to load azure extension (Azure volumes unavailable; run --install-extensions): %v", err))
+	}
+
 	// Get volumes config (legacy: synthesize from catalog_path/data_path).
 	config.EnsureNodeDuckLakeVolumes(&cfg.DuckLake)
 	volumeConfigs := cfg.DuckLake.Volumes
@@ -1815,6 +1823,50 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 
 		if _, err := db.Exec(createSecret); err != nil {
 			return VolumeInfo{}, fmt.Errorf("failed to create S3 secret: %w", err)
+		}
+	}
+
+	// Configure Azure secret for this volume if needed. DuckDB's azure
+	// extension has no ACCOUNT_KEY parameter (verified against v1.5.5) — a
+	// static account name + key can only authenticate via a full
+	// CONNECTION_STRING, so one is assembled here when the operator supplied
+	// a key instead of a raw connection string.
+	if vol.Type == "azure" {
+		secretName := fmt.Sprintf("azure_secret_%s", vol.Name)
+
+		db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
+
+		connStr := strings.TrimSpace(vol.AzureConnectionString)
+		if connStr == "" && strings.TrimSpace(vol.AzureAccountKey) != "" {
+			connStr = fmt.Sprintf(
+				"DefaultEndpointsProtocol=https;AccountName=%s;AccountKey=%s;EndpointSuffix=core.windows.net",
+				vol.AzureAccountName, vol.AzureAccountKey,
+			)
+		}
+
+		var createSecret string
+		if connStr != "" {
+			createSecret = fmt.Sprintf(`
+				CREATE SECRET %s (
+					TYPE azure,
+					CONNECTION_STRING '%s'
+				);
+			`, secretName, strings.ReplaceAll(connStr, "'", "''"))
+		} else {
+			// No key, no connection string: ambient identity via DuckDB's
+			// Azure credential chain (resolves Managed Identity on an Azure VM).
+			createSecret = fmt.Sprintf(`
+				CREATE SECRET %s (
+					TYPE azure,
+					PROVIDER credential_chain,
+					CHAIN 'env;managed_identity;cli',
+					ACCOUNT_NAME '%s'
+				);
+			`, secretName, strings.ReplaceAll(vol.AzureAccountName, "'", "''"))
+		}
+
+		if _, err := db.Exec(createSecret); err != nil {
+			return VolumeInfo{}, fmt.Errorf("failed to create Azure secret: %w", err)
 		}
 	}
 

@@ -277,6 +277,13 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 		duckCfg.S3URLStyle = storageCfg.DuckLake.S3.URLStyle
 	}
 
+	// Azure config
+	if az := storageCfg.DuckLake.Azure; az.AccountName != "" || az.AccountKey != "" || az.ConnectionString != "" {
+		duckCfg.AzureAccountName = az.AccountName
+		duckCfg.AzureAccountKey = az.AccountKey
+		duckCfg.AzureConnectionString = az.ConnectionString
+	}
+
 	duckMgr, err := ducklake.NewManager(duckCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DuckLake manager: %w", err)
@@ -940,20 +947,23 @@ func (w *Writer) startTieringService() error {
 	volumes := make([]ducklake.Volume, len(policy.Volumes))
 	for i, vol := range policy.Volumes {
 		volumes[i] = ducklake.Volume{
-			Name:             vol.Name,
-			Type:             ducklake.VolumeType(vol.Type),
-			Path:             vol.Path,
-			Priority:         vol.Priority,
-			MaxDataAgeDays:   vol.MaxDataAgeDays,
-			MaxSizeGB:        vol.MaxSizeGB,
-			LakeName:         w.storageConfig.DuckLake.LakeName + "_" + vol.Name,
-			S3Region:         vol.S3Region,
-			S3AccessKey:      vol.S3AccessKeyID,
-			S3SecretKey:      vol.S3SecretKey,
-			S3Endpoint:       vol.S3Endpoint,
-			S3UseSSL:         vol.S3UseSSL,
-			S3URLStyle:       vol.S3URLStyle,
-			OverrideDataPath: vol.OverrideDataPath,
+			Name:                  vol.Name,
+			Type:                  ducklake.VolumeType(vol.Type),
+			Path:                  vol.Path,
+			Priority:              vol.Priority,
+			MaxDataAgeDays:        vol.MaxDataAgeDays,
+			MaxSizeGB:             vol.MaxSizeGB,
+			LakeName:              w.storageConfig.DuckLake.LakeName + "_" + vol.Name,
+			S3Region:              vol.S3Region,
+			S3AccessKey:           vol.S3AccessKeyID,
+			S3SecretKey:           vol.S3SecretKey,
+			S3Endpoint:            vol.S3Endpoint,
+			S3UseSSL:              vol.S3UseSSL,
+			S3URLStyle:            vol.S3URLStyle,
+			AzureAccountName:      vol.AzureAccountName,
+			AzureAccountKey:       vol.AzureAccountKey,
+			AzureConnectionString: vol.AzureConnectionString,
+			OverrideDataPath:      vol.OverrideDataPath,
 		}
 	}
 

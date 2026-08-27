@@ -30,6 +30,7 @@ type VolumeType string
 const (
 	VolumeTypeLocal VolumeType = "local"
 	VolumeTypeS3    VolumeType = "s3"
+	VolumeTypeAzure VolumeType = "azure"
 )
 
 // Volume represents a storage volume in the tiered storage system
@@ -49,6 +50,11 @@ type Volume struct {
 	S3Endpoint  string
 	S3UseSSL    bool
 	S3URLStyle  string
+
+	// Azure Blob Storage configuration
+	AzureAccountName      string
+	AzureAccountKey       string
+	AzureConnectionString string
 
 	// OverrideDataPath passes OVERRIDE_DATA_PATH TRUE to DuckLake ATTACH; see config.VolumeConfig.
 	OverrideDataPath bool
@@ -156,6 +162,13 @@ func (tsm *TieredStorageManager) Start() error {
 		logger.Warn("TieredStorageManager: failed to load aws extension (credential_chain unavailable; run --install-extensions)", "error", err)
 	}
 
+	// Load the Azure extension so az:// volumes can attach. Best-effort, same
+	// contract as LOAD aws above: local/S3-only setups do not need it.
+	EnsureAzureCACertPath()
+	if _, err := db.Exec("LOAD azure;"); err != nil {
+		logger.Warn("TieredStorageManager: failed to load azure extension (Azure volumes unavailable; run --install-extensions)", "error", err)
+	}
+
 	// Attach each volume as a separate DuckLake
 	for _, vol := range tsm.volumes {
 		if err := tsm.attachVolume(vol); err != nil {
@@ -236,19 +249,74 @@ func (tsm *TieredStorageManager) createVolumeS3Secret(vol *Volume, replace bool)
 	return nil
 }
 
+func azureSecretName(volumeName string) string {
+	return fmt.Sprintf("azure_secret_%s", volumeName)
+}
+
+// usesAzureCredentialChain is the ambient-identity branch of
+// buildAzureSecretSQL: no static account key and no connection string, so
+// DuckDB resolves credentials through the Azure SDK default chain (env,
+// workload identity, managed identity, Azure CLI).
+func usesAzureCredentialChain(accountKey, connectionString string) bool {
+	return strings.TrimSpace(accountKey) == "" && strings.TrimSpace(connectionString) == ""
+}
+
+func azureSecretSQLForVolume(vol *Volume, replace bool) string {
+	sql := buildAzureSecretSQL(azureSecretName(vol.Name), vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString)
+	if replace {
+		sql = strings.Replace(sql, "CREATE SECRET", "CREATE OR REPLACE SECRET", 1)
+	}
+	return sql
+}
+
+func (tsm *TieredStorageManager) createVolumeAzureSecret(vol *Volume, replace bool) error {
+	secretName := azureSecretName(vol.Name)
+	if !replace {
+		dropSecret := fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName)
+		if _, err := tsm.db.Exec(dropSecret); err != nil {
+			logger.Warn("TieredStorageManager: Failed to drop existing secret", "secret", secretName, "error", err)
+		}
+	}
+
+	createSecret := azureSecretSQLForVolume(vol, replace)
+	if replace {
+		logger.Debug("TieredStorageManager: Refreshing credential_chain Azure secret",
+			"volume", vol.Name)
+	} else {
+		logger.Info("TieredStorageManager: Creating Azure secret",
+			"volume", vol.Name,
+			"account_name", vol.AzureAccountName)
+	}
+
+	if _, err := tsm.db.Exec(createSecret); err != nil {
+		return fmt.Errorf("failed to create Azure secret for volume %s: %w", vol.Name, err)
+	}
+	return nil
+}
+
 // refreshCredentialChainSecret re-resolves a role-based S3 secret so DuckDB
 // does not keep the session token captured at CREATE SECRET / process start.
 // REFRESH auto is the DuckDB-side counterpart, but S3 ExpiredToken is HTTP 400
 // and may not trigger that retry; native register and volume maintenance
 // therefore recreate the secret explicitly. No-op for static keys / MinIO.
 func (tsm *TieredStorageManager) refreshCredentialChainSecret(vol *Volume) error {
-	if tsm == nil || tsm.db == nil || vol == nil || vol.Type != VolumeTypeS3 {
+	if tsm == nil || tsm.db == nil || vol == nil {
 		return nil
 	}
-	if !usesS3CredentialChain(vol.S3AccessKey, volumeS3EndpointHost(vol.S3Endpoint)) {
+	switch vol.Type {
+	case VolumeTypeS3:
+		if !usesS3CredentialChain(vol.S3AccessKey, volumeS3EndpointHost(vol.S3Endpoint)) {
+			return nil
+		}
+		return tsm.createVolumeS3Secret(vol, true)
+	case VolumeTypeAzure:
+		if !usesAzureCredentialChain(vol.AzureAccountKey, vol.AzureConnectionString) {
+			return nil
+		}
+		return tsm.createVolumeAzureSecret(vol, true)
+	default:
 		return nil
 	}
-	return tsm.createVolumeS3Secret(vol, true)
 }
 
 // RefreshCredentialChainSecrets re-creates DuckDB S3 secrets that use
@@ -273,9 +341,14 @@ func (tsm *TieredStorageManager) refreshCredentialChainSecrets() {
 
 // attachVolume attaches a volume as a DuckLake database
 func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
-	// Configure S3 if needed
-	if vol.Type == VolumeTypeS3 {
+	// Configure S3 / Azure secret if needed
+	switch vol.Type {
+	case VolumeTypeS3:
 		if err := tsm.createVolumeS3Secret(vol, false); err != nil {
+			return err
+		}
+	case VolumeTypeAzure:
+		if err := tsm.createVolumeAzureSecret(vol, false); err != nil {
 			return err
 		}
 	}
@@ -531,7 +604,8 @@ func (tsm *TieredStorageManager) nativeMoveOptions(tableName, date string, srcVo
 		opts.Lock = locker.CatalogLock
 		opts.Unlock = locker.CatalogUnlock
 	}
-	if dstVol.Type == VolumeTypeS3 || IsRemoteLakeDataPath(dstVol.Path) {
+	switch {
+	case dstVol.Type == VolumeTypeS3 || isS3Path(dstVol.Path):
 		opts.S3 = &mover.S3Config{
 			Region:    dstVol.S3Region,
 			AccessKey: dstVol.S3AccessKey,
@@ -543,6 +617,19 @@ func (tsm *TieredStorageManager) nativeMoveOptions(tableName, date string, srcVo
 		// PUT uses the AWS SDK (auto-refresh). Register is DuckDB read_blob /
 		// add_data_files against the secret captured at start — recreate it
 		// after a long copy so ExpiredToken cannot land on register.
+		dst := dstVol
+		opts.BeforeRegister = func() error {
+			return tsm.refreshCredentialChainSecret(dst)
+		}
+	case dstVol.Type == VolumeTypeAzure || isAzurePath(dstVol.Path):
+		opts.Azure = &mover.AzureConfig{
+			AccountName:      dstVol.AzureAccountName,
+			AccountKey:       dstVol.AzureAccountKey,
+			ConnectionString: dstVol.AzureConnectionString,
+		}
+		// Same rationale as the S3 branch above: the Azure SDK credential
+		// chain can outlive a Managed Identity token over a long copy;
+		// recreate the DuckDB secret before register so it isn't stale.
 		dst := dstVol
 		opts.BeforeRegister = func() error {
 			return tsm.refreshCredentialChainSecret(dst)
@@ -967,6 +1054,49 @@ func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string,
 				REGION '%s'
 			);
 		`, secretName, accessKey, secretKey, region)
+	}
+}
+
+// buildAzureSecretSQL returns the CREATE SECRET SQL for an Azure Blob volume.
+//
+// Verified against DuckDB's azure extension directly (v1.5.5, the version
+// this repo bundles): the PROVIDER config secret has no ACCOUNT_KEY
+// parameter — a bare account name + key can only be authenticated via a full
+// CONNECTION_STRING, so when the caller supplies AccountKey (not a raw
+// ConnectionString) this function assembles one. REFRESH auto is not a valid
+// parameter for azure secrets of any provider (unlike S3) — credential_chain
+// secrets are kept fresh the same way Homer already refreshes S3
+// credential_chain secrets: by dropping and re-CREATE-ing them before each
+// tiering cycle (see refreshCredentialChainSecret), not by a SQL-level
+// REFRESH clause.
+func buildAzureSecretSQL(secretName, accountName, accountKey, connectionString string) string {
+	connStr := strings.TrimSpace(connectionString)
+	if connStr == "" && strings.TrimSpace(accountKey) != "" {
+		connStr = fmt.Sprintf(
+			"DefaultEndpointsProtocol=https;AccountName=%s;AccountKey=%s;EndpointSuffix=core.windows.net",
+			accountName, accountKey,
+		)
+	}
+	switch {
+	case connStr != "":
+		return fmt.Sprintf(`
+			CREATE SECRET %s (
+				TYPE azure,
+				CONNECTION_STRING '%s'
+			);
+		`, secretName, strings.ReplaceAll(connStr, "'", "''"))
+	default:
+		// No key, no connection string: ambient identity via the Azure SDK's
+		// default credential chain. env/cli let a developer override locally;
+		// managed_identity is what resolves in production on an Azure VM.
+		return fmt.Sprintf(`
+			CREATE SECRET %s (
+				TYPE azure,
+				PROVIDER credential_chain,
+				CHAIN 'env;managed_identity;cli',
+				ACCOUNT_NAME '%s'
+			);
+		`, secretName, strings.ReplaceAll(accountName, "'", "''"))
 	}
 }
 

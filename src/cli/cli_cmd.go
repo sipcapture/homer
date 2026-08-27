@@ -113,6 +113,12 @@ func duckLakeConfigFromModular(cfg *config.Config) ducklake.Config {
 		base.S3URLStyle = source.S3.URLStyle
 	}
 
+	if az := source.Azure; az.AccountName != "" || az.AccountKey != "" || az.ConnectionString != "" {
+		base.AzureAccountName = az.AccountName
+		base.AzureAccountKey = az.AccountKey
+		base.AzureConnectionString = az.ConnectionString
+	}
+
 	return base
 }
 
@@ -137,6 +143,17 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 			db.Close()
 			return nil, fmt.Errorf("failed to configure S3 secret: %w", err)
 		}
+		ducklake.EnsureAzureCACertPath()
+		if _, err := db.Exec("LOAD azure;"); err != nil {
+			// Best-effort: only az:// paths actually need this extension.
+			fmt.Printf("Warning: failed to load azure extension: %v\n", err)
+		}
+		if err := ducklake.EnsureWriterAzureSecret(db,
+			cfg.AzureAccountName, cfg.AzureAccountKey, cfg.AzureConnectionString,
+		); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("failed to configure Azure secret: %w", err)
+		}
 	}
 
 	dataPath := cfg.DataPath
@@ -146,7 +163,7 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 	if err != nil {
 		fmt.Printf("Note: Could not auto-create views: %v\n", err)
 		fmt.Printf("You can query parquet files directly:\n")
-		fmt.Printf("  SELECT * FROM read_parquet('%s/main/*/**/*.parquet', hive_partitioning=true) LIMIT 10;\n\n", dataPath)
+		fmt.Printf("  SELECT * FROM read_parquet('%s/*/**/*.parquet', hive_partitioning=true) LIMIT 10;\n\n", ducklake.JoinLakeDataPath(dataPath, "main"))
 	} else if viewsCreated > 0 {
 		fmt.Printf("Created %d table views\n", viewsCreated)
 	}
@@ -164,7 +181,7 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 // DuckLake *-delete.parquet tombstones live in the table root and must not be
 // included in read_parquet(..., hive_partitioning=true).
 func parquetDataGlobPattern(dataPath, table string) string {
-	return fmt.Sprintf("%s/main/%s/date=*/**/*.parquet", dataPath, table)
+	return ducklake.JoinLakeDataPath(dataPath, "main", table) + "/date=*/**/*.parquet"
 }
 
 func createParquetViewSQL(lakeName, table, dataPath string) string {
@@ -180,7 +197,7 @@ func createParquetViews(db *sql.DB, lakeName, dataPath string) (int, error) {
 		return 0, fmt.Errorf("failed to create schema: %w", err)
 	}
 
-	mainPath := dataPath + "/main"
+	mainPath := ducklake.JoinLakeDataPath(dataPath, "main")
 	globSQL := fmt.Sprintf("SELECT DISTINCT regexp_extract(file, '.*[/\\\\]main[/\\\\]([^/\\\\]+)[/\\\\].*', 1) as tbl FROM glob('%s/**/*.parquet') WHERE file LIKE '%%/main/%%'", mainPath)
 	rows, err := db.Query(globSQL)
 	if err != nil {

@@ -88,6 +88,11 @@ type Config struct {
 	S3UseSSL          bool
 	S3URLStyle        string
 
+	// Azure Blob Storage configuration (if DataPath is az:// or azure://)
+	AzureAccountName      string
+	AzureAccountKey       string
+	AzureConnectionString string
+
 	// DuckDB engine tuning. Empty / zero values mean "leave DuckDB's
 	// own default" — these knobs are opt-in. See ApplyDuckDBTuning
 	// for the SQL we actually run.
@@ -115,17 +120,22 @@ func isS3Path(path string) bool {
 	return strings.HasPrefix(path, "s3://") || strings.HasPrefix(path, "s3a://")
 }
 
-// IsRemoteLakeDataPath reports whether lake parquet roots live on object storage
-// (s3:// or s3a://) rather than the local filesystem.
-func IsRemoteLakeDataPath(p string) bool {
-	return isS3Path(p)
+// isAzurePath checks if path is an Azure Blob Storage URL
+func isAzurePath(path string) bool {
+	return strings.HasPrefix(path, "az://") || strings.HasPrefix(path, "azure://")
 }
 
-// JoinLakeDataPath appends path elements to a lake data root. For s3:// and s3a://
-// bases it uses URL-style '/' joining only — do not use filepath.Join, which on
-// Unix collapses "s3://" to "s3:/" and breaks object URLs.
+// IsRemoteLakeDataPath reports whether lake parquet roots live on object storage
+// (s3://, s3a://, az://, azure://) rather than the local filesystem.
+func IsRemoteLakeDataPath(p string) bool {
+	return isS3Path(p) || isAzurePath(p)
+}
+
+// JoinLakeDataPath appends path elements to a lake data root. For s3://, s3a://,
+// az://, and azure:// bases it uses URL-style '/' joining only — do not use
+// filepath.Join, which on Unix collapses "s3://" to "s3:/" and breaks object URLs.
 func JoinLakeDataPath(base string, elems ...string) string {
-	if isS3Path(base) {
+	if isS3Path(base) || isAzurePath(base) {
 		out := strings.TrimRight(base, "/")
 		for _, e := range elems {
 			e = strings.Trim(e, "/")
@@ -257,8 +267,10 @@ func NewMultiTableWriter(config Config) (*MultiTableWriter, error) {
 		config.FlushInterval = 30 * time.Second
 	}
 
-	// Create data directory if it doesn't exist (for local paths, not S3)
-	if config.DataPath != "" && !isS3Path(config.DataPath) {
+	// Create data directory if it doesn't exist (for local paths only, not
+	// object storage: os.MkdirAll on a URL collapses "az://"/"s3://" to
+	// "az:/"/"s3:/" on Unix and fails, or worse writes a bogus local dir).
+	if config.DataPath != "" && !IsRemoteLakeDataPath(config.DataPath) {
 		if err := os.MkdirAll(config.DataPath, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create data directory %s: %w", config.DataPath, err)
 		}
@@ -491,6 +503,23 @@ func (mtw *MultiTableWriter) connect() error {
 			mtw.config.S3URLStyle,
 		); err != nil {
 			return fmt.Errorf("failed to configure S3 secret for DuckLake: %w", err)
+		}
+	}
+
+	if isAzurePath(mtw.config.DataPath) {
+		// Best-effort load, same contract as tiered storage's LOAD aws: a
+		// missing azure extension must not block startup for local/S3-only
+		// deployments, but this path only runs when DataPath is az://.
+		EnsureAzureCACertPath()
+		if _, err := db.Exec("LOAD azure;"); err != nil {
+			logger.Warn("DuckLake writer: failed to load azure extension (run --install-extensions)", "error", err)
+		}
+		if err := EnsureWriterAzureSecret(db,
+			mtw.config.AzureAccountName,
+			mtw.config.AzureAccountKey,
+			mtw.config.AzureConnectionString,
+		); err != nil {
+			return fmt.Errorf("failed to configure Azure secret for DuckLake: %w", err)
 		}
 	}
 

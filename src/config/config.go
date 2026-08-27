@@ -690,6 +690,7 @@ type DuckLakeConfig struct {
 	DataInliningRowLimit int                 `json:"data_inlining_row_limit" mapstructure:"data_inlining_row_limit" default:"0"`
 	Tuning               DuckDBTuning        `json:"tuning" mapstructure:"tuning"`
 	S3                   S3Config            `json:"s3" mapstructure:"s3"`
+	Azure                AzureConfig         `json:"azure" mapstructure:"azure"`
 	Compaction           CompactionConfig    `json:"compaction" mapstructure:"compaction"`
 	StoragePolicy        StoragePolicyConfig `json:"storage_policy" mapstructure:"storage_policy"`
 	Volumes              []VolumeConfig      `json:"volumes" mapstructure:"volumes"` // Direct volumes config (alternative to storage_policy for read-only nodes)
@@ -745,20 +746,23 @@ type StoragePolicyConfig struct {
 
 // VolumeConfig configures a storage volume (hot or cold)
 type VolumeConfig struct {
-	Name           string `json:"name" mapstructure:"name"`                                       // Volume name (e.g., "hot", "cold")
-	Type           string `json:"type" mapstructure:"type" default:"local"`                       // "local" or "s3"
-	Path           string `json:"path" mapstructure:"path"`                                       // Data path: local path or S3 URL (s3://bucket/path/)
-	CatalogType    string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"`      // DuckLake catalog — sqlite
-	CatalogPath    string `json:"catalog_path" mapstructure:"catalog_path"`                       // Catalog path for this volume
-	Priority       int    `json:"priority" mapstructure:"priority" default:"0"`                   // Lower = higher priority (writes go to lowest)
-	MaxDataAgeDays int    `json:"max_data_age_days" mapstructure:"max_data_age_days" default:"0"` // Move data older than N days to next volume (0 = no limit)
-	MaxSizeGB      int    `json:"max_size_gb" mapstructure:"max_size_gb" default:"0"`             // Max size in GB before moving to next volume (0 = no limit)
-	S3Region       string `json:"s3_region" mapstructure:"s3_region" default:""`
-	S3AccessKeyID  string `json:"s3_access_key_id" mapstructure:"s3_access_key_id" default:""`
-	S3SecretKey    string `json:"s3_secret_access_key" mapstructure:"s3_secret_access_key" default:""`
-	S3Endpoint     string `json:"s3_endpoint" mapstructure:"s3_endpoint" default:""` // For S3-compatible (R2, MinIO)
-	S3UseSSL       bool   `json:"s3_use_ssl" mapstructure:"s3_use_ssl" default:"true"`
-	S3URLStyle     string `json:"s3_url_style" mapstructure:"s3_url_style" default:""` // Empty = path, set "vhost" for virtual-hosted-style
+	Name                  string `json:"name" mapstructure:"name"`                                       // Volume name (e.g., "hot", "cold")
+	Type                  string `json:"type" mapstructure:"type" default:"local"`                       // "local", "s3", or "azure"
+	Path                  string `json:"path" mapstructure:"path"`                                       // Data path: local path, S3 URL (s3://bucket/path/), or Azure URL (az://container/path/)
+	CatalogType           string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"`      // DuckLake catalog — sqlite
+	CatalogPath           string `json:"catalog_path" mapstructure:"catalog_path"`                       // Catalog path for this volume
+	Priority              int    `json:"priority" mapstructure:"priority" default:"0"`                   // Lower = higher priority (writes go to lowest)
+	MaxDataAgeDays        int    `json:"max_data_age_days" mapstructure:"max_data_age_days" default:"0"` // Move data older than N days to next volume (0 = no limit)
+	MaxSizeGB             int    `json:"max_size_gb" mapstructure:"max_size_gb" default:"0"`             // Max size in GB before moving to next volume (0 = no limit)
+	S3Region              string `json:"s3_region" mapstructure:"s3_region" default:""`
+	S3AccessKeyID         string `json:"s3_access_key_id" mapstructure:"s3_access_key_id" default:""`
+	S3SecretKey           string `json:"s3_secret_access_key" mapstructure:"s3_secret_access_key" default:""`
+	S3Endpoint            string `json:"s3_endpoint" mapstructure:"s3_endpoint" default:""` // For S3-compatible (R2, MinIO)
+	S3UseSSL              bool   `json:"s3_use_ssl" mapstructure:"s3_use_ssl" default:"true"`
+	S3URLStyle            string `json:"s3_url_style" mapstructure:"s3_url_style" default:""` // Empty = path, set "vhost" for virtual-hosted-style
+	AzureAccountName      string `json:"azure_account_name" mapstructure:"azure_account_name" default:""`
+	AzureAccountKey       string `json:"azure_account_key" mapstructure:"azure_account_key" default:""`
+	AzureConnectionString string `json:"azure_connection_string" mapstructure:"azure_connection_string" default:""`
 	// OverrideDataPath passes OVERRIDE_DATA_PATH TRUE to DuckLake ATTACH when the path
 	// in config intentionally differs from DATA_PATH stored in an existing catalog
 	// (e.g. bucket rename, or node path typo vs writer). Prefer matching paths first.
@@ -842,6 +846,17 @@ type S3Config struct {
 	Endpoint        string `json:"endpoint" mapstructure:"endpoint" default:""`
 	UseSSL          bool   `json:"use_ssl" mapstructure:"use_ssl" default:"true"`
 	URLStyle        string `json:"url_style" mapstructure:"url_style" default:""` // Empty = path, set "vhost" for virtual-hosted-style
+}
+
+// AzureConfig configures Azure Blob Storage for DuckLake. Precedence when
+// attaching: ConnectionString wins if set; else AccountName+AccountKey are
+// assembled into a connection string; else PROVIDER credential_chain is used
+// (resolves Managed Identity when running on an Azure VM, matching how an
+// empty S3Config.AccessKeyID selects the S3 credential_chain provider).
+type AzureConfig struct {
+	AccountName      string `json:"account_name" mapstructure:"account_name" default:""`
+	AccountKey       string `json:"account_key" mapstructure:"account_key" default:""`
+	ConnectionString string `json:"connection_string" mapstructure:"connection_string" default:""`
 }
 
 // HEPConfig configures HEP protocol processing
@@ -1300,6 +1315,10 @@ func Load(configPath string) (*Config, error) {
 		return nil, err
 	}
 
+	if err := validateVolumeTypes(&cfg); err != nil {
+		return nil, err
+	}
+
 	MainConfig = &cfg
 	return &cfg, nil
 }
@@ -1322,8 +1341,11 @@ func EnsureNodeDuckLakeVolumes(dl *DuckLakeConfig) {
 		catalogType = "sqlite"
 	}
 	volType := "local"
-	if strings.HasPrefix(dataPath, "s3://") {
+	switch {
+	case strings.HasPrefix(dataPath, "s3://"):
 		volType = "s3"
+	case strings.HasPrefix(dataPath, "az://") || strings.HasPrefix(dataPath, "azure://"):
+		volType = "azure"
 	}
 	vol := VolumeConfig{
 		Name:        "default",
@@ -1339,6 +1361,11 @@ func EnsureNodeDuckLakeVolumes(dl *DuckLakeConfig) {
 		vol.S3Endpoint = dl.S3.Endpoint
 		vol.S3UseSSL = dl.S3.UseSSL
 		vol.S3URLStyle = dl.S3.URLStyle
+	}
+	if volType == "azure" {
+		vol.AzureAccountName = dl.Azure.AccountName
+		vol.AzureAccountKey = dl.Azure.AccountKey
+		vol.AzureConnectionString = dl.Azure.ConnectionString
 	}
 	dl.Volumes = []VolumeConfig{vol}
 }
@@ -1387,6 +1414,37 @@ func validateRetentionUnits(cfg *Config) error {
 	}
 	if _, err := NormalizeRetentionUnit(cfg.Node.DuckLake.Compaction.RetentionUnit); err != nil {
 		return fmt.Errorf("node.ducklake.compaction.retention_unit: %w", err)
+	}
+	return nil
+}
+
+// validateVolumeTypes rejects an unrecognized volume type so a typo (e.g.
+// "azur") doesn't silently fall through every "local"/"s3"/"azure" string
+// comparison in the storage layer and get treated as a local path.
+func validateVolumeTypes(cfg *Config) error {
+	check := func(field, v string) error {
+		s := strings.TrimSpace(v)
+		switch s {
+		case "", "local", "s3", "azure":
+			return nil
+		default:
+			return fmt.Errorf("%s: unknown volume type %q (must be \"local\", \"s3\", or \"azure\")", field, v)
+		}
+	}
+	for i, v := range cfg.Storage.DuckLake.Volumes {
+		if err := check(fmt.Sprintf("storage.ducklake.volumes[%d].type", i), v.Type); err != nil {
+			return err
+		}
+	}
+	for i, v := range cfg.Storage.DuckLake.StoragePolicy.Volumes {
+		if err := check(fmt.Sprintf("storage.ducklake.storage_policy.volumes[%d].type", i), v.Type); err != nil {
+			return err
+		}
+	}
+	for i, v := range cfg.Node.DuckLake.Volumes {
+		if err := check(fmt.Sprintf("node.ducklake.volumes[%d].type", i), v.Type); err != nil {
+			return err
+		}
 	}
 	return nil
 }

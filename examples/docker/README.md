@@ -1,9 +1,10 @@
-# Homer + RustFS (Compose)
+# Homer + RustFS / Azurite (Compose)
 
-This folder contains two Docker Compose variants for running Homer with RustFS-backed storage.
+This folder contains Docker Compose variants for running Homer with object-storage-backed storage.
 
 - `docker-compose.yaml` — Homer with **local Parquet hot storage** plus **RustFS S3 cold storage**.
 - `docker-compose_s3direct.yaml` — Homer with **S3-only storage** on RustFS.
+- `docker-compose_azuredirect.yaml` — Homer with **Azure Blob Storage-only storage** on [Azurite](https://github.com/Azure/Azurite) (the official Azure Storage emulator). Good for exercising `type: "azure"` locally without a real Azure account; it does **not** cover Managed Identity auth (Azurite has no Azure AD identity emulation) — that path needs a real Azure VM.
 
 All Homer configuration is in the `homer` service `environment` map (`HOMER_*`). RustFS settings are configured under `rustfs.environment`. Naming rules: [`docs/ENVIRONMENT_VARIABLES.md`](../../docs/ENVIRONMENT_VARIABLES.md). Tiering concepts: [`docs/STORAGE_POLICIES.md`](../../docs/STORAGE_POLICIES.md).
 
@@ -22,6 +23,14 @@ All Homer configuration is in the `homer` service `environment` map (`HOMER_*`).
 |------|--------|------|
 | **Cold only** | `s3://homer-data-cold` on RustFS (`http://rustfs:9000`) | All Homer data is written directly to S3-compatible storage. |
 
+### `docker-compose_azuredirect.yaml`
+
+| Tier | Where | Role |
+|------|--------|------|
+| **Cold only** | `az://homer-data-cold` on Azurite (`http://azurite:10000`) | All Homer data is written directly to Azure Blob Storage. |
+
+Uses Azurite's fixed, well-known development account (`devstoreaccount1`) via a connection string — not secret, never use these credentials against a real Azure account. An `azurite-create-container` init step creates the blob container before Homer starts (Azure requires the container to pre-exist, unlike S3 buckets that some backends auto-vivify).
+
 ## Quick start
 
 ```bash
@@ -34,6 +43,13 @@ Or use the S3-only stack:
 ```bash
 cd examples/docker
 docker compose -f docker-compose_s3direct.yaml up -d
+```
+
+Or the Azure-only stack:
+
+```bash
+cd examples/docker
+docker compose -f docker-compose_azuredirect.yaml up -d
 ```
 
 Edit the chosen compose file to change ports, image (`ghcr.io/sipcapture/homer:latest`), secrets, or storage settings—no separate `.env` file is required.
@@ -104,6 +120,7 @@ See [SECURITY.md](../../docs/SECURITY.md#bootstrap-admin-password-coordinatoraut
 - **HEP / HTTP ingest:** UDP/TCP `9060`, HTTP `9080`
 - **RustFS S3 API:** http://localhost:9000 (`rustfs:9000` inside the stack)
 - **RustFS console:** http://localhost:9001
+- **Azurite Blob API:** http://localhost:10000 (`azurite:10000` inside the stack) — only in `docker-compose_azuredirect.yaml`
 - **Prometheus:** http://localhost:9090/metrics
 
 RustFS keys in `rustfs.environment` must match the Homer S3 access key/secret entries. The default credentials are `rustfsadmin` / `rustfsadmin`.

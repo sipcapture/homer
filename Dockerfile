@@ -33,7 +33,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && groupadd --gid 1000 homer \
     && useradd --uid 1000 --gid 1000 --home-dir /data/homer --no-create-home --shell /usr/sbin/nologin homer \
     && mkdir -p /data/homer/.duckdb_spill \
-    && chown -R homer:homer /data/homer
+    && chown -R homer:homer /data/homer \
+    # DuckDB's azure extension bundles a statically-linked libcurl that only
+    # defaults to the RedHat-family CA bundle path, which Debian never
+    # creates — every HTTPS request to *.blob.core.windows.net then fails
+    # with "Problem with the SSL CA cert", for every auth method (verified
+    # against a real Azure storage account). Reported upstream:
+    # https://github.com/duckdb/duckdb-azure/issues/185 — remove once fixed
+    # and shipped. EnsureAzureCACertPath (Go) does this too at runtime; this
+    # Dockerfile copy is defense-in-depth so the official image works out of
+    # the box. See storage/ducklake/tuning.go.
+    && mkdir -p /etc/pki/tls/certs \
+    && ln -sf /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
 
 WORKDIR /
 COPY --from=builder /homer-core/homer .
