@@ -36,7 +36,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chown -R homer:homer /data/homer \
     # DuckDB's azure extension bundles a statically-linked libcurl that only
     # defaults to the RedHat-family CA bundle path, which Debian never
-    # creates — every HTTPS request to *.blob.core.windows.net then fails
+    # creates — every HTTPS request over any Azure Blob endpoint (standard
+    # public cloud, Gov cloud, China cloud, or a custom endpoint) then fails
     # with "Problem with the SSL CA cert", for every auth method (verified
     # against a real Azure storage account). Reported upstream:
     # https://github.com/duckdb/duckdb-azure/issues/185 — remove once fixed

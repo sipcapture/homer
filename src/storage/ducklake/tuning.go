@@ -163,7 +163,8 @@ const (
 // bundle path (redhatCACertPath), unlike Go's crypto/x509 (which checks both
 // RedHat and Debian paths). On Debian/Ubuntu — including Homer's own
 // debian:bookworm-slim image — the RedHat path never exists, so every HTTPS
-// request to *.blob.core.windows.net fails with "Problem with the SSL CA
+// request over any Azure Blob endpoint (standard public cloud, Gov cloud,
+// China cloud, or a custom endpoint) fails with "Problem with the SSL CA
 // cert (path? access rights?)", regardless of auth method (static key,
 // connection string, or Managed Identity all hit this identically —
 // verified against a real Azure storage account and a real Azure VM).
@@ -188,7 +189,16 @@ func EnsureAzureCACertPath() {
 		return
 	}
 	if err := os.Symlink(debianCACertPath, redhatCACertPath); err != nil {
-		logger.Warn("EnsureAzureCACertPath: failed to symlink CA bundle (Azure HTTPS access may fail with 'SSL CA cert' errors)",
+		if os.IsExist(err) {
+			// Something created the symlink between the os.Stat check above
+			// and this call — the symlink exists either way, so this is
+			// success, not failure.
+			return
+		}
+		logger.Warn("EnsureAzureCACertPath: failed to symlink CA bundle (Azure HTTPS access may fail with 'SSL CA cert' errors); "+
+			"on a non-root deployment (bare Debian/Ubuntu host, or 'docker run' as a non-root user), create it manually: "+
+			"mkdir -p /etc/pki/tls/certs && ln -sf /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt "+
+			"(see duckdb/duckdb-azure#185)",
 			"src", debianCACertPath, "dst", redhatCACertPath, "error", err)
 		return
 	}
