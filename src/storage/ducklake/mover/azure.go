@@ -11,13 +11,36 @@ import (
 )
 
 // AzureConfig is the destination volume's Azure Blob Storage settings.
-// Precedence mirrors buildAzureSecretSQL: ConnectionString wins if set, else
-// AccountKey (paired with AccountName), else the Azure SDK's default
-// credential chain (resolves Managed Identity when running on an Azure VM).
+// Precedence mirrors ducklake.BuildAzureSecretSQL: ConnectionString wins if
+// set, else AccountKey (paired with AccountName), else the Azure SDK's
+// default credential chain (resolves Managed Identity when running on an
+// Azure VM). Endpoint overrides the default public-cloud Blob endpoint
+// (Azurite, Gov/China cloud, ...) for the AccountKey and credential_chain
+// cases; a raw ConnectionString already carries its own endpoint if needed.
 type AzureConfig struct {
 	AccountName      string
 	AccountKey       string
 	ConnectionString string
+	Endpoint         string
+}
+
+// buildAzureConnectionString is a self-contained copy of
+// ducklake.BuildAzureConnectionString: this package cannot import ducklake
+// (ducklake already imports mover, so the reverse would be an import
+// cycle), so the small connection-string synthesis is duplicated here —
+// same convention already used for isS3Path/joinLake between the two
+// packages. Keep in sync with ducklake.BuildAzureConnectionString.
+func buildAzureConnectionString(accountName, accountKey, endpoint string) string {
+	accountName = strings.TrimSpace(accountName)
+	accountKey = strings.TrimSpace(accountKey)
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint != "" {
+		return fmt.Sprintf("AccountName=%s;AccountKey=%s;BlobEndpoint=%s;", accountName, accountKey, endpoint)
+	}
+	return fmt.Sprintf(
+		"DefaultEndpointsProtocol=https;AccountName=%s;AccountKey=%s;EndpointSuffix=core.windows.net",
+		accountName, accountKey,
+	)
 }
 
 type azureCopier struct {
@@ -36,6 +59,7 @@ func azureBlobClient(cfg AzureConfig) (*azblob.Client, error) {
 	connStr := strings.TrimSpace(cfg.ConnectionString)
 	accountName := strings.TrimSpace(cfg.AccountName)
 	accountKey := strings.TrimSpace(cfg.AccountKey)
+	endpoint := strings.TrimSpace(cfg.Endpoint)
 
 	switch {
 	case connStr != "":
@@ -44,11 +68,13 @@ func azureBlobClient(cfg AzureConfig) (*azblob.Client, error) {
 		if accountName == "" {
 			return nil, fmt.Errorf("azure: account_name is required with account_key")
 		}
-		cred, err := azblob.NewSharedKeyCredential(accountName, accountKey)
-		if err != nil {
-			return nil, fmt.Errorf("azure: invalid shared key credential: %w", err)
-		}
-		return azblob.NewClientWithSharedKeyCredential(azureServiceURL(accountName), cred, nil)
+		// Routed through a synthesized connection string (not
+		// NewClientWithSharedKeyCredential + a hardcoded public URL) so this
+		// always agrees with what buildAzureSecretSQL gives DuckDB, endpoint
+		// override included — this is what makes account_key work against
+		// Azurite/Gov/China cloud in the native mover, not just the default
+		// (duckdb-engine) move path.
+		return azblob.NewClientFromConnectionString(buildAzureConnectionString(accountName, accountKey, endpoint), nil)
 	default:
 		if accountName == "" {
 			return nil, fmt.Errorf("azure: account_name is required for credential_chain auth")
@@ -61,7 +87,11 @@ func azureBlobClient(cfg AzureConfig) (*azblob.Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("azure: default credential chain: %w", err)
 		}
-		return azblob.NewClient(azureServiceURL(accountName), cred, nil)
+		serviceURL := endpoint
+		if serviceURL == "" {
+			serviceURL = azureServiceURL(accountName)
+		}
+		return azblob.NewClient(serviceURL, cred, nil)
 	}
 }
 

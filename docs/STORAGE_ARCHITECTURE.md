@@ -124,7 +124,7 @@ The catalog stays on disk (SQLite); only Parquet objects are stored in the conta
 }
 ```
 
-To use a static account key instead, add `"account_key": "..."` to the `azure` block (or a full `"connection_string"`, which takes precedence over `account_key`).
+To use a static account key instead, add `"account_key": "..."` to the `azure` block (or a full `"connection_string"`, which takes precedence over `account_key`). Add `"endpoint": "..."` (a full URL with scheme, e.g. `http://azurite:10000/devstoreaccount1`) to target Azurite, a Gov/China cloud account, or any other non-public-cloud Blob endpoint — applies to both `account_key` and the Managed Identity mode above; a raw `connection_string` already carries its own endpoint if it needs one.
 
 ## Time Travel
 

@@ -117,6 +117,7 @@ func duckLakeConfigFromModular(cfg *config.Config) ducklake.Config {
 		base.AzureAccountName = az.AccountName
 		base.AzureAccountKey = az.AccountKey
 		base.AzureConnectionString = az.ConnectionString
+		base.AzureEndpoint = az.Endpoint
 	}
 
 	return base
@@ -151,7 +152,7 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 			fmt.Printf("Warning: failed to load azure extension: %v\n", err)
 		}
 		if err := ducklake.EnsureWriterAzureSecret(db,
-			cfg.AzureAccountName, cfg.AzureAccountKey, cfg.AzureConnectionString,
+			cfg.AzureAccountName, cfg.AzureAccountKey, cfg.AzureConnectionString, cfg.AzureEndpoint,
 		); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("failed to configure Azure secret: %w", err)

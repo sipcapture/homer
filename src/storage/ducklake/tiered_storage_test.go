@@ -227,7 +227,7 @@ func TestRefreshCredentialChainSecret_NoOpWithoutDBOrStaticKeys(t *testing.T) {
 // BuildAzureSecretSQL on a real DuckDB and returns the provider recorded in
 // duckdb_secrets(). Skips (rather than fails) when the azure extension is
 // unavailable, matching secretProvider's convention above.
-func azureSecretProvider(t *testing.T, accountName, accountKey, connectionString string) string {
+func azureSecretProvider(t *testing.T, accountName, accountKey, connectionString, endpoint string) string {
 	t.Helper()
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
@@ -240,7 +240,7 @@ func azureSecretProvider(t *testing.T, accountName, accountKey, connectionString
 		t.Skipf("azure extension unavailable: %v", err)
 	}
 
-	if _, err := db.Exec(BuildAzureSecretSQL("azure_secret_test", accountName, accountKey, connectionString)); err != nil {
+	if _, err := db.Exec(BuildAzureSecretSQL("azure_secret_test", accountName, accountKey, connectionString, endpoint)); err != nil {
 		t.Skipf("CREATE SECRET unavailable (extension/version): %v", err)
 	}
 
@@ -259,7 +259,7 @@ func azureSecretProvider(t *testing.T, accountName, accountKey, connectionString
 // PROVIDER config (DuckDB's default for TYPE azure).
 func TestCreateAzureSecret_ConnectionString(t *testing.T) {
 	got := azureSecretProvider(t, "", "",
-		"DefaultEndpointsProtocol=https;AccountName=fake;AccountKey=ZmFrZQ==;EndpointSuffix=core.windows.net")
+		"DefaultEndpointsProtocol=https;AccountName=fake;AccountKey=ZmFrZQ==;EndpointSuffix=core.windows.net", "")
 	if got != "config" {
 		t.Errorf("provider = %q, want config", got)
 	}
@@ -270,7 +270,7 @@ func TestCreateAzureSecret_ConnectionString(t *testing.T) {
 // extension has no ACCOUNT_KEY parameter under PROVIDER config — verified
 // directly against v1.5.5) and still resolves to provider config.
 func TestCreateAzureSecret_AccountKey(t *testing.T) {
-	got := azureSecretProvider(t, "myaccount", "ZmFrZQ==", "")
+	got := azureSecretProvider(t, "myaccount", "ZmFrZQ==", "", "")
 	if got != "config" {
 		t.Errorf("provider = %q, want config", got)
 	}
@@ -280,7 +280,71 @@ func TestCreateAzureSecret_AccountKey(t *testing.T) {
 // PROVIDER credential_chain (this is what resolves Azure Managed Identity
 // when Homer runs on an Azure VM with no static credentials configured).
 func TestCreateAzureSecret_CredentialChain(t *testing.T) {
-	got := azureSecretProvider(t, "myaccount", "", "")
+	got := azureSecretProvider(t, "myaccount", "", "", "")
+	if got != "credential_chain" {
+		t.Errorf("provider = %q, want credential_chain", got)
+	}
+}
+
+// TestCreateAzureSecret_AccountKeyWithEndpoint: PR review must-fix #2
+// (github.com/sipcapture/homer/pull/983) — account_key + a custom endpoint
+// (Azurite, Gov/China cloud) must still resolve to a working secret, not
+// silently fall back to the public-cloud default. Real DuckDB accepts a
+// connection string with only AccountName/AccountKey/BlobEndpoint (no
+// DefaultEndpointsProtocol) — verified directly against v1.5.5.
+func TestCreateAzureSecret_AccountKeyWithEndpoint(t *testing.T) {
+	got := azureSecretProvider(t, "myaccount", "ZmFrZQ==", "", "http://azurite:10000/myaccount")
+	if got != "config" {
+		t.Errorf("provider = %q, want config", got)
+	}
+}
+
+// TestCreateAzureSecret_CredentialChainWithEndpoint: PR review must-fix #2
+// — credential_chain (Managed Identity / ambient identity) against a custom
+// endpoint must also work, not just the account_key case. DuckDB's azure
+// extension accepts ENDPOINT as a common secret parameter across providers
+// — verified directly against v1.5.5.
+func TestCreateAzureSecret_CredentialChainWithEndpoint(t *testing.T) {
+	got := azureSecretProvider(t, "myaccount", "", "", "http://fake-endpoint:10000/myaccount")
+	if got != "credential_chain" {
+		t.Errorf("provider = %q, want credential_chain", got)
+	}
+}
+
+// TestCreateAzureSecret_AccountKeyWithGovCloudEndpoint and
+// TestCreateAzureSecret_CredentialChainWithGovCloudEndpoint prove DuckDB
+// itself (not just Homer's SQL string-building) accepts the real-Azure
+// endpoint shape — account name as a DNS subdomain, HTTPS, no path segment
+// — not just Azurite's shape (account name as a path segment on a fixed
+// host:port), which is all the two tests above exercise.
+func TestCreateAzureSecret_AccountKeyWithGovCloudEndpoint(t *testing.T) {
+	got := azureSecretProvider(t, "myaccount", "ZmFrZQ==", "", "https://myaccount.blob.core.usgovcloudapi.net")
+	if got != "config" {
+		t.Errorf("provider = %q, want config", got)
+	}
+}
+
+func TestCreateAzureSecret_CredentialChainWithGovCloudEndpoint(t *testing.T) {
+	got := azureSecretProvider(t, "myaccount", "", "", "https://myaccount.blob.core.usgovcloudapi.net")
+	if got != "credential_chain" {
+		t.Errorf("provider = %q, want credential_chain", got)
+	}
+}
+
+// TestCreateAzureSecret_AccountKeyWithStandardCloudEndpoint and
+// TestCreateAzureSecret_CredentialChainWithStandardCloudEndpoint prove
+// DuckDB also accepts the standard/global public cloud's own endpoint shape
+// (blob.core.windows.net) when passed explicitly, not just Gov/China or the
+// implicit default when endpoint is left empty.
+func TestCreateAzureSecret_AccountKeyWithStandardCloudEndpoint(t *testing.T) {
+	got := azureSecretProvider(t, "myaccount", "ZmFrZQ==", "", "https://myaccount.blob.core.windows.net")
+	if got != "config" {
+		t.Errorf("provider = %q, want config", got)
+	}
+}
+
+func TestCreateAzureSecret_CredentialChainWithStandardCloudEndpoint(t *testing.T) {
+	got := azureSecretProvider(t, "myaccount", "", "", "https://myaccount.blob.core.windows.net")
 	if got != "credential_chain" {
 		t.Errorf("provider = %q, want credential_chain", got)
 	}
@@ -294,6 +358,7 @@ func TestBuildAzureSecretSQL_Branches(t *testing.T) {
 		accountName      string
 		accountKey       string
 		connectionString string
+		endpoint         string
 		wantSubstr       string
 		denySubstr       string
 	}{
@@ -323,11 +388,75 @@ func TestBuildAzureSecretSQL_Branches(t *testing.T) {
 			accountName: "myaccount",
 			wantSubstr:  "managed_identity",
 		},
+		{
+			// PR review must-fix #2: account_key + a custom endpoint must
+			// inject BlobEndpoint, not silently fall back to the public
+			// cloud EndpointSuffix.
+			name:        "account key with custom endpoint uses BlobEndpoint",
+			accountName: "myaccount",
+			accountKey:  "ZmFrZQ==",
+			endpoint:    "http://azurite:10000/myaccount",
+			wantSubstr:  "CONNECTION_STRING 'AccountName=myaccount;AccountKey=ZmFrZQ==;BlobEndpoint=http://azurite:10000/myaccount;'",
+			denySubstr:  "EndpointSuffix=core.windows.net",
+		},
+		{
+			// PR review must-fix #2: credential_chain + a custom endpoint
+			// must pass ENDPOINT through to DuckDB, not silently target
+			// the public cloud regardless of the operator's config.
+			name:        "credential_chain with custom endpoint adds ENDPOINT clause",
+			accountName: "myaccount",
+			endpoint:    "http://fake-endpoint:10000/myaccount",
+			wantSubstr:  "ENDPOINT 'http://fake-endpoint:10000/myaccount'",
+			denySubstr:  "CONNECTION_STRING",
+		},
+		{
+			// The two cases above only use Azurite's URL shape (account name
+			// as a path segment on a fixed host:port). Real Azure Gov/China
+			// cloud endpoints have a different shape entirely — account name
+			// as a DNS subdomain, HTTPS, no path segment
+			// (https://<account>.blob.core.usgovcloudapi.net). The code does
+			// no URL parsing (pure string interpolation), so it should be
+			// shape-agnostic — this proves that rather than assuming it from
+			// the Azurite-shaped cases alone.
+			name:        "account key with real Azure Gov cloud endpoint",
+			accountName: "myaccount",
+			accountKey:  "ZmFrZQ==",
+			endpoint:    "https://myaccount.blob.core.usgovcloudapi.net",
+			wantSubstr:  "CONNECTION_STRING 'AccountName=myaccount;AccountKey=ZmFrZQ==;BlobEndpoint=https://myaccount.blob.core.usgovcloudapi.net;'",
+			denySubstr:  "EndpointSuffix=core.windows.net",
+		},
+		{
+			name:        "credential_chain with real Azure China cloud endpoint",
+			accountName: "myaccount",
+			endpoint:    "https://myaccount.blob.core.chinacloudapi.cn",
+			wantSubstr:  "ENDPOINT 'https://myaccount.blob.core.chinacloudapi.cn'",
+			denySubstr:  "CONNECTION_STRING",
+		},
+		{
+			// The Gov/China cases above are non-default clouds. Also prove
+			// the standard/global public cloud's own DNS-subdomain shape
+			// (blob.core.windows.net) works when passed as an *explicit*
+			// endpoint override, not just relied on implicitly when
+			// endpoint is left empty (the "no endpoint" case above only
+			// tests the implicit default, never this shape as a value).
+			name:        "account key with explicit standard Azure public cloud endpoint",
+			accountName: "myaccount",
+			accountKey:  "ZmFrZQ==",
+			endpoint:    "https://myaccount.blob.core.windows.net",
+			wantSubstr:  "CONNECTION_STRING 'AccountName=myaccount;AccountKey=ZmFrZQ==;BlobEndpoint=https://myaccount.blob.core.windows.net;'",
+		},
+		{
+			name:        "credential_chain with explicit standard Azure public cloud endpoint",
+			accountName: "myaccount",
+			endpoint:    "https://myaccount.blob.core.windows.net",
+			wantSubstr:  "ENDPOINT 'https://myaccount.blob.core.windows.net'",
+			denySubstr:  "CONNECTION_STRING",
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			sql := BuildAzureSecretSQL("test_secret", tc.accountName, tc.accountKey, tc.connectionString)
+			sql := BuildAzureSecretSQL("test_secret", tc.accountName, tc.accountKey, tc.connectionString, tc.endpoint)
 			if !strings.Contains(sql, tc.wantSubstr) {
 				t.Errorf("SQL should contain %q:\n%s", tc.wantSubstr, sql)
 			}

@@ -282,6 +282,7 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 		duckCfg.AzureAccountName = az.AccountName
 		duckCfg.AzureAccountKey = az.AccountKey
 		duckCfg.AzureConnectionString = az.ConnectionString
+		duckCfg.AzureEndpoint = az.Endpoint
 	}
 
 	duckMgr, err := ducklake.NewManager(duckCfg)
@@ -396,6 +397,7 @@ func (w *Writer) Start() error {
 					AccountName:      az.AccountName,
 					AccountKey:       az.AccountKey,
 					ConnectionString: az.ConnectionString,
+					Endpoint:         az.Endpoint,
 				}
 			}
 		}
@@ -973,6 +975,7 @@ func (w *Writer) startTieringService() error {
 			AzureAccountName:      vol.AzureAccountName,
 			AzureAccountKey:       vol.AzureAccountKey,
 			AzureConnectionString: vol.AzureConnectionString,
+			AzureEndpoint:         vol.AzureEndpoint,
 			OverrideDataPath:      vol.OverrideDataPath,
 		}
 	}

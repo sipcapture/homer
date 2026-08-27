@@ -90,3 +90,139 @@ func TestAzureBlobClient_CredentialChainRequiresAccountName(t *testing.T) {
 		t.Fatal("expected error when no key, no connection string, and no account_name")
 	}
 }
+
+// TestBuildAzureConnectionString: PR review must-fix #2
+// (github.com/sipcapture/homer/pull/983) — a custom endpoint must produce a
+// BlobEndpoint connection string (Azurite/Gov/China cloud), not silently
+// default to the public-cloud EndpointSuffix.
+func TestBuildAzureConnectionString(t *testing.T) {
+	got := buildAzureConnectionString("myaccount", "ZmFrZQ==", "")
+	want := "DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=ZmFrZQ==;EndpointSuffix=core.windows.net"
+	if got != want {
+		t.Errorf("no endpoint: got %q, want %q", got, want)
+	}
+
+	got = buildAzureConnectionString("myaccount", "ZmFrZQ==", "http://azurite:10000/myaccount")
+	want = "AccountName=myaccount;AccountKey=ZmFrZQ==;BlobEndpoint=http://azurite:10000/myaccount;"
+	if got != want {
+		t.Errorf("custom endpoint: got %q, want %q", got, want)
+	}
+
+	// Real Azure Gov/China cloud endpoints have a different URL shape than
+	// Azurite (DNS subdomain, HTTPS, no path segment vs. path-segment
+	// account name on a fixed host:port) — the function does no URL
+	// parsing, so it should handle both identically. Prove it rather than
+	// only exercising the Azurite shape above.
+	got = buildAzureConnectionString("myaccount", "ZmFrZQ==", "https://myaccount.blob.core.usgovcloudapi.net")
+	want = "AccountName=myaccount;AccountKey=ZmFrZQ==;BlobEndpoint=https://myaccount.blob.core.usgovcloudapi.net;"
+	if got != want {
+		t.Errorf("gov cloud endpoint: got %q, want %q", got, want)
+	}
+}
+
+// TestAzureBlobClient_AccountKeyWithEndpoint: the native mover's
+// account_key branch must honor a custom endpoint (previously it always
+// pointed at https://<account>.blob.core.windows.net/ regardless of any
+// endpoint override — PR review must-fix #2).
+func TestAzureBlobClient_AccountKeyWithEndpoint(t *testing.T) {
+	client, err := azureBlobClient(AzureConfig{
+		AccountName: "fakeaccount",
+		AccountKey:  "ZmFrZQ==",
+		Endpoint:    "http://azurite:10000/fakeaccount",
+	})
+	if err != nil {
+		t.Fatalf("azureBlobClient: %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected non-nil client")
+	}
+	// NewClientFromConnectionString normalizes with a trailing slash.
+	if got := client.URL(); got != "http://azurite:10000/fakeaccount/" {
+		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	}
+}
+
+// TestAzureBlobClient_CredentialChainWithEndpoint: the credential_chain
+// branch must also honor a custom endpoint, not just account_key (PR review
+// must-fix #2).
+func TestAzureBlobClient_CredentialChainWithEndpoint(t *testing.T) {
+	client, err := azureBlobClient(AzureConfig{
+		AccountName: "fakeaccount",
+		Endpoint:    "http://fake-endpoint:10000/fakeaccount",
+	})
+	if err != nil {
+		t.Fatalf("azureBlobClient: %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected non-nil client")
+	}
+	if got := client.URL(); got != "http://fake-endpoint:10000/fakeaccount" {
+		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	}
+}
+
+// TestAzureBlobClient_CredentialChainWithGovCloudEndpoint: the two tests
+// above only use Azurite's URL shape. Prove the real-Azure shape (DNS
+// subdomain, HTTPS, no path segment) also works, for both mover branches —
+// see the equivalent Gov cloud case in tiered_storage_test.go for the
+// DuckDB-secret side of the same thing.
+func TestAzureBlobClient_CredentialChainWithGovCloudEndpoint(t *testing.T) {
+	client, err := azureBlobClient(AzureConfig{
+		AccountName: "myaccount",
+		Endpoint:    "https://myaccount.blob.core.usgovcloudapi.net",
+	})
+	if err != nil {
+		t.Fatalf("azureBlobClient: %v", err)
+	}
+	if got := client.URL(); got != "https://myaccount.blob.core.usgovcloudapi.net" {
+		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	}
+}
+
+func TestAzureBlobClient_AccountKeyWithGovCloudEndpoint(t *testing.T) {
+	client, err := azureBlobClient(AzureConfig{
+		AccountName: "myaccount",
+		AccountKey:  "ZmFrZQ==",
+		Endpoint:    "https://myaccount.blob.core.usgovcloudapi.net",
+	})
+	if err != nil {
+		t.Fatalf("azureBlobClient: %v", err)
+	}
+	// NewClientFromConnectionString normalizes with a trailing slash.
+	if got := client.URL(); got != "https://myaccount.blob.core.usgovcloudapi.net/" {
+		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	}
+}
+
+// TestAzureBlobClient_CredentialChainWithStandardCloudEndpoint and
+// TestAzureBlobClient_AccountKeyWithStandardCloudEndpoint: the Gov cloud
+// tests above are a non-default cloud. Also prove the standard/global
+// public cloud's own endpoint shape (blob.core.windows.net) works when
+// passed explicitly as Endpoint, not just relied on implicitly via the
+// no-endpoint default (see TestAzureBlobClient_AccountKey/CredentialChain).
+func TestAzureBlobClient_CredentialChainWithStandardCloudEndpoint(t *testing.T) {
+	client, err := azureBlobClient(AzureConfig{
+		AccountName: "myaccount",
+		Endpoint:    "https://myaccount.blob.core.windows.net",
+	})
+	if err != nil {
+		t.Fatalf("azureBlobClient: %v", err)
+	}
+	if got := client.URL(); got != "https://myaccount.blob.core.windows.net" {
+		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	}
+}
+
+func TestAzureBlobClient_AccountKeyWithStandardCloudEndpoint(t *testing.T) {
+	client, err := azureBlobClient(AzureConfig{
+		AccountName: "myaccount",
+		AccountKey:  "ZmFrZQ==",
+		Endpoint:    "https://myaccount.blob.core.windows.net",
+	})
+	if err != nil {
+		t.Fatalf("azureBlobClient: %v", err)
+	}
+	if got := client.URL(); got != "https://myaccount.blob.core.windows.net/" {
+		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	}
+}

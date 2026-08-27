@@ -92,6 +92,7 @@ type Config struct {
 	AzureAccountName      string
 	AzureAccountKey       string
 	AzureConnectionString string
+	AzureEndpoint         string // custom Blob endpoint (Azurite, Gov/China cloud); see config.AzureConfig.Endpoint
 
 	// DuckDB engine tuning. Empty / zero values mean "leave DuckDB's
 	// own default" — these knobs are opt-in. See ApplyDuckDBTuning
@@ -541,6 +542,7 @@ func (mtw *MultiTableWriter) connect() error {
 			mtw.config.AzureAccountName,
 			mtw.config.AzureAccountKey,
 			mtw.config.AzureConnectionString,
+			mtw.config.AzureEndpoint,
 		); err != nil {
 			return fmt.Errorf("failed to configure Azure secret for DuckLake: %w", err)
 		}
@@ -716,7 +718,7 @@ func (mtw *MultiTableWriter) ensureAzureSecretFresh() {
 	if time.Since(mtw.lastAzureSecretRefresh) < azureCredentialChainRefreshInterval {
 		return
 	}
-	if err := EnsureWriterAzureSecret(mtw.db, mtw.config.AzureAccountName, mtw.config.AzureAccountKey, mtw.config.AzureConnectionString); err != nil {
+	if err := EnsureWriterAzureSecret(mtw.db, mtw.config.AzureAccountName, mtw.config.AzureAccountKey, mtw.config.AzureConnectionString, mtw.config.AzureEndpoint); err != nil {
 		logger.Warn("DuckLake writer: failed to refresh Azure credential_chain secret", "error", err)
 		return
 	}

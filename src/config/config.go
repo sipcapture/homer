@@ -763,6 +763,13 @@ type VolumeConfig struct {
 	AzureAccountName      string `json:"azure_account_name" mapstructure:"azure_account_name" default:""`
 	AzureAccountKey       string `json:"azure_account_key" mapstructure:"azure_account_key" default:""`
 	AzureConnectionString string `json:"azure_connection_string" mapstructure:"azure_connection_string" default:""`
+	// AzureEndpoint overrides the default public-cloud Blob endpoint
+	// (https://<account>.blob.core.windows.net) — for Azurite, Gov/China
+	// cloud, or any other custom Blob endpoint. Only takes effect with
+	// azure_account_key or ambient/Managed Identity auth (no
+	// azure_connection_string set); a raw connection string already carries
+	// its own BlobEndpoint if needed.
+	AzureEndpoint string `json:"azure_endpoint" mapstructure:"azure_endpoint" default:""`
 	// OverrideDataPath passes OVERRIDE_DATA_PATH TRUE to DuckLake ATTACH when the path
 	// in config intentionally differs from DATA_PATH stored in an existing catalog
 	// (e.g. bucket rename, or node path typo vs writer). Prefer matching paths first.
@@ -857,6 +864,9 @@ type AzureConfig struct {
 	AccountName      string `json:"account_name" mapstructure:"account_name" default:""`
 	AccountKey       string `json:"account_key" mapstructure:"account_key" default:""`
 	ConnectionString string `json:"connection_string" mapstructure:"connection_string" default:""`
+	// Endpoint overrides the default public-cloud Blob endpoint — see
+	// VolumeConfig.AzureEndpoint for the full explanation (same semantics).
+	Endpoint string `json:"endpoint" mapstructure:"endpoint" default:""`
 }
 
 // HEPConfig configures HEP protocol processing

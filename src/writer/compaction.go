@@ -186,7 +186,7 @@ type CompactionS3Client struct {
 // secrets have no REFRESH auto — see EnsureWriterAzureSecret. Nil means
 // data_path is not az:// (mirrors CompactionS3Client).
 type CompactionAzureClient struct {
-	AccountName, AccountKey, ConnectionString string
+	AccountName, AccountKey, ConnectionString, Endpoint string
 }
 
 // CompactionService handles periodic compaction and retention
@@ -279,7 +279,7 @@ func (c *CompactionService) ensureAzureClientSettings() {
 	if !ducklake.UsesAzureCredentialChain(a.AccountKey, a.ConnectionString) {
 		return
 	}
-	if err := ducklake.EnsureWriterAzureSecret(c.db, a.AccountName, a.AccountKey, a.ConnectionString); err != nil {
+	if err := ducklake.EnsureWriterAzureSecret(c.db, a.AccountName, a.AccountKey, a.ConnectionString, a.Endpoint); err != nil {
 		logger.Warn("CompactionService: EnsureWriterAzureSecret failed", "error", err)
 	}
 }

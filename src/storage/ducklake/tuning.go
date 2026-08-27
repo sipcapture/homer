@@ -211,7 +211,7 @@ const writerLakeAzureSecret = "homer_writer_azure"
 // this to refresh a credential_chain secret before its Managed Identity
 // token (~1h lifetime, no REFRESH clause exists for azure secrets) goes
 // stale — see CompactionService.ensureAzureClientSettings.
-func EnsureWriterAzureSecret(db *sql.DB, accountName, accountKey, connectionString string) error {
+func EnsureWriterAzureSecret(db *sql.DB, accountName, accountKey, connectionString, endpoint string) error {
 	if db == nil {
 		return nil
 	}
@@ -225,7 +225,7 @@ func EnsureWriterAzureSecret(db *sql.DB, accountName, accountKey, connectionStri
 	if _, err := db.Exec(drop); err != nil {
 		return fmt.Errorf("duckdb DROP SECRET %s: %w", writerLakeAzureSecret, err)
 	}
-	create := BuildAzureSecretSQL(writerLakeAzureSecret, accountName, accountKey, connectionString)
+	create := BuildAzureSecretSQL(writerLakeAzureSecret, accountName, accountKey, connectionString, endpoint)
 	if _, err := db.Exec(create); err != nil {
 		return fmt.Errorf("duckdb CREATE SECRET %s: %w", writerLakeAzureSecret, err)
 	}

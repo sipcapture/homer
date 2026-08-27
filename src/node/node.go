@@ -1832,7 +1832,7 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 	if vol.Type == "azure" {
 		secretName := fmt.Sprintf("azure_secret_%s", vol.Name)
 		db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
-		createSecret := ducklake.BuildAzureSecretSQL(secretName, vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString)
+		createSecret := ducklake.BuildAzureSecretSQL(secretName, vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString, vol.AzureEndpoint)
 		if _, err := db.Exec(createSecret); err != nil {
 			return VolumeInfo{}, fmt.Errorf("failed to create Azure secret: %w", err)
 		}
