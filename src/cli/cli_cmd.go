@@ -136,13 +136,15 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("failed to configure S3: %w", err)
 	}
-	if ducklake.IsRemoteLakeDataPath(cfg.DataPath) {
+	if ducklake.IsS3Path(cfg.DataPath) {
 		if err := ducklake.EnsureWriterS3Secret(db,
 			cfg.S3Region, cfg.S3AccessKeyID, cfg.S3SecretAccessKey, cfg.S3Endpoint, cfg.S3UseSSL, cfg.S3URLStyle,
 		); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("failed to configure S3 secret: %w", err)
 		}
+	}
+	if ducklake.IsAzurePath(cfg.DataPath) {
 		ducklake.EnsureAzureCACertPath()
 		if _, err := db.Exec("LOAD azure;"); err != nil {
 			// Best-effort: only az:// paths actually need this extension.

@@ -120,10 +120,19 @@ func isS3Path(path string) bool {
 	return strings.HasPrefix(path, "s3://") || strings.HasPrefix(path, "s3a://")
 }
 
+// IsS3Path is isS3Path exported for callers outside package ducklake that
+// need to branch S3-specific setup separately from Azure (e.g. cli_cmd.go's
+// openDuckLakeReadOnly, so an S3-only data_path does not also attempt to
+// LOAD the azure extension).
+func IsS3Path(path string) bool { return isS3Path(path) }
+
 // isAzurePath checks if path is an Azure Blob Storage URL
 func isAzurePath(path string) bool {
 	return strings.HasPrefix(path, "az://") || strings.HasPrefix(path, "azure://")
 }
+
+// IsAzurePath is isAzurePath exported; see IsS3Path.
+func IsAzurePath(path string) bool { return isAzurePath(path) }
 
 // IsRemoteLakeDataPath reports whether lake parquet roots live on object storage
 // (s3://, s3a://, az://, azure://) rather than the local filesystem.
