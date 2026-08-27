@@ -99,6 +99,14 @@ func azureServiceURL(accountName string) string {
 	return fmt.Sprintf("https://%s.blob.core.windows.net/", accountName)
 }
 
+// azureBlockSize and azureConcurrency mirror s3MultipartPartSize /
+// s3Copier's manager.Uploader concurrency (mover/s3.go) so the two native
+// copiers behave the same way under load.
+const (
+	azureBlockSize   = 8 << 20 // 8 MiB
+	azureConcurrency = 3
+)
+
 func (c *azureCopier) Copy(ctx context.Context, srcPath, dstPath string, size int64) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -113,7 +121,29 @@ func (c *azureCopier) Copy(ctx context.Context, srcPath, dstPath string, size in
 	}
 	defer f.Close()
 
-	if _, err := c.client.UploadFile(ctx, container, key, f, nil); err != nil {
+	// s3Copier passes size as PutObjectInput.ContentLength, which S3
+	// validates during the request itself. UploadFileOptions has no
+	// equivalent field — it reads size directly off the *os.File handle —
+	// so there is no way to get that same request-time validation here.
+	// Check the source file's on-disk size against the catalog's recorded
+	// size up front instead, mirroring what LocalCopier's n != size check
+	// protects against (a truncated/resized source), just checked before
+	// the upload rather than during it.
+	if size > 0 {
+		info, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		if info.Size() != size {
+			return fmt.Errorf("source is %d bytes, catalog size %d: %s", info.Size(), size, srcPath)
+		}
+	}
+
+	opts := &azblob.UploadFileOptions{
+		BlockSize:   azureBlockSize,
+		Concurrency: azureConcurrency,
+	}
+	if _, err := c.client.UploadFile(ctx, container, key, f, opts); err != nil {
 		return fmt.Errorf("azure upload %s: %w", dstPath, err)
 	}
 	return nil

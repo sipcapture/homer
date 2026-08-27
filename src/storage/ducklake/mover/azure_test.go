@@ -1,6 +1,11 @@
 package mover
 
-import "testing"
+import (
+	"context"
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestSplitAzureURL(t *testing.T) {
 	cases := []struct {
@@ -224,5 +229,40 @@ func TestAzureBlobClient_AccountKeyWithStandardCloudEndpoint(t *testing.T) {
 	}
 	if got := client.URL(); got != "https://myaccount.blob.core.windows.net/" {
 		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	}
+}
+
+// TestAzureCopier_CopyRejectsSizeMismatch is a regression test for PR
+// review nit (github.com/sipcapture/homer/pull/983): azureCopier.Copy
+// ignored the size parameter entirely, unlike LocalCopier which verifies
+// the copied byte count matches the catalog's recorded size. The check
+// here runs before any network call (via os.File.Stat, not after
+// uploading), so this test never touches the network and cannot hang —
+// a mismatched size must fail fast with a clear error instead of silently
+// uploading the wrong-sized file.
+func TestAzureCopier_CopyRejectsSizeMismatch(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "azure-copy-test-*.parquet")
+	if err != nil {
+		t.Fatalf("CreateTemp: %v", err)
+	}
+	if _, err := f.WriteString("hello world"); err != nil { // 11 bytes
+		t.Fatalf("WriteString: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	client, err := azureBlobClient(AzureConfig{AccountName: "fakeaccount"})
+	if err != nil {
+		t.Fatalf("azureBlobClient: %v", err)
+	}
+	c := &azureCopier{client: client}
+
+	err = c.Copy(context.Background(), f.Name(), "az://mycontainer/dest.parquet", 999)
+	if err == nil {
+		t.Fatal("expected an error for mismatched size, got nil")
+	}
+	if !strings.Contains(err.Error(), "11 bytes") || !strings.Contains(err.Error(), "catalog size 999") {
+		t.Errorf("error should mention both sizes, got: %v", err)
 	}
 }
