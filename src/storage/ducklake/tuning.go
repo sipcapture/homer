@@ -146,7 +146,9 @@ CREATE SECRET %s (
 );`, writerLakeS3Secret, sqlQuote(accessKeyID), sqlQuote(secretAccessKey), sqlQuote(reg))
 	}
 	if _, err := db.Exec(create); err != nil {
-		return fmt.Errorf("duckdb CREATE SECRET %s: %w", writerLakeS3Secret, err)
+		// Do not wrap the DuckDB error: CREATE SECRET SQL contains KEY_ID /
+		// SECRET and the driver may echo it.
+		return fmt.Errorf("duckdb CREATE SECRET %s failed (error omitted to avoid leaking credentials)", writerLakeS3Secret)
 	}
 	return nil
 }
@@ -243,7 +245,9 @@ func EnsureWriterAzureSecret(db *sql.DB, accountName, accountKey, connectionStri
 	}
 	create := BuildAzureSecretSQL(writerLakeAzureSecret, accountName, accountKey, connectionString, endpoint)
 	if _, err := db.Exec(create); err != nil {
-		return fmt.Errorf("duckdb CREATE SECRET %s: %w", writerLakeAzureSecret, err)
+		// Do not wrap the DuckDB error: CREATE SECRET SQL contains
+		// CONNECTION_STRING / AccountKey and the driver may echo it.
+		return fmt.Errorf("duckdb CREATE SECRET %s failed (error omitted to avoid leaking credentials)", writerLakeAzureSecret)
 	}
 	return nil
 }
