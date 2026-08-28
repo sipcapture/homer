@@ -1376,6 +1376,7 @@ func EnsureNodeDuckLakeVolumes(dl *DuckLakeConfig) {
 		vol.AzureAccountName = dl.Azure.AccountName
 		vol.AzureAccountKey = dl.Azure.AccountKey
 		vol.AzureConnectionString = dl.Azure.ConnectionString
+		vol.AzureEndpoint = dl.Azure.Endpoint
 	}
 	dl.Volumes = []VolumeConfig{vol}
 }

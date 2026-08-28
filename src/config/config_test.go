@@ -983,6 +983,7 @@ func TestEnsureNodeDuckLakeVolumes_AzureCopiesCredentials(t *testing.T) {
 		CatalogType: "sqlite",
 		Azure: AzureConfig{
 			AccountName: "myaccount", AccountKey: "key",
+			Endpoint: "http://azurite:10000/myaccount",
 		},
 	}
 	EnsureNodeDuckLakeVolumes(&dl)
@@ -990,7 +991,8 @@ func TestEnsureNodeDuckLakeVolumes_AzureCopiesCredentials(t *testing.T) {
 		t.Fatalf("want 1 volume, got %d", len(dl.Volumes))
 	}
 	v := dl.Volumes[0]
-	if v.Type != "azure" || v.AzureAccountName != "myaccount" || v.AzureAccountKey != "key" {
+	if v.Type != "azure" || v.AzureAccountName != "myaccount" || v.AzureAccountKey != "key" ||
+		v.AzureEndpoint != "http://azurite:10000/myaccount" {
 		t.Fatalf("azure volume credentials: %+v", v)
 	}
 }
