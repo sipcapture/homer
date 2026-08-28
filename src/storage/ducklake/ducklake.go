@@ -718,7 +718,10 @@ func (mtw *MultiTableWriter) ensureAzureSecretFresh() {
 	if time.Since(mtw.lastAzureSecretRefresh) < azureCredentialChainRefreshInterval {
 		return
 	}
-	if err := EnsureWriterAzureSecret(mtw.db, mtw.config.AzureAccountName, mtw.config.AzureAccountKey, mtw.config.AzureConnectionString, mtw.config.AzureEndpoint); err != nil {
+	mtw.catalogMu.Lock()
+	err := EnsureWriterAzureSecret(mtw.db, mtw.config.AzureAccountName, mtw.config.AzureAccountKey, mtw.config.AzureConnectionString, mtw.config.AzureEndpoint)
+	mtw.catalogMu.Unlock()
+	if err != nil {
 		logger.Warn("DuckLake writer: failed to refresh Azure credential_chain secret", "error", err)
 		return
 	}
