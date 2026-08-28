@@ -744,8 +744,8 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
       const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone)
       const data = await apiPost('/transactions/events', body)
       const payload = data?.data || {}
-      const items = promoteDataExtraNodeName(payload.items || [])
-      setEventsData({ ...payload, items })
+      const rows = promoteDataExtraNodeName(payload.items || [])
+      setEventsData({ ...payload, items: rows })
     } catch (err) {
       setEventsError(err.message)
     } finally {
