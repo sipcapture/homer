@@ -87,16 +87,27 @@ func azureBlobClient(cfg AzureConfig) (*azblob.Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("azure: default credential chain: %w", err)
 		}
-		serviceURL := endpoint
-		if serviceURL == "" {
-			serviceURL = azureServiceURL(accountName)
-		}
-		return azblob.NewClient(serviceURL, cred, nil)
+		return azblob.NewClient(azureBlobServiceURL(accountName, endpoint), cred, nil)
 	}
 }
 
 func azureServiceURL(accountName string) string {
 	return fmt.Sprintf("https://%s.blob.core.windows.net/", accountName)
+}
+
+// azureBlobServiceURL is the account URL passed to azblob.NewClient.
+// NewClientFromConnectionString normalizes with a trailing slash; match
+// that here so a custom endpoint without a slash (Azurite / Gov) does not
+// disagree with the default public-cloud URL, which always has one.
+func azureBlobServiceURL(accountName, endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return azureServiceURL(accountName)
+	}
+	if !strings.HasSuffix(endpoint, "/") {
+		return endpoint + "/"
+	}
+	return endpoint
 }
 
 // azureBlockSize and azureConcurrency mirror s3MultipartPartSize /

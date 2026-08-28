@@ -10,6 +10,7 @@ package node
 import (
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/sipcapture/homer-core/src/config"
 
@@ -93,6 +94,57 @@ func TestRefreshAzureSecrets_NilDBIsNoOp(t *testing.T) {
 		Volumes: []config.VolumeConfig{{Name: "cold", Type: "azure"}},
 	}}}
 	n.refreshAzureSecrets() // must not panic
+}
+
+// TestRefreshAzureSecrets_HoldsRefreshMu: FlightSQL catalog reconnect
+// closes n.db under refreshMu. DROP SECRET must take the same mutex so it
+// cannot run against a handle that refreshCatalog is about to Close.
+func TestRefreshAzureSecrets_HoldsRefreshMu(t *testing.T) {
+	n := &Node{config: &config.NodeConfig{DuckLake: config.DuckLakeConfig{
+		Volumes: []config.VolumeConfig{{Name: "cold", Type: "azure"}},
+	}}}
+	n.refreshMu.Lock()
+	started := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		close(started)
+		n.refreshAzureSecrets()
+		close(done)
+	}()
+	<-started
+	select {
+	case <-done:
+		t.Fatal("refreshAzureSecrets returned while refreshMu is held")
+	case <-time.After(80 * time.Millisecond):
+	}
+	n.refreshMu.Unlock()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("refreshAzureSecrets did not return after refreshMu was released")
+	}
+}
+
+// TestStopAzureSecretRefresh_WaitsForInFlight: Stop must join the refresh
+// goroutine before closing n.db, otherwise DROP SECRET can run on a closed handle.
+func TestStopAzureSecretRefresh_WaitsForInFlight(t *testing.T) {
+	n := &Node{}
+	n.stopAzureRefresh = make(chan struct{})
+	n.azureRefreshWg.Add(1)
+	started := make(chan struct{})
+	go func() {
+		defer n.azureRefreshWg.Done()
+		close(started)
+		<-n.stopAzureRefresh
+		time.Sleep(80 * time.Millisecond)
+	}()
+	<-started
+	start := time.Now()
+	n.stopAzureSecretRefresh()
+	if time.Since(start) < 50*time.Millisecond {
+		t.Fatal("expected stopAzureSecretRefresh to wait for the in-flight goroutine")
+	}
+	n.stopAzureSecretRefresh() // second call must be a no-op
 }
 
 func assertNodeSecret(t *testing.T, db *sql.DB, name string, wantExists bool) {

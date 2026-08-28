@@ -64,6 +64,7 @@ type Node struct {
 	// stopAzureRefresh, when non-nil, signals the periodic Azure
 	// credential_chain secret refresh goroutine (started in Start) to exit.
 	stopAzureRefresh chan struct{}
+	azureRefreshWg   sync.WaitGroup
 
 	// refreshMu serializes catalog reconnect on n.db so queries never observe
 	// a half-swapped handle while ObjectCache from DETACH+ATTACH is avoided.
@@ -234,7 +235,9 @@ func (n *Node) Start() error {
 	if n.sharedDB == nil && nodeUsesAzureCredentialChain(n.config) {
 		n.stopAzureRefresh = make(chan struct{})
 		stop := n.stopAzureRefresh
+		n.azureRefreshWg.Add(1)
 		go func() {
+			defer n.azureRefreshWg.Done()
 			ticker := time.NewTicker(azureSecretRefreshInterval)
 			defer ticker.Stop()
 			for {
@@ -273,6 +276,12 @@ func nodeUsesAzureCredentialChain(cfg *config.NodeConfig) bool {
 // reconnect is unnecessary overhead for what is otherwise just a DROP+CREATE
 // SECRET.
 func (n *Node) refreshAzureSecrets() {
+	// refreshCatalog closes n.db under refreshMu. Hold the same mutex for
+	// the duration of DROP+CREATE so we cannot Exec on a handle that is
+	// about to be (or already has been) closed.
+	n.refreshMu.Lock()
+	defer n.refreshMu.Unlock()
+
 	n.mu.RLock()
 	db := n.db
 	volumes := n.config.DuckLake.Volumes
@@ -341,6 +350,17 @@ func (n *Node) refreshCatalog() {
 // Stop stops the node module
 func (n *Node) Stop() error {
 	n.mu.Lock()
+	if !n.running {
+		n.mu.Unlock()
+		return nil
+	}
+	n.mu.Unlock()
+
+	// Join the Azure refresh goroutine before taking n.mu again: it needs
+	// n.mu.RLock (and refreshMu) to DROP SECRET, and Stop closes n.db below.
+	n.stopAzureSecretRefresh()
+
+	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	if !n.running {
@@ -356,11 +376,6 @@ func (n *Node) Stop() error {
 
 	if n.fsql != nil {
 		n.fsql.Stop()
-	}
-
-	if n.stopAzureRefresh != nil {
-		close(n.stopAzureRefresh)
-		n.stopAzureRefresh = nil
 	}
 
 	// GracefulStop waits for all in-flight RPCs to finish. Guard with a timeout
@@ -385,6 +400,22 @@ func (n *Node) Stop() error {
 
 	logger.Info("Node: Airport server stopped")
 	return nil
+}
+
+// stopAzureSecretRefresh signals the periodic Azure secret refresher to
+// exit and waits for an in-flight DROP+CREATE to finish. Safe to call when
+// the goroutine was never started. Must not be held under n.mu: the
+// goroutine takes n.mu.RLock inside refreshAzureSecrets.
+func (n *Node) stopAzureSecretRefresh() {
+	n.mu.Lock()
+	ch := n.stopAzureRefresh
+	n.stopAzureRefresh = nil
+	n.mu.Unlock()
+	if ch == nil {
+		return
+	}
+	close(ch)
+	n.azureRefreshWg.Wait()
 }
 
 // QueryRequest represents a SQL query request
