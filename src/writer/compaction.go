@@ -267,10 +267,8 @@ func (c *CompactionService) ensureS3ClientSettings() {
 // stale). Static account_key/connection_string secrets never expire, so
 // re-issuing them here would just be unnecessary DROP+CREATE churn — skip.
 //
-// NOTE: the node's own read path (node.attachVolume) has this same gap —
-// its azure secret is also created once at attach and never refreshed. Left
-// alone for now as a separate, pre-existing issue (S3 has the identical gap
-// there too, not introduced by Azure support) rather than widened here.
+// Standalone node recreates both Azure and S3 credential_chain secrets on
+// the same 20-minute ticker (see node.refreshCredentialChainSecrets).
 func (c *CompactionService) ensureAzureClientSettings() {
 	if c == nil || c.db == nil || c.azureClient == nil {
 		return

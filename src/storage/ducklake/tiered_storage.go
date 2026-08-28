@@ -197,17 +197,27 @@ func s3SecretName(volumeName string) string {
 	return fmt.Sprintf("s3_secret_%s", volumeName)
 }
 
-func volumeS3EndpointHost(endpoint string) string {
+// S3EndpointHost strips http(s):// so DuckDB's ENDPOINT clause and
+// UsesS3CredentialChain see a host:port, not a URL.
+func S3EndpointHost(endpoint string) string {
 	endpoint = strings.TrimSpace(endpoint)
 	endpoint = strings.TrimPrefix(endpoint, "http://")
 	endpoint = strings.TrimPrefix(endpoint, "https://")
 	return endpoint
 }
 
-// usesS3CredentialChain is the native-AWS branch of buildS3SecretSQL: empty
+func volumeS3EndpointHost(endpoint string) string {
+	return S3EndpointHost(endpoint)
+}
+
+// UsesS3CredentialChain is the native-AWS branch of BuildS3SecretSQL: empty
 // static key and no custom endpoint, so DuckDB resolves IMDS / IRSA / env.
-func usesS3CredentialChain(accessKey, endpoint string) bool {
+func UsesS3CredentialChain(accessKey, endpoint string) bool {
 	return strings.TrimSpace(accessKey) == "" && strings.TrimSpace(endpoint) == ""
+}
+
+func usesS3CredentialChain(accessKey, endpoint string) bool {
+	return UsesS3CredentialChain(accessKey, endpoint)
 }
 
 func s3SecretSQLForVolume(vol *Volume, replace bool) string {
@@ -216,7 +226,7 @@ func s3SecretSQLForVolume(vol *Volume, replace bool) string {
 	if region == "" && endpoint != "" {
 		region = "us-east-1"
 	}
-	sql := buildS3SecretSQL(s3SecretName(vol.Name), vol.S3AccessKey, vol.S3SecretKey, region, endpoint, vol.S3UseSSL, vol.S3URLStyle)
+	sql := BuildS3SecretSQL(s3SecretName(vol.Name), vol.S3AccessKey, vol.S3SecretKey, region, endpoint, vol.S3UseSSL, vol.S3URLStyle)
 	if replace {
 		sql = strings.Replace(sql, "CREATE SECRET", "CREATE OR REPLACE SECRET", 1)
 	}
@@ -1009,7 +1019,7 @@ func sortResultsByTimestamp(results []map[string]interface{}) {
 	})
 }
 
-// buildS3SecretSQL returns the CREATE SECRET SQL for an S3 volume.
+// BuildS3SecretSQL returns the CREATE SECRET SQL for an S3 volume.
 // When accessKey is empty and endpoint is empty (native AWS S3), the secret
 // uses PROVIDER credential_chain so DuckDB resolves credentials through the
 // AWS SDK default chain (env, container/Pod Identity, instance profile).
@@ -1018,7 +1028,7 @@ func sortResultsByTimestamp(results []map[string]interface{}) {
 // without it the secret is resolved once at CREATE SECRET and every later
 // cold-volume operation fails with ExpiredToken until homer-core restarts.
 // Static keys and custom endpoints (MinIO / R2) use explicit KEY_ID/SECRET.
-func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string, useSSL bool, urlStyle string) string {
+func BuildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string, useSSL bool, urlStyle string) string {
 	switch {
 	case usesS3CredentialChain(accessKey, endpoint):
 		// Default region for native AWS S3 so the secret signs correctly even
@@ -1057,6 +1067,10 @@ func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string,
 			);
 		`, secretName, accessKey, secretKey, region)
 	}
+}
+
+func buildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint string, useSSL bool, urlStyle string) string {
+	return BuildS3SecretSQL(secretName, accessKey, secretKey, region, endpoint, useSSL, urlStyle)
 }
 
 // BuildAzureConnectionString synthesizes an Azure Storage connection string

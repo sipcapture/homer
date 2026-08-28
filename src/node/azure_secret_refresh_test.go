@@ -17,14 +17,16 @@ import (
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
-func TestNodeUsesAzureCredentialChain(t *testing.T) {
+func TestNodeUsesCredentialChain(t *testing.T) {
 	cases := []struct {
 		name    string
 		volumes []config.VolumeConfig
 		want    bool
 	}{
 		{name: "no volumes", volumes: nil, want: false},
-		{name: "s3 volume only", volumes: []config.VolumeConfig{{Type: "s3"}}, want: false},
+		{name: "s3 with static key", volumes: []config.VolumeConfig{{Type: "s3", S3AccessKeyID: "AKIA..."}}, want: false},
+		{name: "s3 with custom endpoint", volumes: []config.VolumeConfig{{Type: "s3", S3Endpoint: "minio.local:9000"}}, want: false},
+		{name: "s3 empty keys native AWS", volumes: []config.VolumeConfig{{Type: "s3"}}, want: true},
 		{
 			name:    "azure with account key",
 			volumes: []config.VolumeConfig{{Type: "azure", AzureAccountKey: "k"}},
@@ -45,20 +47,20 @@ func TestNodeUsesAzureCredentialChain(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &config.NodeConfig{DuckLake: config.DuckLakeConfig{Volumes: tc.volumes}}
-			if got := nodeUsesAzureCredentialChain(cfg); got != tc.want {
-				t.Errorf("nodeUsesAzureCredentialChain() = %v, want %v", got, tc.want)
+			if got := nodeUsesCredentialChain(cfg); got != tc.want {
+				t.Errorf("nodeUsesCredentialChain() = %v, want %v", got, tc.want)
 			}
 		})
 	}
 }
 
-// TestRefreshAzureSecrets_RecreatesCredentialChainSecret proves the refresh
+// TestRefreshCredentialChainSecrets_RecreatesAzure proves the refresh
 // actually reaches DuckDB: it drops and recreates the credential_chain
 // secret for an Azure volume, leaving a static-key volume's secret alone.
 // CREATE SECRET for credential_chain never resolves credentials itself (only
 // first use does, per DuckDB's azure extension), so this cannot hang like
 // the write-path tests that go on to ATTACH/glob.
-func TestRefreshAzureSecrets_RecreatesCredentialChainSecret(t *testing.T) {
+func TestRefreshCredentialChainSecrets_RecreatesAzure(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
 		t.Fatalf("open duckdb: %v", err)
@@ -81,25 +83,61 @@ func TestRefreshAzureSecrets_RecreatesCredentialChainSecret(t *testing.T) {
 		},
 	}
 
-	n.refreshAzureSecrets()
+	n.refreshCredentialChainSecrets()
 
 	assertNodeSecret(t, db, "azure_secret_cold", true)
 	assertNodeSecret(t, db, "azure_secret_static", false)
 }
 
-// TestRefreshAzureSecrets_NilDBIsNoOp is a defensive smoke: a node that
-// hasn't attached yet must not panic when the ticker fires early.
-func TestRefreshAzureSecrets_NilDBIsNoOp(t *testing.T) {
+// TestRefreshCredentialChainSecrets_RecreatesS3 is the S3 counterpart:
+// empty keys + no custom endpoint become PROVIDER credential_chain (the
+// node used to skip CREATE SECRET entirely, which is why #980's SQL
+// console survived while TSM died). Static-key volumes are left alone.
+func TestRefreshCredentialChainSecrets_RecreatesS3(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec("LOAD httpfs;"); err != nil {
+		t.Skipf("httpfs extension unavailable: %v", err)
+	}
+	if _, err := db.Exec("LOAD aws;"); err != nil {
+		t.Skipf("aws extension unavailable: %v", err)
+	}
+
+	n := &Node{
+		db: db,
+		config: &config.NodeConfig{
+			DuckLake: config.DuckLakeConfig{
+				Volumes: []config.VolumeConfig{
+					{Name: "cold", Type: "s3", S3Region: "us-east-1"},
+					{Name: "static", Type: "s3", S3AccessKeyID: "AKIA...", S3SecretKey: "secret", S3Region: "us-east-1"},
+				},
+			},
+		},
+	}
+
+	n.refreshCredentialChainSecrets()
+
+	assertNodeSecret(t, db, "s3_secret_cold", true)
+	assertNodeSecret(t, db, "s3_secret_static", false)
+}
+
+// TestRefreshCredentialChainSecrets_NilDBIsNoOp is a defensive smoke: a node
+// that hasn't attached yet must not panic when the ticker fires early.
+func TestRefreshCredentialChainSecrets_NilDBIsNoOp(t *testing.T) {
 	n := &Node{config: &config.NodeConfig{DuckLake: config.DuckLakeConfig{
 		Volumes: []config.VolumeConfig{{Name: "cold", Type: "azure"}},
 	}}}
-	n.refreshAzureSecrets() // must not panic
+	n.refreshCredentialChainSecrets() // must not panic
 }
 
-// TestRefreshAzureSecrets_HoldsRefreshMu: FlightSQL catalog reconnect
+// TestRefreshCredentialChainSecrets_HoldsRefreshMu: FlightSQL catalog reconnect
 // closes n.db under refreshMu. DROP SECRET must take the same mutex so it
 // cannot run against a handle that refreshCatalog is about to Close.
-func TestRefreshAzureSecrets_HoldsRefreshMu(t *testing.T) {
+func TestRefreshCredentialChainSecrets_HoldsRefreshMu(t *testing.T) {
 	n := &Node{config: &config.NodeConfig{DuckLake: config.DuckLakeConfig{
 		Volumes: []config.VolumeConfig{{Name: "cold", Type: "azure"}},
 	}}}
@@ -108,43 +146,43 @@ func TestRefreshAzureSecrets_HoldsRefreshMu(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		close(started)
-		n.refreshAzureSecrets()
+		n.refreshCredentialChainSecrets()
 		close(done)
 	}()
 	<-started
 	select {
 	case <-done:
-		t.Fatal("refreshAzureSecrets returned while refreshMu is held")
+		t.Fatal("refreshCredentialChainSecrets returned while refreshMu is held")
 	case <-time.After(80 * time.Millisecond):
 	}
 	n.refreshMu.Unlock()
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("refreshAzureSecrets did not return after refreshMu was released")
+		t.Fatal("refreshCredentialChainSecrets did not return after refreshMu was released")
 	}
 }
 
-// TestStopAzureSecretRefresh_WaitsForInFlight: Stop must join the refresh
+// TestStopCredentialChainRefresh_WaitsForInFlight: Stop must join the refresh
 // goroutine before closing n.db, otherwise DROP SECRET can run on a closed handle.
-func TestStopAzureSecretRefresh_WaitsForInFlight(t *testing.T) {
+func TestStopCredentialChainRefresh_WaitsForInFlight(t *testing.T) {
 	n := &Node{}
-	n.stopAzureRefresh = make(chan struct{})
-	n.azureRefreshWg.Add(1)
+	n.stopSecretRefresh = make(chan struct{})
+	n.secretRefreshWg.Add(1)
 	started := make(chan struct{})
 	go func() {
-		defer n.azureRefreshWg.Done()
+		defer n.secretRefreshWg.Done()
 		close(started)
-		<-n.stopAzureRefresh
+		<-n.stopSecretRefresh
 		time.Sleep(80 * time.Millisecond)
 	}()
 	<-started
 	start := time.Now()
-	n.stopAzureSecretRefresh()
+	n.stopCredentialChainRefresh()
 	if time.Since(start) < 50*time.Millisecond {
-		t.Fatal("expected stopAzureSecretRefresh to wait for the in-flight goroutine")
+		t.Fatal("expected stopCredentialChainRefresh to wait for the in-flight goroutine")
 	}
-	n.stopAzureSecretRefresh() // second call must be a no-op
+	n.stopCredentialChainRefresh() // second call must be a no-op
 }
 
 func assertNodeSecret(t *testing.T, db *sql.DB, name string, wantExists bool) {
