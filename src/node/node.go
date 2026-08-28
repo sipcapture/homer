@@ -324,7 +324,7 @@ func (n *Node) refreshCredentialChainSecrets() {
 			db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
 			createSecret := ducklake.BuildAzureSecretSQL(secretName, vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString, vol.AzureEndpoint)
 			if _, err := db.Exec(createSecret); err != nil {
-				logger.Warn(fmt.Sprintf("Node: failed to refresh Azure secret for volume %s: %v", vol.Name, err))
+				logger.Warn(fmt.Sprintf("Node: failed to refresh Azure secret for volume %s (DuckDB error omitted)", vol.Name))
 			}
 		case "s3":
 			endpoint := ducklake.S3EndpointHost(vol.S3Endpoint)
@@ -335,7 +335,7 @@ func (n *Node) refreshCredentialChainSecrets() {
 			db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
 			createSecret := ducklake.BuildS3SecretSQL(secretName, vol.S3AccessKeyID, vol.S3SecretKey, vol.S3Region, endpoint, vol.S3UseSSL, vol.S3URLStyle)
 			if _, err := db.Exec(createSecret); err != nil {
-				logger.Warn(fmt.Sprintf("Node: failed to refresh S3 secret for volume %s: %v", vol.Name, err))
+				logger.Warn(fmt.Sprintf("Node: failed to refresh S3 secret for volume %s (DuckDB error omitted)", vol.Name))
 			}
 		}
 	}
@@ -1946,9 +1946,9 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 		createSecret := ducklake.BuildS3SecretSQL(secretName, vol.S3AccessKeyID, vol.S3SecretKey, region, endpoint, vol.S3UseSSL, vol.S3URLStyle)
 		if _, err := db.Exec(createSecret); err != nil {
 			if ducklake.UsesS3CredentialChain(vol.S3AccessKeyID, endpoint) {
-				logger.Warn(fmt.Sprintf("Node: failed to create credential_chain S3 secret for volume %s (falling back to default AWS chain): %v", vol.Name, err))
+				logger.Warn(fmt.Sprintf("Node: failed to create credential_chain S3 secret for volume %s (falling back to default AWS chain; DuckDB error omitted)", vol.Name))
 			} else {
-				return VolumeInfo{}, fmt.Errorf("failed to create S3 secret: %w", err)
+				return VolumeInfo{}, fmt.Errorf("failed to create S3 secret (DuckDB error omitted to avoid leaking credentials)")
 			}
 		}
 	}
@@ -1961,7 +1961,9 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 		db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
 		createSecret := ducklake.BuildAzureSecretSQL(secretName, vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString, vol.AzureEndpoint)
 		if _, err := db.Exec(createSecret); err != nil {
-			return VolumeInfo{}, fmt.Errorf("failed to create Azure secret: %w", err)
+			// Do not wrap the DuckDB error: CREATE SECRET SQL contains
+			// CONNECTION_STRING / AccountKey and the driver may echo it.
+			return VolumeInfo{}, fmt.Errorf("failed to create Azure secret (DuckDB error omitted to avoid leaking credentials)")
 		}
 	}
 

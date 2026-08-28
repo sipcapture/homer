@@ -255,7 +255,7 @@ func (tsm *TieredStorageManager) createVolumeS3Secret(vol *Volume, replace bool)
 	}
 
 	if _, err := tsm.db.Exec(createSecret); err != nil {
-		return fmt.Errorf("failed to create S3 secret for volume %s: %w", vol.Name, err)
+		return fmt.Errorf("failed to create S3 secret for volume %s (DuckDB error omitted to avoid leaking credentials)", vol.Name)
 	}
 	return nil
 }
@@ -300,7 +300,9 @@ func (tsm *TieredStorageManager) createVolumeAzureSecret(vol *Volume, replace bo
 	}
 
 	if _, err := tsm.db.Exec(createSecret); err != nil {
-		return fmt.Errorf("failed to create Azure secret for volume %s: %w", vol.Name, err)
+		// Do not wrap the DuckDB error: CREATE SECRET SQL contains
+		// CONNECTION_STRING / AccountKey and the driver may echo it.
+		return fmt.Errorf("failed to create Azure secret for volume %s (DuckDB error omitted to avoid leaking credentials)", vol.Name)
 	}
 	return nil
 }
