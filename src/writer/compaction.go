@@ -180,6 +180,15 @@ type CompactionS3Client struct {
 	URLStyle                                       string
 }
 
+// CompactionAzureClient holds the single-volume writer's Azure secret
+// settings so maintenance calls (cleanup/orphan-delete/flush) can refresh a
+// PROVIDER credential_chain secret before it goes stale. Unlike S3, azure
+// secrets have no REFRESH auto — see EnsureWriterAzureSecret. Nil means
+// data_path is not az:// (mirrors CompactionS3Client).
+type CompactionAzureClient struct {
+	AccountName, AccountKey, ConnectionString, Endpoint string
+}
+
 // CompactionService handles periodic compaction and retention
 type CompactionService struct {
 	db            *sql.DB
@@ -190,6 +199,7 @@ type CompactionService struct {
 	tables        []string
 	catalogLocker CatalogLocker // serializes catalog access with writer flush
 	s3Client      *CompactionS3Client
+	azureClient   *CompactionAzureClient
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -221,8 +231,9 @@ type CompactionService struct {
 // NewCompactionService creates a new compaction service.
 // catalogLocker serializes catalog access with writer flush to prevent "database is locked".
 // dataPath is the root directory for Parquet files; catalog paths are relative to it.
-// s3Client may be nil when data_path is local or credentials are not used.
-func NewCompactionService(db *sql.DB, lakeName, dataPath, catalogPath string, config CompactionConfig, catalogLocker CatalogLocker, s3Client *CompactionS3Client) *CompactionService {
+// s3Client and azureClient may be nil when data_path is local or credentials
+// are not used (whichever does not match data_path's scheme is always nil).
+func NewCompactionService(db *sql.DB, lakeName, dataPath, catalogPath string, config CompactionConfig, catalogLocker CatalogLocker, s3Client *CompactionS3Client, azureClient *CompactionAzureClient) *CompactionService {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &CompactionService{
@@ -233,6 +244,7 @@ func NewCompactionService(db *sql.DB, lakeName, dataPath, catalogPath string, co
 		config:        config,
 		catalogLocker: catalogLocker,
 		s3Client:      s3Client,
+		azureClient:   azureClient,
 		ctx:           ctx,
 		cancel:        cancel,
 	}
@@ -249,6 +261,29 @@ func (c *CompactionService) ensureS3ClientSettings() {
 	}
 }
 
+// ensureAzureClientSettings recreates the single-volume writer's Azure secret
+// before procedures that list az://, when it is a PROVIDER credential_chain
+// secret (Managed Identity or ambient identity — the case that actually goes
+// stale). Static account_key/connection_string secrets never expire, so
+// re-issuing them here would just be unnecessary DROP+CREATE churn — skip.
+//
+// NOTE: the node's own read path (node.attachVolume) has this same gap —
+// its azure secret is also created once at attach and never refreshed. Left
+// alone for now as a separate, pre-existing issue (S3 has the identical gap
+// there too, not introduced by Azure support) rather than widened here.
+func (c *CompactionService) ensureAzureClientSettings() {
+	if c == nil || c.db == nil || c.azureClient == nil {
+		return
+	}
+	a := c.azureClient
+	if !ducklake.UsesAzureCredentialChain(a.AccountKey, a.ConnectionString) {
+		return
+	}
+	if err := ducklake.EnsureWriterAzureSecret(c.db, a.AccountName, a.AccountKey, a.ConnectionString, a.Endpoint); err != nil {
+		logger.Warn("CompactionService: EnsureWriterAzureSecret failed", "error", err)
+	}
+}
+
 func (c *CompactionService) warnMaintenanceS3Failure(op string, err error) {
 	logger.Warn("CompactionService: "+op+" failed", "error", err)
 	if err == nil {
@@ -256,6 +291,11 @@ func (c *CompactionService) warnMaintenanceS3Failure(op string, err error) {
 	}
 	if strings.Contains(err.Error(), "NoSuchBucket") && ducklake.IsRemoteLakeDataPath(c.dataPath) {
 		logger.Warn("CompactionService: NoSuchBucket — bucket missing or wrong name for data_path; create it on storage.ducklake.s3.endpoint or fix data_path",
+			"data_path", c.dataPath)
+	}
+	if (strings.Contains(err.Error(), "ContainerNotFound") || strings.Contains(err.Error(), "BlobNotFound")) &&
+		ducklake.IsRemoteLakeDataPath(c.dataPath) {
+		logger.Warn("CompactionService: ContainerNotFound/BlobNotFound — Azure container missing or wrong name for data_path; create it or fix data_path",
 			"data_path", c.dataPath)
 	}
 }
@@ -382,6 +422,7 @@ func (c *CompactionService) withCatalogLock(fn func()) {
 func (c *CompactionService) flushInlinedData() {
 	c.withCatalogLock(func() {
 		c.ensureS3ClientSettings()
+		c.ensureAzureClientSettings()
 		logger.Info("CompactionService: Flush inlined data", "lake", c.lakeName)
 		flushSQL := fmt.Sprintf("CALL ducklake_flush_inlined_data('%s')", c.lakeName)
 		if _, err := c.execWithRetry(flushSQL); err != nil {
@@ -728,6 +769,7 @@ func (c *CompactionService) runMaintenanceCalls() {
 	// 2. Cleanup old files — lock for this call only
 	c.withCatalogLock(func() {
 		c.ensureS3ClientSettings()
+		c.ensureAzureClientSettings()
 		logger.Info("CompactionService: Cleanup old files", "lake", c.lakeName)
 		cleanupSQL := fmt.Sprintf("CALL ducklake_cleanup_old_files('%s', cleanup_all => true)", c.lakeName)
 		if _, err := c.execWithRetry(cleanupSQL); err != nil {
@@ -738,6 +780,7 @@ func (c *CompactionService) runMaintenanceCalls() {
 	// 3. Delete orphaned files — lock for this call only
 	c.withCatalogLock(func() {
 		c.ensureS3ClientSettings()
+		c.ensureAzureClientSettings()
 		logger.Info("CompactionService: Delete orphaned files", "lake", c.lakeName)
 		orphanSQL := fmt.Sprintf("CALL ducklake_delete_orphaned_files('%s', cleanup_all => true)", c.lakeName)
 		if _, err := c.execWithRetry(orphanSQL); err != nil {

@@ -21,7 +21,7 @@ func (LocalCopier) Copy(ctx context.Context, srcPath, dstPath string, size int64
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if isS3Path(dstPath) {
+	if isS3Path(dstPath) || isAzurePath(dstPath) {
 		return fmt.Errorf("local copier cannot write %s", dstPath)
 	}
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
@@ -58,13 +58,20 @@ func (f CopierFunc) Copy(ctx context.Context, srcPath, dstPath string, size int6
 	return f(ctx, srcPath, dstPath, size)
 }
 
-func defaultCopier(dstDataPath string, s3cfg *S3Config) (Copier, error) {
+func defaultCopier(dstDataPath string, s3cfg *S3Config, azurecfg *AzureConfig) (Copier, error) {
 	if isS3Path(dstDataPath) {
 		cfg := S3Config{}
 		if s3cfg != nil {
 			cfg = *s3cfg
 		}
 		return newS3Copier(cfg)
+	}
+	if isAzurePath(dstDataPath) {
+		cfg := AzureConfig{}
+		if azurecfg != nil {
+			cfg = *azurecfg
+		}
+		return newAzureCopier(cfg)
 	}
 	return LocalCopier{}, nil
 }

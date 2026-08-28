@@ -88,6 +88,12 @@ type Config struct {
 	S3UseSSL          bool
 	S3URLStyle        string
 
+	// Azure Blob Storage configuration (if DataPath is az:// or azure://)
+	AzureAccountName      string
+	AzureAccountKey       string
+	AzureConnectionString string
+	AzureEndpoint         string // custom Blob endpoint (Azurite, Gov/China cloud); see config.AzureConfig.Endpoint
+
 	// DuckDB engine tuning. Empty / zero values mean "leave DuckDB's
 	// own default" — these knobs are opt-in. See ApplyDuckDBTuning
 	// for the SQL we actually run.
@@ -115,17 +121,31 @@ func isS3Path(path string) bool {
 	return strings.HasPrefix(path, "s3://") || strings.HasPrefix(path, "s3a://")
 }
 
-// IsRemoteLakeDataPath reports whether lake parquet roots live on object storage
-// (s3:// or s3a://) rather than the local filesystem.
-func IsRemoteLakeDataPath(p string) bool {
-	return isS3Path(p)
+// IsS3Path is isS3Path exported for callers outside package ducklake that
+// need to branch S3-specific setup separately from Azure (e.g. cli_cmd.go's
+// openDuckLakeReadOnly, so an S3-only data_path does not also attempt to
+// LOAD the azure extension).
+func IsS3Path(path string) bool { return isS3Path(path) }
+
+// isAzurePath checks if path is an Azure Blob Storage URL
+func isAzurePath(path string) bool {
+	return strings.HasPrefix(path, "az://") || strings.HasPrefix(path, "azure://")
 }
 
-// JoinLakeDataPath appends path elements to a lake data root. For s3:// and s3a://
-// bases it uses URL-style '/' joining only — do not use filepath.Join, which on
-// Unix collapses "s3://" to "s3:/" and breaks object URLs.
+// IsAzurePath is isAzurePath exported; see IsS3Path.
+func IsAzurePath(path string) bool { return isAzurePath(path) }
+
+// IsRemoteLakeDataPath reports whether lake parquet roots live on object storage
+// (s3://, s3a://, az://, azure://) rather than the local filesystem.
+func IsRemoteLakeDataPath(p string) bool {
+	return isS3Path(p) || isAzurePath(p)
+}
+
+// JoinLakeDataPath appends path elements to a lake data root. For s3://, s3a://,
+// az://, and azure:// bases it uses URL-style '/' joining only — do not use
+// filepath.Join, which on Unix collapses "s3://" to "s3:/" and breaks object URLs.
 func JoinLakeDataPath(base string, elems ...string) string {
-	if isS3Path(base) {
+	if isS3Path(base) || isAzurePath(base) {
 		out := strings.TrimRight(base, "/")
 		for _, e := range elems {
 			e = strings.Trim(e, "/")
@@ -214,7 +234,21 @@ type MultiTableWriter struct {
 	// operations go through a single goroutine, eliminating catalog contention.
 	flushQueueCh chan centralFlushJob
 	flushQueueWg sync.WaitGroup
+
+	// lastAzureSecretRefresh tracks when the az:// credential_chain secret
+	// was last recreated (see ensureAzureSecretFresh). Only touched by the
+	// single flushLoop goroutine, so no lock needed.
+	lastAzureSecretRefresh time.Time
 }
+
+// azureCredentialChainRefreshInterval bounds how often flushLoop recreates a
+// credential_chain Azure secret. Independent of compaction (which only runs
+// when compaction.enable is true and has its own, often longer, cadence) —
+// this is the one path that always runs for a live single-volume writer, so
+// it is what keeps a Managed Identity token (~1h IMDS lifetime) from going
+// stale on a deployment that has compaction disabled. Well under an hour to
+// leave margin.
+const azureCredentialChainRefreshInterval = 20 * time.Minute
 
 // Writer is a deprecated single-table writer kept only for type compatibility
 // with legacy code in api.go, hep_adapter.go, and timetravel.go.
@@ -257,8 +291,10 @@ func NewMultiTableWriter(config Config) (*MultiTableWriter, error) {
 		config.FlushInterval = 30 * time.Second
 	}
 
-	// Create data directory if it doesn't exist (for local paths, not S3)
-	if config.DataPath != "" && !isS3Path(config.DataPath) {
+	// Create data directory if it doesn't exist (for local paths only, not
+	// object storage: os.MkdirAll on a URL collapses "az://"/"s3://" to
+	// "az:/"/"s3:/" on Unix and fails, or worse writes a bogus local dir).
+	if config.DataPath != "" && !IsRemoteLakeDataPath(config.DataPath) {
 		if err := os.MkdirAll(config.DataPath, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create data directory %s: %w", config.DataPath, err)
 		}
@@ -494,6 +530,24 @@ func (mtw *MultiTableWriter) connect() error {
 		}
 	}
 
+	if isAzurePath(mtw.config.DataPath) {
+		// Best-effort load, same contract as tiered storage's LOAD aws: a
+		// missing azure extension must not block startup for local/S3-only
+		// deployments, but this path only runs when DataPath is az://.
+		EnsureAzureCACertPath()
+		if _, err := db.Exec("LOAD azure;"); err != nil {
+			logger.Warn("DuckLake writer: failed to load azure extension (run --install-extensions)", "error", err)
+		}
+		if err := EnsureWriterAzureSecret(db,
+			mtw.config.AzureAccountName,
+			mtw.config.AzureAccountKey,
+			mtw.config.AzureConnectionString,
+			mtw.config.AzureEndpoint,
+		); err != nil {
+			return fmt.Errorf("failed to configure Azure secret for DuckLake: %w", err)
+		}
+	}
+
 	// Build attach statement (SQLite catalog only)
 	attachSQL := mtw.buildAttachSQL()
 
@@ -641,9 +695,37 @@ func (mtw *MultiTableWriter) flushLoop() {
 			mtw.flushAll()
 			return
 		case <-ticker.C:
+			mtw.ensureAzureSecretFresh()
 			mtw.flushAll()
 		}
 	}
+}
+
+// ensureAzureSecretFresh recreates the single-volume writer's az:// secret
+// once azureCredentialChainRefreshInterval has elapsed, when it is a
+// PROVIDER credential_chain secret (Managed Identity / ambient identity —
+// the case that actually goes stale; static keys are left alone). This is
+// what keeps flush working on a deployment with compaction disabled — see
+// CompactionService.ensureAzureClientSettings for the compaction-side half
+// of this same fix.
+func (mtw *MultiTableWriter) ensureAzureSecretFresh() {
+	if mtw == nil || mtw.db == nil || !isAzurePath(mtw.config.DataPath) {
+		return
+	}
+	if !UsesAzureCredentialChain(mtw.config.AzureAccountKey, mtw.config.AzureConnectionString) {
+		return
+	}
+	if time.Since(mtw.lastAzureSecretRefresh) < azureCredentialChainRefreshInterval {
+		return
+	}
+	mtw.catalogMu.Lock()
+	err := EnsureWriterAzureSecret(mtw.db, mtw.config.AzureAccountName, mtw.config.AzureAccountKey, mtw.config.AzureConnectionString, mtw.config.AzureEndpoint)
+	mtw.catalogMu.Unlock()
+	if err != nil {
+		logger.Warn("DuckLake writer: failed to refresh Azure credential_chain secret", "error", err)
+		return
+	}
+	mtw.lastAzureSecretRefresh = time.Now()
 }
 
 // flushAll triggers a double-buffer swap for every table.

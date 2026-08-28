@@ -916,13 +916,15 @@ func logDuckLakeSmallFiles(db *sql.DB, lakeName string, stage string, limit int)
 func installDuckDBExtensions() error {
 	fmt.Println("Installing DuckDB extensions...")
 
+	ducklake.EnsureAzureCACertPath()
+
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
 		return fmt.Errorf("failed to open DuckDB: %w", err)
 	}
 	defer db.Close()
 
-	extensions := []string{"ducklake", "sqlite", "httpfs", "aws"}
+	extensions := []string{"ducklake", "sqlite", "httpfs", "aws", "azure"}
 
 	for _, ext := range extensions {
 		fmt.Printf("Installing %s extension...\n", ext)

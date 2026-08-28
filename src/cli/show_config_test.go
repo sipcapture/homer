@@ -37,6 +37,18 @@ func TestIsSecretJSONKey(t *testing.T) {
 	if isSecretJSONKey("engine") {
 		t.Fatal("engine is not a secret")
 	}
+	if !isSecretJSONKey("account_key") {
+		t.Fatal("account_key should be redacted")
+	}
+	if !isSecretJSONKey("connection_string") {
+		t.Fatal("connection_string should be redacted")
+	}
+	if !isSecretJSONKey("azure_account_key") {
+		t.Fatal("azure_account_key should be redacted")
+	}
+	if !isSecretJSONKey("azure_connection_string") {
+		t.Fatal("azure_connection_string should be redacted")
+	}
 }
 
 func TestRedactJSONSecrets_nested(t *testing.T) {
@@ -51,6 +63,21 @@ func TestRedactJSONSecrets_nested(t *testing.T) {
 					"secret_access_key": "sk",
 					"endpoint":          "http://127.0.0.1:9000",
 				},
+				"azure": map[string]any{
+					"account_name":      "homerstorage",
+					"account_key":       "azkey",
+					"connection_string": "DefaultEndpointsProtocol=https;...",
+				},
+				"storage_policy": map[string]any{
+					"volumes": []any{
+						map[string]any{
+							"name":                    "cold",
+							"type":                    "azure",
+							"azure_account_key":       "volkey",
+							"azure_connection_string": "volconnstr",
+						},
+					},
+				},
 			},
 		},
 		"mcp": map[string]any{"max_tokens": 400},
@@ -63,12 +90,24 @@ func TestRedactJSONSecrets_nested(t *testing.T) {
 	if jwt["expire"] != 3600 {
 		t.Fatal("non-secret jwt field changed")
 	}
-	s3 := root["storage"].(map[string]any)["ducklake"].(map[string]any)["s3"].(map[string]any)
+	ducklake := root["storage"].(map[string]any)["ducklake"].(map[string]any)
+	s3 := ducklake["s3"].(map[string]any)
 	if s3["secret_access_key"] != redactedSecret || s3["access_key_id"] != redactedSecret {
 		t.Fatalf("s3 keys not redacted: %#v", s3)
 	}
 	if s3["endpoint"] != "http://127.0.0.1:9000" {
 		t.Fatal("s3 endpoint changed")
+	}
+	azure := ducklake["azure"].(map[string]any)
+	if azure["account_key"] != redactedSecret || azure["connection_string"] != redactedSecret {
+		t.Fatalf("azure keys not redacted: %#v", azure)
+	}
+	if azure["account_name"] != "homerstorage" {
+		t.Fatal("azure account_name changed")
+	}
+	vol := ducklake["storage_policy"].(map[string]any)["volumes"].([]any)[0].(map[string]any)
+	if vol["azure_account_key"] != redactedSecret || vol["azure_connection_string"] != redactedSecret {
+		t.Fatalf("volume azure keys not redacted: %#v", vol)
 	}
 	if root["mcp"].(map[string]any)["max_tokens"] != 400 {
 		t.Fatal("max_tokens changed")

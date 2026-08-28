@@ -109,7 +109,7 @@ The `move_factor` parameter works similar to ClickHouse storage policies. It con
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `name` | string | required | Volume name (e.g., "hot", "cold") |
-| `type` | string | "local" | Storage type: "local" or "s3" |
+| `type` | string | "local" | Storage type: "local", "s3", or "azure" |
 | `path` | string | required | Local path or S3 URL |
 | `priority` | int | 0 | Lower = higher priority. Writes go to lowest priority |
 | `max_data_age_days` | int | 0 | On intermediate volumes: move partitions whose DuckLake **`date`** is **on or before** `calendar(today) − N days` (inclusive) to the next volume. On the **final** volume: delete (expire) those partitions instead. Example: `N=1` on May 12 includes partition `date=2026-05-11`. `0` disables TTL for that volume. |
@@ -125,6 +125,32 @@ The `move_factor` parameter works similar to ClickHouse storage policies. It con
 | `s3_endpoint` | string | "" | Custom endpoint for S3-compatible services (R2, MinIO, RustFS) |
 | `s3_use_ssl` | bool | true | Use HTTPS for S3 connections |
 | `s3_url_style` | string | "path" | DuckDB S3 URL style for custom endpoints (`path` or `vhost`) |
+
+### Azure-specific Settings (for `type: "azure"`)
+
+`path` is an `az://` URL: `az://<container>/<prefix>/` — the storage account is carried on the secret (below), not in the URL.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `azure_account_name` | string | "" | Storage account name. Required unless `azure_connection_string` is set. |
+| `azure_account_key` | string | "" | Storage account key. Combined with `azure_account_name` into a connection string internally. |
+| `azure_connection_string` | string | "" | Full Azure connection string. Takes precedence over `azure_account_key` if both are set. |
+| `azure_endpoint` | string | "" | Custom Blob endpoint (Azurite, Gov/China cloud, or any non-public-cloud endpoint) — a full URL with scheme, e.g. `http://azurite:10000/devstoreaccount1`. Applies to `azure_account_key` and the ambient-identity (Managed Identity) mode; a raw `azure_connection_string` already carries its own endpoint if it needs one. |
+
+Credential precedence (first match wins):
+
+1. `azure_connection_string`, if set.
+2. `azure_account_name` + `azure_account_key`, if `azure_account_key` is set (a connection string is assembled internally — DuckDB's `azure` extension has no separate account-key parameter — honoring `azure_endpoint` if set).
+3. Otherwise, ambient identity via DuckDB's Azure credential chain (`env`, `managed_identity`, `cli`) — this is what resolves **Managed Identity** automatically when Homer runs on an Azure VM with no static credentials configured. Set `azure_account_name` only in this mode; leave `azure_account_key` and `azure_connection_string` empty. `azure_endpoint` still applies here too, for Managed Identity against a non-public-cloud endpoint.
+
+#### CA certificate path on non-Docker deployments
+
+DuckDB's `azure` extension bundles a libcurl that only checks the RedHat-family CA bundle path (`/etc/pki/tls/certs/ca-bundle.crt`), which Debian/Ubuntu never creates — every HTTPS request over any Azure Blob endpoint (standard public cloud, Gov cloud, China cloud, or a custom `azure_endpoint`) then fails with `Problem with the SSL CA cert (path? access rights?)`, for any auth method (upstream: [duckdb/duckdb-azure#185](https://github.com/duckdb/duckdb-azure/issues/185)). Homer works around this automatically at startup, and the official Docker image bakes the fix into the image itself — but on a **bare Debian/Ubuntu host package, or `docker run` as a non-root user**, Homer may not have permission to create `/etc/pki/tls/certs`, and the workaround silently no-ops (a warning is logged). If Azure storage fails with the error above, create the symlink manually once, as root:
+
+```bash
+mkdir -p /etc/pki/tls/certs
+ln -sf /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
+```
 
 ## Examples
 
@@ -152,6 +178,57 @@ The `move_factor` parameter works similar to ClickHouse storage policies. It con
   ]
 }
 ```
+
+### Local + Azure Blob Storage
+
+Static account key:
+
+```json
+{
+  "volumes": [
+    {
+      "name": "hot",
+      "type": "local",
+      "path": "/data/homer/parquet",
+      "priority": 0,
+      "max_data_age_days": 7
+    },
+    {
+      "name": "cold",
+      "type": "azure",
+      "path": "az://homer-archive/data/",
+      "priority": 1,
+      "azure_account_name": "homerstorage",
+      "azure_account_key": "YOUR_STORAGE_ACCOUNT_KEY"
+    }
+  ]
+}
+```
+
+Managed Identity (recommended when Homer runs on an Azure VM — no secret in config at all):
+
+```json
+{
+  "volumes": [
+    {
+      "name": "hot",
+      "type": "local",
+      "path": "/data/homer/parquet",
+      "priority": 0,
+      "max_data_age_days": 7
+    },
+    {
+      "name": "cold",
+      "type": "azure",
+      "path": "az://homer-archive/data/",
+      "priority": 1,
+      "azure_account_name": "homerstorage"
+    }
+  ]
+}
+```
+
+The VM's system- or user-assigned Managed Identity must be granted the **Storage Blob Data Contributor** role on the storage account (or container) for this to work.
 
 ### Local + Cloudflare R2
 

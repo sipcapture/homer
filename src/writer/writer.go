@@ -114,6 +114,21 @@ const maxPktLen = 65507
 // defaultWorkerMetricsFlushPackets is used when ingest.worker_metrics_flush_packets is 0.
 const defaultWorkerMetricsFlushPackets = 128
 
+// applyAzureDuckLakeConfig copies storage.ducklake.azure into duckCfg when
+// any Azure field is set — including the Managed Identity case where only
+// AccountName is set (no key, no connection string). Extracted out of New
+// so this specific gate is unit-testable without running the full writer
+// constructor, which immediately does real DuckLake I/O.
+func applyAzureDuckLakeConfig(duckCfg *ducklake.Config, az config.AzureConfig) {
+	if az.AccountName == "" && az.AccountKey == "" && az.ConnectionString == "" {
+		return
+	}
+	duckCfg.AzureAccountName = az.AccountName
+	duckCfg.AzureAccountKey = az.AccountKey
+	duckCfg.AzureConnectionString = az.ConnectionString
+	duckCfg.AzureEndpoint = az.Endpoint
+}
+
 // New creates a new Writer module
 func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promCfg *config.PrometheusConfig, remoteLogCfg *config.RemoteLogConfig) (*Writer, error) {
 	queueSize := ingestCfg.QueueSize
@@ -277,6 +292,9 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 		duckCfg.S3URLStyle = storageCfg.DuckLake.S3.URLStyle
 	}
 
+	// Azure config
+	applyAzureDuckLakeConfig(&duckCfg, storageCfg.DuckLake.Azure)
+
 	duckMgr, err := ducklake.NewManager(duckCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DuckLake manager: %w", err)
@@ -370,6 +388,7 @@ func (w *Writer) Start() error {
 			compactionCfg.MaxFileSizeBytes = defaultDuckDBMaxFileSizeBytes
 		}
 		var compactionS3 *CompactionS3Client
+		var compactionAzure *CompactionAzureClient
 		if ducklake.IsRemoteLakeDataPath(w.storageConfig.DuckLake.DataPath) {
 			s := w.storageConfig.DuckLake.S3
 			if ak := strings.TrimSpace(s.AccessKeyID); ak != "" {
@@ -382,6 +401,15 @@ func (w *Writer) Start() error {
 					URLStyle:        s.URLStyle,
 				}
 			}
+			az := w.storageConfig.DuckLake.Azure
+			if az.AccountName != "" || az.AccountKey != "" || az.ConnectionString != "" {
+				compactionAzure = &CompactionAzureClient{
+					AccountName:      az.AccountName,
+					AccountKey:       az.AccountKey,
+					ConnectionString: az.ConnectionString,
+					Endpoint:         az.Endpoint,
+				}
+			}
 		}
 		w.compactionService = NewCompactionService(
 			w.ducklakeManager.GetDB(),
@@ -391,6 +419,7 @@ func (w *Writer) Start() error {
 			compactionCfg,
 			w.ducklakeManager,
 			compactionS3,
+			compactionAzure,
 		)
 		if err := w.compactionService.Start(); err != nil {
 			logger.Error(fmt.Sprintf("Writer: Failed to start compaction service: %v", err))
@@ -940,20 +969,24 @@ func (w *Writer) startTieringService() error {
 	volumes := make([]ducklake.Volume, len(policy.Volumes))
 	for i, vol := range policy.Volumes {
 		volumes[i] = ducklake.Volume{
-			Name:             vol.Name,
-			Type:             ducklake.VolumeType(vol.Type),
-			Path:             vol.Path,
-			Priority:         vol.Priority,
-			MaxDataAgeDays:   vol.MaxDataAgeDays,
-			MaxSizeGB:        vol.MaxSizeGB,
-			LakeName:         w.storageConfig.DuckLake.LakeName + "_" + vol.Name,
-			S3Region:         vol.S3Region,
-			S3AccessKey:      vol.S3AccessKeyID,
-			S3SecretKey:      vol.S3SecretKey,
-			S3Endpoint:       vol.S3Endpoint,
-			S3UseSSL:         vol.S3UseSSL,
-			S3URLStyle:       vol.S3URLStyle,
-			OverrideDataPath: vol.OverrideDataPath,
+			Name:                  vol.Name,
+			Type:                  ducklake.VolumeType(vol.Type),
+			Path:                  vol.Path,
+			Priority:              vol.Priority,
+			MaxDataAgeDays:        vol.MaxDataAgeDays,
+			MaxSizeGB:             vol.MaxSizeGB,
+			LakeName:              w.storageConfig.DuckLake.LakeName + "_" + vol.Name,
+			S3Region:              vol.S3Region,
+			S3AccessKey:           vol.S3AccessKeyID,
+			S3SecretKey:           vol.S3SecretKey,
+			S3Endpoint:            vol.S3Endpoint,
+			S3UseSSL:              vol.S3UseSSL,
+			S3URLStyle:            vol.S3URLStyle,
+			AzureAccountName:      vol.AzureAccountName,
+			AzureAccountKey:       vol.AzureAccountKey,
+			AzureConnectionString: vol.AzureConnectionString,
+			AzureEndpoint:         vol.AzureEndpoint,
+			OverrideDataPath:      vol.OverrideDataPath,
 		}
 	}
 

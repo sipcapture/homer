@@ -61,6 +61,10 @@ type Node struct {
 	// fsql is the optional Apache Arrow FlightSQL server (Grafana / InfluxDB FlightSQL).
 	fsql *fsqlServer
 
+	// stopAzureRefresh, when non-nil, signals the periodic Azure
+	// credential_chain secret refresh goroutine (started in Start) to exit.
+	stopAzureRefresh chan struct{}
+
 	// refreshMu serializes catalog reconnect on n.db so queries never observe
 	// a half-swapped handle while ObjectCache from DETACH+ATTACH is avoided.
 	refreshMu sync.Mutex
@@ -221,7 +225,72 @@ func (n *Node) Start() error {
 		}
 	}
 
+	// Standalone nodes attach volumes once in configureDuckLake and, unless
+	// FlightSQL's own catalog refresher happens to be running, never revisit
+	// them. A credential_chain Azure secret (e.g. Managed Identity via IMDS)
+	// is only valid for its token's lifetime, so it must be recreated
+	// periodically or queries start failing with an authentication error
+	// after the node has been running a while.
+	if n.sharedDB == nil && nodeUsesAzureCredentialChain(n.config) {
+		n.stopAzureRefresh = make(chan struct{})
+		stop := n.stopAzureRefresh
+		go func() {
+			ticker := time.NewTicker(azureSecretRefreshInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					n.refreshAzureSecrets()
+				case <-stop:
+					return
+				}
+			}
+		}()
+	}
+
 	return nil
+}
+
+// azureSecretRefreshInterval bounds how often a standalone node recreates its
+// Azure credential_chain secrets, mirroring the writer's flushLoop refresh
+// cadence for the same secret type.
+const azureSecretRefreshInterval = 20 * time.Minute
+
+// nodeUsesAzureCredentialChain reports whether any attached volume relies on
+// Azure's credential_chain provider (no static account key or connection
+// string), which is the only Azure auth mode whose secret can go stale.
+func nodeUsesAzureCredentialChain(cfg *config.NodeConfig) bool {
+	for _, vol := range cfg.DuckLake.Volumes {
+		if vol.Type == "azure" && ducklake.UsesAzureCredentialChain(vol.AzureAccountKey, vol.AzureConnectionString) {
+			return true
+		}
+	}
+	return false
+}
+
+// refreshAzureSecrets recreates the credential_chain Azure secret for every
+// attached Azure volume. Kept separate from refreshCatalog since a full
+// reconnect is unnecessary overhead for what is otherwise just a DROP+CREATE
+// SECRET.
+func (n *Node) refreshAzureSecrets() {
+	n.mu.RLock()
+	db := n.db
+	volumes := n.config.DuckLake.Volumes
+	n.mu.RUnlock()
+	if db == nil {
+		return
+	}
+	for _, vol := range volumes {
+		if vol.Type != "azure" || !ducklake.UsesAzureCredentialChain(vol.AzureAccountKey, vol.AzureConnectionString) {
+			continue
+		}
+		secretName := fmt.Sprintf("azure_secret_%s", vol.Name)
+		db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
+		createSecret := ducklake.BuildAzureSecretSQL(secretName, vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString, vol.AzureEndpoint)
+		if _, err := db.Exec(createSecret); err != nil {
+			logger.Warn(fmt.Sprintf("Node: failed to refresh Azure secret for volume %s: %v", vol.Name, err))
+		}
+	}
 }
 
 // refreshCatalog opens a fresh in-memory DuckDB, re-ATTACHes DuckLake volumes,
@@ -287,6 +356,11 @@ func (n *Node) Stop() error {
 
 	if n.fsql != nil {
 		n.fsql.Stop()
+	}
+
+	if n.stopAzureRefresh != nil {
+		close(n.stopAzureRefresh)
+		n.stopAzureRefresh = nil
 	}
 
 	// GracefulStop waits for all in-flight RPCs to finish. Guard with a timeout
@@ -1720,6 +1794,14 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 		return nil, fmt.Errorf("failed to configure S3: %w", err)
 	}
 
+	// Best-effort load of the Azure extension so az:// volumes can attach.
+	// Same contract as the tiered-storage manager's LOAD aws: local/S3-only
+	// setups do not need it, so a load failure must not block startup.
+	ducklake.EnsureAzureCACertPath()
+	if _, err := db.Exec("LOAD azure;"); err != nil {
+		logger.Warn(fmt.Sprintf("Node: failed to load azure extension (Azure volumes unavailable; run --install-extensions): %v", err))
+	}
+
 	// Get volumes config (legacy: synthesize from catalog_path/data_path).
 	config.EnsureNodeDuckLakeVolumes(&cfg.DuckLake)
 	volumeConfigs := cfg.DuckLake.Volumes
@@ -1815,6 +1897,18 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 
 		if _, err := db.Exec(createSecret); err != nil {
 			return VolumeInfo{}, fmt.Errorf("failed to create S3 secret: %w", err)
+		}
+	}
+
+	// Configure Azure secret for this volume if needed. Shared with the
+	// writer/CLI path (ducklake.BuildAzureSecretSQL) so a CHAIN/endpoint
+	// change only needs to happen in one place.
+	if vol.Type == "azure" {
+		secretName := fmt.Sprintf("azure_secret_%s", vol.Name)
+		db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
+		createSecret := ducklake.BuildAzureSecretSQL(secretName, vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString, vol.AzureEndpoint)
+		if _, err := db.Exec(createSecret); err != nil {
+			return VolumeInfo{}, fmt.Errorf("failed to create Azure secret: %w", err)
 		}
 	}
 

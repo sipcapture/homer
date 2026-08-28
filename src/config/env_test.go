@@ -291,6 +291,52 @@ func TestLoad_EnvSlice_StoragePolicyVolumes(t *testing.T) {
 	}
 }
 
+// TestLoad_EnvSlice_StoragePolicyVolumes_Azure mirrors
+// TestLoad_EnvSlice_StoragePolicyVolumes for an Azure cold volume — the env
+// override path an operator uses to wire Managed Identity auth (no key) from
+// docker-compose / systemd EnvironmentFile on an Azure VM.
+func TestLoad_EnvSlice_StoragePolicyVolumes_Azure(t *testing.T) {
+	envs := map[string]string{
+		"HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_0_NAME": "hot",
+		"HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_0_TYPE": "local",
+		"HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_0_PATH": "/data/homer/parquet",
+
+		"HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_NAME":               "cold",
+		"HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_TYPE":               "azure",
+		"HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_PATH":               "az://homer-cold/data/",
+		"HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_PRIORITY":           "1",
+		"HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_AZURE_ACCOUNT_NAME": "homerstorage",
+		"HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_AZURE_ACCOUNT_KEY":  "",
+	}
+	for k, v := range envs {
+		t.Setenv(k, v)
+	}
+
+	path := writeTmpConfig(t, `{}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	vols := cfg.Storage.DuckLake.StoragePolicy.Volumes
+	if len(vols) != 2 {
+		t.Fatalf("storage_policy.volumes: want 2 entries, got %d (%+v)", len(vols), vols)
+	}
+	v := vols[1]
+	if v.Type != "azure" {
+		t.Errorf("volumes[1].type: want azure, got %q", v.Type)
+	}
+	if v.Path != "az://homer-cold/data/" {
+		t.Errorf("volumes[1].path: want az URL, got %q", v.Path)
+	}
+	if v.AzureAccountName != "homerstorage" {
+		t.Errorf("volumes[1].azure_account_name: want homerstorage, got %q", v.AzureAccountName)
+	}
+	if v.AzureAccountKey != "" {
+		t.Errorf("volumes[1].azure_account_key: want empty (credential_chain/managed identity), got %q", v.AzureAccountKey)
+	}
+}
+
 // TestLoad_EnvSlice_NodeDuckLakeVolumes covers the same volume layout
 // but in the node.ducklake.volumes section — consumed by read-only
 // nodes (the coordinator-facing facade).

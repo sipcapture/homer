@@ -29,6 +29,7 @@ type Options struct {
 	Partition   string
 	Copier      Copier
 	S3          *S3Config
+	Azure       *AzureConfig
 	// Lock/Unlock serialize hot-catalog access with the writer flush. Held only
 	// for metadata reads and the source DELETE — never during the byte copy.
 	Lock   func()
@@ -74,7 +75,7 @@ func Move(ctx context.Context, opts Options) (Result, error) {
 	if opts.TableName == "" || opts.Partition == "" {
 		return Result{}, fmt.Errorf("mover: table and partition are required")
 	}
-	if isS3Path(opts.SrcDataPath) {
+	if isS3Path(opts.SrcDataPath) || isAzurePath(opts.SrcDataPath) {
 		return Result{}, fallback("source data_path is remote")
 	}
 
@@ -86,7 +87,7 @@ func Move(ctx context.Context, opts Options) (Result, error) {
 	copier := opts.Copier
 	if copier == nil {
 		var err error
-		copier, err = defaultCopier(opts.DstDataPath, opts.S3)
+		copier, err = defaultCopier(opts.DstDataPath, opts.S3, opts.Azure)
 		if err != nil {
 			return Result{}, err
 		}

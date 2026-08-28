@@ -9,10 +9,14 @@ func isS3Path(p string) bool {
 	return strings.HasPrefix(p, "s3://") || strings.HasPrefix(p, "s3a://")
 }
 
-// joinLake appends path elements to a lake data root. s3:// bases use URL-style
-// '/' joining — filepath.Join on Unix collapses "s3://" to "s3:/".
+func isAzurePath(p string) bool {
+	return strings.HasPrefix(p, "az://") || strings.HasPrefix(p, "azure://")
+}
+
+// joinLake appends path elements to a lake data root. s3:// and az:// bases use
+// URL-style '/' joining — filepath.Join on Unix collapses "s3://" to "s3:/".
 func joinLake(base string, elems ...string) string {
-	if isS3Path(base) {
+	if isS3Path(base) || isAzurePath(base) {
 		out := strings.TrimRight(base, "/")
 		for _, e := range elems {
 			e = strings.Trim(e, "/")
@@ -60,6 +64,30 @@ func splitS3URL(u string) (bucket, key string, ok bool) {
 		rest = u[len("s3://"):]
 	case strings.HasPrefix(u, "s3a://"):
 		rest = u[len("s3a://"):]
+	default:
+		return "", "", false
+	}
+	slash := strings.IndexByte(rest, '/')
+	if slash <= 0 {
+		if rest == "" {
+			return "", "", false
+		}
+		return rest, "", true
+	}
+	return rest[:slash], strings.TrimPrefix(rest[slash+1:], "/"), true
+}
+
+// splitAzureURL returns container and blob key for az://container/key or
+// azure://container/key. DuckDB's azure DATA_PATH form carries no account
+// host segment — the storage account comes from the secret, not the URL.
+func splitAzureURL(u string) (container, key string, ok bool) {
+	u = strings.TrimSpace(u)
+	rest := ""
+	switch {
+	case strings.HasPrefix(u, "az://"):
+		rest = u[len("az://"):]
+	case strings.HasPrefix(u, "azure://"):
+		rest = u[len("azure://"):]
 	default:
 		return "", "", false
 	}

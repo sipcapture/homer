@@ -48,7 +48,7 @@ func newInvariantFixture(t *testing.T) *CompactionService {
 	}
 
 	svc := NewCompactionService(db, "lake", data, catalog,
-		CompactionConfig{Enable: true, Engine: EngineNativeGo}, nil, nil)
+		CompactionConfig{Enable: true, Engine: EngineNativeGo}, nil, nil, nil)
 	return svc
 }
 

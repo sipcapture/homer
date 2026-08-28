@@ -976,6 +976,54 @@ func TestEnsureNodeDuckLakeVolumes_S3CopiesCredentials(t *testing.T) {
 	}
 }
 
+func TestEnsureNodeDuckLakeVolumes_AzureCopiesCredentials(t *testing.T) {
+	dl := DuckLakeConfig{
+		CatalogPath: "/var/lib/homer/homer_catalog.sqlite",
+		DataPath:    "az://container/lake/",
+		CatalogType: "sqlite",
+		Azure: AzureConfig{
+			AccountName: "myaccount", AccountKey: "key",
+			Endpoint: "http://azurite:10000/myaccount",
+		},
+	}
+	EnsureNodeDuckLakeVolumes(&dl)
+	if len(dl.Volumes) != 1 {
+		t.Fatalf("want 1 volume, got %d", len(dl.Volumes))
+	}
+	v := dl.Volumes[0]
+	if v.Type != "azure" || v.AzureAccountName != "myaccount" || v.AzureAccountKey != "key" ||
+		v.AzureEndpoint != "http://azurite:10000/myaccount" {
+		t.Fatalf("azure volume credentials: %+v", v)
+	}
+}
+
+func TestLoad_InvalidVolumeType(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "storage": { "ducklake": { "storage_policy": { "volumes": [
+    { "name": "cold", "type": "azur", "path": "az://bucket/cold/" }
+  ] } } }
+}`)
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for unknown volume type")
+	}
+}
+
+func TestLoad_AzureVolumeTypeOK(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "storage": { "ducklake": { "storage_policy": { "volumes": [
+    { "name": "cold", "type": "azure", "path": "az://bucket/cold/", "azure_account_name": "myaccount" }
+  ] } } }
+}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	vols := cfg.Storage.DuckLake.StoragePolicy.Volumes
+	if len(vols) != 1 || vols[0].Type != "azure" || vols[0].AzureAccountName != "myaccount" {
+		t.Fatalf("azure volume: %+v", vols)
+	}
+}
+
 func TestLoad_CoordinatorBareFlightSQLPortEnablesProxy(t *testing.T) {
 	dir := t.TempDir()
 	path := writeTmpConfig(t, `{

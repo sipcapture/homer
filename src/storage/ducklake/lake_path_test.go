@@ -18,6 +18,31 @@ func TestJoinLakeDataPath_PreservesS3Scheme(t *testing.T) {
 	}
 }
 
+// TestJoinLakeDataPath_PreservesAzScheme and
+// TestJoinLakeDataPath_PreservesAzureScheme: PR review should-fix
+// (github.com/sipcapture/homer/pull/983) — filepath.Join collapses
+// "az://"/"azure://" to "az:/"/"azure:/" on Unix (the same bug this PR
+// fixed for S3's ducklake.go NewMultiTableWriter mkdir guard), so
+// JoinLakeDataPath must never fall through to filepath.Join for either
+// Azure scheme. Only the S3 case was tested before this.
+func TestJoinLakeDataPath_PreservesAzScheme(t *testing.T) {
+	base := "az://homer-data/lake/"
+	got := JoinLakeDataPath(base, "main", "hep_proto_1_call", "date=2026-05-12", "x.parquet")
+	want := "az://homer-data/lake/main/hep_proto_1_call/date=2026-05-12/x.parquet"
+	if got != want {
+		t.Fatalf("JoinLakeDataPath: got %q want %q", got, want)
+	}
+}
+
+func TestJoinLakeDataPath_PreservesAzureScheme(t *testing.T) {
+	base := "azure://homer-data/lake/"
+	got := JoinLakeDataPath(base, "main", "hep_proto_1_call", "date=2026-05-12", "x.parquet")
+	want := "azure://homer-data/lake/main/hep_proto_1_call/date=2026-05-12/x.parquet"
+	if got != want {
+		t.Fatalf("JoinLakeDataPath: got %q want %q", got, want)
+	}
+}
+
 func TestJoinLakeDataPath_LocalUsesFilepath(t *testing.T) {
 	got := JoinLakeDataPath("/data/homer", "main", "t", "f.parquet")
 	if got == "" {

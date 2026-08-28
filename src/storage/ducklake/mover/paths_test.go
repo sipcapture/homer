@@ -15,6 +15,27 @@ func TestJoinLakeLocalAndS3(t *testing.T) {
 	}
 }
 
+// TestJoinLakeAz and TestJoinLakeAzure: PR review should-fix
+// (github.com/sipcapture/homer/pull/983) — mirrors TestJoinLakeLocalAndS3's
+// S3 case for both Azure scheme aliases; filepath.Join collapses "az://"/
+// "azure://" to "az:/"/"azure:/" on Unix if the isAzurePath guard in
+// joinLake is ever removed or missed.
+func TestJoinLakeAz(t *testing.T) {
+	got := destAbs("az://container/cold/", "hep_proto_1_call", "date=2026-07-18/a.parquet")
+	want := "az://container/cold/main/hep_proto_1_call/date=2026-07-18/a.parquet"
+	if got != want {
+		t.Fatalf("az: got %q want %q", got, want)
+	}
+}
+
+func TestJoinLakeAzure(t *testing.T) {
+	got := destAbs("azure://container/cold/", "hep_proto_1_call", "date=2026-07-18/a.parquet")
+	want := "azure://container/cold/main/hep_proto_1_call/date=2026-07-18/a.parquet"
+	if got != want {
+		t.Fatalf("azure: got %q want %q", got, want)
+	}
+}
+
 func TestDestRelPathKeepsHiveDir(t *testing.T) {
 	rel := destRelPath("date=2026-07-18/ducklake-x.parquet", "", "/data/hot", "calls", 1)
 	if rel != "date=2026-07-18/ducklake-x.parquet" {

@@ -23,6 +23,14 @@ Field names follow the `mapstructure` tags on [`Config` in `src/config/config.go
 - `node.ducklake.volumes[0].s3_url_style` → `HOMER_NODE_DUCKLAKE_VOLUMES_0_S3_URL_STYLE`
 - `storage.ducklake.storage_policy.volumes[1].s3_url_style` → `HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_S3_URL_STYLE`
 
+Azure Blob Storage (`type: "azure"`) follows the same mechanism — see [`STORAGE_POLICIES.md`](STORAGE_POLICIES.md#azure-specific-settings-for-type-azure) for the field list:
+
+- `storage.ducklake.azure.account_name` → `HOMER_STORAGE_DUCKLAKE_AZURE_ACCOUNT_NAME`
+- `storage.ducklake.storage_policy.volumes[1].azure_account_key`  
+  → `HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_AZURE_ACCOUNT_KEY`
+- `node.ducklake.volumes[0].azure_connection_string` → `HOMER_NODE_DUCKLAKE_VOLUMES_0_AZURE_CONNECTION_STRING`
+- `storage.ducklake.azure.endpoint` → `HOMER_STORAGE_DUCKLAKE_AZURE_ENDPOINT` (Azurite, Gov/China cloud, or any other custom Blob endpoint)
+
 ## References
 
 - Loader: `config.Load` — `SetEnvPrefix("HOMER")`, `SetEnvKeyReplacer(".", "_")`, `AutomaticEnv()` ([source](../src/config/config.go)).
