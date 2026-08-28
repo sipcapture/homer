@@ -70,6 +70,18 @@ func TestAzureBlobClient_AccountKey(t *testing.T) {
 	}
 }
 
+func TestAzureBlobServiceURL(t *testing.T) {
+	if got := azureBlobServiceURL("acct", ""); got != "https://acct.blob.core.windows.net/" {
+		t.Errorf("default: got %q", got)
+	}
+	if got := azureBlobServiceURL("acct", "http://azurite:10000/acct"); got != "http://azurite:10000/acct/" {
+		t.Errorf("azurite without slash: got %q", got)
+	}
+	if got := azureBlobServiceURL("acct", "http://azurite:10000/acct/"); got != "http://azurite:10000/acct/" {
+		t.Errorf("azurite with slash: got %q", got)
+	}
+}
+
 func TestAzureBlobClient_AccountKeyRequiresAccountName(t *testing.T) {
 	if _, err := azureBlobClient(AzureConfig{AccountKey: "ZmFrZQ=="}); err == nil {
 		t.Fatal("expected error when account_key is set without account_name")
@@ -161,8 +173,8 @@ func TestAzureBlobClient_CredentialChainWithEndpoint(t *testing.T) {
 	if client == nil {
 		t.Fatal("expected non-nil client")
 	}
-	if got := client.URL(); got != "http://fake-endpoint:10000/fakeaccount" {
-		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	if got := client.URL(); got != "http://fake-endpoint:10000/fakeaccount/" {
+		t.Errorf("client.URL() = %q, want the configured endpoint with trailing slash", got)
 	}
 }
 
@@ -179,8 +191,8 @@ func TestAzureBlobClient_CredentialChainWithGovCloudEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("azureBlobClient: %v", err)
 	}
-	if got := client.URL(); got != "https://myaccount.blob.core.usgovcloudapi.net" {
-		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	if got := client.URL(); got != "https://myaccount.blob.core.usgovcloudapi.net/" {
+		t.Errorf("client.URL() = %q, want the configured endpoint with trailing slash", got)
 	}
 }
 
@@ -213,8 +225,8 @@ func TestAzureBlobClient_CredentialChainWithStandardCloudEndpoint(t *testing.T) 
 	if err != nil {
 		t.Fatalf("azureBlobClient: %v", err)
 	}
-	if got := client.URL(); got != "https://myaccount.blob.core.windows.net" {
-		t.Errorf("client.URL() = %q, want the configured endpoint", got)
+	if got := client.URL(); got != "https://myaccount.blob.core.windows.net/" {
+		t.Errorf("client.URL() = %q, want the configured endpoint with trailing slash", got)
 	}
 }
 

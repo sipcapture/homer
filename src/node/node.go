@@ -61,9 +61,11 @@ type Node struct {
 	// fsql is the optional Apache Arrow FlightSQL server (Grafana / InfluxDB FlightSQL).
 	fsql *fsqlServer
 
-	// stopAzureRefresh, when non-nil, signals the periodic Azure
-	// credential_chain secret refresh goroutine (started in Start) to exit.
-	stopAzureRefresh chan struct{}
+	// stopSecretRefresh, when non-nil, signals the periodic credential_chain
+	// secret refresh goroutine (started in Start) to exit. Covers both
+	// Azure Managed Identity and S3 instance-profile / IRSA secrets.
+	stopSecretRefresh chan struct{}
+	secretRefreshWg   sync.WaitGroup
 
 	// refreshMu serializes catalog reconnect on n.db so queries never observe
 	// a half-swapped handle while ObjectCache from DETACH+ATTACH is avoided.
@@ -227,20 +229,23 @@ func (n *Node) Start() error {
 
 	// Standalone nodes attach volumes once in configureDuckLake and, unless
 	// FlightSQL's own catalog refresher happens to be running, never revisit
-	// them. A credential_chain Azure secret (e.g. Managed Identity via IMDS)
-	// is only valid for its token's lifetime, so it must be recreated
-	// periodically or queries start failing with an authentication error
-	// after the node has been running a while.
-	if n.sharedDB == nil && nodeUsesAzureCredentialChain(n.config) {
-		n.stopAzureRefresh = make(chan struct{})
-		stop := n.stopAzureRefresh
+	// them. credential_chain secrets (Azure MI via IMDS, S3 instance profile
+	// / IRSA) cache the token resolved at CREATE SECRET. Azure has no
+	// REFRESH auto; S3's REFRESH auto may not fire on HTTP 400 ExpiredToken
+	// (sipcapture/homer#980). Recreate both on a timer or search dies after
+	// the node has been up for a token lifetime.
+	if n.sharedDB == nil && nodeUsesCredentialChain(n.config) {
+		n.stopSecretRefresh = make(chan struct{})
+		stop := n.stopSecretRefresh
+		n.secretRefreshWg.Add(1)
 		go func() {
-			ticker := time.NewTicker(azureSecretRefreshInterval)
+			defer n.secretRefreshWg.Done()
+			ticker := time.NewTicker(credentialChainRefreshInterval)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-ticker.C:
-					n.refreshAzureSecrets()
+					n.refreshCredentialChainSecrets()
 				case <-stop:
 					return
 				}
@@ -251,15 +256,23 @@ func (n *Node) Start() error {
 	return nil
 }
 
-// azureSecretRefreshInterval bounds how often a standalone node recreates its
-// Azure credential_chain secrets, mirroring the writer's flushLoop refresh
-// cadence for the same secret type.
-const azureSecretRefreshInterval = 20 * time.Minute
+// credentialChainRefreshInterval bounds how often a standalone node recreates
+// Azure and S3 credential_chain secrets, mirroring the writer's flushLoop
+// refresh cadence for Azure and TSM's per-cycle S3 replace.
+const credentialChainRefreshInterval = 20 * time.Minute
 
-// nodeUsesAzureCredentialChain reports whether any attached volume relies on
-// Azure's credential_chain provider (no static account key or connection
-// string), which is the only Azure auth mode whose secret can go stale.
+// nodeUsesCredentialChain reports whether any attached volume relies on a
+// credential_chain secret (Azure MI / ambient identity, or native AWS S3
+// with empty keys and no custom endpoint). Those are the secrets that go
+// stale; static keys and MinIO/R2 endpoints do not.
+func nodeUsesCredentialChain(cfg *config.NodeConfig) bool {
+	return nodeUsesAzureCredentialChain(cfg) || nodeUsesS3CredentialChain(cfg)
+}
+
 func nodeUsesAzureCredentialChain(cfg *config.NodeConfig) bool {
+	if cfg == nil {
+		return false
+	}
 	for _, vol := range cfg.DuckLake.Volumes {
 		if vol.Type == "azure" && ducklake.UsesAzureCredentialChain(vol.AzureAccountKey, vol.AzureConnectionString) {
 			return true
@@ -268,27 +281,62 @@ func nodeUsesAzureCredentialChain(cfg *config.NodeConfig) bool {
 	return false
 }
 
-// refreshAzureSecrets recreates the credential_chain Azure secret for every
-// attached Azure volume. Kept separate from refreshCatalog since a full
-// reconnect is unnecessary overhead for what is otherwise just a DROP+CREATE
-// SECRET.
-func (n *Node) refreshAzureSecrets() {
+func nodeUsesS3CredentialChain(cfg *config.NodeConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	for _, vol := range cfg.DuckLake.Volumes {
+		if vol.Type == "s3" && ducklake.UsesS3CredentialChain(vol.S3AccessKeyID, ducklake.S3EndpointHost(vol.S3Endpoint)) {
+			return true
+		}
+	}
+	return false
+}
+
+// refreshCredentialChainSecrets recreates credential_chain secrets for every
+// attached Azure and S3 volume that uses them. Kept separate from
+// refreshCatalog since a full reconnect is unnecessary overhead for what is
+// otherwise just a DROP+CREATE SECRET.
+func (n *Node) refreshCredentialChainSecrets() {
+	// refreshCatalog closes n.db under refreshMu. Hold the same mutex for
+	// the duration of DROP+CREATE so we cannot Exec on a handle that is
+	// about to be (or already has been) closed.
+	n.refreshMu.Lock()
+	defer n.refreshMu.Unlock()
+
 	n.mu.RLock()
 	db := n.db
-	volumes := n.config.DuckLake.Volumes
+	var volumes []config.VolumeConfig
+	if n.config != nil {
+		volumes = n.config.DuckLake.Volumes
+	}
 	n.mu.RUnlock()
 	if db == nil {
 		return
 	}
 	for _, vol := range volumes {
-		if vol.Type != "azure" || !ducklake.UsesAzureCredentialChain(vol.AzureAccountKey, vol.AzureConnectionString) {
-			continue
-		}
-		secretName := fmt.Sprintf("azure_secret_%s", vol.Name)
-		db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
-		createSecret := ducklake.BuildAzureSecretSQL(secretName, vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString, vol.AzureEndpoint)
-		if _, err := db.Exec(createSecret); err != nil {
-			logger.Warn(fmt.Sprintf("Node: failed to refresh Azure secret for volume %s: %v", vol.Name, err))
+		switch vol.Type {
+		case "azure":
+			if !ducklake.UsesAzureCredentialChain(vol.AzureAccountKey, vol.AzureConnectionString) {
+				continue
+			}
+			secretName := fmt.Sprintf("azure_secret_%s", vol.Name)
+			db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
+			createSecret := ducklake.BuildAzureSecretSQL(secretName, vol.AzureAccountName, vol.AzureAccountKey, vol.AzureConnectionString, vol.AzureEndpoint)
+			if _, err := db.Exec(createSecret); err != nil {
+				logger.Warn(fmt.Sprintf("Node: failed to refresh Azure secret for volume %s: %v", vol.Name, err))
+			}
+		case "s3":
+			endpoint := ducklake.S3EndpointHost(vol.S3Endpoint)
+			if !ducklake.UsesS3CredentialChain(vol.S3AccessKeyID, endpoint) {
+				continue
+			}
+			secretName := fmt.Sprintf("s3_secret_%s", vol.Name)
+			db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
+			createSecret := ducklake.BuildS3SecretSQL(secretName, vol.S3AccessKeyID, vol.S3SecretKey, vol.S3Region, endpoint, vol.S3UseSSL, vol.S3URLStyle)
+			if _, err := db.Exec(createSecret); err != nil {
+				logger.Warn(fmt.Sprintf("Node: failed to refresh S3 secret for volume %s: %v", vol.Name, err))
+			}
 		}
 	}
 }
@@ -341,6 +389,18 @@ func (n *Node) refreshCatalog() {
 // Stop stops the node module
 func (n *Node) Stop() error {
 	n.mu.Lock()
+	if !n.running {
+		n.mu.Unlock()
+		return nil
+	}
+	n.mu.Unlock()
+
+	// Join the credential-chain refresh goroutine before taking n.mu again:
+	// it needs n.mu.RLock (and refreshMu) to DROP SECRET, and Stop closes
+	// n.db below.
+	n.stopCredentialChainRefresh()
+
+	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	if !n.running {
@@ -356,11 +416,6 @@ func (n *Node) Stop() error {
 
 	if n.fsql != nil {
 		n.fsql.Stop()
-	}
-
-	if n.stopAzureRefresh != nil {
-		close(n.stopAzureRefresh)
-		n.stopAzureRefresh = nil
 	}
 
 	// GracefulStop waits for all in-flight RPCs to finish. Guard with a timeout
@@ -385,6 +440,22 @@ func (n *Node) Stop() error {
 
 	logger.Info("Node: Airport server stopped")
 	return nil
+}
+
+// stopCredentialChainRefresh signals the periodic secret refresher to exit
+// and waits for an in-flight DROP+CREATE to finish. Safe to call when the
+// goroutine was never started. Must not be held under n.mu: the goroutine
+// takes n.mu.RLock inside refreshCredentialChainSecrets.
+func (n *Node) stopCredentialChainRefresh() {
+	n.mu.Lock()
+	ch := n.stopSecretRefresh
+	n.stopSecretRefresh = nil
+	n.mu.Unlock()
+	if ch == nil {
+		return
+	}
+	close(ch)
+	n.secretRefreshWg.Wait()
 }
 
 // QueryRequest represents a SQL query request
@@ -1794,9 +1865,15 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 		return nil, fmt.Errorf("failed to configure S3: %w", err)
 	}
 
+	// Best-effort LOAD aws so S3 volumes can use PROVIDER credential_chain
+	// (instance profile / IRSA). Static-key and local-only setups do not
+	// need it; a load failure must not block startup.
+	if _, err := db.Exec("LOAD aws;"); err != nil {
+		logger.Warn(fmt.Sprintf("Node: failed to load aws extension (credential_chain S3 unavailable; run --install-extensions): %v", err))
+	}
+
 	// Best-effort load of the Azure extension so az:// volumes can attach.
-	// Same contract as the tiered-storage manager's LOAD aws: local/S3-only
-	// setups do not need it, so a load failure must not block startup.
+	// Same contract as LOAD aws above: local/S3-only setups do not need it.
 	ducklake.EnsureAzureCACertPath()
 	if _, err := db.Exec("LOAD azure;"); err != nil {
 		logger.Warn(fmt.Sprintf("Node: failed to load azure extension (Azure volumes unavailable; run --install-extensions): %v", err))
@@ -1851,52 +1928,28 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 		lakeName = baseLakeName + "_" + vol.Name
 	}
 
-	// Configure S3 secret for this volume if needed
-	if vol.Type == "s3" && vol.S3AccessKeyID != "" {
+	// Configure S3 secret for this volume. Shared with TSM
+	// (ducklake.BuildS3SecretSQL) so empty keys on native AWS become
+	// PROVIDER credential_chain + REFRESH auto instead of skipping the
+	// secret (the #980 node-vs-writer split). Custom endpoints / static
+	// keys keep KEY_ID/SECRET. credential_chain CREATE can fail when the
+	// aws extension did not load — fall back to the default SDK chain so
+	// attach still succeeds, matching the previous empty-key behaviour.
+	if vol.Type == "s3" {
 		secretName := fmt.Sprintf("s3_secret_%s", vol.Name)
-
-		// Drop existing secret if any
 		db.Exec(fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName))
-
-		// Build endpoint
-		endpoint := vol.S3Endpoint
-		if endpoint != "" {
-			endpoint = strings.TrimPrefix(endpoint, "http://")
-			endpoint = strings.TrimPrefix(endpoint, "https://")
-		}
+		endpoint := ducklake.S3EndpointHost(vol.S3Endpoint)
 		region := strings.TrimSpace(vol.S3Region)
 		if region == "" && endpoint != "" {
 			region = "us-east-1"
 		}
-		urlStyle := strings.ReplaceAll(ducklake.NormalizeS3URLStyle(vol.S3URLStyle), "'", "''")
-
-		// Create secret
-		var createSecret string
-		if endpoint != "" {
-			createSecret = fmt.Sprintf(`
-				CREATE SECRET %s (
-					TYPE S3,
-					KEY_ID '%s',
-					SECRET '%s',
-					REGION '%s',
-					ENDPOINT '%s',
-					URL_STYLE '%s',
-					USE_SSL %t
-				);
-			`, secretName, vol.S3AccessKeyID, vol.S3SecretKey, region, endpoint, urlStyle, vol.S3UseSSL)
-		} else {
-			createSecret = fmt.Sprintf(`
-				CREATE SECRET %s (
-					TYPE S3,
-					KEY_ID '%s',
-					SECRET '%s',
-					REGION '%s'
-				);
-			`, secretName, vol.S3AccessKeyID, vol.S3SecretKey, region)
-		}
-
+		createSecret := ducklake.BuildS3SecretSQL(secretName, vol.S3AccessKeyID, vol.S3SecretKey, region, endpoint, vol.S3UseSSL, vol.S3URLStyle)
 		if _, err := db.Exec(createSecret); err != nil {
-			return VolumeInfo{}, fmt.Errorf("failed to create S3 secret: %w", err)
+			if ducklake.UsesS3CredentialChain(vol.S3AccessKeyID, endpoint) {
+				logger.Warn(fmt.Sprintf("Node: failed to create credential_chain S3 secret for volume %s (falling back to default AWS chain): %v", vol.Name, err))
+			} else {
+				return VolumeInfo{}, fmt.Errorf("failed to create S3 secret: %w", err)
+			}
 		}
 	}
 
