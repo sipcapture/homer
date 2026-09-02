@@ -71,6 +71,8 @@
     "@hono/node-server": "2.0.11",
     "fast-uri": "3.1.5",
     "@babel/core": "7.29.6",
-    "ws": "8.21.0"
+    "ws": "8.21.0",
+    "browserslist": "4.28.7",
+    "postcss-selector-parser": "7.1.3"
   }
 }
