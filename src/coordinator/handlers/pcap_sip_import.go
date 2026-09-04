@@ -168,7 +168,7 @@ func importPcapSIP(
 		if err != nil {
 			return err
 		}
-		if _, err := flight.QueryFirstConnected(ctx, sql); err != nil {
+		if err := flight.ExecFirstConnected(ctx, sql); err != nil {
 			return err
 		}
 		inserted += len(rows)

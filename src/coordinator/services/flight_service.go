@@ -301,6 +301,27 @@ func (s *FlightService) QueryFirstConnected(ctx context.Context, sql string) ([]
 	return nil, fmt.Errorf("no connected storage nodes")
 }
 
+// ExecFirstConnected runs write SQL (INSERT) on the first connected node via POST /exec.
+// /query stays read-only; this is the path for PCAP import and other coordinator writes.
+func (s *FlightService) ExecFirstConnected(ctx context.Context, sql string) error {
+	s.mu.RLock()
+	nodes := make([]config.NodeEndpoint, len(s.nodes))
+	copy(nodes, s.nodes)
+	connected := make(map[string]bool)
+	for k, v := range s.connected {
+		connected[k] = v
+	}
+	s.mu.RUnlock()
+
+	for _, node := range nodes {
+		if !connected[node.Name] {
+			continue
+		}
+		return s.execNode(ctx, node, sql)
+	}
+	return fmt.Errorf("no connected storage nodes")
+}
+
 // nodesForRange filters connected nodes to those whose cached timestamp range
 // may overlap the query window [fromNs, toNs]. A node is skipped only when its
 // cached range (with flush/health slack on max) provably does not overlap the
@@ -441,8 +462,17 @@ func (s *FlightService) QueryNode(ctx context.Context, nodeName string, sql stri
 	return s.queryNode(ctx, node, sql)
 }
 
-// queryNode executes a query on a single node via HTTP
+// queryNode executes a query on a single node via HTTP POST /query
 func (s *FlightService) queryNode(ctx context.Context, node config.NodeEndpoint, sql string) ([]map[string]interface{}, error) {
+	return s.postNodeSQL(ctx, node, "/query", sql)
+}
+
+func (s *FlightService) execNode(ctx context.Context, node config.NodeEndpoint, sql string) error {
+	_, err := s.postNodeSQL(ctx, node, "/exec", sql)
+	return err
+}
+
+func (s *FlightService) postNodeSQL(ctx context.Context, node config.NodeEndpoint, path, sql string) ([]map[string]interface{}, error) {
 	// Per-query timeout; context.WithTimeout keeps the parent deadline when
 	// the caller's is sooner.
 	ctx, cancel := context.WithTimeout(ctx, s.queryTimeout)
@@ -450,7 +480,7 @@ func (s *FlightService) queryNode(ctx context.Context, node config.NodeEndpoint,
 
 	// Node HTTP API runs on FlightServer.Port + 1
 	httpPort := node.Port + 1
-	url := fmt.Sprintf("http://%s:%d/query", node.Host, httpPort)
+	url := fmt.Sprintf("http://%s:%d%s", node.Host, httpPort, path)
 
 	reqBody, err := json.Marshal(queryRequest{SQL: sql})
 	if err != nil {
