@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
+	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	"github.com/sipcapture/homer-core/src/decoder"
 	"github.com/sipcapture/homer-core/src/pcapwriter"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
@@ -78,6 +79,9 @@ func TestPcapSyntheticInvitePipeline(t *testing.T) {
 	}
 	if !strings.Contains(sql, "314159") {
 		t.Fatalf("cseq not in sql: %s", sql)
+	}
+	if err := sqlvalidator.ValidateWriteSQL(sql); err != nil {
+		t.Fatalf("generated INSERT must pass write validator: %v\n%s", err, sql)
 	}
 }
 

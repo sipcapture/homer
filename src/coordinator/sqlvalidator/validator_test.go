@@ -297,6 +297,95 @@ func TestValidateRawSQL(t *testing.T) {
 	}
 }
 
+func TestValidateWriteSQL(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		wantErr string
+	}{
+		{
+			name: "insert values",
+			sql:  "INSERT INTO homer_lake.main.hep_proto_1_call (id) VALUES (1)",
+		},
+		{
+			name: "insert values registration",
+			sql:  "INSERT INTO homer_lake.main.hep_proto_1_registration (uuid) VALUES ('abc')",
+		},
+		{
+			name:    "insert select from table",
+			sql:     "INSERT INTO homer_lake.main.hep_proto_1_call SELECT * FROM src_table",
+			wantErr: "VALUES",
+		},
+		{
+			name:    "insert values with subquery",
+			sql:     "INSERT INTO homer_lake.main.hep_proto_1_call (id) VALUES ((SELECT 1))",
+			wantErr: "blocked keyword",
+		},
+		{
+			name:    "wrong table",
+			sql:     "INSERT INTO homer_lake.main.users VALUES (1)",
+			wantErr: "hep_proto_",
+		},
+		{
+			name:    "memory catalog",
+			sql:     "INSERT INTO memory.main.hep_proto_1_call VALUES (1)",
+			wantErr: "system catalog",
+		},
+		{
+			name:    "quoted identifier",
+			sql:     `INSERT INTO "homer_lake".main.hep_proto_1_call VALUES (1)`,
+			wantErr: "quoted identifiers",
+		},
+		{
+			name:    "select rejected",
+			sql:     "SELECT * FROM t",
+			wantErr: "INSERT INTO",
+		},
+		{
+			name:    "drop rejected",
+			sql:     "DROP TABLE t",
+			wantErr: "INSERT INTO",
+		},
+		{
+			name:    "insert then drop stacked",
+			sql:     "INSERT INTO homer_lake.main.hep_proto_1_call VALUES (1); DROP TABLE t",
+			wantErr: "semicolons are not allowed",
+		},
+		{
+			name:    "insert select read_text",
+			sql:     "INSERT INTO homer_lake.main.hep_proto_1_call SELECT content FROM read_text('/etc/passwd')",
+			wantErr: "VALUES",
+		},
+		{
+			name:    "insert copy",
+			sql:     "INSERT INTO homer_lake.main.hep_proto_1_call COPY FROM '/tmp/x'",
+			wantErr: "VALUES",
+		},
+		{
+			name:    "empty",
+			sql:     "   ",
+			wantErr: "empty SQL query",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateWriteSQL(tt.sql)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("expected no error, got: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.wantErr)
+				} else if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("expected error containing %q, got: %v", tt.wantErr, err)
+				}
+			}
+		})
+	}
+}
+
 // ---- ValidateExpression tests ----------------------------------------------
 
 func TestValidateExpression(t *testing.T) {

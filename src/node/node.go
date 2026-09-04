@@ -197,6 +197,7 @@ func (n *Node) Start() error {
 	mux := http.NewServeMux()
 	authTok := n.config.FlightServer.AuthToken
 	mux.HandleFunc("/query", withBearerAuth(authTok, n.handleQuery))
+	mux.HandleFunc("/exec", withBearerAuth(authTok, n.handleExec))
 	mux.HandleFunc("/health", n.handleHealth)
 	mux.HandleFunc("/vacuum", withBearerAuth(authTok, n.handleVacuum))
 	mux.HandleFunc("/metadata/stats", withBearerAuth(authTok, n.handleMetadataStats))
@@ -1212,6 +1213,7 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Deny DML/DDL and filesystem/network table functions (GHSA-rm5w-rqr7-2h54).
+	// Coordinator writes (PCAP import INSERT) go to POST /exec, not /query.
 	if err := sqlvalidator.ValidateRawSQL(req.SQL); err != nil {
 		writeJSON(w, http.StatusBadRequest, QueryResponse{
 			Success: false,
@@ -1322,6 +1324,67 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Data:    results,
 		Count:   len(results),
+	})
+}
+
+// handleExec handles POST /exec for coordinator-generated writes (PCAP import).
+// /query stays read-only (GHSA-rm5w-rqr7-2h54); this path allows INSERT only.
+func (n *Node) handleExec(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req QueryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, QueryResponse{
+			Success: false,
+			Error:   "Invalid request body",
+		})
+		return
+	}
+
+	if req.SQL == "" {
+		writeJSON(w, http.StatusBadRequest, QueryResponse{
+			Success: false,
+			Error:   "SQL query is required",
+		})
+		return
+	}
+
+	if err := sqlvalidator.ValidateWriteSQL(req.SQL); err != nil {
+		writeJSON(w, http.StatusBadRequest, QueryResponse{
+			Success: false,
+			Error:   "SQL validation failed: " + err.Error(),
+		})
+		return
+	}
+
+	db := n.queryDB()
+	if db == nil {
+		writeJSON(w, http.StatusServiceUnavailable, QueryResponse{
+			Success: false,
+			Error:   "storage not ready",
+		})
+		return
+	}
+
+	logger.Info("Node: handleExec", "sql_chars", len(req.SQL))
+	res, err := db.ExecContext(r.Context(), req.SQL)
+	if err != nil {
+		logger.Error("Node: Exec failed", "sql", req.SQL, "error", err)
+		writeJSON(w, http.StatusOK, QueryResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+	nAff, _ := res.RowsAffected()
+	logger.Info("Node: handleExec OK", "rows_affected", nAff)
+	writeJSON(w, http.StatusOK, QueryResponse{
+		Success: true,
+		Data:    []map[string]interface{}{},
+		Count:   0,
 	})
 }
 

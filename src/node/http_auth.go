@@ -43,7 +43,7 @@ func ensureFlightAuthToken(cfg *config.NodeConfig) error {
 			"host", cfg.FlightServer.Host,
 			"hint", "set node.flight_server.auth_token or bind flight_server.host to 127.0.0.1")
 	} else if tok != "" {
-		logger.Info("node: HTTP /query and /vacuum require Authorization Bearer token")
+		logger.Info("node: HTTP /query, /exec and /vacuum require Authorization Bearer token")
 	}
 	return nil
 }

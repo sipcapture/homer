@@ -4,6 +4,7 @@ package sqlvalidator
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -210,8 +211,8 @@ var blockedDML = map[string]bool{
 	"ATTACH":   true,
 	"DETACH":   true,
 	"LOAD":     true,
-	"INSTALL": true,
-	"SET":     true,
+	"INSTALL":  true,
+	"SET":      true,
 }
 
 // blockedFunctions are DuckDB functions that access the filesystem or network.
@@ -260,32 +261,146 @@ var allowedStatementStarts = map[string]bool{
 // ValidateRawSQL validates a full SQL statement for safety.
 // Returns nil if the SQL is safe to execute, or an error describing the violation.
 func ValidateRawSQL(sql string) error {
-	trimmed := strings.TrimSpace(sql)
-	if trimmed == "" {
-		return fmt.Errorf("empty SQL query")
+	tokens, err := tokensForValidation(sql)
+	if err != nil {
+		return err
 	}
 
-	tokens := tokenize(trimmed)
-	if len(tokens) == 0 {
-		return fmt.Errorf("empty SQL query after parsing")
-	}
-
-	// 1. Must start with an allowed statement type
 	first := tokens[0]
 	if first.kind != tkIdent || !allowedStatementStarts[first.upper] {
 		return fmt.Errorf("query must start with SELECT, WITH, SHOW, DESCRIBE, EXPLAIN, or PRAGMA (got %q)", first.value)
 	}
 
-	// 2. No semicolons (prevents statement stacking)
+	return rejectSQLHazards(tokens, nil)
+}
+
+// hepProtoTableName is the only table name allowed on POST /exec (PCAP import).
+// Matches LakeTableFQN: <catalog>.main.hep_proto_<proto>_<suffix>.
+var hepProtoTableName = regexp.MustCompile(`(?i)^hep_proto_[0-9]+_[a-z][a-z0-9_]*$`)
+
+var blockedWriteCatalogs = map[string]bool{
+	"MEMORY":             true,
+	"TEMP":               true,
+	"SYSTEM":             true,
+	"INFORMATION_SCHEMA": true,
+	"PG_CATALOG":         true,
+}
+
+// ValidateWriteSQL validates coordinator-generated writes (PCAP import INSERT).
+// Only INSERT INTO <catalog>.main.hep_proto_* (...) VALUES ... is allowed.
+// SELECT/FROM, system catalogs, quoted identifiers, and DML/filesystem hazards stay blocked.
+func ValidateWriteSQL(sql string) error {
+	tokens, err := tokensForValidation(sql)
+	if err != nil {
+		return err
+	}
+
+	if err := requireInsertIntoHepProtoValues(tokens); err != nil {
+		return err
+	}
+
+	return rejectSQLHazards(tokens, map[string]bool{"INSERT": true})
+}
+
+func requireInsertIntoHepProtoValues(tokens []token) error {
+	for _, tok := range tokens {
+		if tok.kind == tkSemi {
+			return fmt.Errorf("semicolons are not allowed (prevents multi-statement injection)")
+		}
+		if tok.kind == tkIdent && strings.HasPrefix(tok.value, "\"") {
+			return fmt.Errorf("quoted identifiers are not allowed in write SQL")
+		}
+		if tok.kind == tkOp && (tok.value == "[" || tok.value == "`") {
+			return fmt.Errorf("quoted identifiers are not allowed in write SQL")
+		}
+	}
+
+	if len(tokens) < 8 {
+		return fmt.Errorf("write SQL must be INSERT INTO <catalog>.main.hep_proto_* VALUES ...")
+	}
+	if tokens[0].kind != tkIdent || tokens[0].upper != "INSERT" ||
+		tokens[1].kind != tkIdent || tokens[1].upper != "INTO" {
+		return fmt.Errorf("write SQL must start with INSERT INTO (got %q)", tokens[0].value)
+	}
+	if tokens[2].kind != tkIdent {
+		return fmt.Errorf("write target catalog must be an identifier")
+	}
+	if blockedWriteCatalogs[tokens[2].upper] {
+		return fmt.Errorf("system catalog %q is not allowed as write target", tokens[2].value)
+	}
+	if tokens[3].kind != tkDot ||
+		tokens[4].kind != tkIdent || tokens[4].upper != "MAIN" ||
+		tokens[5].kind != tkDot ||
+		tokens[6].kind != tkIdent {
+		return fmt.Errorf("write target must be <catalog>.main.hep_proto_<proto>_<name>")
+	}
+	if !hepProtoTableName.MatchString(tokens[6].value) {
+		return fmt.Errorf("write target table must match hep_proto_<proto>_<name> (got %q)", tokens[6].value)
+	}
+
+	i := 7
+	if i < len(tokens) && tokens[i].kind == tkLParen {
+		depth := 0
+		for i < len(tokens) {
+			switch tokens[i].kind {
+			case tkLParen:
+				depth++
+			case tkRParen:
+				depth--
+				i++
+				if depth == 0 {
+					goto afterCols
+				}
+				continue
+			}
+			i++
+		}
+		return fmt.Errorf("write SQL has an unclosed column list")
+	}
+afterCols:
+	if i >= len(tokens) || tokens[i].kind != tkIdent || tokens[i].upper != "VALUES" {
+		return fmt.Errorf("write SQL must use INSERT ... VALUES (SELECT/FROM is not allowed)")
+	}
+
+	for _, tok := range tokens {
+		if tok.kind != tkIdent {
+			continue
+		}
+		switch tok.upper {
+		case "SELECT", "FROM", "JOIN", "UNION", "EXCEPT", "INTERSECT",
+			"TABLE", "PIVOT", "UNPIVOT", "REPLACE", "OVERWRITE", "RETURNING":
+			return fmt.Errorf("blocked keyword %q in write SQL", tok.value)
+		}
+	}
+	return nil
+}
+
+func tokensForValidation(sql string) ([]token, error) {
+	trimmed := strings.TrimSpace(sql)
+	if trimmed == "" {
+		return nil, fmt.Errorf("empty SQL query")
+	}
+	tokens := tokenize(trimmed)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("empty SQL query after parsing")
+	}
+	return tokens, nil
+}
+
+// rejectSQLHazards applies the GHSA-rm5w-rqr7-2h54 checks shared by read and write SQL.
+// skipDML lists keywords that may appear (the write path allows INSERT itself).
+func rejectSQLHazards(tokens []token, skipDML map[string]bool) error {
 	for _, tok := range tokens {
 		if tok.kind == tkSemi {
 			return fmt.Errorf("semicolons are not allowed (prevents multi-statement injection)")
 		}
 	}
 
-	// 3. Check for blocked DML/DDL keywords
 	for _, tok := range tokens {
 		if tok.kind != tkIdent {
+			continue
+		}
+		if skipDML[tok.upper] {
 			continue
 		}
 		if blockedDML[tok.upper] {
@@ -293,21 +408,17 @@ func ValidateRawSQL(sql string) error {
 		}
 	}
 
-	// 4. Check for blocked filesystem/network functions
 	for i, tok := range tokens {
 		if tok.kind != tkIdent {
 			continue
 		}
 		if blockedFunctions[tok.upper] {
-			// Only flag if it looks like a function call (followed by parenthesis)
 			if i+1 < len(tokens) && tokens[i+1].kind == tkLParen {
 				return fmt.Errorf("blocked function %q (filesystem/network access is not allowed)", tok.value)
 			}
-			// Also block as keyword for COPY, EXPORT, IMPORT (already in blockedDML)
 		}
 	}
 
-	// 5. Check for SELECT ... INTO (prevents writing to tables/files)
 	selectSeen := false
 	fromSeen := false
 	for _, tok := range tokens {
@@ -326,7 +437,6 @@ func ValidateRawSQL(sql string) error {
 		}
 	}
 
-	// 6. Check for CALL (except within string literals, already handled by tokenizer)
 	for _, tok := range tokens {
 		if tok.kind == tkIdent && tok.upper == "CALL" {
 			return fmt.Errorf("CALL statements are not allowed")
@@ -368,8 +478,8 @@ var blockedExprKeywords = map[string]bool{
 	"ATTACH":    true,
 	"DETACH":    true,
 	"LOAD":      true,
-	"INSTALL":  true,
-	"SET":      true,
+	"INSTALL":   true,
+	"SET":       true,
 	"INTO":      true,
 	"CALL":      true,
 	"UNION":     true,

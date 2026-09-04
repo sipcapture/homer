@@ -74,6 +74,45 @@ func TestFlightServiceQuerySendsBearerToken(t *testing.T) {
 	}
 }
 
+func TestFlightServiceExecFirstConnectedPostsExec(t *testing.T) {
+	var gotPath, gotAuth, gotSQL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		var req queryRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		gotSQL = req.SQL
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"data":[],"count":0}`))
+	}))
+	defer srv.Close()
+
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := u.Hostname()
+	port, _ := strconv.Atoi(u.Port())
+	svc := NewFlightService([]config.NodeEndpoint{
+		{Name: "local", Host: host, Port: port - 1, Token: "node-secret"},
+	}, time.Second, false)
+	svc.connected["local"] = true
+
+	sql := "INSERT INTO homer_lake.main.hep_proto_1_call (id) VALUES (1)"
+	if err := svc.ExecFirstConnected(context.Background(), sql); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/exec" {
+		t.Fatalf("path=%q want /exec", gotPath)
+	}
+	if gotAuth != "Bearer node-secret" {
+		t.Fatalf("Authorization=%q", gotAuth)
+	}
+	if gotSQL != sql {
+		t.Fatalf("sql=%q", gotSQL)
+	}
+}
+
 func TestFetchNodeRangeParsesStats(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/metadata/stats" {

@@ -93,6 +93,51 @@ func TestHandleQueryRejectsDML(t *testing.T) {
 	}
 }
 
+func TestHandleQueryRejectsInsert(t *testing.T) {
+	node := &Node{}
+	body, _ := json.Marshal(QueryRequest{SQL: `INSERT INTO t VALUES (1)`})
+	req := httptest.NewRequest(http.MethodPost, "/query", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	node.handleQuery(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for INSERT on /query, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleExecValidatesWriteSQL(t *testing.T) {
+	node := &Node{}
+
+	t.Run("drop", func(t *testing.T) {
+		body, _ := json.Marshal(QueryRequest{SQL: `DROP TABLE t`})
+		req := httptest.NewRequest(http.MethodPost, "/exec", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		node.handleExec(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("insert with read_text", func(t *testing.T) {
+		body, _ := json.Marshal(QueryRequest{SQL: `INSERT INTO t SELECT content FROM read_text('/etc/passwd')`})
+		req := httptest.NewRequest(http.MethodPost, "/exec", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		node.handleExec(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("valid insert without db is 503", func(t *testing.T) {
+		body, _ := json.Marshal(QueryRequest{SQL: `INSERT INTO homer_lake.main.hep_proto_1_call (id) VALUES (1)`})
+		req := httptest.NewRequest(http.MethodPost, "/exec", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		node.handleExec(rr, req)
+		if rr.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected 503 after validation, got %d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+}
+
 func TestBearerTokenFromRequest(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer  abc ")
