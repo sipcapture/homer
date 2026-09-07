@@ -476,7 +476,10 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
 
     const searchData = {
       filter,
-      param: { limit: Number(limit) || 50 },
+      param: {
+        limit: Number(limit) || 50,
+        order_by: form.sort_order === 'asc' ? 'timestamp ASC' : 'timestamp DESC',
+      },
       // AI / MCP: do not send the dashboard time window — the server infers
       // range from natural language (and LLM fallbacks). Sending the previous
       // range here pinned "last two hours" to the old 1h window after the
@@ -660,6 +663,25 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
       )
     }
     if (id === 'results_container') return null // handled by target widget selector
+    if (id === 'sort_order') {
+      return (
+        <div className="grid gap-1" key={id}>
+          <Label htmlFor="sp-sort_order" className="text-[11px] text-muted-foreground">Sort Order</Label>
+          <Select
+            value={form.sort_order || 'desc'}
+            onValueChange={(v) => handleChange('sort_order', v)}
+          >
+            <SelectTrigger id="sp-sort_order" className="h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Newest first</SelectItem>
+              <SelectItem value="asc">Oldest first</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )
+    }
 
     // multiselect (selector / form_default) or input_multi_select (form_default) → chips + custom
     if (form_type === 'multiselect' || form_type === 'input_multi_select') {

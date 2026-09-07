@@ -3,6 +3,7 @@ import React from 'react'
 import { apiPost } from '../api'
 import ExportModal from '../settings/ExportModal'
 import CallFlow from './CallFlow'
+import { getColorByString } from './flow-utils'
 import ExportTab from './ExportTab'
 import MessageModal from './MessageModal'
 import QosPanel from './QosPanel'
@@ -646,6 +647,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
   if (!modal) return null
   const { id, loading, items, error, timeRange, modalKey, sessionIds, primarySessionId } = modal
   const primaryId = primarySessionId ?? (sessionIds && sessionIds[0]) ?? id
+  const headerColor = primaryId ? getColorByString(primaryId, 75, 42, 1) : undefined
   const isMultiSession = Array.isArray(sessionIds) && sessionIds.length > 1
   const sessionIdsForApi = (Array.isArray(sessionIds) && sessionIds.length)
     ? sessionIds.map((s) => String(s).trim()).filter(Boolean)
@@ -823,18 +825,19 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
       <FloatingWindow
         open
         onClose={onClose}
+        headerColor={headerColor}
         id={`tx:${modalKey || id}`}
         title={
           isMultiSession ? (
             <span className="truncate text-sm">
               Transactions:{' '}
-              <span className="font-mono text-muted-foreground">
+              <span className={cn('font-mono', headerColor ? 'text-white/75' : 'text-muted-foreground')}>
                 {sessionIds.length} {sessionIds.length === 1 ? 'session' : 'sessions'}
               </span>
             </span>
           ) : (
             <span className="truncate font-mono text-sm">
-              Transaction: <span className="text-muted-foreground">{id}</span>
+              Transaction: <span className={headerColor ? 'text-white/75' : 'text-muted-foreground'}>{id}</span>
             </span>
           )
         }
