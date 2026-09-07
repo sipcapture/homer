@@ -16,6 +16,7 @@ interface FloatingWindowProps {
   onClose: () => void
   title?: ReactNode
   headerActions?: ReactNode
+  headerColor?: string
   children?: ReactNode
   className?: string
   id?: string
@@ -30,6 +31,7 @@ export function FloatingWindow({
   onClose,
   title,
   headerActions,
+  headerColor,
   children,
   className,
   id,
@@ -252,8 +254,10 @@ export function FloatingWindow({
       <div
         className={cn(
           'flex shrink-0 items-center gap-2 border-b border-border bg-card/80 px-3 py-2',
+          headerColor && 'text-white',
           headerStyle,
         )}
+        style={headerColor ? { backgroundColor: headerColor } : undefined}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
