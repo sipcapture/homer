@@ -25,6 +25,7 @@ import { SettingsPageHeader } from './SettingsPageHeader'
 import UserAvatar from '@/components/UserAvatar'
 import { apiPatch } from '../api'
 import { useLocale } from '@/components/locale/locale-provider'
+import { useDefaultDetailsTab } from '@/components/details-tab/details-tab-provider'
 
 const LOCALE_TAGS = [
   'ar-EG', 'ar-SA', 'bg-BG', 'ca-ES', 'cs-CZ', 'da-DK',
@@ -103,6 +104,7 @@ export default function ProfilePanel({
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const { locale, setLocale, resolved, auto } = useLocale()
+  const { defaultDetailsTab, setDefaultDetailsTab } = useDefaultDetailsTab()
   const localeChoices = useMemo(() => {
     const collator = new Intl.Collator(resolved)
     return LOCALE_TAGS
@@ -273,6 +275,29 @@ export default function ProfilePanel({
           <div className="text-sm">
             <span className="text-muted-foreground">Sample: </span>
             <span className="font-mono">{sample}</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Transaction view</CardTitle>
+          <CardDescription>
+            Controls which tab a transaction opens on by default. Stored in this browser only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 sm:max-w-md">
+            <Label htmlFor="profile-default-details-tab">Default tab</Label>
+            <Select value={defaultDetailsTab} onValueChange={(v) => setDefaultDetailsTab(v as 'flow' | 'messages')}>
+              <SelectTrigger id="profile-default-details-tab" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="messages">Messages</SelectItem>
+                <SelectItem value="flow">Call Flow</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>

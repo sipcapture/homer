@@ -32,6 +32,7 @@ import {
 import { cn } from '@/lib/utils'
 import { newModalKey } from '@/lib/modalKey'
 import { useLocale } from '@/components/locale/locale-provider'
+import { useDefaultDetailsTab } from '@/components/details-tab/details-tab-provider'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { getMethodColor } from './flow-utils'
 import { resolveTimeRange } from './utils/resolveTimeRange'
@@ -602,7 +603,8 @@ function OtlpLogsTab({
 
 export default function TransactionModal({ modal, onClose, timeZone }) {
   const { resolved: locale } = useLocale()
-  const [activeTab, setActiveTab] = React.useState('messages')
+  const { defaultDetailsTab } = useDefaultDetailsTab()
+  const [activeTab, setActiveTab] = React.useState(defaultDetailsTab)
   const [qosData, setQosData] = React.useState(null)
   const [qosLoading, setQosLoading] = React.useState(false)
   const [qosError, setQosError] = React.useState('')
@@ -625,7 +627,7 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
 
   // reset per-tab state whenever a new transaction is opened
   React.useEffect(() => {
-    setActiveTab('messages')
+    setActiveTab(defaultDetailsTab)
     setQosData(null); setQosError(''); setQosLoading(false)
     setCallInfoData(null); setCallInfoError(''); setCallInfoLoading(false)
     setEventsData(null); setEventsError(''); setEventsLoading(false)
