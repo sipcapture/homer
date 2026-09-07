@@ -151,11 +151,11 @@ export function getHighContrastColor(
 
   const hue = index === 0 ? baseComponents.hue : baseComponents.hue + offsetStep * index
   const saturation = index === 0 ? baseComponents.saturation + 10 : 60
-  const lightness = index === 0 ? baseComponents.lightness - 20 : 70
+  const lightness = index === 0 ? baseComponents.lightness - 20 : 55
 
   return {
-    color: `hsla(${hue}, ${saturation}%, ${lightness}%, 0.2)`,
+    color: `hsla(${hue}, ${saturation}%, ${lightness}%, 0.35)`,
     tabColor: `hsla(${hue}, ${saturation}%, ${lightness}%, 1)`,
-    arrowColor: `hsla(${hue}, ${saturation}%, ${lightness}%, 0.55)`,
+    arrowColor: `hsla(${hue}, ${saturation}%, ${lightness}%, 0.9)`,
   }
 }

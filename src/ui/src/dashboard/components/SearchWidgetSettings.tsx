@@ -52,6 +52,7 @@ const DEFAULT_FIELDS: FieldItem[] = [
     form_type: 'select',
     form_default: 'default',
   },
+  { id: 'sort_order', name: 'Sort Order', type: 'string', form_type: 'select', form_default: 'desc' },
 ]
 
 export default function SearchWidgetSettings({
@@ -118,9 +119,9 @@ export default function SearchWidgetSettings({
   useEffect(() => {
     if (!selectedMapping) return
     const merged = getMergedFields(selectedMapping)
-    const withDefaults = merged.find((f) => f.id === 'limit')
-      ? merged
-      : [...merged, ...DEFAULT_FIELDS]
+    const mergedIds = new Set(merged.map((f) => f.id))
+    const missingDefaults = DEFAULT_FIELDS.filter((f) => !mergedIds.has(f.id))
+    const withDefaults = missingDefaults.length > 0 ? [...merged, ...missingDefaults] : merged
 
     const activeIds = (config.fields ?? []).map((f) => f.id)
     // Preserve active selection from saved config if protocol matches
