@@ -29,6 +29,7 @@ import DashboardHeader from './dashboard/DashboardHeader'
 import { fetchMeAvatarObjectUrl, handleUnauthorized } from './api'
 import { ThemeProvider } from "@/components/theme/theme-provider"
 import { LocaleProvider } from "@/components/locale/locale-provider"
+import { DetailsTabProvider } from "@/components/details-tab/details-tab-provider"
 import { WindowDock } from "@/components/ui/window-dock"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { LoginPage } from './LoginPage'
@@ -594,6 +595,7 @@ function App() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
       <LocaleProvider defaultLocale="auto" storageKey="vite-ui-locale">
+      <DetailsTabProvider defaultTab="messages" storageKey="vite-ui-default-details-tab">
       <div className="app">
         <main className="content">
           {!authReady ? (
@@ -670,6 +672,7 @@ function App() {
         </main>
         <WindowDock />
       </div>
+      </DetailsTabProvider>
       </LocaleProvider>
     </ThemeProvider>
   )
