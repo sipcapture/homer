@@ -1,6 +1,6 @@
 module github.com/sipcapture/homer-core/src
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
