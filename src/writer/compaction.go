@@ -541,15 +541,14 @@ func (c *CompactionService) runCompaction() {
 		"rows_deleted", totalRowsDeleted)
 }
 
-// discoverTables finds all HEP tables in the DuckLake catalog
+// discoverTables finds HEP and OTLP tables in the DuckLake catalog
 func (c *CompactionService) discoverTables() error {
 	query := `
 		SELECT table_name
 		FROM information_schema.tables
 		WHERE table_catalog = ?
 		  AND table_schema = 'main'
-		  AND (table_name LIKE 'hep_proto_%' OR table_name LIKE 'otlp_%')
-	`
+		  AND ` + ducklake.ManagedLakeTablePredicate
 
 	rows, err := c.queryWithRetry(query, c.lakeName)
 	if err != nil {
