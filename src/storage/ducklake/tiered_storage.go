@@ -876,15 +876,14 @@ func (tsm *TieredStorageManager) GetPartitionsOlderThan(vol *Volume, tableName s
 	return partitions, nil
 }
 
-// GetTableNames returns all table names in a volume
+// GetTableNames returns HEP and OTLP table names in a volume.
 func (tsm *TieredStorageManager) GetTableNames(vol *Volume) ([]string, error) {
 	query := `
 		SELECT table_name
 		FROM information_schema.tables
 		WHERE table_catalog = ?
 		  AND table_schema = 'main'
-		  AND table_name LIKE 'hep_proto_%'
-	`
+		  AND ` + ManagedLakeTablePredicate
 
 	rows, err := tsm.db.Query(query, vol.LakeName)
 	if err != nil {

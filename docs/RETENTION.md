@@ -122,9 +122,11 @@ capture — an `otlp_logs` override is the usual case:
 }
 ```
 
-For datasets that are in neither discovery set (for example Line Protocol
-tables), use separate volumes/tiering or external lifecycle rules on object
-storage.
+The same discovery set is used by the writer compaction cycle, the one-off
+`homer-core system --compaction-retention-days` / `--compaction-force` CLI,
+and `TieredStorageManager` (hot→cold moves and final-volume expiry). Line
+Protocol tables are in neither set; use a non-empty `table_prefix` plus
+external lifecycle rules on object storage, or a dedicated volume.
 
 OTLP and Line Protocol docs point here: [OTLP.md](OTLP.md), [LINE_PROTOCOL.md](LINE_PROTOCOL.md).
 

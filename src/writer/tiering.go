@@ -330,7 +330,7 @@ func (ts *TieringService) moveOldPartitions(srcVol, dstVol *ducklake.Volume) (in
 		return 0, fmt.Errorf("failed to get table names: %w", err)
 	}
 	if len(tables) == 0 {
-		logger.Info("TieringService: No hep_proto* tables on tiered source volume — nothing to move by age",
+		logger.Info("TieringService: No hep_proto*/otlp_* tables on tiered source volume — nothing to move by age",
 			"source", srcVol.Name,
 			"lake", srcVol.LakeName,
 			"hint", "Tiering runs on the TieredStorageManager DuckDB; if that catalog has no tables while ingest uses the writer DuckLake only, hot tier stays empty until writer and tiered paths share the same catalog data.")
@@ -434,7 +434,7 @@ func (ts *TieringService) expireOldPartitions(vol *ducklake.Volume) (int64, erro
 		return 0, fmt.Errorf("failed to get table names: %w", err)
 	}
 	if len(tables) == 0 {
-		logger.Info("TieringService: No hep_proto* tables on final volume — nothing to expire by age",
+		logger.Info("TieringService: No hep_proto*/otlp_* tables on final volume — nothing to expire by age",
 			"source", vol.Name,
 			"lake", vol.LakeName)
 		return 0, nil

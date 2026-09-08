@@ -114,7 +114,7 @@ func (tr *TieredReader) QueryAll(whereClause string, limit int) ([]map[string]in
 	var allResults []map[string]interface{}
 
 	for _, vol := range volumes {
-		// Get all HEP tables in this volume
+		// Get HEP and OTLP tables in this volume
 		tables, err := tr.tieredStorage.GetTableNames(vol)
 		if err != nil {
 			continue

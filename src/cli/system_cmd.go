@@ -403,15 +403,14 @@ func runCompaction(f SystemFlags) error {
 }
 
 func discoverDuckLakeTables(db *sql.DB, lakeName string) ([]string, error) {
-	query := fmt.Sprintf(`
+	query := `
 		SELECT table_name 
 		FROM information_schema.tables 
-		WHERE table_catalog = '%s' 
+		WHERE table_catalog = ?
 		  AND table_schema = 'main'
-		  AND table_name LIKE 'hep_proto_%%'
-	`, lakeName)
+		  AND ` + ducklake.ManagedLakeTablePredicate
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, lakeName)
 	if err != nil {
 		return nil, err
 	}
