@@ -95,7 +95,7 @@ Failures are logged per table; missing Parquet files are skipped and cleaned up 
 
 ### Applies to lake tables
 
-Retention runs on **every HEP table** discovered in the writer DuckLake catalog (`hep_proto_*`). Use `retention_days_by_table` when different datasets need different windows — for example keep calls longer than REGISTERs:
+Retention runs on **every HEP table** (`hep_proto_*`) and **every OTLP signal table** (`otlp_traces`, `otlp_metrics`, `otlp_logs`) discovered in the writer DuckLake catalog. Use `retention_days_by_table` when different datasets need different windows — for example keep calls longer than REGISTERs:
 
 ```json
 "compaction": {
@@ -109,7 +109,22 @@ Retention runs on **every HEP table** discovered in the writer DuckLake catalog 
 
 Keys must match the **bare** catalog table name (not a fully-qualified `lake.main.*` name). Unknown keys are ignored.
 
-For datasets that are not part of the HEP discovery set, use separate volumes/tiering or external lifecycle rules on object storage.
+OTLP tables are high-volume and often want a much shorter window than call
+capture — an `otlp_logs` override is the usual case:
+
+```json
+"compaction": {
+  "enable": true,
+  "retention_days": 30,
+  "retention_days_by_table": {
+    "otlp_logs": 1
+  }
+}
+```
+
+For datasets that are in neither discovery set (for example Line Protocol
+tables), use separate volumes/tiering or external lifecycle rules on object
+storage.
 
 OTLP and Line Protocol docs point here: [OTLP.md](OTLP.md), [LINE_PROTOCOL.md](LINE_PROTOCOL.md).
 
