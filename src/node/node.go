@@ -1370,7 +1370,11 @@ func (n *Node) handleExec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Info("Node: handleExec", "sql_chars", len(req.SQL))
-	res, err := db.ExecContext(r.Context(), req.SQL)
+	// Bound parameters cannot carry a coordinator INSERT ... VALUES statement
+	// (PCAP import). ValidateWriteSQL above is the sanitizer: only
+	// INSERT INTO <catalog>.main.hep_proto_* VALUES ..., no SELECT/FROM,
+	// comments, or stacked statements (GHSA-rm5w-rqr7-2h54).
+	res, err := db.ExecContext(r.Context(), req.SQL) // codeql[go/sql-injection]
 	if err != nil {
 		logger.Error("Node: Exec failed", "sql", req.SQL, "error", err)
 		writeJSON(w, http.StatusOK, QueryResponse{
