@@ -548,7 +548,7 @@ func (c *CompactionService) discoverTables() error {
 		FROM information_schema.tables
 		WHERE table_catalog = ?
 		  AND table_schema = 'main'
-		  AND table_name LIKE 'hep_proto_%'
+		  AND (table_name LIKE 'hep_proto_%' OR table_name LIKE 'otlp_%')
 	`
 
 	rows, err := c.queryWithRetry(query, c.lakeName)
