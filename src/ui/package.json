@@ -69,7 +69,7 @@
     "js-yaml": "4.3.1",
     "nanoid": "3.3.18",
     "@hono/node-server": "2.0.11",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.6",
     "@babel/core": "7.29.6",
     "ws": "8.21.0",
     "browserslist": "4.28.7",
