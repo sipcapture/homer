@@ -140,7 +140,7 @@ Homer 11 **Protocol Search** (`SearchPanel` Form tab) supports:
 
 | `form_type` | UI control | Notes |
 |-------------|------------|--------|
-| `input` | Single-line text or number | Default. `type: integer` → `type="number"` input. |
+| `input` | Single-line text or number | Default. `type: integer` → `type="number"` input. Semicolon-separated text values (`110;112`) are OR-ed as SQL `IN` / `LIKE` (Homer 7). |
 | `input_multi_select` | Multi-select chips + custom values | Uses `form_default` as preset options. Sends `filter.<id>` or `filter.<id>s` (array → SQL `IN`). |
 | `multiselect` | Same as above when `selector` or `form_default` is set | Legacy alias; prefer `input_multi_select` in new JSON. |
 | `select` | Dropdown | Requires `selector: [{ "name", "value" }, ...]`. |
@@ -289,8 +289,8 @@ Multi-select with one value uses singular key (`method`); multiple values use pl
 | `id` | Column / source | Profile notes |
 |------|-----------------|---------------|
 | `call_id` | `session_id` (+ `cid` OR in default profile) | `sid_type: true` in call mapping |
-| `from_user` | `caller` | call |
-| `to_user` | `callee` | call |
+| `from_user` | `caller` | call; `;` separates OR values (`110;112`) |
+| `to_user` | `callee` | call; `;` separates OR values (`110;112`) |
 | `method` | `method` | multi-select → `IN` |
 | `response_code` | `response_code` | multi-select → `IN` |
 | `src_ip`, `dst_ip`, `src_port`, `dst_port` | same | |
@@ -338,6 +338,7 @@ No manual JSON file per measurement is required after ingest is enabled.
 | Field visible but search ignores it | No SQL branch for that `id`; use virtual or extend backend. |
 | Virtual filter no effect | Wrong `hepid`/`profile`; typo in `path`; OTLP/LP proto (virtual disabled). |
 | Multi-select ignored | Empty array; check plural key `methods` in network tab. |
+| `SQL contains forbidden comment or statement separator` | Search value still contains `;` as a literal. Text fields split on `;` into OR/`IN` (#1008). |
 | Homer 7 “protosearch” feel missing | Homer 11 uses generic **Protocol Search** + **Results** table; configure mapping + selected fields ([issue #763](https://github.com/sipcapture/homer/issues/763)). |
 
 ---

@@ -641,14 +641,13 @@ func buildSQL(payload searchPayload) string {
 		parts = append(parts, fmt.Sprintf("method = '%s'", escapeSQL(payload.Filter.Method)))
 	}
 	if payload.Filter.CallID != "" {
-		callID := escapeSQL(payload.Filter.CallID)
-		parts = append(parts, fmt.Sprintf("(session_id LIKE '%%%s%%' OR cid LIKE '%%%s%%')", callID, callID))
+		parts = append(parts, mcpLikeAny([]string{"session_id", "cid"}, payload.Filter.CallID))
 	}
 	if payload.Filter.FromUser != "" {
-		parts = append(parts, fmt.Sprintf("caller LIKE '%%%s%%'", escapeSQL(payload.Filter.FromUser)))
+		parts = append(parts, mcpLikeAny([]string{"caller"}, payload.Filter.FromUser))
 	}
 	if payload.Filter.ToUser != "" {
-		parts = append(parts, fmt.Sprintf("callee LIKE '%%%s%%'", escapeSQL(payload.Filter.ToUser)))
+		parts = append(parts, mcpLikeAny([]string{"callee"}, payload.Filter.ToUser))
 	}
 	if payload.Filter.SrcIP != "" {
 		parts = append(parts, fmt.Sprintf("src_ip = '%s'", escapeSQL(payload.Filter.SrcIP)))
@@ -667,6 +666,37 @@ func buildSQL(payload searchPayload) string {
 
 func escapeSQL(v string) string {
 	return strings.ReplaceAll(v, "'", "''")
+}
+
+// mcpLikeAny builds substring LIKE clauses. Semicolon-separated tokens are
+// OR-ed so "110;112" does not embed ';' (rejected by validateSQL, #1008).
+func mcpLikeAny(columns []string, raw string) string {
+	tokens := strings.Split(raw, ";")
+	var values []string
+	for _, t := range tokens {
+		t = strings.TrimSpace(t)
+		if t == "" {
+			continue
+		}
+		values = append(values, t)
+		if len(values) >= 64 {
+			break
+		}
+	}
+	if len(values) == 0 || len(columns) == 0 {
+		return "TRUE"
+	}
+	var parts []string
+	for _, col := range columns {
+		for _, v := range values {
+			esc := escapeSQL(v)
+			parts = append(parts, fmt.Sprintf("%s LIKE '%%%s%%'", col, esc))
+		}
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	return "(" + strings.Join(parts, " OR ") + ")"
 }
 
 func validateSQL(sql string) error {

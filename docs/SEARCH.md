@@ -106,9 +106,9 @@ Supported time formats:
 | `--proto` | Protocol: name (`sip`, `otlp_traces`, …) or integer `proto_type` | `sip` (same as `1`) |
 | `--event-type <type>` | SIP: `call`/`registration`/`default`; OTLP: `default`; LP: `schema__table` | `call` (SIP only) |
 | `--method <method>` | SIP method filter | - |
-| `--call-id <id>` | Call-ID / session ID (partial match) | - |
-| `--from-user <user>` | Caller/from user (partial match) | - |
-| `--to-user <user>` | Callee/to user (partial match) | - |
+| `--call-id <id>` | Call-ID / session ID. Semicolon-separated values are OR-ed. `%` is a LIKE wildcard. | - |
+| `--from-user <user>` | Caller/from user. Semicolon-separated values are OR-ed (`110;112`). `%` is a LIKE wildcard. | - |
+| `--to-user <user>` | Callee/to user. Semicolon-separated values are OR-ed (`110;112`). `%` is a LIKE wildcard. | - |
 | `--src-ip <ip>` | Source IP (exact match) | - |
 | `--dst-ip <ip>` | Destination IP (exact match) | - |
 | `--node <name>` | Node name filter | - |

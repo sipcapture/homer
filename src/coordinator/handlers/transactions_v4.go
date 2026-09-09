@@ -40,23 +40,81 @@ func stripB2BSuffix(sid string) string {
 	return b2bSuffixRe.ReplaceAllString(sid, "")
 }
 
-// sqlFormMatchClause builds a dashboard/form string filter: exact equality by
-// default; SQL LIKE only when rawValue contains '%' (user-supplied wildcards).
-func sqlFormMatchClause(columnExpr, rawValue string) string {
-	esc := sqlvalidator.SafeString(rawValue)
-	if strings.Contains(rawValue, "%") {
+// maxFormMatchValues caps semicolon-separated search tokens (Homer 7 OR/IN).
+const maxFormMatchValues = 64
+
+// splitFormMatchValues splits a dashboard/form value on ';' (Homer 7 / HEPIC).
+// Empty tokens are dropped. Tokens beyond maxFormMatchValues are ignored.
+func splitFormMatchValues(rawValue string) []string {
+	if !strings.Contains(rawValue, ";") {
+		v := strings.TrimSpace(rawValue)
+		if v == "" {
+			return nil
+		}
+		return []string{v}
+	}
+	parts := strings.Split(rawValue, ";")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+		if len(out) >= maxFormMatchValues {
+			break
+		}
+	}
+	return out
+}
+
+func sqlFormMatchOne(columnExpr, value string) string {
+	esc := sqlvalidator.SafeString(value)
+	if strings.Contains(value, "%") {
 		return fmt.Sprintf("%s LIKE '%s'", columnExpr, esc)
 	}
 	return fmt.Sprintf("%s = '%s'", columnExpr, esc)
 }
 
+func sqlFormMatchJoin(columnExpr string, values []string) string {
+	if len(values) == 0 {
+		return "TRUE"
+	}
+	if len(values) == 1 {
+		return sqlFormMatchOne(columnExpr, values[0])
+	}
+	allExact := true
+	for _, v := range values {
+		if strings.Contains(v, "%") {
+			allExact = false
+			break
+		}
+	}
+	if allExact {
+		quoted := make([]string, len(values))
+		for i, v := range values {
+			quoted[i] = "'" + sqlvalidator.SafeString(v) + "'"
+		}
+		return fmt.Sprintf("%s IN (%s)", columnExpr, strings.Join(quoted, ", "))
+	}
+	parts := make([]string, len(values))
+	for i, v := range values {
+		parts[i] = sqlFormMatchOne(columnExpr, v)
+	}
+	return "(" + strings.Join(parts, " OR ") + ")"
+}
+
+// sqlFormMatchClause builds a dashboard/form string filter: exact equality by
+// default; SQL LIKE only when a token contains '%' (user-supplied wildcards).
+// Semicolon-separated tokens are OR-ed (IN when every token is exact), matching
+// Homer 7 / HEPIC "110;112" multi-number search (#1008).
+func sqlFormMatchClause(columnExpr, rawValue string) string {
+	return sqlFormMatchJoin(columnExpr, splitFormMatchValues(rawValue))
+}
+
 // sqlFormMatchClauseOr applies sqlFormMatchClause across two columns (OR).
 func sqlFormMatchClauseOr(leftExpr, rightExpr, rawValue string) string {
-	esc := sqlvalidator.SafeString(rawValue)
-	if strings.Contains(rawValue, "%") {
-		return fmt.Sprintf("(%s LIKE '%s' OR %s LIKE '%s')", leftExpr, esc, rightExpr, esc)
-	}
-	return fmt.Sprintf("(%s = '%s' OR %s = '%s')", leftExpr, esc, rightExpr, esc)
+	return sqlFormMatchClauseAny([]string{leftExpr, rightExpr}, rawValue)
 }
 
 // sipCallIDMatchClause builds a Call-ID / session_id filter for a SIP profile.
@@ -77,16 +135,18 @@ func sipCIDMatchClause(txType, rawValue string) string {
 	return sqlFormMatchClause("cid", rawValue)
 }
 
-// sqlFormMatchClauseAny ORs the same value across multiple column expressions.
+// sqlFormMatchClauseAny ORs the same value(s) across multiple column expressions.
 func sqlFormMatchClauseAny(columnExprs []string, rawValue string) string {
-	esc := sqlvalidator.SafeString(rawValue)
-	op := "="
-	if strings.Contains(rawValue, "%") {
-		op = "LIKE"
+	values := splitFormMatchValues(rawValue)
+	if len(columnExprs) == 0 || len(values) == 0 {
+		return "TRUE"
+	}
+	if len(columnExprs) == 1 {
+		return sqlFormMatchJoin(columnExprs[0], values)
 	}
 	parts := make([]string, len(columnExprs))
 	for i, col := range columnExprs {
-		parts[i] = fmt.Sprintf("%s %s '%s'", col, op, esc)
+		parts[i] = sqlFormMatchJoin(col, values)
 	}
 	return "(" + strings.Join(parts, " OR ") + ")"
 }

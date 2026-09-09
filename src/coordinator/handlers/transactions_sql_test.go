@@ -560,6 +560,70 @@ func TestBuildSearchSQLV4_FormExactMatchUnlessPercent(t *testing.T) {
 	}
 }
 
+func TestBuildSearchSQLV4_SemicolonSeparatedOR(t *testing.T) {
+	// Homer 7 / HEPIC: "110;112" means callee IN ('110', '112'), not a literal
+	// that the node SQL validator then rejects as a statement separator (#1008).
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.ToUser = "112;110"
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(sql, ";") {
+		t.Fatalf("generated SQL must not contain semicolon (node validator), got:\n%s", sql)
+	}
+	if !strings.Contains(sql, "callee IN ('112', '110')") {
+		t.Fatalf("expected callee IN for semicolon-separated numbers, got:\n%s", sql)
+	}
+
+	req.Filter.ToUser = ""
+	req.Filter.FromUser = "00492111234567;+492111234567;02111234567"
+	sql2, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(sql2, ";") {
+		t.Fatalf("generated SQL must not contain semicolon, got:\n%s", sql2)
+	}
+	if !strings.Contains(sql2, "caller IN ('00492111234567', '+492111234567', '02111234567')") {
+		t.Fatalf("expected caller IN for alternate number formats, got:\n%s", sql2)
+	}
+
+	req.Filter.FromUser = ""
+	req.Filter.ToUser = "112%;110"
+	sql3, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql3, "(callee LIKE '112%' OR callee = '110')") {
+		t.Fatalf("expected mixed LIKE/= OR for wildcard tokens, got:\n%s", sql3)
+	}
+
+	req.Filter.ToUser = " 112 ; ; 110 "
+	sql4, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sql4, "callee IN ('112', '110')") {
+		t.Fatalf("expected empty tokens skipped, got:\n%s", sql4)
+	}
+}
+
+func TestSqlFormMatchClause_Helpers(t *testing.T) {
+	if got := sqlFormMatchClause("callee", "112"); got != "callee = '112'" {
+		t.Fatalf("single exact: %s", got)
+	}
+	if got := sqlFormMatchClauseOr("session_id", "cid", "a;b"); got != "(session_id IN ('a', 'b') OR cid IN ('a', 'b'))" {
+		t.Fatalf("or IN: %s", got)
+	}
+	if got := sqlFormMatchClauseAny([]string{"body", "CAST(raw AS VARCHAR)"}, "x"); got != "(body = 'x' OR CAST(raw AS VARCHAR) = 'x')" {
+		t.Fatalf("any single: %s", got)
+	}
+}
+
 func TestBuildSearchSQLV4_VirtualDataExtraEquals(t *testing.T) {
 	req := SearchObjectV4{}
 	req.Filter.ProtoType = 1
