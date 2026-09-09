@@ -44,6 +44,12 @@ import MessageModal from '../MessageModal'
 import { useLocale } from '@/components/locale/locale-provider'
 import { columnDisplayLabel, columnDisplayTitle } from '../resultColumnLabels'
 import { ensureNodeNameKey, promoteDataExtraNodeName } from '../promoteDataExtraNodeName'
+import {
+  compareSearchResultRows,
+  DEFAULT_RESULT_SORT_COL,
+  DEFAULT_RESULT_SORT_DIR,
+  pickRowTimestampMs,
+} from '../resultRowSort'
 
 const OTLP_TRACES_PROTO = 200
 const OTLP_METRICS_PROTO = 201
@@ -136,36 +142,6 @@ function pickSessionForTx(row, protoType) {
   const v = row.session_id ?? row.cid ?? row.SESSION_ID ?? row.CID
   if (v != null && String(v).trim() !== '') return String(v).trim()
   return ''
-}
-
-function timestampToMs(val) {
-  if (val == null && val !== 0) return null
-  if (val instanceof Date) return val.getTime()
-  if (typeof val === 'number') {
-    if (val > 1e15) return Math.round(val / 1e6)
-    if (val > 1e12) return Math.round(val)
-    if (val > 1e9) return Math.round(val * 1000)
-    return val
-  }
-  if (typeof val === 'string') {
-    let s = val.trim()
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s = `${s}T00:00:00Z`
-    else if (s.includes(' ') && !s.includes('T')) s = s.replace(' ', 'T')
-    const d = new Date(s)
-    return Number.isNaN(d.getTime()) ? null : d.getTime()
-  }
-  return null
-}
-
-/** Row event time for /messages (never use dashboard time picker here). */
-function pickRowTimestampMs(row) {
-  if (!row || typeof row !== 'object') return null
-  for (const k of ['timestamp', 'TIMESTAMP', 'ts', 'TS', 'create_date', 'CREATE_DATE']) {
-    if (!Object.prototype.hasOwnProperty.call(row, k)) continue
-    const ms = timestampToMs(row[k])
-    if (ms != null) return ms
-  }
-  return null
 }
 
 /** Stable key for row selection: uuid when present, else index in filteredRows. */
@@ -322,8 +298,8 @@ export default function ResultsPanel({ widgetId, config: _config }) {
   const [currentEvent, setCurrentEvent] = useState('call')
   const [hiddenColumns, setHiddenColumns] = useState(() => loadLS(LS_KEY_HIDDEN(widgetId, '1', 'call'), []))
   const [columnOrder, setColumnOrder] = useState(() => loadLS(LS_KEY_ORDER(widgetId, '1', 'call'), []))
-  const [sortCol, setSortCol] = useState(null)
-  const [sortDir, setSortDir] = useState('asc')
+  const [sortCol, setSortCol] = useState(DEFAULT_RESULT_SORT_COL)
+  const [sortDir, setSortDir] = useState(DEFAULT_RESULT_SORT_DIR)
   const [colorByCall, setColorByCall] = useState(() => loadLS(`results_color_by_call_${widgetId}`, true))
   const [otlpMetricsTab, setOtlpMetricsTab] = useState(() => {
     const t = loadLS(LS_KEY_OTLP_METRICS_TAB(widgetId), 'chart')
@@ -353,8 +329,8 @@ export default function ResultsPanel({ widgetId, config: _config }) {
     setCurrentEvent(event)
     setHiddenColumns(loadLS(LS_KEY_HIDDEN(widgetId, proto, event), []))
     setColumnOrder(loadLS(LS_KEY_ORDER(widgetId, proto, event), []))
-    setSortCol(null)
-    setSortDir('asc')
+    setSortCol(DEFAULT_RESULT_SORT_COL)
+    setSortDir(DEFAULT_RESULT_SORT_DIR)
     setLoading(true)
     setStatus('')
     setGeneratedSql('')
@@ -513,19 +489,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
       )
     }
     if (!sortCol) return result
-    return [...result].sort((a, b) => {
-      let va = a[sortCol] ?? ''
-      let vb = b[sortCol] ?? ''
-      const na = Number(va), nb = Number(vb)
-      if (!isNaN(na) && !isNaN(nb) && va !== '' && vb !== '') {
-        return sortDir === 'asc' ? na - nb : nb - na
-      }
-      va = String(va).toLowerCase()
-      vb = String(vb).toLowerCase()
-      if (va < vb) return sortDir === 'asc' ? -1 : 1
-      if (va > vb) return sortDir === 'asc' ? 1 : -1
-      return 0
-    })
+    return [...result].sort((a, b) => compareSearchResultRows(a, b, sortCol, sortDir))
   }, [rows, filterText, sortCol, sortDir])
 
   const totalRows = filteredRows?.length || 0
