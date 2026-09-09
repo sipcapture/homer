@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/storage/ducklake"
 )
 
 func TestFlightServiceCloseAllIsIdempotent(t *testing.T) {
@@ -74,14 +75,18 @@ func TestFlightServiceQuerySendsBearerToken(t *testing.T) {
 	}
 }
 
-func TestFlightServiceExecFirstConnectedPostsExec(t *testing.T) {
-	var gotPath, gotAuth, gotSQL string
+func TestFlightServiceInsertFirstConnectedPostsExec(t *testing.T) {
+	var gotPath, gotAuth string
+	var got struct {
+		SQL       string          `json:"sql"`
+		ProtoType uint32          `json:"proto_type"`
+		SubType   string          `json:"sub_type"`
+		Rows      [][]interface{} `json:"rows"`
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		gotAuth = r.Header.Get("Authorization")
-		var req queryRequest
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		gotSQL = req.SQL
+		_ = json.NewDecoder(r.Body).Decode(&got)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"success":true,"data":[],"count":0}`))
 	}))
@@ -98,8 +103,9 @@ func TestFlightServiceExecFirstConnectedPostsExec(t *testing.T) {
 	}, time.Second, false)
 	svc.connected["local"] = true
 
-	sql := "INSERT INTO homer_lake.main.hep_proto_1_call (id) VALUES (1)"
-	if err := svc.ExecFirstConnected(context.Background(), sql); err != nil {
+	key := ducklake.TableKey{ProtoType: ducklake.ProtoTypeSIP, SubType: ducklake.SIPTypeCall}
+	rows := [][]interface{}{{"uuid-1", "payload"}}
+	if err := svc.InsertFirstConnected(context.Background(), key, rows); err != nil {
 		t.Fatal(err)
 	}
 	if gotPath != "/exec" {
@@ -108,8 +114,14 @@ func TestFlightServiceExecFirstConnectedPostsExec(t *testing.T) {
 	if gotAuth != "Bearer node-secret" {
 		t.Fatalf("Authorization=%q", gotAuth)
 	}
-	if gotSQL != sql {
-		t.Fatalf("sql=%q", gotSQL)
+	if got.ProtoType != key.ProtoType || got.SubType != key.SubType {
+		t.Fatalf("got proto=%d sub=%q", got.ProtoType, got.SubType)
+	}
+	if len(got.Rows) != 1 || len(got.Rows[0]) != 2 || got.Rows[0][0] != "uuid-1" {
+		t.Fatalf("rows=%v", got.Rows)
+	}
+	if got.SQL != "" {
+		t.Fatalf("sql field must be empty, got %q", got.SQL)
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -272,6 +273,12 @@ type queryRequest struct {
 	SQL string `json:"sql"`
 }
 
+type insertRequest struct {
+	ProtoType uint32          `json:"proto_type"`
+	SubType   string          `json:"sub_type"`
+	Rows      [][]interface{} `json:"rows"`
+}
+
 // QueryResponse from HTTP API
 type queryResponse struct {
 	Success bool                     `json:"success"`
@@ -301,9 +308,9 @@ func (s *FlightService) QueryFirstConnected(ctx context.Context, sql string) ([]
 	return nil, fmt.Errorf("no connected storage nodes")
 }
 
-// ExecFirstConnected runs write SQL (INSERT) on the first connected node via POST /exec.
-// /query stays read-only; this is the path for PCAP import and other coordinator writes.
-func (s *FlightService) ExecFirstConnected(ctx context.Context, sql string) error {
+// InsertFirstConnected inserts rows on the first connected node via POST /exec.
+// Table identity is proto_type + sub_type; the node builds parameterized INSERT SQL.
+func (s *FlightService) InsertFirstConnected(ctx context.Context, key ducklake.TableKey, rows [][]interface{}) error {
 	s.mu.RLock()
 	nodes := make([]config.NodeEndpoint, len(s.nodes))
 	copy(nodes, s.nodes)
@@ -317,7 +324,7 @@ func (s *FlightService) ExecFirstConnected(ctx context.Context, sql string) erro
 		if !connected[node.Name] {
 			continue
 		}
-		return s.execNode(ctx, node, sql)
+		return s.insertNode(ctx, node, key, rows)
 	}
 	return fmt.Errorf("no connected storage nodes")
 }
@@ -467,12 +474,28 @@ func (s *FlightService) queryNode(ctx context.Context, node config.NodeEndpoint,
 	return s.postNodeSQL(ctx, node, "/query", sql)
 }
 
-func (s *FlightService) execNode(ctx context.Context, node config.NodeEndpoint, sql string) error {
-	_, err := s.postNodeSQL(ctx, node, "/exec", sql)
+func (s *FlightService) insertNode(ctx context.Context, node config.NodeEndpoint, key ducklake.TableKey, rows [][]interface{}) error {
+	reqBody, err := json.Marshal(insertRequest{
+		ProtoType: key.ProtoType,
+		SubType:   key.SubType,
+		Rows:      ducklake.JSONSafeInsertRows(rows),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal insert request: %w", err)
+	}
+	_, err = s.postNodeJSON(ctx, node, "/exec", reqBody)
 	return err
 }
 
 func (s *FlightService) postNodeSQL(ctx context.Context, node config.NodeEndpoint, path, sql string) ([]map[string]interface{}, error) {
+	reqBody, err := json.Marshal(queryRequest{SQL: sql})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal query request: %w", err)
+	}
+	return s.postNodeJSON(ctx, node, path, reqBody)
+}
+
+func (s *FlightService) postNodeJSON(ctx context.Context, node config.NodeEndpoint, path string, reqBody []byte) ([]map[string]interface{}, error) {
 	// Per-query timeout; context.WithTimeout keeps the parent deadline when
 	// the caller's is sooner.
 	ctx, cancel := context.WithTimeout(ctx, s.queryTimeout)
@@ -482,10 +505,6 @@ func (s *FlightService) postNodeSQL(ctx context.Context, node config.NodeEndpoin
 	httpPort := node.Port + 1
 	url := fmt.Sprintf("http://%s:%d%s", node.Host, httpPort, path)
 
-	reqBody, err := json.Marshal(queryRequest{SQL: sql})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal query request: %w", err)
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
