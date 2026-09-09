@@ -341,4 +341,4 @@ python3 -m venv .venv-docs && .venv-docs/bin/pip install -r docs-requirements.tx
 ## License
 Released under the [AGPL-3.0 License](LICENSE.md)
 
-> Copyright (C) 2025 QXIP BV
+> Copyright (C) 2010-2026 QXIP BV
