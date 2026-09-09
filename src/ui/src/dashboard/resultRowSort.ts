@@ -4,6 +4,28 @@ export const DEFAULT_RESULT_SORT_DIR = 'asc' as const
 
 export type ResultSortDir = 'asc' | 'desc'
 
+export interface StoredResultSort {
+  col: string
+  dir: ResultSortDir
+}
+
+const defaultStoredSort: StoredResultSort = {
+  col: DEFAULT_RESULT_SORT_COL,
+  dir: DEFAULT_RESULT_SORT_DIR,
+}
+
+/** Parse localStorage sort prefs; invalid payloads fall back to timestamp asc. */
+export function normalizeStoredResultSort(raw: unknown): StoredResultSort {
+  if (!raw || typeof raw !== 'object') return { ...defaultStoredSort }
+  const rec = raw as Record<string, unknown>
+  const col = typeof rec.col === 'string' ? rec.col.trim() : ''
+  if (!col || col.startsWith('_')) return { ...defaultStoredSort }
+  return {
+    col,
+    dir: rec.dir === 'desc' ? 'desc' : 'asc',
+  }
+}
+
 function isTimestampSortCol(col: string): boolean {
   const c = col.toLowerCase()
   return c === 'timestamp' || c === 'ts' || c === 'create_date'

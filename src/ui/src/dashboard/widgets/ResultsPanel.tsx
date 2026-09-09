@@ -46,8 +46,7 @@ import { columnDisplayLabel, columnDisplayTitle } from '../resultColumnLabels'
 import { ensureNodeNameKey, promoteDataExtraNodeName } from '../promoteDataExtraNodeName'
 import {
   compareSearchResultRows,
-  DEFAULT_RESULT_SORT_COL,
-  DEFAULT_RESULT_SORT_DIR,
+  normalizeStoredResultSort,
   pickRowTimestampMs,
 } from '../resultRowSort'
 
@@ -107,6 +106,7 @@ function useIsDark() {
 
 const LS_KEY_HIDDEN = (id, proto, event) => `results_hidden_cols_${id}_p${proto}_e${event}`
 const LS_KEY_ORDER  = (id, proto, event) => `results_col_order_${id}_p${proto}_e${event}`
+const LS_KEY_SORT   = (id, proto, event) => `results_sort_${id}_p${proto}_e${event}`
 const LS_KEY_OTLP_METRICS_TAB = (id) => `results_otlp_metrics_tab_${id}`
 const LS_KEY_OTLP_METRICS_CHART = (id) => `results_otlp_metrics_chart_type_${id}`
 
@@ -116,6 +116,9 @@ function loadLS(key, fallback) {
 }
 function saveLS(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* ignore */ }
+}
+function loadResultSort(widgetId, proto, event) {
+  return normalizeStoredResultSort(loadLS(LS_KEY_SORT(widgetId, proto, event), null))
 }
 
 /** Lake / API message id (POST /messages); DuckDB may expose column as UUID. */
@@ -298,8 +301,8 @@ export default function ResultsPanel({ widgetId, config: _config }) {
   const [currentEvent, setCurrentEvent] = useState('call')
   const [hiddenColumns, setHiddenColumns] = useState(() => loadLS(LS_KEY_HIDDEN(widgetId, '1', 'call'), []))
   const [columnOrder, setColumnOrder] = useState(() => loadLS(LS_KEY_ORDER(widgetId, '1', 'call'), []))
-  const [sortCol, setSortCol] = useState(DEFAULT_RESULT_SORT_COL)
-  const [sortDir, setSortDir] = useState(DEFAULT_RESULT_SORT_DIR)
+  const [sortCol, setSortCol] = useState(() => loadResultSort(widgetId, '1', 'call').col)
+  const [sortDir, setSortDir] = useState(() => loadResultSort(widgetId, '1', 'call').dir)
   const [colorByCall, setColorByCall] = useState(() => loadLS(`results_color_by_call_${widgetId}`, true))
   const [otlpMetricsTab, setOtlpMetricsTab] = useState(() => {
     const t = loadLS(LS_KEY_OTLP_METRICS_TAB(widgetId), 'chart')
@@ -329,8 +332,9 @@ export default function ResultsPanel({ widgetId, config: _config }) {
     setCurrentEvent(event)
     setHiddenColumns(loadLS(LS_KEY_HIDDEN(widgetId, proto, event), []))
     setColumnOrder(loadLS(LS_KEY_ORDER(widgetId, proto, event), []))
-    setSortCol(DEFAULT_RESULT_SORT_COL)
-    setSortDir(DEFAULT_RESULT_SORT_DIR)
+    const sort = loadResultSort(widgetId, proto, event)
+    setSortCol(sort.col)
+    setSortDir(sort.dir)
     setLoading(true)
     setStatus('')
     setGeneratedSql('')
@@ -468,14 +472,11 @@ export default function ResultsPanel({ widgetId, config: _config }) {
 
   const handleSort = (col) => {
     if (col === '_actions' || col === '_select') return
-    setSortCol((prev) => {
-      if (prev === col) {
-        setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
-        return col
-      }
-      setSortDir('asc')
-      return col
-    })
+    const nextCol = col
+    const nextDir = sortCol === col ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc'
+    setSortCol(nextCol)
+    setSortDir(nextDir)
+    saveLS(LS_KEY_SORT(widgetId, currentProto, currentEvent), { col: nextCol, dir: nextDir })
     setScrollTop(0)
     if (containerRef.current) containerRef.current.scrollTop = 0
   }

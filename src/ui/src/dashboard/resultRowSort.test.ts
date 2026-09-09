@@ -3,6 +3,7 @@ import {
   compareSearchResultRows,
   DEFAULT_RESULT_SORT_COL,
   DEFAULT_RESULT_SORT_DIR,
+  normalizeStoredResultSort,
 } from './resultRowSort'
 
 describe('compareSearchResultRows', () => {
@@ -28,5 +29,25 @@ describe('compareSearchResultRows', () => {
       compareSearchResultRows(a, b, DEFAULT_RESULT_SORT_COL, DEFAULT_RESULT_SORT_DIR),
     )
     expect(sorted.map((r) => r.method)).toEqual(['INVITE', '200', 'BYE'])
+  })
+})
+
+describe('normalizeStoredResultSort', () => {
+  it('falls back to timestamp asc for missing or junk payloads', () => {
+    expect(normalizeStoredResultSort(null)).toEqual({
+      col: DEFAULT_RESULT_SORT_COL,
+      dir: DEFAULT_RESULT_SORT_DIR,
+    })
+    expect(normalizeStoredResultSort({ col: '_select', dir: 'desc' })).toEqual({
+      col: DEFAULT_RESULT_SORT_COL,
+      dir: DEFAULT_RESULT_SORT_DIR,
+    })
+  })
+
+  it('keeps a user-chosen column and direction', () => {
+    expect(normalizeStoredResultSort({ col: 'method', dir: 'desc' })).toEqual({
+      col: 'method',
+      dir: 'desc',
+    })
   })
 })
