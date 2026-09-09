@@ -7,12 +7,17 @@ package ducklake
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sipcapture/homer-core/src/decoder"
 )
+
+// lakeIdent is the only catalog name shape interpolated into INSERT FQNs.
+// proto_type / sub_type from HTTP never enter this string.
+var lakeIdent = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // ConvertHEPToLakeRow maps a decoded HEP record to a DuckLake row (table key + column values).
 func ConvertHEPToLakeRow(hep *decoder.HEP) (TableKey, []interface{}, error) {
@@ -49,6 +54,17 @@ func schemaForKey(key TableKey) *TableSchema {
 	return GetDefaultSchema(key)
 }
 
+// KnownTableSchema returns the allowlisted schema for key. Unknown keys
+// (including GetDefaultSchema fallbacks) are rejected so table/column
+// identifiers in INSERT SQL never come from request JSON.
+func KnownTableSchema(key TableKey) (*TableSchema, error) {
+	s, ok := GetTableSchemas()[key]
+	if !ok || s == nil {
+		return nil, fmt.Errorf("unknown table proto_type=%d sub_type=%q", key.ProtoType, key.SubType)
+	}
+	return s, nil
+}
+
 // insertColumnNames parses the column list from InsertSQL, e.g. "(uuid, date, ...) VALUES".
 func insertColumnNames(schema *TableSchema) []string {
 	s := schema.InsertSQL
@@ -83,6 +99,139 @@ func InsertColumnNamesForKey(key TableKey) []string {
 // aligned with InsertSQL in tables.go).
 func SIPCallInsertColumnNames() []string {
 	return InsertColumnNamesForKey(TableKey{ProtoType: ProtoTypeSIP, SubType: SIPTypeCall})
+}
+
+func jsonCellText(cell interface{}) (string, bool) {
+	switch x := cell.(type) {
+	case string:
+		return x, true
+	case json.RawMessage:
+		return string(x), true
+	case []byte:
+		return string(x), true
+	case *[]byte:
+		if x == nil {
+			return "", false
+		}
+		return string(*x), true
+	case map[string]interface{}:
+		b, err := json.Marshal(x)
+		if err != nil {
+			return "", false
+		}
+		return string(b), true
+	default:
+		return "", false
+	}
+}
+
+// JSONSafeInsertRows copies rows so encoding/json can serialize them:
+// pooled *[]byte / json.RawMessage become JSON text strings (not base64).
+func JSONSafeInsertRows(rows [][]interface{}) [][]interface{} {
+	out := make([][]interface{}, len(rows))
+	for i, row := range rows {
+		nr := make([]interface{}, len(row))
+		for j, cell := range row {
+			if text, ok := jsonCellText(cell); ok {
+				if _, isString := cell.(string); isString {
+					nr[j] = cell
+				} else {
+					nr[j] = text
+				}
+			} else {
+				nr[j] = cell
+			}
+		}
+		out[i] = nr
+	}
+	return out
+}
+
+func bindInsertArg(col string, cell interface{}) interface{} {
+	if col == "data_extra" {
+		if text, ok := jsonCellText(cell); ok && text != "" {
+			return text
+		}
+		return "{}"
+	}
+	switch x := cell.(type) {
+	case float64:
+		if x == float64(int64(x)) {
+			return int64(x)
+		}
+		return x
+	case json.Number:
+		if i, err := x.Int64(); err == nil {
+			return i
+		}
+		if f, err := x.Float64(); err == nil {
+			return f
+		}
+		return string(x)
+	case string:
+		if col == "date" || col == "timestamp" {
+			if t, err := time.Parse(time.RFC3339Nano, x); err == nil {
+				return t.UTC()
+			}
+			if t, err := time.Parse(time.RFC3339, x); err == nil {
+				return t.UTC()
+			}
+			if t, err := time.Parse("2006-01-02", x); err == nil {
+				return t.UTC()
+			}
+		}
+		return x
+	default:
+		return cell
+	}
+}
+
+// BuildParameterizedInsert builds INSERT ... VALUES (?,?,...), ... with bound
+// arguments. Table and column names come only from KnownTableSchema (Go
+// constants). lakeName must be a simple SQL identifier (node config).
+func BuildParameterizedInsert(lakeName string, key TableKey, rows [][]interface{}) (string, []any, error) {
+	if len(rows) == 0 {
+		return "", nil, fmt.Errorf("no rows")
+	}
+	if lakeName == "" {
+		lakeName = "homer_lake"
+	}
+	if !lakeIdent.MatchString(lakeName) {
+		return "", nil, fmt.Errorf("invalid lake name")
+	}
+	schema, err := KnownTableSchema(key)
+	if err != nil {
+		return "", nil, err
+	}
+	cols := insertColumnNames(schema)
+	if len(cols) == 0 {
+		return "", nil, fmt.Errorf("no columns for key %v", key)
+	}
+	tupleParts := make([]string, len(cols))
+	for i, col := range cols {
+		if col == "data_extra" {
+			tupleParts[i] = "CAST(? AS JSON)"
+		} else {
+			tupleParts[i] = "?"
+		}
+	}
+	tuple := "(" + strings.Join(tupleParts, ", ") + ")"
+	placeholders := make([]string, len(rows))
+	args := make([]any, 0, len(rows)*len(cols))
+	for i, row := range rows {
+		if len(row) != len(cols) {
+			return "", nil, fmt.Errorf("row %d: column count %d != schema %d", i, len(row), len(cols))
+		}
+		placeholders[i] = tuple
+		for ci, cell := range row {
+			args = append(args, bindInsertArg(cols[ci], cell))
+		}
+	}
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s",
+		LakeTableFQN(lakeName, schema),
+		strings.Join(cols, ", "),
+		strings.Join(placeholders, ", "))
+	return query, args, nil
 }
 
 func formatSQLLiteral(v interface{}) (string, error) {
@@ -142,17 +291,7 @@ func BuildInsertMultiValues(lakeName string, key TableKey, rows [][]interface{})
 			// string, json.RawMessage or pooled *[]byte (see
 			// buildExtraJSONCell); all three carry the raw JSON text.
 			if cols[ci] == "data_extra" {
-				var text string
-				switch x := cell.(type) {
-				case string:
-					text = x
-				case json.RawMessage:
-					text = string(x)
-				case *[]byte:
-					if x != nil {
-						text = string(*x)
-					}
-				}
+				text, _ := jsonCellText(cell)
 				if text != "" {
 					esc, err := formatSQLLiteral(text)
 					if err != nil {

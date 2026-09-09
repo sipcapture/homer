@@ -66,7 +66,7 @@ func (h *ImportsHandler) V4ImportsPcap(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", ferr.Error())
 	}
 
-	inserted, rejected, err := importPcapSIP(c.Request().Context(), h.flight, h.flight.LakeName(), raw, pcapImportOptions{
+	inserted, rejected, err := importPcapSIP(c.Request().Context(), h.flight, raw, pcapImportOptions{
 		OverrideToCurrentTime: override,
 		ForceSIPSubtype:       forceSub,
 	})

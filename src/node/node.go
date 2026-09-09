@@ -1327,15 +1327,35 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ExecInsertRequest is the POST /exec body. Raw SQL is rejected; the node
+// builds a parameterized INSERT from an allowlisted DuckLake schema.
+type ExecInsertRequest struct {
+	SQL       string          `json:"sql"`
+	ProtoType uint32          `json:"proto_type"`
+	SubType   string          `json:"sub_type"`
+	Rows      [][]interface{} `json:"rows"`
+}
+
+const maxExecInsertRows = 512
+
+func (n *Node) execLakeName() string {
+	if n.config != nil && n.config.DuckLake.LakeName != "" {
+		return n.config.DuckLake.LakeName
+	}
+	return "homer_lake"
+}
+
 // handleExec handles POST /exec for coordinator-generated writes (PCAP import).
-// /query stays read-only (GHSA-rm5w-rqr7-2h54); this path allows INSERT only.
+// /query stays read-only (GHSA-rm5w-rqr7-2h54). This path never executes a
+// client-supplied SQL string: table/columns come from GetTableSchemas, values
+// are bound parameters.
 func (n *Node) handleExec(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req QueryRequest
+	var req ExecInsertRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, QueryResponse{
 			Success: false,
@@ -1344,18 +1364,35 @@ func (n *Node) handleExec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.SQL == "" {
+	if strings.TrimSpace(req.SQL) != "" {
 		writeJSON(w, http.StatusBadRequest, QueryResponse{
 			Success: false,
-			Error:   "SQL query is required",
+			Error:   "raw SQL is not accepted; send proto_type, sub_type, and rows",
 		})
 		return
 	}
 
-	if err := sqlvalidator.ValidateWriteSQL(req.SQL); err != nil {
+	if len(req.Rows) == 0 {
 		writeJSON(w, http.StatusBadRequest, QueryResponse{
 			Success: false,
-			Error:   "SQL validation failed: " + err.Error(),
+			Error:   "rows are required",
+		})
+		return
+	}
+	if len(req.Rows) > maxExecInsertRows {
+		writeJSON(w, http.StatusBadRequest, QueryResponse{
+			Success: false,
+			Error:   fmt.Sprintf("too many rows (max %d)", maxExecInsertRows),
+		})
+		return
+	}
+
+	key := ducklake.TableKey{ProtoType: req.ProtoType, SubType: req.SubType}
+	query, args, err := ducklake.BuildParameterizedInsert(n.execLakeName(), key, req.Rows)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, QueryResponse{
+			Success: false,
+			Error:   err.Error(),
 		})
 		return
 	}
@@ -1369,14 +1406,10 @@ func (n *Node) handleExec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("Node: handleExec", "sql_chars", len(req.SQL))
-	// Bound parameters cannot carry a coordinator INSERT ... VALUES statement
-	// (PCAP import). ValidateWriteSQL above is the sanitizer: only
-	// INSERT INTO <catalog>.main.hep_proto_* VALUES ..., no SELECT/FROM,
-	// comments, or stacked statements (GHSA-rm5w-rqr7-2h54).
-	res, err := db.ExecContext(r.Context(), req.SQL) // codeql[go/sql-injection]
+	logger.Info("Node: handleExec", "proto_type", req.ProtoType, "sub_type", req.SubType, "rows", len(req.Rows))
+	res, err := db.ExecContext(r.Context(), query, args...)
 	if err != nil {
-		logger.Error("Node: Exec failed", "sql", req.SQL, "error", err)
+		logger.Error("Node: Exec failed", "error", err)
 		writeJSON(w, http.StatusOK, QueryResponse{
 			Success: false,
 			Error:   err.Error(),

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/sipcapture/homer-core/src/storage/ducklake"
 )
 
 func TestWithBearerAuthDisabled(t *testing.T) {
@@ -104,20 +106,23 @@ func TestHandleQueryRejectsInsert(t *testing.T) {
 	}
 }
 
-func TestHandleExecValidatesWriteSQL(t *testing.T) {
+func TestHandleExecRejectsRawSQL(t *testing.T) {
 	node := &Node{}
 
-	t.Run("drop", func(t *testing.T) {
-		body, _ := json.Marshal(QueryRequest{SQL: `DROP TABLE t`})
+	t.Run("sql field", func(t *testing.T) {
+		body, _ := json.Marshal(QueryRequest{SQL: `INSERT INTO homer_lake.main.hep_proto_1_call (id) VALUES (1)`})
 		req := httptest.NewRequest(http.MethodPost, "/exec", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
 		node.handleExec(rr, req)
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
 		}
+		if !bytes.Contains(rr.Body.Bytes(), []byte("raw SQL")) {
+			t.Fatalf("expected raw SQL rejection, body=%s", rr.Body.String())
+		}
 	})
 
-	t.Run("insert with read_text", func(t *testing.T) {
+	t.Run("insert select", func(t *testing.T) {
 		body, _ := json.Marshal(QueryRequest{SQL: `INSERT INTO t SELECT content FROM read_text('/etc/passwd')`})
 		req := httptest.NewRequest(http.MethodPost, "/exec", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
@@ -126,14 +131,55 @@ func TestHandleExecValidatesWriteSQL(t *testing.T) {
 			t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
 		}
 	})
+}
 
-	t.Run("valid insert without db is 503", func(t *testing.T) {
-		body, _ := json.Marshal(QueryRequest{SQL: `INSERT INTO homer_lake.main.hep_proto_1_call (id) VALUES (1)`})
+func TestHandleExecRowsContract(t *testing.T) {
+	node := &Node{}
+
+	t.Run("unknown table", func(t *testing.T) {
+		body, _ := json.Marshal(ExecInsertRequest{
+			ProtoType: 99,
+			SubType:   "nope",
+			Rows:      [][]interface{}{{1}},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/exec", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		node.handleExec(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("empty rows", func(t *testing.T) {
+		body, _ := json.Marshal(ExecInsertRequest{
+			ProtoType: 1,
+			SubType:   "call",
+			Rows:      [][]interface{}{},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/exec", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		node.handleExec(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+		}
+	})
+
+	t.Run("valid rows without db is 503", func(t *testing.T) {
+		n := len(ducklake.InsertColumnNamesForKey(ducklake.TableKey{ProtoType: ducklake.ProtoTypeSIP, SubType: ducklake.SIPTypeCall}))
+		row := make([]interface{}, n)
+		for i := range row {
+			row[i] = "x"
+		}
+		body, _ := json.Marshal(ExecInsertRequest{
+			ProtoType: ducklake.ProtoTypeSIP,
+			SubType:   ducklake.SIPTypeCall,
+			Rows:      [][]interface{}{row},
+		})
 		req := httptest.NewRequest(http.MethodPost, "/exec", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
 		node.handleExec(rr, req)
 		if rr.Code != http.StatusServiceUnavailable {
-			t.Fatalf("expected 503 after validation, got %d body=%s", rr.Code, rr.Body.String())
+			t.Fatalf("expected 503 after schema check, got %d body=%s", rr.Code, rr.Body.String())
 		}
 	})
 }

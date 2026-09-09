@@ -16,8 +16,8 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
-	"github.com/sipcapture/homer-core/src/decoder"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
+	"github.com/sipcapture/homer-core/src/decoder"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 )
 
@@ -126,7 +126,6 @@ func newPcapIterator(buf []byte) (next func() ([]byte, gopacket.CaptureInfo, err
 func importPcapSIP(
 	ctx context.Context,
 	flight *services.FlightService,
-	lakeName string,
 	raw []byte,
 	opts pcapImportOptions,
 ) (inserted, rejected int, err error) {
@@ -164,11 +163,7 @@ func importPcapSIP(
 		if len(rows) == 0 {
 			return nil
 		}
-		sql, err := ducklake.BuildInsertMultiValues(lakeName, key, rows)
-		if err != nil {
-			return err
-		}
-		if err := flight.ExecFirstConnected(ctx, sql); err != nil {
+		if err := flight.InsertFirstConnected(ctx, key, rows); err != nil {
 			return err
 		}
 		inserted += len(rows)
