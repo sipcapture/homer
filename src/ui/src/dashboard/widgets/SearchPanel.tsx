@@ -543,6 +543,7 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
         id={`sp-${id}`}
         type={type}
         placeholder={placeholder}
+        title={type === 'text' ? 'Separate multiple values with semicolon (;). Use % as a wildcard.' : undefined}
         value={form[id] || ''}
         onChange={(e) => handleChange(id, e.target.value)}
         className="h-7 text-xs"
@@ -773,8 +774,8 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
               : (
                 <>
                   {textField('call_id', 'Call-ID', 'text', 'SIP Call-ID')}
-                  {textField('from_user', 'From', 'text', 'Caller')}
-                  {textField('to_user', 'To', 'text', 'Callee')}
+                  {textField('from_user', 'From', 'text', 'alice;+49211…')}
+                  {textField('to_user', 'To', 'text', '110;112')}
                   {selectField('method', 'Method', METHOD_OPTIONS)}
                   {selectField('event_type', 'Event', EVENT_OPTIONS)}
                   {selectField('proto_type', 'Protocol', PROTO_OPTIONS)}

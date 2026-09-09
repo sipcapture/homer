@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -71,6 +72,30 @@ func TestValidateSQLRejectsSemicolon(t *testing.T) {
 	if err := validateSQL(sql); err == nil {
 		t.Fatalf("expected semicolon SQL to be rejected")
 	}
+}
+
+func TestBuildSQL_SemicolonSeparatedOR(t *testing.T) {
+	payload := searchPayload{}
+	payload.Timestamp.From = 1
+	payload.Timestamp.To = 2
+	payload.Filter.ToUser = "112;110"
+	payload.Param.Limit = 10
+	sql := buildSQL(payload)
+	if err := validateSQL(sql); err != nil {
+		t.Fatalf("generated SQL rejected: %v\n%s", err, sql)
+	}
+	if !containsAll(sql, "callee LIKE '%112%'", "callee LIKE '%110%'") {
+		t.Fatalf("expected OR of LIKE tokens, got:\n%s", sql)
+	}
+}
+
+func containsAll(s string, parts ...string) bool {
+	for _, p := range parts {
+		if !strings.Contains(s, p) {
+			return false
+		}
+	}
+	return true
 }
 
 func TestValidateSQLRejectsDropToken(t *testing.T) {
