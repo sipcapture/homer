@@ -255,6 +255,65 @@ func TestCreateDashboard_AllowsSameIDForDifferentUsers(t *testing.T) {
 	}
 }
 
+func TestUpdateDashboard_AdminCanUpdateSharedDashboard(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenSettingsDB(filepath.Join(dir, "settings.duckdb"))
+	if err != nil {
+		t.Fatalf("OpenSettingsDB: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := EnsureSettingsSchema(db); err != nil {
+		t.Fatalf("EnsureSettingsSchema: %v", err)
+	}
+
+	svc := NewDashboardService(db, config.DefaultWidgetControl())
+	ctx := context.Background()
+	if _, err := svc.CreateDashboard(ctx, "owner", "shared", json.RawMessage(`{"shared":true,"name":"Before"}`)); err != nil {
+		t.Fatalf("CreateDashboard: %v", err)
+	}
+
+	guid, err := svc.UpdateDashboard(ctx, "admin", "shared", json.RawMessage(`{"shared":true,"name":"After"}`), true)
+	if err != nil {
+		t.Fatalf("UpdateDashboard: %v", err)
+	}
+	if guid == "" {
+		t.Fatal("UpdateDashboard returned an empty GUID")
+	}
+	got, err := svc.GetDashboard(ctx, "viewer", "shared")
+	if err != nil {
+		t.Fatalf("GetDashboard: %v", err)
+	}
+	if got == nil || !strings.Contains(string(got.Data), `"After"`) {
+		t.Fatalf("shared dashboard was not updated: %#v", got)
+	}
+}
+
+func TestUpdateDashboard_AdminCannotUpdatePrivateDashboard(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenSettingsDB(filepath.Join(dir, "settings.duckdb"))
+	if err != nil {
+		t.Fatalf("OpenSettingsDB: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := EnsureSettingsSchema(db); err != nil {
+		t.Fatalf("EnsureSettingsSchema: %v", err)
+	}
+
+	svc := NewDashboardService(db, config.DefaultWidgetControl())
+	ctx := context.Background()
+	if _, err := svc.CreateDashboard(ctx, "owner", "private", json.RawMessage(`{"shared":false,"name":"Before"}`)); err != nil {
+		t.Fatalf("CreateDashboard: %v", err)
+	}
+
+	guid, err := svc.UpdateDashboard(ctx, "admin", "private", json.RawMessage(`{"shared":false,"name":"After"}`), true)
+	if err != nil {
+		t.Fatalf("UpdateDashboard: %v", err)
+	}
+	if guid != "" {
+		t.Fatalf("private dashboard was updated by admin: %q", guid)
+	}
+}
+
 func decodeWidgets(t *testing.T, raw json.RawMessage) []string {
 	t.Helper()
 	var doc struct {

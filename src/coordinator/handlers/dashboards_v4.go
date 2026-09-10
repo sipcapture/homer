@@ -237,7 +237,7 @@ func (h *DashboardsHandler) V4DashboardsUpdate(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid dashboard payload")
 	}
 
-	guid, err := h.service.UpdateDashboard(c.Request().Context(), username, dashboardID, payload)
+	guid, err := h.service.UpdateDashboard(c.Request().Context(), username, dashboardID, payload, isAdmin(c))
 	if err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to update dashboard")
 	}

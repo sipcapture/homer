@@ -131,28 +131,61 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, username, dashbo
 	return guid, nil
 }
 
-func (s *DashboardService) UpdateDashboard(ctx context.Context, username, dashboardID string, data json.RawMessage) (string, error) {
+func (s *DashboardService) UpdateDashboard(ctx context.Context, username, dashboardID string, data json.RawMessage, isAdmin bool) (string, error) {
 	if s.db == nil {
 		return "", fmt.Errorf("settings db not available")
+	}
+
+	query := fmt.Sprintf(
+		`SELECT guid, username, data
+		 FROM dashboard_settings
+		 WHERE dashboard_id = '%s'`,
+		escapeSQL(dashboardID),
+	)
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	var guid string
+	for rows.Next() {
+		var (
+			rowGUID string
+			owner   string
+			stored  interface{}
+		)
+		if err := rows.Scan(&rowGUID, &owner, &stored); err != nil {
+			return "", err
+		}
+		if strings.EqualFold(owner, username) || (isAdmin && isDashboardShared(rawMessageFromSQLValue(stored))) {
+			guid = rowGUID
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	if guid == "" {
+		return "", nil
 	}
 
 	sqlUpdate := fmt.Sprintf(
 		`UPDATE dashboard_settings
 		 SET data = '%s'
-		 WHERE username = '%s' AND dashboard_id = '%s'
+		 WHERE guid = '%s'
 		 RETURNING guid`,
 		escapeJSONData(string(data)),
-		escapeSQL(username),
-		escapeSQL(dashboardID),
+		escapeSQL(guid),
 	)
-	var guid string
-	if err := s.db.QueryRowContext(ctx, sqlUpdate).Scan(&guid); err != nil {
+	var updatedGUID string
+	if err := s.db.QueryRowContext(ctx, sqlUpdate).Scan(&updatedGUID); err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
 		return "", err
 	}
-	return guid, nil
+	return updatedGUID, nil
 }
 
 func (s *DashboardService) DeleteDashboard(ctx context.Context, username, dashboardID string) (bool, error) {
