@@ -11,11 +11,16 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/sipcapture/homer-core/src/config"
 )
+
+// ErrDashboardNotWritable is returned when the dashboard is visible (typically
+// shared) but the caller is not the owner and is not allowed to change it.
+var ErrDashboardNotWritable = errors.New("dashboard not writable")
 
 // DashboardService provides dashboard operations backed by dashboard_settings.
 type DashboardService struct {
@@ -131,19 +136,35 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, username, dashbo
 	return guid, nil
 }
 
-func (s *DashboardService) UpdateDashboard(ctx context.Context, username, dashboardID string, data json.RawMessage) (string, error) {
+func (s *DashboardService) UpdateDashboard(ctx context.Context, username, dashboardID string, data json.RawMessage, isAdmin bool) (string, error) {
 	if s.db == nil {
 		return "", fmt.Errorf("settings db not available")
 	}
 
+	target, err := s.GetDashboard(ctx, username, dashboardID)
+	if err != nil {
+		return "", err
+	}
+	if target == nil {
+		return "", nil
+	}
+	if !canWriteDashboard(*target, username, isAdmin) {
+		return "", ErrDashboardNotWritable
+	}
+
+	data, err = pinDashboardOwner(data, target.UserName)
+	if err != nil {
+		return "", err
+	}
+
+	// Key by guid so a shared id like "home" cannot clobber another user's row.
 	sqlUpdate := fmt.Sprintf(
 		`UPDATE dashboard_settings
 		 SET data = '%s'
-		 WHERE username = '%s' AND dashboard_id = '%s'
+		 WHERE guid = '%s'
 		 RETURNING guid`,
 		escapeJSONData(string(data)),
-		escapeSQL(username),
-		escapeSQL(dashboardID),
+		escapeSQL(target.GUID),
 	)
 	var guid string
 	if err := s.db.QueryRowContext(ctx, sqlUpdate).Scan(&guid); err != nil {
@@ -153,6 +174,29 @@ func (s *DashboardService) UpdateDashboard(ctx context.Context, username, dashbo
 		return "", err
 	}
 	return guid, nil
+}
+
+func canWriteDashboard(setting UserSetting, username string, isAdmin bool) bool {
+	if strings.EqualFold(setting.UserName, username) {
+		return true
+	}
+	return isAdmin && isDashboardShared(setting.Data)
+}
+
+func pinDashboardOwner(data json.RawMessage, owner string) (json.RawMessage, error) {
+	if owner == "" || len(data) == 0 {
+		return data, nil
+	}
+	merged := map[string]interface{}{}
+	if err := json.Unmarshal(data, &merged); err != nil {
+		return nil, err
+	}
+	merged["owner"] = owner
+	out, err := json.Marshal(merged)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(out), nil
 }
 
 func (s *DashboardService) DeleteDashboard(ctx context.Context, username, dashboardID string) (bool, error) {

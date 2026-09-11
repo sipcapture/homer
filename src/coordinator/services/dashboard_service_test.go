@@ -229,7 +229,8 @@ func TestResetDashboards_SeedsIndependentDefaultsPerUser(t *testing.T) {
 	}
 }
 
-func TestCreateDashboard_AllowsSameIDForDifferentUsers(t *testing.T) {
+func newTestDashboardService(t *testing.T) *DashboardService {
+	t.Helper()
 	dir := t.TempDir()
 	db, err := OpenSettingsDB(filepath.Join(dir, "settings.duckdb"))
 	if err != nil {
@@ -239,8 +240,11 @@ func TestCreateDashboard_AllowsSameIDForDifferentUsers(t *testing.T) {
 	if err := EnsureSettingsSchema(db); err != nil {
 		t.Fatalf("EnsureSettingsSchema: %v", err)
 	}
+	return NewDashboardService(db, config.DefaultWidgetControl())
+}
 
-	svc := NewDashboardService(db, config.DefaultWidgetControl())
+func TestCreateDashboard_AllowsSameIDForDifferentUsers(t *testing.T) {
+	svc := newTestDashboardService(t)
 	ctx := context.Background()
 	payload := json.RawMessage(`{"name":"Custom","param":"custom","shared":false}`)
 
@@ -253,6 +257,162 @@ func TestCreateDashboard_AllowsSameIDForDifferentUsers(t *testing.T) {
 	if _, err := svc.CreateDashboard(ctx, "alice", "custom", payload); err == nil {
 		t.Fatal("expected error creating duplicate dashboard for same user")
 	}
+}
+
+func TestUpdateDashboard_OwnerCanUpdateOwnShared(t *testing.T) {
+	svc := newTestDashboardService(t)
+	ctx := context.Background()
+	if _, err := svc.CreateDashboard(ctx, "alice", "ops", json.RawMessage(`{"name":"Before","shared":true}`)); err != nil {
+		t.Fatalf("CreateDashboard: %v", err)
+	}
+
+	guid, err := svc.UpdateDashboard(ctx, "alice", "ops", json.RawMessage(`{"name":"After","shared":true}`), false)
+	if err != nil {
+		t.Fatalf("UpdateDashboard: %v", err)
+	}
+	if guid == "" {
+		t.Fatal("owner update returned empty guid")
+	}
+
+	got, err := svc.GetDashboard(ctx, "alice", "ops")
+	if err != nil {
+		t.Fatalf("GetDashboard: %v", err)
+	}
+	if got == nil || !strings.Contains(string(got.Data), `"After"`) {
+		t.Fatalf("owner update did not persist: %#v", got)
+	}
+}
+
+func TestUpdateDashboard_AdminCanUpdateSharedDashboard(t *testing.T) {
+	svc := newTestDashboardService(t)
+	ctx := context.Background()
+	if _, err := svc.CreateDashboard(ctx, "alice", "ops", json.RawMessage(`{"name":"Before","owner":"alice","shared":true}`)); err != nil {
+		t.Fatalf("CreateDashboard: %v", err)
+	}
+
+	guid, err := svc.UpdateDashboard(ctx, "bob", "ops", json.RawMessage(`{"name":"After","owner":"bob","shared":true}`), true)
+	if err != nil {
+		t.Fatalf("UpdateDashboard: %v", err)
+	}
+	if guid == "" {
+		t.Fatal("admin update of shared dashboard returned empty guid")
+	}
+
+	got, err := svc.GetDashboard(ctx, "carol", "ops")
+	if err != nil {
+		t.Fatalf("GetDashboard: %v", err)
+	}
+	if got == nil {
+		t.Fatal("GetDashboard: nil")
+	}
+	if !strings.EqualFold(got.UserName, "alice") {
+		t.Errorf("admin update stole username column: got %q", got.UserName)
+	}
+	if dashboardJSONField(t, got.Data, "owner") != "alice" {
+		t.Errorf("admin update stole JSON owner: %s", got.Data)
+	}
+	if dashboardJSONField(t, got.Data, "name") != "After" {
+		t.Fatalf("shared dashboard was not updated: %s", got.Data)
+	}
+}
+
+func TestUpdateDashboard_NonAdminCannotUpdateSharedDashboard(t *testing.T) {
+	svc := newTestDashboardService(t)
+	ctx := context.Background()
+	if _, err := svc.CreateDashboard(ctx, "alice", "ops", json.RawMessage(`{"name":"Before","shared":true}`)); err != nil {
+		t.Fatalf("CreateDashboard: %v", err)
+	}
+
+	guid, err := svc.UpdateDashboard(ctx, "bob", "ops", json.RawMessage(`{"name":"After","shared":true}`), false)
+	if guid != "" {
+		t.Fatalf("non-admin update returned guid %q", guid)
+	}
+	if err != ErrDashboardNotWritable {
+		t.Fatalf("UpdateDashboard err=%v want ErrDashboardNotWritable", err)
+	}
+
+	got, err := svc.GetDashboard(ctx, "bob", "ops")
+	if err != nil {
+		t.Fatalf("GetDashboard: %v", err)
+	}
+	if got == nil || strings.Contains(string(got.Data), `"After"`) {
+		t.Fatalf("non-admin must not mutate shared dashboard: %#v", got)
+	}
+}
+
+func TestUpdateDashboard_AdminCannotUpdatePrivateDashboard(t *testing.T) {
+	svc := newTestDashboardService(t)
+	ctx := context.Background()
+	if _, err := svc.CreateDashboard(ctx, "alice", "private", json.RawMessage(`{"name":"Before","shared":false}`)); err != nil {
+		t.Fatalf("CreateDashboard: %v", err)
+	}
+
+	guid, err := svc.UpdateDashboard(ctx, "bob", "private", json.RawMessage(`{"name":"After","shared":false}`), true)
+	if err != nil {
+		t.Fatalf("UpdateDashboard: %v", err)
+	}
+	if guid != "" {
+		t.Fatal("admin must not update another user's private dashboard")
+	}
+
+	got, err := svc.GetDashboard(ctx, "alice", "private")
+	if err != nil {
+		t.Fatalf("GetDashboard: %v", err)
+	}
+	if got == nil || strings.Contains(string(got.Data), `"After"`) {
+		t.Fatalf("private dashboard was mutated: %#v", got)
+	}
+}
+
+func TestUpdateDashboard_SameIDDoesNotClobberOtherUser(t *testing.T) {
+	svc := newTestDashboardService(t)
+	ctx := context.Background()
+	if _, err := svc.CreateDashboard(ctx, "alice", "home", json.RawMessage(`{"name":"Alice Home","shared":false}`)); err != nil {
+		t.Fatalf("CreateDashboard alice: %v", err)
+	}
+	if _, err := svc.CreateDashboard(ctx, "bob", "home", json.RawMessage(`{"name":"Bob Home","shared":true}`)); err != nil {
+		t.Fatalf("CreateDashboard bob: %v", err)
+	}
+
+	guid, err := svc.UpdateDashboard(ctx, "carol", "home", json.RawMessage(`{"name":"Admin Edit","shared":true}`), true)
+	if err != nil {
+		t.Fatalf("UpdateDashboard: %v", err)
+	}
+	if guid == "" {
+		t.Fatal("admin update of shared home returned empty guid")
+	}
+
+	alice, err := svc.GetDashboard(ctx, "alice", "home")
+	if err != nil {
+		t.Fatalf("GetDashboard alice: %v", err)
+	}
+	if alice == nil || !strings.Contains(string(alice.Data), `"Alice Home"`) {
+		t.Fatalf("alice private home was clobbered: %#v", alice)
+	}
+	if strings.Contains(string(alice.Data), `"Admin Edit"`) {
+		t.Fatal("alice private home picked up admin edit")
+	}
+
+	bob, err := svc.GetDashboard(ctx, "bob", "home")
+	if err != nil {
+		t.Fatalf("GetDashboard bob: %v", err)
+	}
+	if bob == nil || !strings.Contains(string(bob.Data), `"Admin Edit"`) {
+		t.Fatalf("bob shared home was not updated: %#v", bob)
+	}
+	if !strings.EqualFold(bob.UserName, "bob") {
+		t.Errorf("bob home owner drifted to %q", bob.UserName)
+	}
+}
+
+func dashboardJSONField(t *testing.T, raw json.RawMessage, key string) string {
+	t.Helper()
+	var data map[string]interface{}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		t.Fatalf("decode dashboard data: %v", err)
+	}
+	v, _ := data[key].(string)
+	return v
 }
 
 func decodeWidgets(t *testing.T, raw json.RawMessage) []string {

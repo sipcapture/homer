@@ -9,6 +9,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"sort"
@@ -228,7 +229,11 @@ func (h *DashboardsHandler) V4DashboardsUpdate(c echo.Context) error {
 	}
 	merged["id"] = dashboardID
 	merged["param"] = dashboardID
-	if owner, ok := merged["owner"].(string); !ok || owner == "" {
+	// Keep the stored owner. An admin saving a shared dashboard must not
+	// rewrite the row onto their own username (issue #1017).
+	if setting.UserName != "" {
+		merged["owner"] = setting.UserName
+	} else if owner, ok := merged["owner"].(string); !ok || owner == "" {
 		merged["owner"] = username
 	}
 
@@ -237,8 +242,11 @@ func (h *DashboardsHandler) V4DashboardsUpdate(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid dashboard payload")
 	}
 
-	guid, err := h.service.UpdateDashboard(c.Request().Context(), username, dashboardID, payload)
+	guid, err := h.service.UpdateDashboard(c.Request().Context(), username, dashboardID, payload, isAdmin(c))
 	if err != nil {
+		if errors.Is(err, services.ErrDashboardNotWritable) {
+			return writeError(c, http.StatusForbidden, "Forbidden", "Only the owner or an admin can update this dashboard")
+		}
 		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to update dashboard")
 	}
 	if guid == "" {
