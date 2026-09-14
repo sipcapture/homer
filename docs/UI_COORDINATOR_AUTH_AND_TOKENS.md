@@ -112,6 +112,8 @@ When a valid row is found, the request is treated as authenticated with a **synt
 
 Tokens support optional **expiry**, **call limits**, and **active** flag; the server increments usage on successful lookups.
 
+**MCP module use case:** set `mcp.homer_auth_header` (e.g. `Auth-Token`) so `mcp.homer_token` holds one of these static, non-expiring secrets instead of a 24h JWT — avoids needing to redeploy Homer's config daily since Homer has no config hot-reload. See [MCP.md § Security](MCP.md#11-security).
+
 ### OAuth-only: CLI / scripts without password login
 
 `coordinator.auth.disable_password_login: true` hides the username/password form **and** rejects `POST /api/v4/auth/sessions` with **403**. Username/password API login (including `homer search --user/--pass`) does not work in that mode.

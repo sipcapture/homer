@@ -528,6 +528,13 @@ type MCPConfig struct {
 	Mode              string       `json:"mode" mapstructure:"mode" default:"hybrid"` // hybrid|structured|sql
 	HomerBaseURL      string       `json:"homer_base_url" mapstructure:"homer_base_url" default:"http://127.0.0.1:8080"`
 	HomerToken        string       `json:"homer_token" mapstructure:"homer_token" default:""`
+	// HomerAuthHeader, when non-empty, is the raw header name (e.g. "Auth-Token")
+	// used to send HomerToken as a static Coordinator Auth-Token secret instead
+	// of "Authorization: Bearer <jwt>". Empty (default) preserves the existing
+	// Bearer-JWT behavior. Pair with a long-lived secret created via
+	// POST /api/v4/auth-tokens while coordinator.api_settings.enable_token_access
+	// is true.
+	HomerAuthHeader   string       `json:"homer_auth_header" mapstructure:"homer_auth_header" default:""`
 	DefaultLimit      int          `json:"default_limit" mapstructure:"default_limit" default:"100"`
 	SQLDefaultLimit   int          `json:"sql_default_limit" mapstructure:"sql_default_limit" default:"100"`
 	RequestTimeoutSec int          `json:"request_timeout_sec" mapstructure:"request_timeout_sec" default:"30"`
@@ -1664,6 +1671,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("mcp.enable", false)
 	v.SetDefault("mcp.mode", "hybrid")
 	v.SetDefault("mcp.homer_base_url", "http://127.0.0.1:8080")
+	v.SetDefault("mcp.homer_auth_header", "")
 	v.SetDefault("mcp.default_limit", 100)
 	v.SetDefault("mcp.sql_default_limit", 100)
 	v.SetDefault("mcp.request_timeout_sec", 30)
@@ -2145,6 +2153,7 @@ func SaveExample(path string) error {
 			Mode:              "hybrid",
 			HomerBaseURL:      "http://127.0.0.1:8080",
 			HomerToken:        "",
+			HomerAuthHeader:   "",
 			DefaultLimit:      100,
 			SQLDefaultLimit:   100,
 			RequestTimeoutSec: 30,

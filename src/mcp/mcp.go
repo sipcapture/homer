@@ -135,6 +135,7 @@ func New(cfg *config.MCPConfig) (*Module, error) {
 	}
 	cfg.Mode = mode
 	cfg.HomerBaseURL = strings.TrimRight(baseURL, "/")
+	cfg.HomerAuthHeader = strings.TrimSpace(cfg.HomerAuthHeader)
 
 	m := &Module{
 		cfg: cfg,
@@ -509,7 +510,11 @@ func (m *Module) postJSON(ctx context.Context, endpoint string, body any, out an
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	if m.cfg.HomerAuthHeader != "" {
+		req.Header.Set(m.cfg.HomerAuthHeader, token)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := m.httpClient.Do(req)
 	if err != nil {
