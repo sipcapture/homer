@@ -132,6 +132,45 @@ func TestTryLLMStructured_Success(t *testing.T) {
 	}
 }
 
+func TestTryLLMStructured_ResponseCode(t *testing.T) {
+	h, stop := newLLMTestHandler(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeChatCompletion(w, `{"filter":{"method":"INVITE","response_code":"608,486"}}`)
+	}, "key")
+	defer stop()
+
+	req, res := h.tryLLMStructured(context.Background(), "find INVITE rejected with 608 or 486", 100, 200, 100)
+	if !res.Used {
+		t.Fatalf("expected Used=true, got %#v", res)
+	}
+	if req == nil {
+		t.Fatal("expected non-nil SearchObjectV4")
+	}
+	if req.Filter.ResponseCode != "608,486" {
+		t.Fatalf("expected response_code=608,486, got %q", req.Filter.ResponseCode)
+	}
+}
+
+func TestTryLLMStructured_CIDIsSeparateFromCallID(t *testing.T) {
+	h, stop := newLLMTestHandler(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeChatCompletion(w, `{"filter":{"cid":"abc-123-xyz"}}`)
+	}, "key")
+	defer stop()
+
+	req, res := h.tryLLMStructured(context.Background(), "find cid abc-123-xyz", 100, 200, 100)
+	if !res.Used {
+		t.Fatalf("expected Used=true, got %#v", res)
+	}
+	if req == nil {
+		t.Fatal("expected non-nil SearchObjectV4")
+	}
+	if req.Filter.CID != "abc-123-xyz" {
+		t.Fatalf("expected cid='abc-123-xyz', got %q", req.Filter.CID)
+	}
+	if req.Filter.CallID != "" {
+		t.Fatalf("expected empty call_id (cid must not alias into call_id), got %q", req.Filter.CallID)
+	}
+}
+
 func TestTryLLMStructured_FallbackToFallbackTime(t *testing.T) {
 	h, stop := newLLMTestHandler(t, func(w http.ResponseWriter, _ *http.Request) {
 		// Model omits time range — handler must use fallbackFrom/fallbackTo.

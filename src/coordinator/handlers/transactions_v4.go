@@ -2267,8 +2267,10 @@ func (h *SearchHandler) runMCPAsStructured(c echo.Context, req *MCPQueryRequest)
 		searchReq.Filter.SrcIP = extractByRegex(req.QueryText, `(?:src|source)\s+ip[:=]?\s*([0-9.]+)`)
 		searchReq.Filter.DstIP = extractByRegex(req.QueryText, `(?:dst|destination)\s+ip[:=]?\s*([0-9.]+)`)
 		searchReq.Filter.CallID = extractCallID(req.QueryText)
+		searchReq.Filter.CID = extractCID(req.QueryText)
 		searchReq.Filter.FromUser = extractFromUser(req.QueryText)
 		searchReq.Filter.ToUser = extractToUser(req.QueryText)
+		searchReq.Filter.ResponseCode = extractResponseCodes(req.QueryText)
 		searchReq.Timestamp.From = fallbackFrom
 		searchReq.Timestamp.To = fallbackTo
 	}
@@ -2312,8 +2314,10 @@ func (h *SearchHandler) runMCPAsSQL(c echo.Context, req *MCPQueryRequest) error 
 	sqlReq.Filter.SrcIP = extractByRegex(req.QueryText, `(?:src|source)\s+ip[:=]?\s*([0-9.]+)`)
 	sqlReq.Filter.DstIP = extractByRegex(req.QueryText, `(?:dst|destination)\s+ip[:=]?\s*([0-9.]+)`)
 	sqlReq.Filter.CallID = extractByRegex(req.QueryText, `(?:call[_\s-]?id|session[_\s-]?id)[:=]?\s*([^\s,]+)`)
+	sqlReq.Filter.CID = extractCID(req.QueryText)
 	sqlReq.Filter.FromUser = extractByRegex(req.QueryText, `(?:from[_\s-]?user|caller)[:=]?\s*([^\s,]+)`)
 	sqlReq.Filter.ToUser = extractByRegex(req.QueryText, `(?:to[_\s-]?user|callee)[:=]?\s*([^\s,]+)`)
+	sqlReq.Filter.ResponseCode = extractResponseCodes(req.QueryText)
 	sqlReq.Param.Limit = sanitizeLimit(req.Limit, 100, 50000)
 	sqlReq.Param.OrderBy = "timestamp DESC"
 	if req.Timestamp.From > 0 || req.Timestamp.To > 0 {
@@ -2588,21 +2592,64 @@ func extractByRegex(text, pattern string) string {
 	return strings.TrimSpace(strings.Trim(m[1], `"'`))
 }
 
-// extractCallID recognises: call_id, call-id, callid, session_id, cid, CID
+// extractCallID recognises: call_id, call-id, callid, session_id
 // followed by optional =/:space and an optionally-quoted value.
+// cid is a genuinely distinct field (see extractCID below), not a call_id
+// alias - it must not be matched here.
 func extractCallID(text string) string {
-	re := regexp.MustCompile(`(?i)(?:call[_\s-]?id|session[_\s-]?id|\bcid\b)[\s:=]*["']?([^\s,"']+)["']?`)
+	re := regexp.MustCompile(`(?i)(?:call[_\s-]?id|session[_\s-]?id)[\s:=]*["']?([^\s,"']+)["']?`)
 	m := re.FindStringSubmatch(text)
 	if len(m) >= 2 {
 		return strings.TrimSpace(m[1])
 	}
-	// Also match: `with CID "value"` or `with CID value`
-	re2 := regexp.MustCompile(`(?i)\bcid\b[\s:=]*["']?([^\s,"']+)["']?`)
-	m2 := re2.FindStringSubmatch(text)
-	if len(m2) >= 2 {
-		return strings.TrimSpace(m2[1])
+	return ""
+}
+
+// extractCID recognises the cid field, which the backend treats as a
+// genuinely distinct column from call_id/session_id (see issue #884) -
+// aliasing them would silently search the wrong column on deployments
+// where they differ.
+func extractCID(text string) string {
+	re := regexp.MustCompile(`(?i)\bcid\b[\s:=]*["']?([^\s,"']+)["']?`)
+	m := re.FindStringSubmatch(text)
+	if len(m) >= 2 {
+		return strings.TrimSpace(m[1])
 	}
 	return ""
+}
+
+// responseCodeKeywordFirst: TRIGGER WORD comes first, then the code(s).
+// Trigger words: reject/rejected, response(s), response code(s), resp
+// code(s), status (code(s)), sip code(s), error code(s) — optionally
+// followed by ":" or "=", then one or more standalone 3-digit codes
+// separated by ",", "or", "and", or ";".
+var responseCodeKeywordFirst = regexp.MustCompile(
+	`(?i)(?:reject(?:ed)?(?:\s+with)?|responses?(?:\s+codes?)?|resp\s*codes?|status(?:\s+codes?)?|sip\s*codes?|error\s+codes?)` +
+		`[:=]?\s*(\b\d{3}\b(?:\s*(?:,|or|and|;)\s*\b\d{3}\b)*)`,
+)
+
+// responseCodeNumberFirst: the CODE(S) come first, then a trigger word.
+// Trigger words: response(s), busy, reject/rejected, error(s).
+var responseCodeNumberFirst = regexp.MustCompile(
+	`(?i)\b(\d{3}\b(?:\s*(?:,|or|and|;)\s*\b\d{3}\b)*)\s*(?:responses?|busy|reject(?:ed)?|errors?)\b`,
+)
+
+// extractResponseCodes tries the keyword-first pattern, falls back to the
+// number-first pattern, then re-extracts every standalone 3-digit run from
+// whichever raw match it got and joins them with commas (matching
+// SearchObjectV4.Filter.ResponseCode's comma-separated convention). The
+// \b...\b boundary on every digit run prevents matching a partial substring
+// of a longer number, e.g. "response 5060" must not extract "506".
+func extractResponseCodes(text string) string {
+	m := responseCodeKeywordFirst.FindStringSubmatch(text)
+	if m == nil {
+		m = responseCodeNumberFirst.FindStringSubmatch(text)
+	}
+	if m == nil {
+		return ""
+	}
+	codes := regexp.MustCompile(`\b\d{3}\b`).FindAllString(m[1], -1)
+	return strings.Join(codes, ",")
 }
 
 func shouldUseSQLMode(queryText string) bool {
@@ -2641,6 +2688,8 @@ func buildMCPRawSQL(lakeName string, req *SearchObjectV4) string {
 	}
 	if req.Filter.CallID != "" {
 		conditions = append(conditions, sqlFormMatchClauseOr("session_id", "cid", req.Filter.CallID))
+	} else if req.Filter.CID != "" {
+		conditions = append(conditions, sqlFormMatchClause("cid", req.Filter.CID))
 	}
 	if req.Filter.FromUser != "" {
 		conditions = append(conditions, sqlFormMatchClause("caller", req.Filter.FromUser))
