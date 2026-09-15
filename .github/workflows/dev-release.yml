@@ -22,6 +22,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         goos: [linux]
         goarch: [amd64, arm64]
@@ -182,14 +183,12 @@ jobs:
 
     - name: Upload release
       if: ${{ github.event_name == 'release' || inputs.release }}
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.VERSION }}
-        name: ${{ env.VERSION }}
-        draft: false
-        prerelease: false
-        overwrite_files: true
-        files: |
-          homer-core_${{ matrix.goarch }}
-          homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.deb
-          homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.rpm
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        gh release upload "${{ env.VERSION }}" \
+          "homer-core_${{ matrix.goarch }}" \
+          "homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.deb" \
+          "homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.rpm" \
+          --clobber
