@@ -24,6 +24,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         goos: [linux]
         goarch: [amd64, arm64]
@@ -92,7 +93,7 @@ jobs:
 
     - name: Set version
       run: |
-        echo "VERSION=${{ (github.ref_name == 'master' && github.event_name == 'workflow_dispatch') && github.event.inputs.ref_name || github.ref_name }}" >> $GITHUB_ENV
+        echo "VERSION=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref_name || github.ref_name }}" >> $GITHUB_ENV
 
     - name: Compile homer-core ${{ matrix.goarch }}
       env:
@@ -183,16 +184,18 @@ jobs:
           DUCKDB_VERSION="$DUCKDB_VERSION" EXT_PLATFORM="$EXT_PLATFORM" VERSION="$VERSION" \
             ./nfpm pkg --config homer-core_workflow.yaml --target "./${PACKAGE}_${RELEASE}_${ARCH}.rpm"
 
+    # Upload assets only. Do not PATCH the GitHub Release (softprops/action-gh-release@v2
+    # does that after "Found release" and fails with a bare HttpError on Node 24 runners —
+    # sipcapture/homer 11.0.344 arm64). gh release upload --clobber is the same as
+    # overwrite_files: true and works when the release already exists.
     - name: Upload release
       if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release) }}
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ env.VERSION }}
-        name: ${{ env.VERSION }}
-        draft: false
-        prerelease: false
-        overwrite_files: true
-        files: |
-          homer-core_${{ matrix.goarch }}
-          homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.deb
-          homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.rpm
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        gh release upload "${{ env.VERSION }}" \
+          "homer-core_${{ matrix.goarch }}" \
+          "homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.deb" \
+          "homer-core_${{ env.VERSION }}_${{ matrix.goarch }}.rpm" \
+          --clobber
