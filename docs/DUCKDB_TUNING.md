@@ -47,9 +47,16 @@ per-connection DuckDB SET statements:
   startup too.
 - A bad value (e.g. `"memory_limit": "8 angstrom"`) only logs a WARN
   and leaves DuckDB on its default. The writer / node still come up.
-- The same knobs are honoured on both sides:
+- The same knobs are honoured on every in-memory DuckDB:
   - writer connection — opened in `src/storage/ducklake/ducklake.go`,
     reads `storage.ducklake.tuning`.
+  - **tiering** connection — a **separate** DuckDB opened by
+    `TieredStorageManager` (`src/storage/ducklake/tiered_storage.go`).
+    It does not share the writer handle. Same `storage.ducklake.tuning`
+    values. Without `temp_directory`, DuckDB stages parquet as `cwd/.tmp`
+    and the official image (non-root, previously `WORKDIR /`) fails with
+    `Failed to create directory ".tmp": Permission denied`
+    ([#1020](https://github.com/sipcapture/homer/issues/1020)).
   - node connection — opened in `src/node/node.go`,
     reads `node.ducklake.tuning`.
 

@@ -290,6 +290,10 @@ func ApplyDuckDBTuning(db *sql.DB, threads int, memoryLimit, tempDirectory, who 
 		}
 	}
 	if s := strings.TrimSpace(tempDirectory); s != "" {
+		if err := os.MkdirAll(s, 0o755); err != nil {
+			logger.Warn("DuckDB tuning: cannot create temp_directory",
+				"where", who, "path", s, "error", err)
+		}
 		safe := strings.ReplaceAll(s, "'", "''")
 		if _, err := db.Exec(fmt.Sprintf("SET temp_directory = '%s'", safe)); err != nil {
 			logger.Warn(fmt.Sprintf("DuckDB tuning (%s): SET temp_directory = %q failed: %v", who, s, err))
@@ -297,6 +301,35 @@ func ApplyDuckDBTuning(db *sql.DB, threads int, memoryLimit, tempDirectory, who 
 			logger.Info("DuckDB tuning: temp_directory set", "where", who, "temp_directory", s)
 		}
 	}
+}
+
+// ApplyHomerDuckDBDefaults fills empty tuning knobs with Homer's writer/node
+// defaults (auto threads, 2GB memory, catalog-dir spill) and applies them.
+// Use this on every in-memory DuckDB that can INSERT or spill — including the
+// separate TieredStorageManager instance, which does not share the writer DB
+// (sipcapture/homer#1020: DuckDB then creates cwd/.tmp, which is "/" in the
+// official image and not writable by uid 1000).
+func ApplyHomerDuckDBDefaults(db *sql.DB, threads int, memoryLimit, tempDirectory, catalogPath, who string) {
+	if threads == 0 {
+		threads = AutoThreads()
+		logger.Info("DuckDB: auto-limiting threads (operator did not set tuning.threads)",
+			"where", who, "threads", threads, "host_cpus", runtime.NumCPU())
+	}
+	if strings.TrimSpace(memoryLimit) == "" {
+		memoryLimit = "2GB"
+		logger.Info("DuckDB: auto-limiting memory (operator did not set tuning.memory_limit)",
+			"where", who, "memory_limit", memoryLimit)
+	}
+	tempDir := strings.TrimSpace(tempDirectory)
+	if tempDir == "" {
+		tempDir = DefaultSpillDirectory(catalogPath)
+		if tempDir != "" {
+			logger.Info("DuckDB: defaulting spill directory (operator did not set tuning.temp_directory)",
+				"where", who, "temp_directory", tempDir)
+		}
+	}
+	ApplyDuckDBTuning(db, threads, memoryLimit, tempDir, who)
+	ApplyDuckDBMemorySafety(db, who)
 }
 
 // DefaultSpillDirectory returns the spill path to use when the operator did

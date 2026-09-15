@@ -20,7 +20,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -399,37 +398,12 @@ func (mtw *MultiTableWriter) connect() error {
 	db.SetMaxIdleConns(writerPoolConns)
 	mtw.db = db
 
-	// Apply DuckDB engine tuning (memory_limit, threads, temp_directory)
-	// before LOAD / ATTACH so the limits are in effect for the catalog
-	// bring-up too. When the operator hasn't set threads or memory_limit,
-	// apply sensible defaults so DuckDB doesn't oversubscribe the host
-	// (by default DuckDB claims all cores and ~80% of RAM).
-	threads := mtw.config.TuningThreads
-	memLimit := mtw.config.TuningMemoryLimit
-	if threads == 0 {
-		threads = AutoThreads()
-		logger.Info("DuckDB writer: auto-limiting threads (operator did not set tuning.threads)",
-			"threads", threads, "host_cpus", runtime.NumCPU())
-	}
-	if strings.TrimSpace(memLimit) == "" {
-		memLimit = "2GB"
-		logger.Info("DuckDB writer: auto-limiting memory (operator did not set tuning.memory_limit)",
-			"memory_limit", memLimit)
-	}
-	// In-memory DuckDB has disk spilling DISABLED unless temp_directory is
-	// set. With the writer pool, search + flush + compaction run concurrently
-	// against the same memory_limit, so without a spill path long-range
-	// searches abort with Out of Memory instead of spilling to disk.
-	tempDir := mtw.config.TuningTempDirectory
-	if strings.TrimSpace(tempDir) == "" {
-		tempDir = DefaultSpillDirectory(mtw.config.CatalogPath)
-		if tempDir != "" {
-			logger.Info("DuckDB writer: defaulting spill directory (operator did not set tuning.temp_directory)",
-				"temp_directory", tempDir)
-		}
-	}
-	ApplyDuckDBTuning(db, threads, memLimit, tempDir, "writer")
-	ApplyDuckDBMemorySafety(db, "writer")
+	// Apply DuckDB engine tuning before LOAD / ATTACH so the limits are
+	// in effect for catalog bring-up too. In-memory DuckDB cannot spill
+	// unless temp_directory is set (search + flush + compaction share the
+	// same memory_limit).
+	ApplyHomerDuckDBDefaults(db, mtw.config.TuningThreads, mtw.config.TuningMemoryLimit,
+		mtw.config.TuningTempDirectory, mtw.config.CatalogPath, "writer")
 
 	// Load DuckLake extension (must be pre-installed via --install-extensions)
 	if _, err := db.Exec("LOAD ducklake;"); err != nil {

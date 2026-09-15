@@ -86,6 +86,65 @@ func TestApplyDuckDBTuning_NilDB(t *testing.T) {
 	ApplyDuckDBTuning(nil, 4, "1GB", "/tmp", "test")
 }
 
+// TestApplyDuckDBTuning_CreatesTempDirectory is the mkdir half of
+// sipcapture/homer#1020: SET temp_directory must succeed even when the
+// operator path does not exist yet (volume mount over /data/homer).
+func TestApplyDuckDBTuning_CreatesTempDirectory(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	spill := t.TempDir() + "/nested/spill"
+	ApplyDuckDBTuning(db, 0, "", spill, "test")
+	if st, err := os.Stat(spill); err != nil || !st.IsDir() {
+		t.Fatalf("temp_directory not created: %v", err)
+	}
+	if got := getSetting(t, db, "temp_directory"); !strings.Contains(got, spill) {
+		t.Fatalf("temp_directory = %q, want path containing %q", got, spill)
+	}
+}
+
+// TestApplyHomerDuckDBDefaults_EmptyKnobsUsesCatalogSpill covers the
+// TieredStorageManager path: empty operator tuning still pins spill next
+// to the catalog instead of cwd/.tmp (#1020).
+func TestApplyHomerDuckDBDefaults_EmptyKnobsUsesCatalogSpill(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	tmp := t.TempDir()
+	catalog := tmp + "/homer_catalog.sqlite"
+	ApplyHomerDuckDBDefaults(db, 0, "", "", catalog, "tiering")
+	wantSpill := tmp + "/.duckdb_spill"
+	if got := getSetting(t, db, "temp_directory"); !strings.Contains(got, wantSpill) {
+		t.Fatalf("temp_directory = %q, want path containing %q", got, wantSpill)
+	}
+	if got := getSetting(t, db, "preserve_insertion_order"); got != "false" {
+		t.Fatalf("preserve_insertion_order = %q, want false", got)
+	}
+}
+
+// TestApplyHomerDuckDBDefaults_ExplicitTempDirectoryWins ensures operator
+// HOMER_*_TUNING_TEMP_DIRECTORY is not replaced by the catalog-dir default.
+func TestApplyHomerDuckDBDefaults_ExplicitTempDirectoryWins(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	tmp := t.TempDir()
+	spill := tmp + "/explicit-spill"
+	ApplyHomerDuckDBDefaults(db, 1, "256MB", spill, tmp+"/catalog.sqlite", "tiering")
+	if got := getSetting(t, db, "temp_directory"); !strings.Contains(got, spill) {
+		t.Fatalf("temp_directory = %q, want path containing %q", got, spill)
+	}
+}
+
 // TestDefaultSpillDirectory verifies the spill dir is derived from the
 // catalog location and created on disk, and that degenerate catalog paths
 // yield "" (leave temp_directory untouched).

@@ -495,3 +495,31 @@ func TestAzureSecretSQLForVolume_Replace(t *testing.T) {
 		t.Fatalf("refresh SQL must keep credential_chain:\n%s", sql)
 	}
 }
+
+// TestTieredStorageManager_applyDuckDBTuning is the #1020 regression: the
+// tiering DuckDB is not the writer DB, so it must SET temp_directory itself
+// or INSERT…SELECT tries to mkdir cwd/.tmp.
+func TestTieredStorageManager_applyDuckDBTuning(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	tmp := t.TempDir()
+	spill := tmp + "/tiering-spill"
+	tsm := &TieredStorageManager{
+		db: db,
+		config: TieredStorageConfig{
+			CatalogPath:         tmp + "/hot.sqlite",
+			TuningThreads:       1,
+			TuningMemoryLimit:   "256MB",
+			TuningTempDirectory: spill,
+		},
+	}
+	tsm.applyDuckDBTuning()
+	got := getSetting(t, db, "temp_directory")
+	if !strings.Contains(got, spill) {
+		t.Fatalf("temp_directory = %q, want path containing %q", got, spill)
+	}
+}
