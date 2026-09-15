@@ -63,10 +63,18 @@ override without rebuilding. The all-in-one container needs **~8GB RAM**.
 
 ## Non-root runtime
 
-The image runs as uid/gid **1000** (`USER homer`). Named volumes from older
-root images need a one-shot chown; both compose files include `homer-init`
-for that. Homer listens on ports >1024, so the compose services use
-`cap_drop: ALL` and `no-new-privileges`.
+The image runs as uid/gid **1000** (`USER homer`) with **WORKDIR `/data/homer`**
+(the mounted data volume). Named volumes from older root images need a
+one-shot chown; both compose files include `homer-init` for that. Homer
+listens on ports >1024, so the compose services use `cap_drop: ALL` and
+`no-new-privileges`.
+
+Do not set `working_dir: /` (or leave cwd as `/` on a custom image). DuckDB
+creates a relative `.tmp` directory from cwd during tiering `INSERT`; that
+fails with `Permission denied` for uid 1000 ([#1020](https://github.com/sipcapture/homer/issues/1020)).
+Compose files pin `working_dir: /data/homer` as well. The writer and the
+separate tiering DuckDB also `SET temp_directory` to
+`/data/homer/.duckdb_spill` (image ENV / `HOMER_*_TUNING_TEMP_DIRECTORY`).
 
 ```bash
 # docker run

@@ -65,6 +65,7 @@ services:
   homer:
     image: ghcr.io/sipcapture/homer:latest
     user: "1000:1000"
+    working_dir: /data/homer
     security_opt:
       - "no-new-privileges:true"
     cap_drop:

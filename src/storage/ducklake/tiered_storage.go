@@ -80,6 +80,15 @@ type TieredStorageConfig struct {
 
 	// CatalogLocker serializes hot-catalog writes with the writer flush path.
 	CatalogLocker CatalogLocker
+
+	// DuckDB engine tuning for this instance. The tiering manager opens its
+	// own in-memory DuckDB (it does not share the writer connection), so
+	// these must be applied here or INSERT…SELECT stages parquet under
+	// cwd/.tmp (sipcapture/homer#1020). Empty / zero = Homer defaults
+	// (see ApplyHomerDuckDBDefaults).
+	TuningThreads       int
+	TuningMemoryLimit   string
+	TuningTempDirectory string
 }
 
 // TieredStorageManager manages multiple storage volumes with automatic tiering
@@ -131,6 +140,18 @@ func NewTieredStorageManager(config TieredStorageConfig) (*TieredStorageManager,
 	return tsm, nil
 }
 
+// applyDuckDBTuning pins spill/memory on this instance. The manager opens its
+// own in-memory DuckDB (not the writer). Without temp_directory DuckDB creates
+// ".tmp" in cwd; the official image WORKDIR was "/" and uid 1000 cannot mkdir
+// there (sipcapture/homer#1020).
+func (tsm *TieredStorageManager) applyDuckDBTuning() {
+	if tsm == nil || tsm.db == nil {
+		return
+	}
+	ApplyHomerDuckDBDefaults(tsm.db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,
+		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering")
+}
+
 // Start initializes all volumes and starts the tiering service
 func (tsm *TieredStorageManager) Start() error {
 	// Open shared DuckDB connection
@@ -143,6 +164,8 @@ func (tsm *TieredStorageManager) Start() error {
 	// (pool growth would otherwise yield connections without credentials).
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
+
+	tsm.applyDuckDBTuning()
 
 	// Load DuckLake extension
 	if _, err := db.Exec("LOAD ducklake;"); err != nil {

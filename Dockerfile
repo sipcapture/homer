@@ -47,11 +47,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mkdir -p /etc/pki/tls/certs \
     && ln -sf /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt
 
-WORKDIR /
-COPY --from=builder /homer-core/homer .
+# Binary is at /homer (absolute), not under WORKDIR. WORKDIR must be a
+# directory uid 1000 can write: DuckDB/DuckLake stage parquet and spill
+# files as cwd/.tmp when temp_directory is unset (sipcapture/homer#1020).
+COPY --from=builder /homer-core/homer /homer
 COPY --from=builder /homer-core/src/dist /usr/local/homer-core/dist
 RUN ln -s /usr/local/homer-core/dist /dist \
     && chmod 0755 /homer
+WORKDIR /data/homer
 
 # DuckDB caps for the generic all-in-one image. Override at runtime, e.g.
 #   docker run -e HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT=8GB ...

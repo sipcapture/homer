@@ -1922,29 +1922,17 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 	// even during DuckLake bring-up. Same knobs as the writer side.
 	// When the operator hasn't set tuning, apply sensible defaults
 	// so DuckDB doesn't oversubscribe the host.
-	nodeThreads := cfg.DuckLake.Tuning.Threads
-	nodeMemLimit := cfg.DuckLake.Tuning.MemoryLimit
-	if nodeThreads == 0 {
-		nodeThreads = ducklake.AutoThreads()
-	}
-	if strings.TrimSpace(nodeMemLimit) == "" {
-		nodeMemLimit = "2GB"
-	}
 	// Same rationale as the writer: the node DB is in-memory, and in-memory
 	// DuckDB cannot spill to disk without an explicit temp_directory —
 	// long-range searches then die with Out of Memory at memory_limit.
-	nodeTempDir := cfg.DuckLake.Tuning.TempDirectory
-	if strings.TrimSpace(nodeTempDir) == "" {
-		nodeTempDir = ducklake.DefaultSpillDirectory(cfg.DuckLake.CatalogPath)
-	}
-	ducklake.ApplyDuckDBTuning(
+	ducklake.ApplyHomerDuckDBDefaults(
 		db,
-		nodeThreads,
-		nodeMemLimit,
-		nodeTempDir,
+		cfg.DuckLake.Tuning.Threads,
+		cfg.DuckLake.Tuning.MemoryLimit,
+		cfg.DuckLake.Tuning.TempDirectory,
+		cfg.DuckLake.CatalogPath,
 		"node",
 	)
-	ducklake.ApplyDuckDBMemorySafety(db, "node")
 
 	// Install and load DuckLake extension
 	_, err := db.Exec("INSTALL ducklake; LOAD ducklake;")
