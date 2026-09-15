@@ -88,6 +88,7 @@ type searchPayload struct {
 		FromUser     string `json:"from_user,omitempty"`
 		ToUser       string `json:"to_user,omitempty"`
 		ResponseCode string `json:"response_code,omitempty"`
+		UserAgent    string `json:"user_agent,omitempty"`
 		SrcIP        string `json:"src_ip,omitempty"`
 		DstIP        string `json:"dst_ip,omitempty"`
 	} `json:"filter"`
@@ -453,6 +454,9 @@ func (m *Module) applyLLMFilters(
 	if v := strings.TrimSpace(llm.ResponseCode); v != "" {
 		payload.Filter.ResponseCode = v
 	}
+	if v := strings.TrimSpace(llm.UserAgent); v != "" {
+		payload.Filter.UserAgent = v
+	}
 
 	timeLabel, _ := regexNorm["time_range"].(string)
 	if llm.FromMS > 0 && llm.ToMS > 0 && llm.ToMS >= llm.FromMS {
@@ -478,6 +482,7 @@ func (m *Module) applyLLMFilters(
 		"from_user":     nullIfEmpty(payload.Filter.FromUser),
 		"to_user":       nullIfEmpty(payload.Filter.ToUser),
 		"response_code": nullIfEmpty(payload.Filter.ResponseCode),
+		"user_agent":    nullIfEmpty(payload.Filter.UserAgent),
 	}
 	_ = nowMS
 	return payload, normalized
@@ -580,6 +585,7 @@ func (m *Module) buildStructuredPayload(queryText string, nowUTCUnixMS int64, li
 	payload.Filter.FromUser = extractPattern(queryText, `(?:from[_\s-]?user|caller)[:=]?\s*([^\s,]+)`)
 	payload.Filter.ToUser = extractPattern(queryText, `(?:to[_\s-]?user|callee)[:=]?\s*([^\s,]+)`)
 	payload.Filter.ResponseCode = extractResponseCodes(queryText)
+	payload.Filter.UserAgent = extractUserAgent(queryText)
 
 	normalized := map[string]any{
 		"query_text":    queryText,
@@ -590,6 +596,7 @@ func (m *Module) buildStructuredPayload(queryText string, nowUTCUnixMS int64, li
 		"call_id":       nullIfEmpty(payload.Filter.CallID),
 		"cid":           nullIfEmpty(payload.Filter.CID),
 		"response_code": nullIfEmpty(payload.Filter.ResponseCode),
+		"user_agent":    nullIfEmpty(payload.Filter.UserAgent),
 	}
 	return payload, normalized
 }
@@ -683,6 +690,25 @@ func extractResponseCodes(queryText string) string {
 	return strings.Join(codes, ",")
 }
 
+// userAgentKeyword recognises an explicit trigger word ("user agent",
+// "device", "client", "ua", "involving"), optionally followed by a
+// connective ("is", "contains", ":", "="), then a QUOTED value. Quotes are
+// required — "client"/"device"/"involving" are common enough words that an
+// unquoted bare-word match would false-positive too often. The connective
+// is optional and un-anchored so "where user agent is 'X'" matches just as
+// well as "user agent 'X'" or "user agent: 'X'".
+var userAgentKeyword = regexp.MustCompile(
+	`(?i)(?:user[_\s-]?agent|user\s+agent|\bua\b|\bdevice\b|\bclient\b|\binvolving\b)` +
+		`(?:\s*(?:is|contains|=|:))?\s*["']([^"']+)["']`,
+)
+
+func extractUserAgent(text string) string {
+	if m := userAgentKeyword.FindStringSubmatch(text); m != nil {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
 func nullIfEmpty(v string) any {
 	if strings.TrimSpace(v) == "" {
 		return nil
@@ -729,6 +755,9 @@ func buildSQL(payload searchPayload) string {
 	}
 	if payload.Filter.ResponseCode != "" {
 		parts = append(parts, mcpEqualsAny("response_code", payload.Filter.ResponseCode))
+	}
+	if payload.Filter.UserAgent != "" {
+		parts = append(parts, mcpLikeAny([]string{"json_extract_string(data_extra, '$.user_agent')"}, payload.Filter.UserAgent))
 	}
 
 	limit := clampLimit(payload.Param.Limit, 100, 50000)

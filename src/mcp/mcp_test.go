@@ -104,6 +104,17 @@ func TestBuildStructuredPayloadResponseCodeIgnoresPartialDigitRun(t *testing.T) 
 	}
 }
 
+func TestBuildStructuredPayloadUserAgentInvolving(t *testing.T) {
+	mod := newTestModule(t)
+	payload, normalized := mod.buildStructuredPayload("show all calls involving 'Linphone'", 0, 0)
+	if payload.Filter.UserAgent != "Linphone" {
+		t.Fatalf("expected user_agent 'Linphone', got %q", payload.Filter.UserAgent)
+	}
+	if normalized["user_agent"] != "Linphone" {
+		t.Fatalf("expected normalized.user_agent='Linphone', got %#v", normalized["user_agent"])
+	}
+}
+
 func TestBuildStructuredPayloadCallIDAcceptsSessionId(t *testing.T) {
 	mod := newTestModule(t)
 	payload, _ := mod.buildStructuredPayload("session id abc-999", 0, 0)
@@ -159,6 +170,20 @@ func TestBuildSQL_SemicolonSeparatedOR(t *testing.T) {
 	}
 	if !containsAll(sql, "callee LIKE '%112%'", "callee LIKE '%110%'") {
 		t.Fatalf("expected OR of LIKE tokens, got:\n%s", sql)
+	}
+}
+
+func TestBuildSQL_UserAgentJSONExtract(t *testing.T) {
+	payload := searchPayload{}
+	payload.Timestamp.From = 1
+	payload.Timestamp.To = 2
+	payload.Filter.UserAgent = "Linphone"
+	sql := buildSQL(payload)
+	if err := validateSQL(sql); err != nil {
+		t.Fatalf("generated SQL rejected: %v\n%s", err, sql)
+	}
+	if !containsAll(sql, "json_extract_string(data_extra, '$.user_agent') LIKE '%Linphone%'") {
+		t.Fatalf("expected user_agent JSON-extract LIKE clause, got:\n%s", sql)
 	}
 }
 
@@ -566,6 +591,26 @@ func TestParseQueryLLMResponseCodeOverridesRegex(t *testing.T) {
 	}
 	if normalized["response_code"] != "608,486" {
 		t.Fatalf("expected normalized.response_code=608,486, got %#v", normalized["response_code"])
+	}
+}
+
+func TestParseQueryLLMUserAgent(t *testing.T) {
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, chatJSON(`{"user_agent":"Linphone"}`))
+	}))
+	defer llm.Close()
+
+	mod := newModuleWithLLM(t, llm.URL)
+	payload, normalized, _, err := mod.parseQuery(context.Background(), "show all calls involving 'Linphone'", 1740656400000, 0, "auto")
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+	if payload.Filter.UserAgent != "Linphone" {
+		t.Fatalf("expected user_agent='Linphone', got %q", payload.Filter.UserAgent)
+	}
+	if normalized["user_agent"] != "Linphone" {
+		t.Fatalf("expected normalized.user_agent='Linphone', got %#v", normalized["user_agent"])
 	}
 }
 

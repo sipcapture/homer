@@ -456,6 +456,7 @@ See [MCP_UI_GUIDE.md](MCP_UI_GUIDE.md) for the UI-side details.
 - `show me BYE between 1700000000000 and 1700003600000` *(LLM picks up explicit ranges)*
 - `find all calls in the last 15 minutes that were rejected with 608`
 - `find cid abc-123-xyz in the last hour`
+- `show all calls involving 'Linphone'`
 
 ## 11. Security
 

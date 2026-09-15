@@ -38,6 +38,7 @@ type llmParsedFilters struct {
 	FromUser       string `json:"from_user,omitempty"`
 	ToUser         string `json:"to_user,omitempty"`
 	ResponseCode   string `json:"response_code,omitempty"`
+	UserAgent      string `json:"user_agent,omitempty"`
 	TimeRangeLabel string `json:"time_range_label,omitempty"`
 	FromMS         int64  `json:"from_ms,omitempty"`
 	ToMS           int64  `json:"to_ms,omitempty"`
@@ -82,6 +83,7 @@ Allowed top-level keys (all optional, omit if not mentioned in the query):
 - from_user: caller / from username
 - to_user: callee / to username
 - response_code: SIP response/status code(s), digits only, comma-separated if multiple (e.g. "608" or "608,486"); covers phrasing like "rejected with 608", "486 busy", "status code 404"
+- user_agent: User-Agent/client-software substring. Phrasing like "involving 'X'", "user agent X", "where user agent is 'X'", "device X", "client X" means user_agent=X.
 - time_range_label: short human label such as "last_hour", "last_24h", "today", "yesterday", "custom"
 - from_ms: start of time range, UTC unix timestamp in milliseconds (integer)
 - to_ms: end of time range, UTC unix timestamp in milliseconds (integer)
