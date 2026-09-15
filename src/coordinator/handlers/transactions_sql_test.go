@@ -113,6 +113,28 @@ func TestBuildSearchSQLV4_UserAgentRegistrationColumn(t *testing.T) {
 	}
 }
 
+func TestBuildSearchSQLV4_UserAgentCallUsesSubstringMatch(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.ProtoType = 1
+	req.Filter.EventType = "call"
+	req.Filter.UserAgent = "Linphone"
+
+	sql, err := buildSearchSQLV4("homer_lake", &req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Regression guard: sqlFormMatchOne only emits LIKE when the value
+	// already contains a literal '%' — without explicit wrapping this
+	// degenerates into an exact '=' match that would miss any header
+	// string that isn't identical to the search term.
+	if !strings.Contains(sql, "json_extract_string(data_extra, '$.user_agent') LIKE '%Linphone%'") {
+		t.Fatalf("expected substring LIKE match for call user_agent, got:\n%s", sql)
+	}
+	if strings.Contains(sql, "json_extract_string(data_extra, '$.user_agent') = ") {
+		t.Fatalf("call user_agent must not use exact match, got:\n%s", sql)
+	}
+}
+
 func TestBuildSearchSQLV4_RegistrationCallIDUsesSessionIDOnly(t *testing.T) {
 	// hep_proto_1_registration has session_id but no cid (#884).
 	req := SearchObjectV4{}

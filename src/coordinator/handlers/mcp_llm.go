@@ -25,6 +25,7 @@ type llmStructuredOutput struct {
 		SrcIP        string `json:"src_ip,omitempty"`
 		DstIP        string `json:"dst_ip,omitempty"`
 		ResponseCode string `json:"response_code,omitempty"`
+		UserAgent    string `json:"user_agent,omitempty"`
 	} `json:"filter"`
 	Timestamp struct {
 		From int64 `json:"from,omitempty"`
@@ -192,8 +193,9 @@ Filter field mapping (use these exact keys):
   src_ip      - source IP address
   dst_ip      - destination IP address
   response_code - SIP response/status code(s), digits only, comma-separated if multiple (e.g. "608" or "608,486")
+  user_agent  - User-Agent/client-software substring. Phrasing like "involving 'X'", "user agent X", "where user agent is 'X'", "device X", "client X" means user_agent=X.
 Return JSON shape (omit empty string fields):
-{"filter":{"method":"","call_id":"","cid":"","from_user":"","to_user":"","src_ip":"","dst_ip":"","response_code":""},"timestamp":{"from":0,"to":0},"limit":0}`,
+{"filter":{"method":"","call_id":"","cid":"","from_user":"","to_user":"","src_ip":"","dst_ip":"","response_code":"","user_agent":""},"timestamp":{"from":0,"to":0},"limit":0}`,
 		queryText, fallbackFrom, fallbackTo, fallbackLimit,
 	)
 
@@ -214,6 +216,7 @@ Return JSON shape (omit empty string fields):
 	req.Filter.SrcIP = strings.TrimSpace(parsed.Filter.SrcIP)
 	req.Filter.DstIP = strings.TrimSpace(parsed.Filter.DstIP)
 	req.Filter.ResponseCode = strings.TrimSpace(parsed.Filter.ResponseCode)
+	req.Filter.UserAgent = strings.TrimSpace(parsed.Filter.UserAgent)
 	req.Timestamp.From = parsed.Timestamp.From
 	req.Timestamp.To = parsed.Timestamp.To
 	req.Param.Limit = parsed.Limit
@@ -261,6 +264,7 @@ Columns:
   protocol        UINTEGER   - transport protocol (1=UDP, 2=TCP, 3=TLS)
   node_id         VARCHAR    - capturing node identifier
   uuid            VARCHAR    - unique packet identifier
+  data_extra      JSON       - extra fields; for User-Agent header substring use json_extract_string(data_extra, '$.user_agent') LIKE '%%value%%'
 Rules:
 - Use LIKE '%%value%%' for partial string matches
 - Use = 'value' for exact matches

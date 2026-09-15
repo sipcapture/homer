@@ -67,3 +67,38 @@ func TestBuildMCPRawSQL_CIDMatchesOnlyCIDColumn(t *testing.T) {
 		t.Fatalf("expected cid to NOT also match session_id (that's call_id's job), got:\n%s", sql)
 	}
 }
+
+func TestExtractUserAgentInvolving(t *testing.T) {
+	got := extractUserAgent("show all calls involving 'Linphone'")
+	if got != "Linphone" {
+		t.Fatalf("expected user_agent 'Linphone', got %q", got)
+	}
+}
+
+func TestExtractUserAgentKeyword(t *testing.T) {
+	got := extractUserAgent(`find calls with user agent "Asterisk PBX"`)
+	if got != "Asterisk PBX" {
+		t.Fatalf("expected user_agent 'Asterisk PBX', got %q", got)
+	}
+}
+
+func TestExtractUserAgentWhereIs(t *testing.T) {
+	got := extractUserAgent(`where user agent is "Linphone"`)
+	if got != "Linphone" {
+		t.Fatalf("expected user_agent 'Linphone', got %q", got)
+	}
+}
+
+func TestBuildMCPRawSQL_UserAgentUsesSubstringMatch(t *testing.T) {
+	req := SearchObjectV4{}
+	req.Filter.UserAgent = "Linphone"
+
+	sql := buildMCPRawSQL("homer_lake", &req)
+	// Regression guard: sqlFormMatchOne only emits LIKE when the value
+	// already contains a literal '%' — without explicit wrapping this
+	// degenerates into an exact '=' match that would miss any header
+	// string that isn't identical to the search term.
+	if !strings.Contains(sql, "json_extract_string(data_extra, '$.user_agent') LIKE '%Linphone%'") {
+		t.Fatalf("expected substring LIKE match for user_agent, got:\n%s", sql)
+	}
+}

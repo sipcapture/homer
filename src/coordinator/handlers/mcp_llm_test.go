@@ -171,6 +171,24 @@ func TestTryLLMStructured_CIDIsSeparateFromCallID(t *testing.T) {
 	}
 }
 
+func TestTryLLMStructured_UserAgent(t *testing.T) {
+	h, stop := newLLMTestHandler(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeChatCompletion(w, `{"filter":{"user_agent":"Linphone"}}`)
+	}, "key")
+	defer stop()
+
+	req, res := h.tryLLMStructured(context.Background(), "show all calls involving 'Linphone'", 100, 200, 100)
+	if !res.Used {
+		t.Fatalf("expected Used=true, got %#v", res)
+	}
+	if req == nil {
+		t.Fatal("expected non-nil SearchObjectV4")
+	}
+	if req.Filter.UserAgent != "Linphone" {
+		t.Fatalf("expected user_agent='Linphone', got %q", req.Filter.UserAgent)
+	}
+}
+
 func TestTryLLMStructured_FallbackToFallbackTime(t *testing.T) {
 	h, stop := newLLMTestHandler(t, func(w http.ResponseWriter, _ *http.Request) {
 		// Model omits time range — handler must use fallbackFrom/fallbackTo.

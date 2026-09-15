@@ -2271,6 +2271,7 @@ func (h *SearchHandler) runMCPAsStructured(c echo.Context, req *MCPQueryRequest)
 		searchReq.Filter.FromUser = extractFromUser(req.QueryText)
 		searchReq.Filter.ToUser = extractToUser(req.QueryText)
 		searchReq.Filter.ResponseCode = extractResponseCodes(req.QueryText)
+		searchReq.Filter.UserAgent = extractUserAgent(req.QueryText)
 		searchReq.Timestamp.From = fallbackFrom
 		searchReq.Timestamp.To = fallbackTo
 	}
@@ -2318,6 +2319,7 @@ func (h *SearchHandler) runMCPAsSQL(c echo.Context, req *MCPQueryRequest) error 
 	sqlReq.Filter.FromUser = extractByRegex(req.QueryText, `(?:from[_\s-]?user|caller)[:=]?\s*([^\s,]+)`)
 	sqlReq.Filter.ToUser = extractByRegex(req.QueryText, `(?:to[_\s-]?user|callee)[:=]?\s*([^\s,]+)`)
 	sqlReq.Filter.ResponseCode = extractResponseCodes(req.QueryText)
+	sqlReq.Filter.UserAgent = extractUserAgent(req.QueryText)
 	sqlReq.Param.Limit = sanitizeLimit(req.Limit, 100, 50000)
 	sqlReq.Param.OrderBy = "timestamp DESC"
 	if req.Timestamp.From > 0 || req.Timestamp.To > 0 {
@@ -2652,6 +2654,25 @@ func extractResponseCodes(text string) string {
 	return strings.Join(codes, ",")
 }
 
+// userAgentKeyword recognises an explicit trigger word ("user agent",
+// "device", "client", "ua", "involving"), optionally followed by a
+// connective ("is", "contains", ":", "="), then a QUOTED value. Quotes are
+// required — "client"/"device"/"involving" are common enough words that an
+// unquoted bare-word match would false-positive too often. The connective
+// is optional and un-anchored so "where user agent is 'X'" matches just as
+// well as "user agent 'X'" or "user agent: 'X'".
+var userAgentKeyword = regexp.MustCompile(
+	`(?i)(?:user[_\s-]?agent|user\s+agent|\bua\b|\bdevice\b|\bclient\b|\binvolving\b)` +
+		`(?:\s*(?:is|contains|=|:))?\s*["']([^"']+)["']`,
+)
+
+func extractUserAgent(text string) string {
+	if m := userAgentKeyword.FindStringSubmatch(text); m != nil {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
 func shouldUseSQLMode(queryText string) bool {
 	q := strings.ToLower(queryText)
 	return strings.Contains(q, "mode=sql") ||
@@ -2711,6 +2732,13 @@ func buildMCPRawSQL(lakeName string, req *SearchObjectV4) string {
 	}
 	if req.Filter.Payload != "" {
 		conditions = append(conditions, sqlFormMatchClause("payload", req.Filter.Payload))
+	}
+	if req.Filter.UserAgent != "" {
+		// sqlFormMatchOne only emits LIKE when the value already contains a
+		// literal '%' — otherwise it degenerates into an exact '=' match,
+		// which would miss any header string that isn't identical to the
+		// search term. Wrap explicitly so substring search works.
+		conditions = append(conditions, sqlFormMatchClause("json_extract_string(data_extra, '$.user_agent')", "%"+req.Filter.UserAgent+"%"))
 	}
 
 	sql := "SELECT * FROM " + lakeName + ".main.hep_proto_1_call"
@@ -3033,7 +3061,15 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		if protoType == 1 && txType == "registration" {
 			conditions = append(conditions, sqlFormMatchClause("user_agent", ua))
 		} else {
-			conditions = append(conditions, sqlFormMatchClause("json_extract_string(data_extra, '$.user_agent')", ua))
+			// sqlFormMatchOne only emits LIKE when the value already
+			// contains a literal '%' — otherwise it degenerates into an
+			// exact '=' match, which would miss any header string that
+			// isn't identical to the search term. Wrap explicitly so
+			// substring search works. The registration branch above is a
+			// separate, pre-existing exact-match filter (see
+			// TestBuildSearchSQLV4_UserAgentRegistrationColumn) and is left
+			// as-is.
+			conditions = append(conditions, sqlFormMatchClause("json_extract_string(data_extra, '$.user_agent')", "%"+ua+"%"))
 		}
 	}
 	if ru := strings.TrimSpace(req.Filter.RuriUser); ru != "" {

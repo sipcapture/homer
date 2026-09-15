@@ -190,6 +190,7 @@ Notes:
 - `find calls from src ip 10.10.0.5`
 - `find call-id abc-123 in the last hour`
 - `find all calls in the last 15 minutes that were rejected with 608`
+- `show all calls involving 'Linphone'`
 
 ## 6. Security Notes
 
