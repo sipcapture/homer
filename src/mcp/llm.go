@@ -34,8 +34,10 @@ type llmParsedFilters struct {
 	SrcIP          string `json:"src_ip,omitempty"`
 	DstIP          string `json:"dst_ip,omitempty"`
 	CallID         string `json:"call_id,omitempty"`
+	CID            string `json:"cid,omitempty"`
 	FromUser       string `json:"from_user,omitempty"`
 	ToUser         string `json:"to_user,omitempty"`
+	ResponseCode   string `json:"response_code,omitempty"`
 	TimeRangeLabel string `json:"time_range_label,omitempty"`
 	FromMS         int64  `json:"from_ms,omitempty"`
 	ToMS           int64  `json:"to_ms,omitempty"`
@@ -75,9 +77,11 @@ Allowed top-level keys (all optional, omit if not mentioned in the query):
 - method: one of INVITE, BYE, REGISTER, OPTIONS, ACK, CANCEL, PRACK, UPDATE, INFO, REFER, SUBSCRIBE, NOTIFY, PUBLISH, MESSAGE
 - src_ip: source IPv4/IPv6 string
 - dst_ip: destination IPv4/IPv6 string
-- call_id: SIP Call-ID substring
+- call_id: SIP Call-ID substring. "session id" is a synonym for call_id on this backend — emit it under call_id, not a separate key.
+- cid: Homer's correlation ID — a distinct field from call_id on this backend, only emit it when the query explicitly says "cid" (not "call id" or "session id")
 - from_user: caller / from username
 - to_user: callee / to username
+- response_code: SIP response/status code(s), digits only, comma-separated if multiple (e.g. "608" or "608,486"); covers phrasing like "rejected with 608", "486 busy", "status code 404"
 - time_range_label: short human label such as "last_hour", "last_24h", "today", "yesterday", "custom"
 - from_ms: start of time range, UTC unix timestamp in milliseconds (integer)
 - to_ms: end of time range, UTC unix timestamp in milliseconds (integer)

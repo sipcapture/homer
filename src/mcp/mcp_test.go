@@ -53,6 +53,79 @@ func TestBuildStructuredPayloadInviteLastHour(t *testing.T) {
 	}
 }
 
+func TestBuildStructuredPayloadResponseCodeRejectedWith(t *testing.T) {
+	mod := newTestModule(t)
+	now := int64(1740656400000)
+	payload, normalized := mod.buildStructuredPayload("find all calls in the last 15 minutes that were rejected with 608", now, 0)
+
+	if payload.Filter.ResponseCode != "608" {
+		t.Fatalf("expected response_code 608, got %q", payload.Filter.ResponseCode)
+	}
+	if normalized["response_code"] != "608" {
+		t.Fatalf("expected normalized.response_code=608, got %#v", normalized["response_code"])
+	}
+	// "last 15 minutes" isn't parsed by parseTimeRange today (unrelated,
+	// pre-existing limitation) - documenting it here so this test doesn't
+	// silently assume it's handled.
+	if normalized["time_range"] != "default_last_hour" {
+		t.Fatalf("expected time_range=default_last_hour, got %#v", normalized["time_range"])
+	}
+}
+
+func TestBuildStructuredPayloadResponseCodeMultiple(t *testing.T) {
+	mod := newTestModule(t)
+	payload, _ := mod.buildStructuredPayload("show 608 or 486 responses", 0, 0)
+	if payload.Filter.ResponseCode != "608,486" {
+		t.Fatalf("expected response_code 608,486, got %q", payload.Filter.ResponseCode)
+	}
+}
+
+func TestBuildStructuredPayloadResponseCodeCommaSeparated(t *testing.T) {
+	mod := newTestModule(t)
+	payload, _ := mod.buildStructuredPayload("find calls with response code 404, 486", 0, 0)
+	if payload.Filter.ResponseCode != "404,486" {
+		t.Fatalf("expected response_code 404,486, got %q", payload.Filter.ResponseCode)
+	}
+}
+
+func TestBuildStructuredPayloadResponseCodeIgnoresPortAndMinutes(t *testing.T) {
+	mod := newTestModule(t)
+	payload, _ := mod.buildStructuredPayload("find INVITE on port 5060 in the last 15 minutes", 0, 0)
+	if payload.Filter.ResponseCode != "" {
+		t.Fatalf("expected empty response_code, got %q", payload.Filter.ResponseCode)
+	}
+}
+
+func TestBuildStructuredPayloadResponseCodeIgnoresPartialDigitRun(t *testing.T) {
+	mod := newTestModule(t)
+	payload, _ := mod.buildStructuredPayload("response 5060 latency test", 0, 0)
+	if payload.Filter.ResponseCode != "" {
+		t.Fatalf("expected empty response_code (must not extract 506 from 5060), got %q", payload.Filter.ResponseCode)
+	}
+}
+
+func TestBuildStructuredPayloadCallIDAcceptsSessionId(t *testing.T) {
+	mod := newTestModule(t)
+	payload, _ := mod.buildStructuredPayload("session id abc-999", 0, 0)
+	if payload.Filter.CallID != "abc-999" {
+		t.Fatalf("expected call_id abc-999, got %q", payload.Filter.CallID)
+	}
+}
+
+func TestBuildStructuredPayloadCIDIsSeparateFromCallID(t *testing.T) {
+	mod := newTestModule(t)
+	payload, normalized := mod.buildStructuredPayload("find cid abc-123-xyz", 0, 0)
+	if payload.Filter.CID != "abc-123-xyz" {
+		t.Fatalf("expected cid abc-123-xyz, got %q", payload.Filter.CID)
+	}
+	if payload.Filter.CallID != "" {
+		t.Fatalf("expected empty call_id (cid must not alias into call_id), got %q", payload.Filter.CallID)
+	}
+	if normalized["cid"] != "abc-123-xyz" {
+		t.Fatalf("expected normalized.cid=abc-123-xyz, got %#v", normalized["cid"])
+	}
+}
+
 func TestValidateSQLAllowsCallTableName(t *testing.T) {
 	sql := "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE method = 'INVITE' ORDER BY timestamp DESC LIMIT 10"
 	if err := validateSQL(sql); err != nil {
@@ -86,6 +159,69 @@ func TestBuildSQL_SemicolonSeparatedOR(t *testing.T) {
 	}
 	if !containsAll(sql, "callee LIKE '%112%'", "callee LIKE '%110%'") {
 		t.Fatalf("expected OR of LIKE tokens, got:\n%s", sql)
+	}
+}
+
+func TestBuildSQL_ResponseCodeSingle(t *testing.T) {
+	payload := searchPayload{}
+	payload.Timestamp.From = 1
+	payload.Timestamp.To = 2
+	payload.Filter.ResponseCode = "608"
+	sql := buildSQL(payload)
+	if err := validateSQL(sql); err != nil {
+		t.Fatalf("generated SQL rejected: %v\n%s", err, sql)
+	}
+	if !containsAll(sql, "response_code = '608'") {
+		t.Fatalf("expected response_code equality clause, got:\n%s", sql)
+	}
+}
+
+func TestBuildSQL_ResponseCodeMultipleIN(t *testing.T) {
+	payload := searchPayload{}
+	payload.Timestamp.From = 1
+	payload.Timestamp.To = 2
+	payload.Filter.ResponseCode = "608,486"
+	sql := buildSQL(payload)
+	if err := validateSQL(sql); err != nil {
+		t.Fatalf("generated SQL rejected: %v\n%s", err, sql)
+	}
+	if !containsAll(sql, "response_code IN (", "'608'", "'486'") {
+		t.Fatalf("expected response_code IN clause, got:\n%s", sql)
+	}
+}
+
+func TestBuildSQL_ResponseCodeEscapesQuotes(t *testing.T) {
+	payload := searchPayload{}
+	payload.Timestamp.From = 1
+	payload.Timestamp.To = 2
+	payload.Filter.ResponseCode = "608'; DROP TABLE x --"
+	sql := buildSQL(payload)
+	if err := validateSQL(sql); err != nil {
+		t.Fatalf("generated SQL rejected: %v\n%s", err, sql)
+	}
+	// The embedded ';' is consumed as a value separator (same rationale as
+	// mcpLikeAny, #1008), producing two IN-list values rather than one
+	// value with an embedded semicolon - the semicolon never survives into
+	// the final SQL string.
+	if !containsAll(sql, "response_code IN (", "'608'''", "'DROP TABLE x --'") {
+		t.Fatalf("expected escaped two-value IN clause, got:\n%s", sql)
+	}
+}
+
+func TestBuildSQL_CIDMatchesOnlyCIDColumn(t *testing.T) {
+	payload := searchPayload{}
+	payload.Timestamp.From = 1
+	payload.Timestamp.To = 2
+	payload.Filter.CID = "abc-123"
+	sql := buildSQL(payload)
+	if err := validateSQL(sql); err != nil {
+		t.Fatalf("generated SQL rejected: %v\n%s", err, sql)
+	}
+	if !containsAll(sql, "cid LIKE '%abc-123%'") {
+		t.Fatalf("expected cid LIKE clause, got:\n%s", sql)
+	}
+	if strings.Contains(sql, "session_id") {
+		t.Fatalf("cid filter must not also match session_id, got:\n%s", sql)
 	}
 }
 
@@ -410,6 +546,66 @@ func TestParseQueryFallsBackOnLLMFailure(t *testing.T) {
 	}
 	if payload.Filter.Method != "INVITE" || payload.Filter.SrcIP != "10.1.2.3" {
 		t.Fatalf("regex fallback did not extract expected fields: %+v", payload.Filter)
+	}
+}
+
+func TestParseQueryLLMResponseCodeOverridesRegex(t *testing.T) {
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, chatJSON(`{"method":"BYE","response_code":"608,486"}`))
+	}))
+	defer llm.Close()
+
+	mod := newModuleWithLLM(t, llm.URL)
+	payload, normalized, _, err := mod.parseQuery(context.Background(), "give me everything", 1740656400000, 0, "auto")
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+	if payload.Filter.ResponseCode != "608,486" {
+		t.Fatalf("expected response_code=608,486, got %q", payload.Filter.ResponseCode)
+	}
+	if normalized["response_code"] != "608,486" {
+		t.Fatalf("expected normalized.response_code=608,486, got %#v", normalized["response_code"])
+	}
+}
+
+func TestParseQueryLLMEmptyResponseCodeFallsBackToRegex(t *testing.T) {
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, chatJSON(`{"method":"INVITE"}`))
+	}))
+	defer llm.Close()
+
+	mod := newModuleWithLLM(t, llm.URL)
+	payload, _, meta, err := mod.parseQuery(context.Background(), "find all calls in the last 15 minutes that were rejected with 608", 1740656400000, 0, "auto")
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+	if meta.Used != parserLLM {
+		t.Fatalf("expected parser_used=llm, got %q", meta.Used)
+	}
+	if payload.Filter.ResponseCode != "608" {
+		t.Fatalf("expected regex-derived response_code=608 to survive the merge, got %q", payload.Filter.ResponseCode)
+	}
+}
+
+func TestParseQueryLLMCIDDistinctFromCallID(t *testing.T) {
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, chatJSON(`{"call_id":"call-1","cid":"cid-1"}`))
+	}))
+	defer llm.Close()
+
+	mod := newModuleWithLLM(t, llm.URL)
+	payload, _, _, err := mod.parseQuery(context.Background(), "give me everything", 1740656400000, 0, "auto")
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+	if payload.Filter.CallID != "call-1" {
+		t.Fatalf("expected call_id=call-1, got %q", payload.Filter.CallID)
+	}
+	if payload.Filter.CID != "cid-1" {
+		t.Fatalf("expected cid=cid-1, got %q", payload.Filter.CID)
 	}
 }
 

@@ -80,14 +80,16 @@ type apiResponse struct {
 
 type searchPayload struct {
 	Filter struct {
-		ProtoType int    `json:"proto_type"`
-		EventType string `json:"event_type"`
-		Method    string `json:"method,omitempty"`
-		CallID    string `json:"call_id,omitempty"`
-		FromUser  string `json:"from_user,omitempty"`
-		ToUser    string `json:"to_user,omitempty"`
-		SrcIP     string `json:"src_ip,omitempty"`
-		DstIP     string `json:"dst_ip,omitempty"`
+		ProtoType    int    `json:"proto_type"`
+		EventType    string `json:"event_type"`
+		Method       string `json:"method,omitempty"`
+		CallID       string `json:"call_id,omitempty"`
+		CID          string `json:"cid,omitempty"`
+		FromUser     string `json:"from_user,omitempty"`
+		ToUser       string `json:"to_user,omitempty"`
+		ResponseCode string `json:"response_code,omitempty"`
+		SrcIP        string `json:"src_ip,omitempty"`
+		DstIP        string `json:"dst_ip,omitempty"`
 	} `json:"filter"`
 	Param struct {
 		Limit   int    `json:"limit"`
@@ -439,11 +441,17 @@ func (m *Module) applyLLMFilters(
 	if v := strings.TrimSpace(llm.CallID); v != "" {
 		payload.Filter.CallID = v
 	}
+	if v := strings.TrimSpace(llm.CID); v != "" {
+		payload.Filter.CID = v
+	}
 	if v := strings.TrimSpace(llm.FromUser); v != "" {
 		payload.Filter.FromUser = v
 	}
 	if v := strings.TrimSpace(llm.ToUser); v != "" {
 		payload.Filter.ToUser = v
+	}
+	if v := strings.TrimSpace(llm.ResponseCode); v != "" {
+		payload.Filter.ResponseCode = v
 	}
 
 	timeLabel, _ := regexNorm["time_range"].(string)
@@ -460,14 +468,16 @@ func (m *Module) applyLLMFilters(
 	payload.Param.Limit = clampLimit(limit, m.cfg.DefaultLimit, 1000)
 
 	normalized := map[string]any{
-		"query_text": queryText,
-		"method":     nullIfEmpty(payload.Filter.Method),
-		"time_range": timeLabel,
-		"src_ip":     nullIfEmpty(payload.Filter.SrcIP),
-		"dst_ip":     nullIfEmpty(payload.Filter.DstIP),
-		"call_id":    nullIfEmpty(payload.Filter.CallID),
-		"from_user":  nullIfEmpty(payload.Filter.FromUser),
-		"to_user":    nullIfEmpty(payload.Filter.ToUser),
+		"query_text":    queryText,
+		"method":        nullIfEmpty(payload.Filter.Method),
+		"time_range":    timeLabel,
+		"src_ip":        nullIfEmpty(payload.Filter.SrcIP),
+		"dst_ip":        nullIfEmpty(payload.Filter.DstIP),
+		"call_id":       nullIfEmpty(payload.Filter.CallID),
+		"cid":           nullIfEmpty(payload.Filter.CID),
+		"from_user":     nullIfEmpty(payload.Filter.FromUser),
+		"to_user":       nullIfEmpty(payload.Filter.ToUser),
+		"response_code": nullIfEmpty(payload.Filter.ResponseCode),
 	}
 	_ = nowMS
 	return payload, normalized
@@ -566,16 +576,20 @@ func (m *Module) buildStructuredPayload(queryText string, nowUTCUnixMS int64, li
 	payload.Filter.SrcIP = extractPattern(queryText, `(?:src|source)\s+ip[:=]?\s*([0-9.]+)`)
 	payload.Filter.DstIP = extractPattern(queryText, `(?:dst|destination)\s+ip[:=]?\s*([0-9.]+)`)
 	payload.Filter.CallID = extractPattern(queryText, `(?:call[_\s-]?id|session[_\s-]?id)[:=]?\s*([^\s,]+)`)
+	payload.Filter.CID = extractPattern(queryText, `\bcid\b[:=]?\s*([^\s,]+)`)
 	payload.Filter.FromUser = extractPattern(queryText, `(?:from[_\s-]?user|caller)[:=]?\s*([^\s,]+)`)
 	payload.Filter.ToUser = extractPattern(queryText, `(?:to[_\s-]?user|callee)[:=]?\s*([^\s,]+)`)
+	payload.Filter.ResponseCode = extractResponseCodes(queryText)
 
 	normalized := map[string]any{
-		"query_text": queryText,
-		"method":     nullIfEmpty(payload.Filter.Method),
-		"time_range": rangeLabel,
-		"src_ip":     nullIfEmpty(payload.Filter.SrcIP),
-		"dst_ip":     nullIfEmpty(payload.Filter.DstIP),
-		"call_id":    nullIfEmpty(payload.Filter.CallID),
+		"query_text":    queryText,
+		"method":        nullIfEmpty(payload.Filter.Method),
+		"time_range":    rangeLabel,
+		"src_ip":        nullIfEmpty(payload.Filter.SrcIP),
+		"dst_ip":        nullIfEmpty(payload.Filter.DstIP),
+		"call_id":       nullIfEmpty(payload.Filter.CallID),
+		"cid":           nullIfEmpty(payload.Filter.CID),
+		"response_code": nullIfEmpty(payload.Filter.ResponseCode),
 	}
 	return payload, normalized
 }
@@ -634,6 +648,41 @@ func extractPattern(queryText, pattern string) string {
 	return strings.TrimSpace(m[1])
 }
 
+// responseCodeKeywordFirst: TRIGGER WORD comes first, then the code(s).
+// Trigger words: reject/rejected, response(s), response code(s), resp
+// code(s), status (code(s)), sip code(s), error code(s) — optionally
+// followed by ":" or "=", then one or more standalone 3-digit codes
+// separated by ",", "or", "and", or ";". Trailing "s?" tolerates plurals
+// (e.g. "response codes 608, 486").
+var responseCodeKeywordFirst = regexp.MustCompile(
+	`(?i)(?:reject(?:ed)?(?:\s+with)?|responses?(?:\s+codes?)?|resp\s*codes?|status(?:\s+codes?)?|sip\s*codes?|error\s+codes?)` +
+		`[:=]?\s*(\b\d{3}\b(?:\s*(?:,|or|and|;)\s*\b\d{3}\b)*)`,
+)
+
+// responseCodeNumberFirst: the CODE(S) come first, then a trigger word.
+// Trigger words: response(s), busy, reject/rejected, error(s).
+var responseCodeNumberFirst = regexp.MustCompile(
+	`(?i)\b(\d{3}\b(?:\s*(?:,|or|and|;)\s*\b\d{3}\b)*)\s*(?:responses?|busy|reject(?:ed)?|errors?)\b`,
+)
+
+// extractResponseCodes tries the keyword-first pattern, falls back to the
+// number-first pattern, then re-extracts every standalone 3-digit run from
+// whichever raw match it got and joins them with commas (matching the
+// Coordinator's ResponseCode convention). The \b...\b boundary on every
+// digit run prevents matching a partial substring of a longer number, e.g.
+// "response 5060" must not extract "506".
+func extractResponseCodes(queryText string) string {
+	m := responseCodeKeywordFirst.FindStringSubmatch(queryText)
+	if m == nil {
+		m = responseCodeNumberFirst.FindStringSubmatch(queryText)
+	}
+	if m == nil {
+		return ""
+	}
+	codes := regexp.MustCompile(`\b\d{3}\b`).FindAllString(m[1], -1)
+	return strings.Join(codes, ",")
+}
+
 func nullIfEmpty(v string) any {
 	if strings.TrimSpace(v) == "" {
 		return nil
@@ -663,6 +712,9 @@ func buildSQL(payload searchPayload) string {
 	if payload.Filter.CallID != "" {
 		parts = append(parts, mcpLikeAny([]string{"session_id", "cid"}, payload.Filter.CallID))
 	}
+	if payload.Filter.CID != "" {
+		parts = append(parts, mcpLikeAny([]string{"cid"}, payload.Filter.CID))
+	}
 	if payload.Filter.FromUser != "" {
 		parts = append(parts, mcpLikeAny([]string{"caller"}, payload.Filter.FromUser))
 	}
@@ -674,6 +726,9 @@ func buildSQL(payload searchPayload) string {
 	}
 	if payload.Filter.DstIP != "" {
 		parts = append(parts, fmt.Sprintf("dst_ip = '%s'", escapeSQL(payload.Filter.DstIP)))
+	}
+	if payload.Filter.ResponseCode != "" {
+		parts = append(parts, mcpEqualsAny("response_code", payload.Filter.ResponseCode))
 	}
 
 	limit := clampLimit(payload.Param.Limit, 100, 50000)
@@ -717,6 +772,45 @@ func mcpLikeAny(columns []string, raw string) string {
 		return parts[0]
 	}
 	return "(" + strings.Join(parts, " OR ") + ")"
+}
+
+// mcpValueList splits raw on comma/semicolon/"or"/"and" into trimmed,
+// non-empty tokens, capped at 64 (same separator convention as mcpLikeAny,
+// #1008: embedded ';' must never reach validateSQL literally).
+func mcpValueList(raw string) []string {
+	re := regexp.MustCompile(`(?i)[,;]+|\s+(?:or|and)\s+`)
+	var out []string
+	for _, t := range re.Split(raw, -1) {
+		t = strings.TrimSpace(t)
+		if t == "" {
+			continue
+		}
+		out = append(out, t)
+		if len(out) >= 64 {
+			break
+		}
+	}
+	return out
+}
+
+// mcpEqualsAny builds an equality/IN clause for one real column across one
+// or more exact values, e.g. response_code IN ('608','486'). Unlike
+// mcpLikeAny (substring LIKE across multiple aliased columns for one
+// value), this targets one column with multiple exact values — correct for
+// a fixed-format status code, avoiding LIKE's accidental substring risk.
+func mcpEqualsAny(column, raw string) string {
+	values := mcpValueList(raw)
+	if len(values) == 0 {
+		return "TRUE"
+	}
+	if len(values) == 1 {
+		return fmt.Sprintf("%s = '%s'", column, escapeSQL(values[0]))
+	}
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = "'" + escapeSQL(v) + "'"
+	}
+	return fmt.Sprintf("%s IN (%s)", column, strings.Join(quoted, ", "))
 }
 
 func validateSQL(sql string) error {
