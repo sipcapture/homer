@@ -15,6 +15,7 @@ import (
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"github.com/sipcapture/homer-core/src/storage/ducklake/compactor"
+	"github.com/sipcapture/homer-core/src/storage/ducklake/mover"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -279,6 +280,25 @@ func (c *CompactionService) ensureAzureClientSettings() {
 	}
 	if err := ducklake.EnsureWriterAzureSecret(c.db, a.AccountName, a.AccountKey, a.ConnectionString, a.Endpoint); err != nil {
 		logger.Warn("CompactionService: EnsureWriterAzureSecret failed", "error", err)
+	}
+}
+
+func (c *CompactionService) useAzureNativeFileCleanup() bool {
+	if c == nil || c.azureClient == nil || !ducklake.IsAzurePath(c.dataPath) {
+		return false
+	}
+	return ducklake.UsesAzureCredentialChain(c.azureClient.AccountKey, c.azureClient.ConnectionString)
+}
+
+func ducklakeAzureConfig(a *CompactionAzureClient) mover.AzureConfig {
+	if a == nil {
+		return mover.AzureConfig{}
+	}
+	return mover.AzureConfig{
+		AccountName:      a.AccountName,
+		AccountKey:       a.AccountKey,
+		ConnectionString: a.ConnectionString,
+		Endpoint:         a.Endpoint,
 	}
 }
 
@@ -763,27 +783,42 @@ func (c *CompactionService) runMaintenanceCalls() {
 		}
 	})
 
-	// 2. Cleanup old files — lock for this call only
-	c.withCatalogLock(func() {
-		c.ensureS3ClientSettings()
-		c.ensureAzureClientSettings()
-		logger.Info("CompactionService: Cleanup old files", "lake", c.lakeName)
-		cleanupSQL := fmt.Sprintf("CALL ducklake_cleanup_old_files('%s', cleanup_all => true)", c.lakeName)
-		if _, err := c.execWithRetry(cleanupSQL); err != nil {
-			c.warnMaintenanceS3Failure("cleanup_old_files", err)
-		}
-	})
+	if c.useAzureNativeFileCleanup() {
+		// duckdb-azure rebuilds the managed-identity credential per file
+		// (sipcapture/homer#1023 / duckdb/duckdb-azure#171). Bypass both
+		// DuckLake file-cleanup CALLs and delete through the cached SDK client.
+		c.withCatalogLock(func() {
+			logger.Info("CompactionService: Azure credential_chain file cleanup using native SDK",
+				"lake", c.lakeName,
+				"workaround", "sipcapture/homer#1023")
+			err := ducklake.RunAzureNativeFileCleanup(c.ctx, c.db, c.lakeName, c.dataPath, ducklakeAzureConfig(c.azureClient))
+			if err != nil {
+				c.warnMaintenanceS3Failure("azure native file cleanup", err)
+			}
+		})
+	} else {
+		// 2. Cleanup old files — lock for this call only
+		c.withCatalogLock(func() {
+			c.ensureS3ClientSettings()
+			c.ensureAzureClientSettings()
+			logger.Info("CompactionService: Cleanup old files", "lake", c.lakeName)
+			cleanupSQL := fmt.Sprintf("CALL ducklake_cleanup_old_files('%s', cleanup_all => true)", c.lakeName)
+			if _, err := c.execWithRetry(cleanupSQL); err != nil {
+				c.warnMaintenanceS3Failure("cleanup_old_files", err)
+			}
+		})
 
-	// 3. Delete orphaned files — lock for this call only
-	c.withCatalogLock(func() {
-		c.ensureS3ClientSettings()
-		c.ensureAzureClientSettings()
-		logger.Info("CompactionService: Delete orphaned files", "lake", c.lakeName)
-		orphanSQL := fmt.Sprintf("CALL ducklake_delete_orphaned_files('%s', cleanup_all => true)", c.lakeName)
-		if _, err := c.execWithRetry(orphanSQL); err != nil {
-			c.warnMaintenanceS3Failure("delete_orphaned_files", err)
-		}
-	})
+		// 3. Delete orphaned files — lock for this call only
+		c.withCatalogLock(func() {
+			c.ensureS3ClientSettings()
+			c.ensureAzureClientSettings()
+			logger.Info("CompactionService: Delete orphaned files", "lake", c.lakeName)
+			orphanSQL := fmt.Sprintf("CALL ducklake_delete_orphaned_files('%s', cleanup_all => true)", c.lakeName)
+			if _, err := c.execWithRetry(orphanSQL); err != nil {
+				c.warnMaintenanceS3Failure("delete_orphaned_files", err)
+			}
+		})
+	}
 
 	// 4. Remove empty directories (no catalog lock needed — filesystem only)
 	if c.dataPath != "" && !ducklake.IsRemoteLakeDataPath(c.dataPath) {

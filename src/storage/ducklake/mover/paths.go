@@ -77,10 +77,10 @@ func splitS3URL(u string) (bucket, key string, ok bool) {
 	return rest[:slash], strings.TrimPrefix(rest[slash+1:], "/"), true
 }
 
-// splitAzureURL returns container and blob key for az://container/key or
+// SplitAzureURL returns container and blob key for az://container/key or
 // azure://container/key. DuckDB's azure DATA_PATH form carries no account
 // host segment — the storage account comes from the secret, not the URL.
-func splitAzureURL(u string) (container, key string, ok bool) {
+func SplitAzureURL(u string) (container, key string, ok bool) {
 	u = strings.TrimSpace(u)
 	rest := ""
 	switch {

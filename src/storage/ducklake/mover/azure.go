@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 )
 
 // AzureConfig is the destination volume's Azure Blob Storage settings.
@@ -122,7 +123,7 @@ func (c *azureCopier) Copy(ctx context.Context, srcPath, dstPath string, size in
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	container, key, ok := splitAzureURL(dstPath)
+	container, key, ok := SplitAzureURL(dstPath)
 	if !ok || container == "" || key == "" {
 		return fmt.Errorf("invalid azure destination path %q", dstPath)
 	}
@@ -158,4 +159,88 @@ func (c *azureCopier) Copy(ctx context.Context, srcPath, dstPath string, size in
 		return fmt.Errorf("azure upload %s: %w", dstPath, err)
 	}
 	return nil
+}
+
+// AzureStore is a cached Azure Blob client used for lake file maintenance.
+// Unlike duckdb-azure (which rebuilds ChainedTokenCredential on every file
+// open — duckdb/duckdb-azure#171), this client is constructed once and the
+// Azure SDK token cache is reused across List/Delete calls.
+type AzureStore struct {
+	client *azblob.Client
+}
+
+// NewAzureStore builds a Blob client from the same credential precedence as
+// the native copier (connection string, account key, then DefaultAzureCredential).
+func NewAzureStore(cfg AzureConfig) (*AzureStore, error) {
+	client, err := azureBlobClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &AzureStore{client: client}, nil
+}
+
+func isDuckLakeDataFileName(name string) bool {
+	return strings.HasSuffix(name, ".parquet") || strings.HasSuffix(name, ".puffin")
+}
+
+// ListDataFiles lists .parquet/.puffin blobs under dataPath (az://container/prefix/).
+// One ListBlobs pager, one cached credential — not one IMDS request per object.
+func (s *AzureStore) ListDataFiles(ctx context.Context, dataPath string) ([]string, error) {
+	if s == nil || s.client == nil {
+		return nil, fmt.Errorf("azure store is not initialized")
+	}
+	container, prefix, ok := SplitAzureURL(dataPath)
+	if !ok || container == "" {
+		return nil, fmt.Errorf("invalid azure data path %q", dataPath)
+	}
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	opts := &azblob.ListBlobsFlatOptions{}
+	if prefix != "" {
+		opts.Prefix = &prefix
+	}
+	var out []string
+	pager := s.client.NewListBlobsFlatPager(container, opts)
+	for pager.More() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("azure list %s: %w", dataPath, err)
+		}
+		for _, item := range page.Segment.BlobItems {
+			if item.Name == nil {
+				continue
+			}
+			name := *item.Name
+			if !isDuckLakeDataFileName(name) {
+				continue
+			}
+			out = append(out, "az://"+container+"/"+name)
+		}
+	}
+	return out, nil
+}
+
+// DeleteBlob removes one az:// blob. Missing blobs are treated as success so
+// cleanup can finish after a previous partial cycle.
+func (s *AzureStore) DeleteBlob(ctx context.Context, azURL string) error {
+	if s == nil || s.client == nil {
+		return fmt.Errorf("azure store is not initialized")
+	}
+	container, key, ok := SplitAzureURL(azURL)
+	if !ok || container == "" || key == "" {
+		return fmt.Errorf("invalid azure blob path %q", azURL)
+	}
+	_, err := s.client.DeleteBlob(ctx, container, key, nil)
+	if err == nil {
+		return nil
+	}
+	if blobNotFound(err) {
+		return nil
+	}
+	return fmt.Errorf("azure delete %s: %w", azURL, err)
+}
+
+func blobNotFound(err error) bool {
+	return bloberror.HasCode(err, bloberror.BlobNotFound, bloberror.ContainerNotFound)
 }
