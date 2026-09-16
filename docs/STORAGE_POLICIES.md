@@ -379,6 +379,8 @@ level=INFO msg="TieredStorageManager: Volume maintenance completed" volume=cold 
 
 Expired data disappears from S3 after the snapshot window passes (default 1 hour), not instantly at the moment of the expire DELETE.
 
+Azure cold volumes that authenticate with **Managed Identity** / `credential_chain` (no static account key) do not run `ducklake_cleanup_old_files` / `ducklake_delete_orphaned_files` through DuckDB. Those CALLs open every object through duckdb-azure, which rebuilds the IMDS token on every file and fails with `ChainedTokenCredential` / HTTP 429 once more than a handful of files are pending ([#1023](https://github.com/sipcapture/homer/issues/1023), [duckdb-azure#171](https://github.com/duckdb/duckdb-azure/issues/171)). Homer deletes those blobs with the cached Azure SDK client instead (same credential chain as native tier moves) and then updates the DuckLake catalog. Static `azure_account_key` / `azure_connection_string` volumes keep the DuckDB CALL path.
+
 ### Partition Movement Process
 
 Data is partitioned by date (`date` column). The default **duckdb** engine rewrites the partition:

@@ -31,6 +31,18 @@ func TestVolumeMaintenanceSQL(t *testing.T) {
 	}
 }
 
+func TestUsesAzureNativeFileCleanupVolumeSQLStillHasThreeSteps(t *testing.T) {
+	// The DuckDB SQL helper is unchanged; RunVolumeMaintenance skips the last
+	// two statements when usesAzureNativeFileCleanup is true.
+	if usesAzureNativeFileCleanup(&Volume{Type: VolumeTypeAzure, AzureAccountName: "acct"}) != true {
+		t.Fatal("credential_chain azure volume must use native file cleanup")
+	}
+	stmts := volumeMaintenanceSQL("homer_lake_cold", 1800)
+	if len(stmts) != 3 {
+		t.Fatalf("volumeMaintenanceSQL must still describe the full DuckDB path, got %d", len(stmts))
+	}
+}
+
 func TestVolumeMaintenanceSQLDefaultWindow(t *testing.T) {
 	stmts := volumeMaintenanceSQL("homer_lake_hot", 0)
 	if !strings.Contains(stmts[0], "INTERVAL '3600 seconds'") {

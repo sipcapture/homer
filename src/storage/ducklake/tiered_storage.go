@@ -820,7 +820,16 @@ func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlder
 		"snapshot_older_than_sec", snapshotOlderThanSec)
 
 	var firstErr error
-	for _, stmt := range volumeMaintenanceSQL(vol.LakeName, snapshotOlderThanSec) {
+	stmts := volumeMaintenanceSQL(vol.LakeName, snapshotOlderThanSec)
+	// expire_snapshots is catalog-only. cleanup_old_files / delete_orphaned_files
+	// open every az:// object through duckdb-azure, which rebuilds the
+	// managed-identity credential per file and trips IMDS 429
+	// (sipcapture/homer#1023). Native SDK cleanup reuses one token cache.
+	nativeAzure := usesAzureNativeFileCleanup(vol)
+	if nativeAzure {
+		stmts = stmts[:1]
+	}
+	for _, stmt := range stmts {
 		if _, err := execWithRetry(
 			tsm.db,
 			tieringMaxRetries,
@@ -832,6 +841,30 @@ func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlder
 				"volume", vol.Name,
 				"lake", vol.LakeName,
 				"sql", stmt,
+				"error", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	if nativeAzure {
+		logger.Info("TieredStorageManager: Azure credential_chain file cleanup using native SDK",
+			"volume", vol.Name,
+			"lake", vol.LakeName,
+			"workaround", "sipcapture/homer#1023")
+		var err error
+		func() {
+			if locker != nil {
+				locker.CatalogLock()
+				defer locker.CatalogUnlock()
+			}
+			err = RunAzureNativeFileCleanup(context.Background(), tsm.db, vol.LakeName, vol.Path, volumeAzureConfig(vol))
+		}()
+		if err != nil {
+			logger.Warn("TieredStorageManager: Volume maintenance step failed",
+				"volume", vol.Name,
+				"lake", vol.LakeName,
+				"sql", "azure native cleanup_old_files+delete_orphaned_files",
 				"error", err)
 			if firstErr == nil {
 				firstErr = err

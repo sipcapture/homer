@@ -22,9 +22,9 @@ func TestSplitAzureURL(t *testing.T) {
 		{url: "az://", container: "", key: "", ok: false},
 	}
 	for _, tc := range cases {
-		container, key, ok := splitAzureURL(tc.url)
+		container, key, ok := SplitAzureURL(tc.url)
 		if container != tc.container || key != tc.key || ok != tc.ok {
-			t.Errorf("splitAzureURL(%q) = (%q, %q, %v), want (%q, %q, %v)",
+			t.Errorf("SplitAzureURL(%q) = (%q, %q, %v), want (%q, %q, %v)",
 				tc.url, container, key, ok, tc.container, tc.key, tc.ok)
 		}
 	}
@@ -276,5 +276,27 @@ func TestAzureCopier_CopyRejectsSizeMismatch(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "11 bytes") || !strings.Contains(err.Error(), "catalog size 999") {
 		t.Errorf("error should mention both sizes, got: %v", err)
+	}
+}
+
+func TestNewAzureStore_AccountKey(t *testing.T) {
+	store, err := NewAzureStore(AzureConfig{
+		AccountName: "fakeaccount",
+		AccountKey:  "ZmFrZQ==",
+	})
+	if err != nil {
+		t.Fatalf("NewAzureStore: %v", err)
+	}
+	if store == nil || store.client == nil {
+		t.Fatal("expected a client")
+	}
+}
+
+func TestIsDuckLakeDataFileName(t *testing.T) {
+	if !isDuckLakeDataFileName("a.parquet") || !isDuckLakeDataFileName("a.puffin") {
+		t.Fatal("parquet and puffin must match")
+	}
+	if isDuckLakeDataFileName("a.json") || isDuckLakeDataFileName("a.PARQUET") {
+		t.Fatal("non-data files and uppercase suffix must not match DuckLake suffix()")
 	}
 }
