@@ -403,7 +403,8 @@ To copy parquet files *without* rewriting them through DuckDB (no catalog lock d
 - Original parquet files in hot storage are marked for deletion (GC removes them later)
 - If copy succeeds but delete fails, data exists in both places temporarily (no data loss)
 - A failed source delete is **not** reported as `Partition moved`; the tiering cycle logs `Partition copied, source delete pending` and does not increment `partitions_moved`
-- On the next tiering cycle, if cold already holds the partition, HOMER performs **delete-only** from hot (no duplicate cold copy)
+- On the next tiering cycle, if cold already holds the **complete** partition (`destination_rows == source_rows`), HOMER performs **delete-only** from hot (no duplicate cold copy)
+- If cold already holds a **partial** partition (`destination_rows != source_rows`), HOMER **does not** delete hot ([#1025](https://github.com/sipcapture/homer/issues/1025)). The cycle fails that partition and leaves the source untouched. Remove the incomplete cold partition for that date before retrying, so the next cycle can copy the full source.
 - Under high ingest load, use `concurrent_moves=1` to reduce SQLite catalog contention on the shared hot catalog
 - Tables in cold storage are created with `PARTITION BY (date)` for efficient queries
 
@@ -439,11 +440,18 @@ level=ERROR msg="TieringService: Failed to move partition" table=hep_proto_1_cal
 level=INFO msg="TieringService: Tiering cycle completed" duration=45.2s partitions_moved=0
 ```
 
-The next cycle retries delete-only when cold already contains the partition:
+The next cycle retries delete-only when cold already contains the **same number of rows** as hot:
 
 ```
 level=INFO msg="TieredStorageManager: Destination already has partition; retrying source delete only" table=hep_proto_1_call date=2026-01-10 rows=150000
 level=INFO msg="TieredStorageManager: Partition moved" table=hep_proto_1_call date=2026-01-10 rows=150000
+```
+
+If cold contains only a partial copy, the source is left in place:
+
+```
+level=ERROR msg="TieredStorageManager: Destination partition is incomplete; refusing source delete" table=hep_proto_1_call date=2026-01-10 source_rows=7293773 destination_rows=47046
+level=ERROR msg="TieringService: Failed to move partition" table=hep_proto_1_call date=2026-01-10 error="destination partition is incomplete: source_rows=7293773 destination_rows=47046"
 ```
 
 ## Migration from Non-Tiered Setup

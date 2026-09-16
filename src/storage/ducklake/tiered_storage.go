@@ -518,6 +518,43 @@ func (tsm *TieredStorageManager) QueryAllVolumes(tableName, whereClause string, 
 	return allResults, nil
 }
 
+// partitionMoveAction is the next step MovePartition should take after counting
+// source and destination rows. The source is never deleted unless the destination
+// is empty (copy, then delete) or the destination row count matches the source
+// (delete-only retry after a previous successful copy).
+type partitionMoveAction int
+
+const (
+	partitionMoveNone partitionMoveAction = iota
+	partitionMoveCopy
+	partitionMoveDeleteSourceOnly
+)
+
+// partitionMovePlan decides how MovePartition should proceed.
+//
+// A non-zero destination with a different row count is an incomplete prior copy
+// (sipcapture/homer#1025). Returning an error leaves the source untouched:
+// delete-only retry is only safe when dstCount == srcCount (#866).
+func partitionMovePlan(srcCount, dstCount int64) (partitionMoveAction, error) {
+	if srcCount < 0 || dstCount < 0 {
+		return partitionMoveNone, fmt.Errorf(
+			"invalid partition row counts: source_rows=%d destination_rows=%d",
+			srcCount, dstCount)
+	}
+	if srcCount == 0 {
+		return partitionMoveNone, nil
+	}
+	if dstCount == 0 {
+		return partitionMoveCopy, nil
+	}
+	if dstCount == srcCount {
+		return partitionMoveDeleteSourceOnly, nil
+	}
+	return partitionMoveNone, fmt.Errorf(
+		"destination partition is incomplete: source_rows=%d destination_rows=%d",
+		srcCount, dstCount)
+}
+
 // MovePartition moves a partition (date) from source to destination volume.
 // DuckDB does not support transactions across multiple attached databases, so
 // INSERT and DELETE run as separate operations with idempotency on the destination.
@@ -566,19 +603,20 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 		return nil
 	}
 
-	if dstCount > 0 {
-		if dstCount != srcCount {
-			logger.Warn("TieredStorageManager: Destination row count differs from source; delete-only retry",
-				"table", tableName,
-				"date", date,
-				"source_rows", srcCount,
-				"destination_rows", dstCount)
-		} else {
-			logger.Info("TieredStorageManager: Destination already has partition; retrying source delete only",
-				"table", tableName,
-				"date", date,
-				"rows", dstCount)
-		}
+	action, err := partitionMovePlan(srcCount, dstCount)
+	if err != nil {
+		logger.Error("TieredStorageManager: Destination partition is incomplete; refusing source delete",
+			"table", tableName,
+			"date", date,
+			"source_rows", srcCount,
+			"destination_rows", dstCount)
+		return err
+	}
+	if action == partitionMoveDeleteSourceOnly {
+		logger.Info("TieredStorageManager: Destination already has partition; retrying source delete only",
+			"table", tableName,
+			"date", date,
+			"rows", dstCount)
 		return tsm.deleteSourcePartition(srcTable, date, tableName, srcCount, dstCount, hotLocker)
 	}
 

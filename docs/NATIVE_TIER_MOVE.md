@@ -67,7 +67,9 @@ than 8MB use multipart.
 
 DuckLake still issues every snapshot id. Two catalogs, no cross-DB transaction:
 copy is idempotent (overwrite), register is skipped when cold already has the
-row count, a failed source delete is retried as delete-only on the next cycle.
+matching row count, a failed source delete is retried as delete-only on the
+next cycle. A partial cold partition (`destination_rows != source_rows`) is
+**not** treated as complete: hot is left untouched ([#1025](https://github.com/sipcapture/homer/issues/1025)).
 
 ## When native falls back to `duckdb`
 
