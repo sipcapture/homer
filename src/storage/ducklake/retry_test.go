@@ -10,6 +10,7 @@ package ducklake
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -149,5 +150,64 @@ func TestMovePartitionIdempotencySkipsInsertWhenDestinationHasRows(t *testing.T)
 	locker := tsm.hotCatalogLocker(&Volume{LakeName: "lake_hot"})
 	if locker == nil {
 		t.Fatal("hot locker should be set for primary source volume")
+	}
+}
+
+func TestPartitionMovePlan(t *testing.T) {
+	cases := []struct {
+		name      string
+		src       int64
+		dst       int64
+		want      partitionMoveAction
+		wantErr   bool
+		errSubstr string
+	}{
+		{name: "empty both is noop", src: 0, dst: 0, want: partitionMoveNone},
+		{name: "source empty dest present is noop", src: 0, dst: 10, want: partitionMoveNone},
+		{name: "empty dest copies", src: 100, dst: 0, want: partitionMoveCopy},
+		{name: "matching dest is delete-only retry", src: 100, dst: 100, want: partitionMoveDeleteSourceOnly},
+		{
+			name:      "partial dest refuses source delete",
+			src:       7293773,
+			dst:       47046,
+			want:      partitionMoveNone,
+			wantErr:   true,
+			errSubstr: "destination partition is incomplete",
+		},
+		{
+			name:      "default table partial dest refuses source delete",
+			src:       171382887,
+			dst:       4187558,
+			want:      partitionMoveNone,
+			wantErr:   true,
+			errSubstr: "destination partition is incomplete",
+		},
+		{
+			name:      "dest larger than source is incomplete",
+			src:       100,
+			dst:       200,
+			want:      partitionMoveNone,
+			wantErr:   true,
+			errSubstr: "destination partition is incomplete",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := partitionMovePlan(tc.src, tc.dst)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tc.errSubstr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tc.errSubstr)
+				}
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("partitionMovePlan(%d, %d) = %v, want %v", tc.src, tc.dst, got, tc.want)
+			}
+		})
 	}
 }
