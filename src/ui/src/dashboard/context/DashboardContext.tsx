@@ -58,7 +58,7 @@ export type RequestTimeRange = (
 type EventPayload = unknown
 type EventListener = (payload: EventPayload) => void
 
-class EventBus {
+export class EventBus {
   private listeners = new Map<string, Set<EventListener>>()
   // Emits with no listener yet (e.g. a deep-link search firing before the
   // target widget has mounted/subscribed) are replayed once to the next
