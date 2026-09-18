@@ -58,13 +58,22 @@ export type RequestTimeRange = (
 type EventPayload = unknown
 type EventListener = (payload: EventPayload) => void
 
-class EventBus {
+export class EventBus {
   private listeners = new Map<string, Set<EventListener>>()
+  // Emits with no listener yet (e.g. a deep-link search firing before the
+  // target widget has mounted/subscribed) are replayed once to the next
+  // subscriber instead of being dropped.
+  private pending = new Map<string, EventPayload>()
 
   on(event: string, id: string, fn: EventListener): () => void {
     const key = `${event}:${id}`
     if (!this.listeners.has(key)) this.listeners.set(key, new Set())
     this.listeners.get(key)!.add(fn)
+    if (this.pending.has(key)) {
+      const payload = this.pending.get(key)
+      this.pending.delete(key)
+      fn(payload)
+    }
     return () => {
       this.listeners.get(key)?.delete(fn)
     }
@@ -72,7 +81,12 @@ class EventBus {
 
   emit(event: string, id: string, payload: EventPayload): void {
     const key = `${event}:${id}`
-    this.listeners.get(key)?.forEach((fn) => fn(payload))
+    const fns = this.listeners.get(key)
+    if (fns && fns.size > 0) {
+      fns.forEach((fn) => fn(payload))
+    } else {
+      this.pending.set(key, payload)
+    }
   }
 
   broadcast(event: string, payload: EventPayload): void {
