@@ -130,11 +130,11 @@ function processRTCPItems(items) {
     const payload = parsePayload(item.payload || item.raw || item.data_extra)
     if (!payload) continue
 
-    const si = payload.sender_information
-    if (!si || !si.packets || !si.octets) continue
-
     const type = payload.type ? Number(payload.type) : 0
     if (type && ![200, 201, 202, 207].includes(type)) continue
+
+    const si = payload.sender_information
+    if (type !== 201 && (!si || !si.packets || !si.octets)) continue
 
     const srcIp = item.src_ip || 'unknown'
     const dstIp = item.dst_ip || 'unknown'
@@ -167,8 +167,8 @@ function processRTCPItems(items) {
 
     allPoints.push({
       ts, streamKey: key,
-      packets: si.packets || 0,
-      octets: si.octets || 0,
+      packets: si?.packets ?? null,
+      octets: si?.octets ?? null,
       highest_seq_no: block.highest_seq_no || 0,
       ia_jitter: jitter,
       lsr: (block.lsr || 0) * 1,
@@ -341,7 +341,7 @@ function CombinedChart({ allPoints, metricKeys, colors, streams, height, chartTy
         const stream = streams.find(s => s.key === p.streamKey)
         if (!stream || !stream.enabled[mk]) return 0
         const v = p[mk]
-        return v != null && !isNaN(v) ? v : 0
+        return v != null && !isNaN(v) ? v : null
       })
       seriesData.push(data)
       const c = colors[mk] || { bg: 'rgba(100,100,100,0.5)', border: 'rgba(100,100,100,1)' }
