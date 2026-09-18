@@ -182,6 +182,138 @@ func TestRunHybridAutoModeRouting(t *testing.T) {
 	}
 }
 
+func TestRunHybridUsesStaticAuthTokenHeaderWhenConfigured(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Auth-Token") != "static-secret" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if r.Header.Get("Authorization") != "" {
+			http.Error(w, "unexpected authorization header", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"items": []map[string]any{{"id": 1}},
+				"keys":  []string{"id"},
+			},
+			"meta": map[string]any{"ok": true},
+		})
+	})
+
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	mod, err := New(&config.MCPConfig{
+		Mode:            "hybrid",
+		HomerBaseURL:    ts.URL,
+		HomerToken:      "static-secret",
+		HomerAuthHeader: "Auth-Token",
+		DefaultLimit:    100,
+		SQLDefaultLimit: 100,
+	})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	if _, err := mod.runHybrid(context.Background(), hybridArgs{QueryText: "find INVITE in the last hour", Mode: "auto"}); err != nil {
+		t.Fatalf("runHybrid structured error: %v", err)
+	}
+	if _, err := mod.runHybrid(context.Background(), hybridArgs{QueryText: "show sql INVITE in the last hour", Mode: "auto"}); err != nil {
+		t.Fatalf("runHybrid sql error: %v", err)
+	}
+}
+
+func TestPostJSONRefusesCrossHostRedirect(t *testing.T) {
+	var attackerHit bool
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attackerHit = true
+		if r.Header.Get("Auth-Token") != "" {
+			t.Errorf("Auth-Token header leaked to redirect target: %q", r.Header.Get("Auth-Token"))
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer attacker.Close()
+
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, attacker.URL+"/steal", http.StatusFound)
+	}))
+	defer primary.Close()
+
+	mod, err := New(&config.MCPConfig{
+		Mode:            "hybrid",
+		HomerBaseURL:    primary.URL,
+		HomerToken:      "static-secret",
+		HomerAuthHeader: "Auth-Token",
+		DefaultLimit:    100,
+		SQLDefaultLimit: 100,
+	})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	_, err = mod.runHybrid(context.Background(), hybridArgs{QueryText: "find INVITE in the last hour", Mode: "auto"})
+	if err == nil {
+		t.Fatal("expected runHybrid to fail when the Coordinator redirects cross-host, got nil error")
+	}
+	if attackerHit {
+		t.Fatal("expected the cross-host redirect target to never be requested")
+	}
+}
+
+func TestRunHybridDefaultsToBearerWhenAuthHeaderEmpty(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"items": []map[string]any{{"id": 1}},
+				"keys":  []string{"id"},
+			},
+			"meta": map[string]any{"ok": true},
+		})
+	})
+
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	mod, err := New(&config.MCPConfig{
+		Mode:            "hybrid",
+		HomerBaseURL:    ts.URL,
+		HomerToken:      "token",
+		DefaultLimit:    100,
+		SQLDefaultLimit: 100,
+	})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	if _, err := mod.runHybrid(context.Background(), hybridArgs{QueryText: "find INVITE in the last hour", Mode: "auto"}); err != nil {
+		t.Fatalf("runHybrid error: %v", err)
+	}
+}
+
+func TestNewTrimsHomerAuthHeader(t *testing.T) {
+	mod, err := New(&config.MCPConfig{
+		Mode:            "hybrid",
+		HomerBaseURL:    "http://127.0.0.1:8080",
+		HomerToken:      "token",
+		HomerAuthHeader: "  Auth-Token  ",
+		DefaultLimit:    100,
+		SQLDefaultLimit: 100,
+	})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	if mod.cfg.HomerAuthHeader != "Auth-Token" {
+		t.Fatalf("expected trimmed HomerAuthHeader %q, got %q", "Auth-Token", mod.cfg.HomerAuthHeader)
+	}
+}
+
 func TestParseQueryRegexOnlyWhenLLMDisabled(t *testing.T) {
 	mod := newTestModule(t)
 	if mod.llm != nil {

@@ -192,7 +192,8 @@ Add an `mcp` section to `homer-core.json`:
 | `enable` | `false` | Start MCP module on `homer` boot when modular server runs |
 | `mode` | `hybrid` | Global mode: `hybrid`, `structured`, `sql` |
 | `homer_base_url` | `http://127.0.0.1:8080` | Coordinator base URL |
-| `homer_token` | `""` | Bearer JWT used by MCP HTTP calls (required) |
+| `homer_token` | `""` | Secret sent to the Coordinator (required). Sent as `Authorization: Bearer <token>` by default, or via the header named in `homer_auth_header` (raw, no prefix) when set. |
+| `homer_auth_header` | `""` | Header name (e.g. `Auth-Token`) to send `homer_token` as a raw static secret instead of `Authorization: Bearer`. Empty (default) preserves the Bearer-JWT behavior. |
 | `default_limit` | `100` | Default row limit for structured mode (capped at 1000) |
 | `sql_default_limit` | `100` | Default row limit for SQL mode (capped at 50000) |
 | `request_timeout_sec` | `30` | HTTP timeout to Coordinator |
@@ -456,7 +457,7 @@ See [MCP_UI_GUIDE.md](MCP_UI_GUIDE.md) for the UI-side details.
 
 ## 11. Security
 
-- All Coordinator calls go through the standard JWT path — `mcp.homer_token` should be a short-lived service token with the minimum required scope.
+- Coordinator calls authenticate with either a short-lived JWT (`Authorization: Bearer`, default) or a static Coordinator Auth-Token secret (set `mcp.homer_auth_header`, e.g. `Auth-Token`). The latter is recommended for unattended deployments, since Homer's config has no hot-reload and a 24h-default JWT would otherwise need daily rotation and a restart. See [UI_COORDINATOR_AUTH_AND_TOKENS.md](UI_COORDINATOR_AUTH_AND_TOKENS.md#static-api-tokens-auth-token) for how to create one. Regardless of mode, scope `mcp.homer_token` to the minimum required access.
 - SQL is server-side validated before execution; only `SELECT` / `WITH` against `homer_lake.main.hep_proto_1_call` are allowed (see `validateSQL` in [`src/mcp/mcp.go`](../src/mcp/mcp.go)).
 - LLM provider keys live in `mcp.llm.api_key`. Treat the config file as a secret: prefer mounting it from a secrets manager.
 - LLM output is **never** trusted as SQL. The model only emits structured filters that the Go side translates into a parameterised payload or a templated `SELECT` that goes through the same validator.
@@ -466,7 +467,8 @@ See [MCP_UI_GUIDE.md](MCP_UI_GUIDE.md) for the UI-side details.
 
 | Symptom | Likely cause / fix |
 |---------|--------------------|
-| `mcp.homer_token is required` | Set a JWT in `mcp.homer_token`. The module refuses to call the Coordinator without one. |
+| `mcp.homer_token is required` | Set a JWT (or, with `mcp.homer_auth_header` set, a static Auth-Token secret) in `mcp.homer_token`. The module refuses to call the Coordinator without one. |
+| Coordinator returns 401 despite a correct `homer_token` | If using `homer_auth_header`, confirm it matches `coordinator.api_settings.auth_token_header` (default `Auth-Token`) and that `coordinator.api_settings.enable_token_access=true`; also confirm the Auth-Token row is `active`, unexpired, and under its `limit_calls`. |
 | `mcp.homer_base_url is required` | Set `mcp.homer_base_url` to the Coordinator URL. |
 | `parser=llm requested but mcp.llm.enable=false` | Either enable the LLM or drop the per-request `parser=llm`. |
 | `llm api error 401` | Wrong / missing `api_key` for the provider. Ollama-style local servers need `api_key=""`. |

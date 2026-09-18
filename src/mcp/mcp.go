@@ -135,11 +135,13 @@ func New(cfg *config.MCPConfig) (*Module, error) {
 	}
 	cfg.Mode = mode
 	cfg.HomerBaseURL = strings.TrimRight(baseURL, "/")
+	cfg.HomerAuthHeader = strings.TrimSpace(cfg.HomerAuthHeader)
 
 	m := &Module{
 		cfg: cfg,
 		httpClient: &http.Client{
-			Timeout: time.Duration(cfg.RequestTimeoutSec) * time.Second,
+			Timeout:       time.Duration(cfg.RequestTimeoutSec) * time.Second,
+			CheckRedirect: refuseCrossHostRedirect,
 		},
 		llm: NewLLMClient(&cfg.LLM),
 	}
@@ -493,6 +495,20 @@ func mergeMeta(apiMeta map[string]any, p parserMeta) map[string]any {
 	return out
 }
 
+// refuseCrossHostRedirect stops http.Client from following a redirect to a
+// different host. Go's stdlib strips Authorization on a cross-host redirect
+// but NOT a custom header like homer_auth_header, so a static long-lived
+// secret would otherwise leak to whatever host a 3xx response points at.
+func refuseCrossHostRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) == 0 {
+		return nil
+	}
+	if req.URL.Host != via[0].URL.Host {
+		return fmt.Errorf("refusing redirect from %s to a different host %s", via[0].URL.Host, req.URL.Host)
+	}
+	return nil
+}
+
 func (m *Module) postJSON(ctx context.Context, endpoint string, body any, out any) error {
 	token := strings.TrimSpace(m.cfg.HomerToken)
 	if token == "" {
@@ -509,7 +525,11 @@ func (m *Module) postJSON(ctx context.Context, endpoint string, body any, out an
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	if m.cfg.HomerAuthHeader != "" {
+		req.Header.Set(m.cfg.HomerAuthHeader, token)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := m.httpClient.Do(req)
 	if err != nil {
