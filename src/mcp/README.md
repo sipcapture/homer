@@ -28,6 +28,7 @@ Configure in `homer-core.json` under `mcp`:
     "mode": "hybrid",
     "homer_base_url": "http://127.0.0.1:8080",
     "homer_token": "replace-with-jwt",
+    "homer_auth_header": "",
     "default_limit": 100,
     "sql_default_limit": 100,
     "request_timeout_sec": 30,
@@ -46,6 +47,8 @@ Configure in `homer-core.json` under `mcp`:
 ```
 
 When `llm.enable=false` (default) the module behaves exactly as the regex-only build — zero external dependencies.
+
+`homer_token` is sent as `Authorization: Bearer <token>` by default. Set `homer_auth_header` (e.g. `Auth-Token`) to send it as a raw static secret via that header instead — useful for unattended deployments, since Homer's config has no hot-reload and a short-lived JWT would otherwise need daily rotation and a restart. See [docs/MCP.md § Security](../../docs/MCP.md#11-security).
 
 ### Example: OpenAI
 

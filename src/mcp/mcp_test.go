@@ -225,6 +225,43 @@ func TestRunHybridUsesStaticAuthTokenHeaderWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestPostJSONRefusesCrossHostRedirect(t *testing.T) {
+	var attackerHit bool
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attackerHit = true
+		if r.Header.Get("Auth-Token") != "" {
+			t.Errorf("Auth-Token header leaked to redirect target: %q", r.Header.Get("Auth-Token"))
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer attacker.Close()
+
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, attacker.URL+"/steal", http.StatusFound)
+	}))
+	defer primary.Close()
+
+	mod, err := New(&config.MCPConfig{
+		Mode:            "hybrid",
+		HomerBaseURL:    primary.URL,
+		HomerToken:      "static-secret",
+		HomerAuthHeader: "Auth-Token",
+		DefaultLimit:    100,
+		SQLDefaultLimit: 100,
+	})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	_, err = mod.runHybrid(context.Background(), hybridArgs{QueryText: "find INVITE in the last hour", Mode: "auto"})
+	if err == nil {
+		t.Fatal("expected runHybrid to fail when the Coordinator redirects cross-host, got nil error")
+	}
+	if attackerHit {
+		t.Fatal("expected the cross-host redirect target to never be requested")
+	}
+}
+
 func TestRunHybridDefaultsToBearerWhenAuthHeaderEmpty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer token" {

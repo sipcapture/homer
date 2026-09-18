@@ -19,6 +19,7 @@ Add the `mcp` section to your `homer-core.json`:
     "mode": "hybrid",
     "homer_base_url": "http://127.0.0.1:8080",
     "homer_token": "replace-with-jwt-token",
+    "homer_auth_header": "",
     "default_limit": 100,
     "sql_default_limit": 100,
     "request_timeout_sec": 30,
@@ -41,7 +42,8 @@ Add the `mcp` section to your `homer-core.json`:
 - `enable` - Enables the MCP module at server startup.
 - `mode` - Global mode policy: `hybrid`, `structured`, or `sql`.
 - `homer_base_url` - Base URL for coordinator API calls.
-- `homer_token` - Bearer JWT token used by MCP HTTP calls.
+- `homer_token` - Secret used by MCP HTTP calls. Sent as `Authorization: Bearer <token>` by default, or via the header named in `homer_auth_header` (raw, no prefix) when set.
+- `homer_auth_header` - Header name (e.g. `Auth-Token`) to send `homer_token` as a static secret instead of a Bearer JWT — avoids daily token rotation since Homer's config has no hot-reload. Empty (default) preserves the Bearer-JWT behavior. See [MCP.md § Security](MCP.md#11-security).
 - `default_limit` - Default row limit for structured mode.
 - `sql_default_limit` - Default row limit for SQL mode.
 - `request_timeout_sec` - HTTP timeout for MCP backend calls.
@@ -192,7 +194,7 @@ Notes:
 
 - SQL queries are validated server-side before execution.
 - Dangerous SQL operations are blocked by validator rules.
-- Use short-lived token for `mcp.homer_token` when possible.
+- Use short-lived token for `mcp.homer_token` when possible; for unattended deployments where daily rotation isn't practical, use `mcp.homer_auth_header` with a static, revocable Coordinator Auth-Token instead.
 
 ## 7. Troubleshooting
 
