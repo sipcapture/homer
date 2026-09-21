@@ -1,13 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import QosPanel from './QosPanel'
 
-const uplot = vi.hoisted(() => ({ charts: [] as { opts: { series: { label: string }[] }; data: (number | null)[][] }[] }))
+interface ChartCapture {
+  opts: {
+    series: { label: string; scale?: string }[]
+    axes?: { scale?: string; side?: number }[]
+  }
+  data: (number | null)[][]
+}
+
+const uplot = vi.hoisted(() => ({ charts: [] as ChartCapture[] }))
 
 vi.mock('uplot', () => {
   class FakeUPlot {
     static paths = { linear: () => () => {}, bars: () => () => {} }
-    constructor(opts: { series: { label: string }[] }, data: (number | null)[][]) {
+    constructor(opts: ChartCapture['opts'], data: (number | null)[][]) {
       uplot.charts.push({ opts, data })
     }
     setSize() {}
@@ -126,5 +134,47 @@ describe('QosPanel RTCP tab', () => {
     render(<QosPanel qosData={qosData([item({ ...receiverReport, type: 203 })])} timeZone="UTC" />)
 
     expect(screen.getByText(/No QoS data available/)).toBeInTheDocument()
+  })
+
+  it('leaves lsr off the shared Y axis by default', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 800 })
+    uplot.charts.length = 0
+
+    render(<QosPanel qosData={qosData([item(receiverReport)])} timeZone="UTC" />)
+
+    expect(screen.getByRole('checkbox', { name: 'lsr' })).not.toBeChecked()
+    await waitFor(() => expect(uplot.charts.length).toBeGreaterThan(0))
+    expect(seriesFor('lsr')).toBeUndefined()
+    expect(seriesFor('ia_jitter')).toEqual([31])
+
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 0 })
+  })
+
+  it('plots lsr on a separate right-hand scale when enabled', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 800 })
+    uplot.charts.length = 0
+
+    render(<QosPanel qosData={qosData([item({
+      ...receiverReport,
+      report_blocks: [{ ...receiverReport.report_blocks[0], lsr: 3_200_000_000 }],
+    })])} timeZone="UTC" />)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'lsr' }))
+    await waitFor(() => {
+      const chart = uplot.charts.at(-1)
+      expect(chart?.opts.series.some(serie => serie.label === 'lsr' && serie.scale === 'lsr')).toBe(true)
+    })
+    const chart = uplot.charts.at(-1)
+    expect(chart?.opts.axes?.some(axis => axis.scale === 'lsr' && axis.side === 1)).toBe(true)
+    expect(chart?.opts.series.find(serie => serie.label === 'ia_jitter')?.scale).toBeUndefined()
+
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 0 })
+  })
+
+  it('marks the RTCP tabs and stream legend shrink-0 so they stay reachable while scrolling', () => {
+    render(<QosPanel qosData={qosData([item(receiverReport)])} timeZone="UTC" />)
+
+    expect(screen.getByRole('tablist').closest('[data-slot="tabs"]')).toHaveClass('shrink-0')
+    expect(screen.getByRole('button', { name: 'Bar' }).closest('div.flex.items-center')).toHaveClass('shrink-0')
   })
 })
