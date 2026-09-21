@@ -366,7 +366,9 @@ level=INFO msg="TieredStorageManager: Partition expired" table=hep_proto_1_call 
 level=INFO msg="TieringService: Tiering cycle completed" partitions_moved=0 partitions_expired=4
 ```
 
-Set `max_data_age_days: 0` on the final volume to keep data indefinitely (or rely on S3 lifecycle / writer `retention_days`).
+Set `max_data_age_days: 0` on the final volume to keep data indefinitely (an external bucket lifecycle rule - e.g. Glacier after 1 year - remains a valid, backend-native way to bound it instead).
+
+Do not rely on writer `retention_days` / `retention_days_by_table` to bound a tiered volume's growth - retention enforcement only ever runs against the writer's own hot lake and has no code path to a tiered volume at all, so those settings have no effect here regardless of value. If you want the final volume's data to actually expire, set its own `max_data_age_days` to a real positive number. That value then applies uniformly to every table on that volume - there is no per-table override for a tiered volume today, so a table's own `retention_days_by_table` entry stops being meaningful once its data reaches a tiered destination.
 
 ### Physical space reclaim
 
