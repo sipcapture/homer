@@ -189,6 +189,7 @@ Notes:
 - `show sql for INVITE messages for today`
 - `find calls from src ip 10.10.0.5`
 - `find call-id abc-123 in the last hour`
+- `find cid abc-123-xyz in the last hour`
 - `find all calls in the last 15 minutes that were rejected with 608`
 - `show all calls involving 'Linphone'`
 
