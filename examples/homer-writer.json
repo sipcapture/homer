@@ -100,7 +100,7 @@
             "type": "s3",
             "path": "s3://your-bucket/homer/cold/",
             "priority": 1,
-            "max_data_age_days": 0,
+            "max_data_age_days": 30,
             "s3_region": "us-east-1",
             "s3_access_key_id": "",
             "s3_secret_access_key": "",

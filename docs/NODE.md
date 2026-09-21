@@ -340,5 +340,5 @@ See examples in the `examples/` directory:
 
 - `homer-node.json` - Node only (read-only)
 - `homer-writer.json` - Ingest + Storage + Node (combined)
-- `homer-writer-rustfs.json` - Ingest + Storage + Node with S3 (RustFS/MinIO)
+- `homer-writer-rustfs.json` - Ingest + Storage + Node with S3 (RustFS/MinIO); cold is left at `max_data_age_days: 0` intentionally for this local demo - see [RETENTION.md](RETENTION.md) for what that value means on a tiered volume
 - `homer.json` - All-in-one (Ingest + Storage + Node + Coordinator)

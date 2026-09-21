@@ -152,8 +152,8 @@ Example on `2026-07-22`: hot keeps partitions after `2026-07-20`; cold keeps par
 
 Also available:
 
-- **`retention_days`** on the writer compaction service (timestamp-based TTL on the writer DuckLake catalog), and/or
-- **S3 lifecycle rules** on the cold bucket (Glacier, expire after 1y, …).
+- **`retention_days`** on the writer compaction service (timestamp-based TTL on the writer DuckLake catalog) - trims only the writer's own hot lake; it never reaches a tiered destination like `cold` above, regardless of value.
+- **S3 lifecycle rules** on the cold bucket (Glacier, expire after 1y, …) - a backend-native way to bound tiered storage, independent of `max_data_age_days`.
 
 Details: [STORAGE_POLICIES.md](STORAGE_POLICIES.md).
 
@@ -185,6 +185,10 @@ When migrating from Homer 7/10, align **`retention_days`** / **`retention_days_b
 
 1. **Single-node / all-in-one:** `retention_days: 30`, compaction enabled, `check_interval_sec: 1800`.
 2. **Calls longer than REGISTERs:** keep a long default (e.g. `retention_days: 120`) and shorten high-volume tables via `retention_days_by_table` (e.g. `hep_proto_1_registration: 30`). Prefer this over different TTLs on LB backends that shard the same calls.
-3. **Hot + S3 tiering:** short `max_data_age_days` on hot (e.g. 2–7); set a positive `max_data_age_days` on cold to expire final-tier partitions, or `0` to keep cold forever (optionally trim with bucket lifecycle / writer `retention_days`). Large live moves: [NATIVE_TIER_MOVE.md](NATIVE_TIER_MOVE.md).
+3. **Hot + S3 tiering:** short `max_data_age_days` on hot (e.g. 2–7); set a positive `max_data_age_days` on cold to expire final-tier partitions, or `0` to keep cold forever.
+   - Writer `retention_days` / `retention_days_by_table` cannot trim a tiered volume - that enforcement only ever runs against the writer's own hot lake, never a tiered destination, so it has no effect on cold regardless of value. To bound cold's growth, set its own `max_data_age_days` instead; that applies uniformly across every table on that volume, not per-table.
+   - A table's `retention_days_by_table` override also stops mattering once its data ages past hot's own `max_data_age_days`: if hot is shorter than every configured retention value (as in the example above), none of them ever get a chance to match anything, even on hot.
+
+   Large live moves: [NATIVE_TIER_MOVE.md](NATIVE_TIER_MOVE.md).
 4. **Compliance / legal hold:** set `retention_days: 0` (disabled) and manage expiry outside Homer (bucket lifecycle, offline archive). Use a per-table override of `0` only when you need to disable TTL for selected tables while keeping a global default.
 For OOM or runaway file counts, see [OOM.md](OOM.md) and [INGEST_PERFORMANCE.md](INGEST_PERFORMANCE.md).
