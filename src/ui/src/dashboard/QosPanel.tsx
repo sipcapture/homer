@@ -470,7 +470,7 @@ function StatBoxes({ stats, metricKeys }) {
 
 function StreamCheckboxes({ streams, metricKeys, colors, onChange }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex shrink-0 flex-col gap-2">
       {streams.map(stream => (
         <div key={stream.key} className="border border-border bg-card px-2 py-2">
           <div className="flex flex-col gap-0.5 border-b border-border pb-1.5 font-mono text-[10px] text-foreground">
@@ -549,7 +549,7 @@ export default function QosPanel({ qosData, timeZone }) {
   const stats = computeStats(parsed.allPoints, parsed.metricKeys)
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 p-2">
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2">
       {(hasRTCP || hasRTP || hasVQRTCP) && (
         <Tabs value={subTab} onValueChange={setSubTab}>
           <TabsList variant="line" className="h-8 border-b border-border">
@@ -630,7 +630,7 @@ export default function QosPanel({ qosData, timeZone }) {
         onChange={toggleMetric}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+      <div className="flex shrink-0 flex-col gap-2">
         <StatBoxes stats={stats} metricKeys={parsed.metricKeys} />
       </div>
     </div>
