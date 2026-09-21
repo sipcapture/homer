@@ -672,6 +672,10 @@ var responseCodeNumberFirst = regexp.MustCompile(
 	`(?i)\b(\d{3}\b(?:\s*(?:,|or|and|;)\s*\b\d{3}\b)*)\s*(?:responses?|busy|reject(?:ed)?|errors?)\b`,
 )
 
+// threeDigitRun re-extracts every standalone 3-digit code from a raw
+// responseCodeKeywordFirst/responseCodeNumberFirst match.
+var threeDigitRun = regexp.MustCompile(`\b\d{3}\b`)
+
 // extractResponseCodes tries the keyword-first pattern, falls back to the
 // number-first pattern, then re-extracts every standalone 3-digit run from
 // whichever raw match it got and joins them with commas (matching the
@@ -686,7 +690,7 @@ func extractResponseCodes(queryText string) string {
 	if m == nil {
 		return ""
 	}
-	codes := regexp.MustCompile(`\b\d{3}\b`).FindAllString(m[1], -1)
+	codes := threeDigitRun.FindAllString(m[1], -1)
 	return strings.Join(codes, ",")
 }
 
