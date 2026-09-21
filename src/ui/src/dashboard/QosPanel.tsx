@@ -150,7 +150,7 @@ function processRTCPItems(items) {
       streamMap[key] = {
         key, sid, srcIp, dstIp, srcPort, dstPort,
         label: sid ? `${sid} · ${route}` : route,
-        enabled: { packets: true, octets: true, highest_seq_no: true, ia_jitter: true, lsr: true, mos: true, packets_lost: true, fraction_lost: true },
+        enabled: { packets: true, octets: true, highest_seq_no: true, ia_jitter: true, lsr: false, mos: true, packets_lost: true, fraction_lost: true },
       }
       streams.push(streamMap[key])
     }
@@ -336,6 +336,20 @@ function CombinedChart({ allPoints, metricKeys, colors, streams, height, chartTy
     const seriesData = [tsArr]
     const seriesOpts = [{ label: 'Time' }]
 
+    const formatY = (u, vals) => vals.map(v => {
+      if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M'
+      if (v >= 1000) return (v / 1000).toFixed(0) + 'k'
+      return v.toFixed(v < 10 ? 2 : 0)
+    })
+    const yAxis = {
+      stroke: axisStroke,
+      grid: { stroke: gridStroke, width: 1 },
+      ticks: { stroke: gridStroke, width: 1 },
+      font: '10px Inter, sans-serif',
+      size: 60,
+      values: formatY,
+    }
+
     for (const mk of enabledMetrics) {
       const data = allPoints.map(p => {
         const stream = streams.find(s => s.key === p.streamKey)
@@ -352,7 +366,25 @@ function CombinedChart({ allPoints, metricKeys, colors, streams, height, chartTy
         width: 2,
         paths: chartType === 'line' ? uPlot.paths.linear() : uPlot.paths.bars({ size: [0.7, 100] }),
         points: { show: false },
+        // lsr is an NTP timestamp in the billions; sharing the linear Y axis
+        // flattens jitter / loss / MOS onto the baseline.
+        ...(mk === 'lsr' ? { scale: 'lsr' } : {}),
       })
+    }
+
+    const axes = [
+      {
+        stroke: axisStroke,
+        grid: { stroke: gridStroke, width: 1 },
+        ticks: { stroke: gridStroke, width: 1 },
+        font: '10px Inter, sans-serif',
+        values: (u, vals) => vals.map(v => formatAxisTime(v, timeZone, locale)),
+        gap: 4,
+      },
+      yAxis,
+    ]
+    if (enabledMetrics.includes('lsr')) {
+      axes.push({ ...yAxis, scale: 'lsr', side: 1, grid: { show: false } })
     }
 
     const opts = {
@@ -361,28 +393,7 @@ function CombinedChart({ allPoints, metricKeys, colors, streams, height, chartTy
       cursor: { show: true, drag: { x: false, y: false } },
       select: { show: false },
       legend: { show: false },
-      axes: [
-        {
-          stroke: axisStroke,
-          grid: { stroke: gridStroke, width: 1 },
-          ticks: { stroke: gridStroke, width: 1 },
-          font: '10px Inter, sans-serif',
-          values: (u, vals) => vals.map(v => formatAxisTime(v, timeZone, locale)),
-          gap: 4,
-        },
-        {
-          stroke: axisStroke,
-          grid: { stroke: gridStroke, width: 1 },
-          ticks: { stroke: gridStroke, width: 1 },
-          font: '10px Inter, sans-serif',
-          size: 60,
-          values: (u, vals) => vals.map(v => {
-            if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M'
-            if (v >= 1000) return (v / 1000).toFixed(0) + 'k'
-            return v.toFixed(v < 10 ? 2 : 0)
-          }),
-        },
-      ],
+      axes,
       series: seriesOpts,
     }
 
@@ -551,8 +562,8 @@ export default function QosPanel({ qosData, timeZone }) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-y-auto p-2">
       {(hasRTCP || hasRTP || hasVQRTCP) && (
-        <Tabs value={subTab} onValueChange={setSubTab}>
-          <TabsList variant="line" className="h-8 border-b border-border">
+        <Tabs value={subTab} onValueChange={setSubTab} className="shrink-0">
+          <TabsList variant="line" className="h-8 shrink-0 border-b border-border">
             {hasRTCP && (
               <TabsTrigger value="rtcp">
                 RTCP ({(qosData?.rtcp?.data || []).length})
@@ -572,7 +583,7 @@ export default function QosPanel({ qosData, timeZone }) {
         </Tabs>
       )}
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2">
           {activeStreams.map((s, i) => (
             <span
