@@ -55,10 +55,10 @@ func settingsDBQuery(ctx context.Context, db *sql.DB, query string) ([]map[strin
 	return out, rows.Err()
 }
 
-func settingsDBExec(ctx context.Context, db *sql.DB, query string) error {
+func settingsDBExec(ctx context.Context, db *sql.DB, query string, args ...any) error {
 	if db == nil {
 		return fmt.Errorf("settings db not available")
 	}
-	_, err := db.ExecContext(ctx, query)
+	_, err := db.ExecContext(ctx, query, args...)
 	return err
 }

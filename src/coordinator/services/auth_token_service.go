@@ -215,14 +215,13 @@ func (s *AuthTokenService) Create(ctx context.Context, item AuthTokenItem) (Auth
 			 create_date, lastusage_date, expire_date, usage_calls, limit_calls, active
 		 )
 		 VALUES (
-			 '%s', '%s', '%s', '%s', '%s', '%s',
+			 '%s', '%s', '%s', '%s', ?, '%s',
 			 current_timestamp, '%s', '%s', %d, %d, %d
 		 )`,
 		escapeSQL(item.GUID),
 		escapeSQL(item.CreatorGUID),
 		escapeSQL(item.Name),
 		escapeSQL(item.Token),
-		escapeJSONData(string(item.UserObject)),
 		escapeSQL(item.IPAddress),
 		escapeSQL(item.LastUsageDate),
 		escapeSQL(item.ExpireDate),
@@ -230,7 +229,7 @@ func (s *AuthTokenService) Create(ctx context.Context, item AuthTokenItem) (Auth
 		item.LimitCalls,
 		status,
 	)
-	if err := settingsDBExec(ctx, s.db, sql); err != nil {
+	if err := settingsDBExec(ctx, s.db, sql, jsonDataParam(string(item.UserObject))); err != nil {
 		return AuthTokenItem{}, err
 	}
 	return item, nil

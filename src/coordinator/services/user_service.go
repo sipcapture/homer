@@ -409,3 +409,18 @@ func escapeJSONData(s string) string {
 	}
 	return b.String()
 }
+
+// jsonDataParam prepares a JSON/script blob for a bound (?) parameter. It
+// strips NUL and replaces invalid UTF-8 exactly like escapeJSONData, so
+// stored values stay identical.
+func jsonDataParam(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == 0 {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
