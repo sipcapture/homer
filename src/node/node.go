@@ -964,6 +964,72 @@ func sqlSplitSafeForTimestampTopN(sql, baseSQL, orderByClause, limitClause strin
 	return sqlSplitSafeShape(baseSQL, limitClause)
 }
 
+// searchBufferEnabled reports whether node reads should include rows that
+// are still in the writer's in-memory buffers. When it is off, the node
+// runs the lake statement alone. When it is on, a top-N search still keeps
+// LIMIT on that lake statement and merges buffer rows in Go.
+func (n *Node) searchBufferEnabled() bool {
+	return n != nil && n.config != nil && n.config.DuckLake.SearchBuffer
+}
+
+// sqlTopNMergeShape reports whether a search can run on the lake and on the
+// memory buffers as two statements whose rows are merged in Go.
+//
+// The lake statement keeps its own LIMIT (and ORDER BY, when present), so
+// DuckLake can stop after N rows. Wrapping the same scan in an outer
+// UNION ALL forces the lake branch to materialise every matching row first.
+// Coordinator stream searches omit ORDER BY; anything other than
+// "timestamp DESC" stays on the single combined statement.
+func sqlTopNMergeShape(baseSQL, orderByClause, limitClause string) bool {
+	if strings.TrimSpace(limitClause) == "" {
+		return false
+	}
+	order := normalizeSQLWhitespace(orderByClause)
+	if order != "" && order != "order by timestamp desc" {
+		return false
+	}
+	if sqlIsAggregateShape(baseSQL) {
+		return false
+	}
+	upper := strings.ToUpper(baseSQL)
+	selectIdx := strings.Index(upper, "SELECT")
+	fromIdx := strings.Index(upper, "FROM")
+	return selectIdx != -1 && fromIdx > selectIdx+len("SELECT")
+}
+
+// planSharedSelect chooses how a read against the writer's DuckDB runs.
+// mergeSeparately means the lake statement and the memory-buffer statement
+// are executed on their own and combined in Go. timeSlice is the long
+// unfiltered SELECT * case, which still uses the lake top-N strategy.
+func (n *Node) planSharedSelect(sql string) (plan sharedQueryPlanLog, mergeSeparately, timeSlice bool) {
+	plan = sharedQueryPlanLog{
+		mode:        "no_mem_union",
+		lakeSQL:     sql,
+		combinedSQL: sql,
+	}
+	if !n.searchBufferEnabled() {
+		return plan, false, false
+	}
+	mq := n.buildMemoryUnionQueries(sql)
+	if !mq.ok {
+		return plan, false, false
+	}
+	orderByClause, limitClause, baseSQL := extractOrderLimit(sql)
+	if mq.memSQL != "" && sqlTopNMergeShape(baseSQL, orderByClause, limitClause) {
+		plan.mode = "split_lake_and_mem"
+		plan.lakeSQL = mq.lakeSQL
+		plan.memSQL = mq.memSQL
+		plan.combinedSQL = ""
+		timeSlice = shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause)
+		return plan, true, timeSlice
+	}
+	plan.mode = "single_union"
+	plan.lakeSQL = mq.lakeSQL
+	plan.memSQL = mq.memSQL
+	plan.combinedSQL = mq.combinedSQL
+	return plan, false, false
+}
+
 func (n *Node) buildMemoryUnionQueries(sql string) memoryUnionQueries {
 	out := memoryUnionQueries{lakeSQL: sql}
 	if n.sharedDB == nil {
@@ -1089,46 +1155,39 @@ func shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause string) bool
 }
 
 func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, sql string) ([]map[string]interface{}, []string, sharedQueryPlanLog, error) {
-	plan := sharedQueryPlanLog{
-		mode:        "no_mem_union",
-		lakeSQL:     sql,
-		combinedSQL: sql,
-	}
-	mq := n.buildMemoryUnionQueries(sql)
-	if !mq.ok {
-		data, cols, err := runSelectQuery(ctx, db, sql)
+	plan, mergeSeparately, timeSlice := n.planSharedSelect(sql)
+	if !mergeSeparately {
+		query := sql
+		if plan.mode == "single_union" {
+			query = plan.combinedSQL
+		}
+		data, cols, err := runSelectQuery(ctx, db, query)
 		return data, cols, plan, err
 	}
-	orderByClause, limitClause, baseSQL := extractOrderLimit(sql)
-	// mq.memSQL is empty for the derived-table rewrite (CTE/aggregate
-	// queries); those must run as a single combined statement.
-	if mq.memSQL != "" && shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause) {
-		plan.mode = "split_lake_and_mem"
-		plan.lakeSQL = mq.lakeSQL
-		plan.memSQL = mq.memSQL
-		plan.combinedSQL = ""
-		limitN := extractSQLLimit(sql)
-		// The lake sub-query (SELECT * ORDER BY timestamp DESC LIMIT N over a long
-		// range) is what OOMs on payload-heavy SIP rows under a small memory_limit.
-		// search.lake_topn_strategy picks how to run it.
-		var lakeData []map[string]interface{}
-		var lakeCols []string
-		var err error
+	limitN := extractSQLLimit(sql)
+	var lakeData []map[string]interface{}
+	var lakeCols []string
+	var err error
+	if timeSlice {
+		// Long unfiltered SELECT * : the lake sub-query OOMs on payload-heavy
+		// SIP rows under a small memory_limit. search.lake_topn_strategy
+		// picks how to run it. Filtered and short searches skip this and keep
+		// ORDER BY / LIMIT on the lake statement.
 		switch n.lakeTopNStrategy() {
 		case lakeTopNFull:
 			plan.mode = "split_lake_and_mem:full"
-			lakeData, lakeCols, err = runSelectQuery(ctx, db, mq.lakeSQL)
+			lakeData, lakeCols, err = runSelectQuery(ctx, db, plan.lakeSQL)
 		case lakeTopNChunked:
 			plan.mode = "split_lake_and_mem:chunked"
-			if fromMs, toMs, ok := memorySplitBoundsMs(mq.lakeSQL); ok {
+			if fromMs, toMs, ok := memorySplitBoundsMs(plan.lakeSQL); ok {
 				lakeData, lakeCols, plan.lakeChunks, err = n.runLakeSplitByTime(
-					ctx, db, mq.lakeSQL, fromMs, toMs, n.lakeChunkMs(), limitN)
+					ctx, db, plan.lakeSQL, fromMs, toMs, n.lakeChunkMs(), limitN)
 			} else {
-				lakeData, lakeCols, err = runSelectQuery(ctx, db, mq.lakeSQL)
+				lakeData, lakeCols, err = runSelectQuery(ctx, db, plan.lakeSQL)
 			}
 		default: // lakeTopNStream (default)
 			plan.mode = "split_lake_and_mem:stream"
-			streamSQL := stripOrderByForStream(mq.lakeSQL)
+			streamSQL := stripOrderByForStream(plan.lakeSQL)
 			plan.lakeSQL = streamSQL
 			lakeData, lakeCols, err = runSelectQuery(ctx, db, streamSQL)
 			if err == nil {
@@ -1138,22 +1197,18 @@ func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, 
 				lakeData = sortRowsByTimestampDescLimit(lakeData, limitN)
 			}
 		}
-		if err != nil {
-			return nil, nil, plan, fmt.Errorf("lake query: %w", err)
-		}
-		memData, memCols, err := runSelectQuery(ctx, db, mq.memSQL)
-		if err != nil {
-			return nil, nil, plan, fmt.Errorf("memory query: %w", err)
-		}
-		merged, cols := mergeSelectResults(lakeData, memData, lakeCols, memCols, limitN)
-		return merged, cols, plan, nil
+	} else {
+		lakeData, lakeCols, err = runSelectQuery(ctx, db, plan.lakeSQL)
 	}
-	plan.mode = "single_union"
-	plan.lakeSQL = mq.lakeSQL
-	plan.memSQL = mq.memSQL
-	plan.combinedSQL = mq.combinedSQL
-	data, cols, err := runSelectQuery(ctx, db, mq.combinedSQL)
-	return data, cols, plan, err
+	if err != nil {
+		return nil, nil, plan, fmt.Errorf("lake query: %w", err)
+	}
+	memData, memCols, err := runSelectQuery(ctx, db, plan.memSQL)
+	if err != nil {
+		return nil, nil, plan, fmt.Errorf("memory query: %w", err)
+	}
+	merged, cols := mergeSelectResults(lakeData, memData, lakeCols, memCols, limitN)
+	return merged, cols, plan, nil
 }
 
 func (n *Node) querySelectMerged(ctx context.Context, sharedSQL string, sharedDB *sql.DB, tieredSQL string, tieredDB *sql.DB, originalSQL string) ([]map[string]interface{}, []string, error) {
@@ -1428,14 +1483,18 @@ func (n *Node) handleExec(w http.ResponseWriter, r *http.Request) {
 // prepareFlightSQLDataSQL applies node query rewrites (tiered volumes + memory union) after Grafana/sqlrewrite.
 func (n *Node) prepareFlightSQLDataSQL(q string) string {
 	q = n.rewriteQueryForVolumes(q)
+	if !n.searchBufferEnabled() {
+		return q
+	}
 	mq := n.buildMemoryUnionQueries(q)
 	if !mq.ok {
 		return q
 	}
 	orderByClause, limitClause, baseSQL := extractOrderLimit(q)
-	if shouldSplitLakeAndMem(q, baseSQL, orderByClause, limitClause) {
-		// FlightSQL prepares a single SQL statement; for wide ranges avoid
-		// the huge lake+mem UNION and keep a lake-only query.
+	if mq.memSQL != "" && sqlTopNMergeShape(baseSQL, orderByClause, limitClause) {
+		// FlightSQL prepares one statement. An outer UNION ALL with the
+		// memory buffers drops the lake LIMIT early-stop. Unflushed rows
+		// are merged in Go on the HTTP /query path.
 		return q
 	}
 	return mq.combinedSQL

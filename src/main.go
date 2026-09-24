@@ -605,6 +605,11 @@ func runServer() {
 
 		// Start Node module if enabled
 		if cfg.Node.Enable {
+			// Buffers live in the writer. The node uses the same flag only to
+			// decide whether those rows are visible, not which query plan to pick.
+			if cfg.Storage.Enable {
+				cfg.Node.DuckLake.SearchBuffer = cfg.Storage.DuckLake.SearchBuffer
+			}
 			n, err := node.New(&cfg.Node)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to create node module: %v\n", err)

@@ -388,7 +388,10 @@ func TestExtractSQLLimit(t *testing.T) {
 func defaultMemoryUnionNode() *Node {
 	return &Node{
 		config: &config.NodeConfig{
-			DuckLake: config.DuckLakeConfig{LakeName: "homer_lake"},
+			DuckLake: config.DuckLakeConfig{
+				LakeName:     "homer_lake",
+				SearchBuffer: true,
+			},
 		},
 		sharedDB: new(sql.DB),
 		volumes: []VolumeInfo{
@@ -479,6 +482,73 @@ func TestShouldSplitLakeAndMemThresholdAndFallback(t *testing.T) {
 	orderBy, limit, base = extractOrderLimit(customOrderSQL)
 	if shouldSplitLakeAndMem(customOrderSQL, base, orderBy, limit) {
 		t.Fatal("expected fallback to legacy single-UNION path for custom ORDER BY")
+	}
+}
+
+func TestPlanSharedSelect_filteredHourKeepsLakeTopN(t *testing.T) {
+	n := defaultMemoryUnionNode()
+	sqlIn := "SELECT * FROM homer_lake.main.hep_proto_1_registration WHERE timestamp >= (to_timestamp(1790164809722 / 1000.0) AT TIME ZONE 'UTC') AND timestamp <= (to_timestamp(1790168409722 / 1000.0) AT TIME ZONE 'UTC') AND dst_ip = '192.168.3.5' ORDER BY timestamp DESC LIMIT 50"
+	plan, merge, timeSlice := n.planSharedSelect(sqlIn)
+	if !merge || timeSlice {
+		t.Fatalf("filtered 1h search must merge lake and buffer without time-slicing, merge=%v timeSlice=%v", merge, timeSlice)
+	}
+	if plan.mode != "split_lake_and_mem" {
+		t.Fatalf("mode=%q", plan.mode)
+	}
+	if strings.Contains(plan.lakeSQL, "UNION ALL") || !strings.Contains(plan.lakeSQL, "ORDER BY timestamp DESC") || !strings.Contains(plan.lakeSQL, "LIMIT 50") {
+		t.Fatalf("lake SQL must keep ORDER BY LIMIT and must not union buffers: %s", plan.lakeSQL)
+	}
+	if !strings.Contains(plan.memSQL, "mem_hep_proto_1_registration_a") || !strings.Contains(plan.memSQL, "LIMIT 50") {
+		t.Fatalf("mem SQL: %s", plan.memSQL)
+	}
+}
+
+func TestPlanSharedSelect_narrowStreamLimitMergesWithoutUnion(t *testing.T) {
+	n := defaultMemoryUnionNode()
+	sqlIn := "SELECT uuid, timestamp FROM homer_lake.main.hep_proto_1_registration WHERE timestamp >= (to_timestamp(1790164809722 / 1000.0) AT TIME ZONE 'UTC') AND timestamp <= (to_timestamp(1790168409722 / 1000.0) AT TIME ZONE 'UTC') AND dst_ip = '192.168.3.5' LIMIT 50"
+	plan, merge, timeSlice := n.planSharedSelect(sqlIn)
+	if !merge || timeSlice {
+		t.Fatalf("narrow LIMIT without ORDER BY must merge, not time-slice: merge=%v timeSlice=%v mode=%s", merge, timeSlice, plan.mode)
+	}
+	if strings.Contains(plan.lakeSQL, "UNION ALL") || !strings.Contains(plan.lakeSQL, "LIMIT 50") {
+		t.Fatalf("lake SQL: %s", plan.lakeSQL)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(plan.lakeSQL), "SELECT uuid, timestamp") {
+		t.Fatalf("narrow projection must stay on the lake query: %s", plan.lakeSQL)
+	}
+}
+
+func TestPlanSharedSelect_searchBufferOffIsLakeOnly(t *testing.T) {
+	n := defaultMemoryUnionNode()
+	n.config.DuckLake.SearchBuffer = false
+	sqlIn := searchSQLWithRange(1_700_000_000_000, 1_700_003_600_000)
+	plan, merge, timeSlice := n.planSharedSelect(sqlIn)
+	if merge || timeSlice || plan.mode != "no_mem_union" {
+		t.Fatalf("search_buffer=false must skip buffers, mode=%s merge=%v timeSlice=%v", plan.mode, merge, timeSlice)
+	}
+	if strings.Contains(plan.lakeSQL, "mem_hep") || strings.Contains(plan.combinedSQL, "UNION ALL") {
+		t.Fatalf("lake-only plan still mentions buffers: %+v", plan)
+	}
+}
+
+func TestPlanSharedSelect_longUnfilteredStillTimeSlices(t *testing.T) {
+	n := defaultMemoryUnionNode()
+	sqlIn := searchSQLWithRange(1_700_000_000_000, 1_700_007_500_000)
+	_, merge, timeSlice := n.planSharedSelect(sqlIn)
+	if !merge || !timeSlice {
+		t.Fatalf("long unfiltered SELECT * must still time-slice, merge=%v timeSlice=%v", merge, timeSlice)
+	}
+}
+
+func TestPlanSharedSelect_aggregateStaysSingleUnion(t *testing.T) {
+	n := defaultMemoryUnionNode()
+	sqlIn := "SELECT count(*) FROM homer_lake.main.hep_proto_1_default WHERE date = DATE '2026-07-12'"
+	plan, merge, timeSlice := n.planSharedSelect(sqlIn)
+	if merge || timeSlice || plan.mode != "single_union" {
+		t.Fatalf("aggregate must stay a single union, mode=%s merge=%v timeSlice=%v", plan.mode, merge, timeSlice)
+	}
+	if strings.Count(plan.combinedSQL, "count(*)") != 1 {
+		t.Fatalf("combined SQL: %s", plan.combinedSQL)
 	}
 }
 
@@ -612,15 +682,25 @@ func TestValidateUserSQL_KeywordsInLiterals(t *testing.T) {
 func TestPrepareFlightSQLDataSQLUsesThresholdDecision(t *testing.T) {
 	n := defaultMemoryUnionNode()
 
-	smallRangeSQL := searchSQLWithRange(1_700_000_000_000, 1_700_003_000_000)
-	gotSmall := n.prepareFlightSQLDataSQL(smallRangeSQL)
-	if !strings.Contains(gotSmall, "mem_hep_proto_1_call_a") {
-		t.Fatalf("expected mem union for <=1h in FlightSQL rewrite, got: %s", gotSmall)
+	// FlightSQL prepares one statement, so a top-N search stays on the lake
+	// query. An outer UNION ALL with the memory buffers would drop DuckLake's
+	// LIMIT early-stop. The HTTP /query path merges buffer rows in Go.
+	for _, sql := range []string{
+		searchSQLWithRange(1_700_000_000_000, 1_700_003_000_000),
+		searchSQLWithRange(1_700_000_000_000, 1_700_007_500_000),
+	} {
+		got := n.prepareFlightSQLDataSQL(sql)
+		if strings.Contains(got, "mem_hep_proto_1_call_a") || strings.Contains(got, "UNION ALL") {
+			t.Fatalf("expected lake-only top-N for FlightSQL, got: %s", got)
+		}
+		if !strings.Contains(got, "ORDER BY timestamp DESC") || !strings.Contains(got, "LIMIT 50") {
+			t.Fatalf("expected ORDER BY and LIMIT to stay on the lake query, got: %s", got)
+		}
 	}
 
-	largeRangeSQL := searchSQLWithRange(1_700_000_000_000, 1_700_007_500_000)
-	gotLarge := n.prepareFlightSQLDataSQL(largeRangeSQL)
-	if strings.Contains(gotLarge, "mem_hep_proto_1_call_a") || strings.Contains(gotLarge, "mem_hep_proto_1_call_b") {
-		t.Fatalf("expected no mem union SQL for >1h in FlightSQL rewrite, got: %s", gotLarge)
+	agg := "SELECT count(*) FROM homer_lake.main.hep_proto_1_call WHERE date = DATE '2026-07-12'"
+	gotAgg := n.prepareFlightSQLDataSQL(agg)
+	if !strings.Contains(gotAgg, "mem_hep_proto_1_call_a") || strings.Count(gotAgg, "count(*)") != 1 {
+		t.Fatalf("expected a single aggregate over lake+buffers, got: %s", gotAgg)
 	}
 }
