@@ -331,9 +331,8 @@ func (s *LPMappingSyncService) upsertMapping(ctx context.Context, t discoveredLP
 		}
 		// UPDATE existing row, leaving other operator-curated columns
 		// (retention, partition_step, etc.) untouched.
-		q := `UPDATE mapping_schema SET fields_mapping = '` + escapeJSONData(string(fields)) + `'` +
-			` WHERE guid = '` + escapeSQL(guid) + `'`
-		if _, err := s.db.ExecContext(ctx, q); err != nil {
+		q := `UPDATE mapping_schema SET fields_mapping = ? WHERE guid = '` + escapeSQL(guid) + `'`
+		if _, err := s.db.ExecContext(ctx, q, jsonDataParam(string(fields))); err != nil {
 			return false, fmt.Errorf("update fields_mapping: %w", err)
 		}
 		return true, nil
@@ -351,11 +350,7 @@ func (s *LPMappingSyncService) upsertMapping(ctx context.Context, t discoveredLP
 		'%s', '%s', %d, '%s', 10, 1, 14, 3600,
 		'{}',
 		'%s',
-		'%s',
-		'%s',
-		'%s',
-		'%s',
-		'%s',
+		?, ?, ?, ?, ?,
 		current_timestamp
 	)`,
 		escapeSQL(guid),
@@ -363,13 +358,12 @@ func (s *LPMappingSyncService) upsertMapping(ctx context.Context, t discoveredLP
 		LPVirtualHepID,
 		escapeSQL(hepAlias),
 		escapeSQL(defaultMappingCreateTable),
-		escapeJSONData(correlationMappingEmpty),
-		escapeJSONData(string(fields)),
-		escapeJSONData("{}"),
-		escapeJSONData("{}"),
-		escapeJSONData("{}"),
 	)
-	if _, err := s.db.ExecContext(ctx, q); err != nil {
+	if _, err := s.db.ExecContext(ctx, q,
+		jsonDataParam(correlationMappingEmpty),
+		jsonDataParam(string(fields)),
+		"{}", "{}", "{}",
+	); err != nil {
 		return false, fmt.Errorf("insert lp mapping schema=%s table=%s: %w", t.Schema, t.Name, err)
 	}
 	return true, nil
