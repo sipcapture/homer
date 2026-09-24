@@ -118,16 +118,15 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, username, dashbo
 	guid := newGUID()
 	sqlInsert := fmt.Sprintf(
 		`INSERT INTO dashboard_settings (guid, username, partid, dashboard_id, data, create_date)
-		 VALUES ('%s', '%s', %d, '%s', '%s', current_timestamp)
+		 VALUES ('%s', '%s', %d, '%s', ?, current_timestamp)
 		 RETURNING guid`,
 		escapeSQL(guid),
 		escapeSQL(username),
 		10,
 		escapeSQL(dashboardID),
-		escapeJSONData(string(data)),
 	)
 	var inserted string
-	if err := s.db.QueryRowContext(ctx, sqlInsert).Scan(&inserted); err != nil {
+	if err := s.db.QueryRowContext(ctx, sqlInsert, jsonDataParam(string(data))).Scan(&inserted); err != nil {
 		return guid, err
 	}
 	if inserted != "" {
@@ -160,14 +159,13 @@ func (s *DashboardService) UpdateDashboard(ctx context.Context, username, dashbo
 	// Key by guid so a shared id like "home" cannot clobber another user's row.
 	sqlUpdate := fmt.Sprintf(
 		`UPDATE dashboard_settings
-		 SET data = '%s'
+		 SET data = ?
 		 WHERE guid = '%s'
 		 RETURNING guid`,
-		escapeJSONData(string(data)),
 		escapeSQL(target.GUID),
 	)
 	var guid string
-	if err := s.db.QueryRowContext(ctx, sqlUpdate).Scan(&guid); err != nil {
+	if err := s.db.QueryRowContext(ctx, sqlUpdate, jsonDataParam(string(data))).Scan(&guid); err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
