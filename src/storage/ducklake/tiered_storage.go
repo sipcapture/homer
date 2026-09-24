@@ -110,6 +110,10 @@ type TieredStorageManager struct {
 	// long per-object sweeps never hold the single db connection that also
 	// serves Node hot+cold reads (sipcapture/homer#1037).
 	maint maintenanceDB
+
+	// fileCleanupExec runs cleanup_old_files / delete_orphaned_files;
+	// nil means execWithRetry.
+	fileCleanupExec func(db *sql.DB, locker CatalogLocker, stmt string) error
 }
 
 // NewTieredStorageManager creates a new tiered storage manager

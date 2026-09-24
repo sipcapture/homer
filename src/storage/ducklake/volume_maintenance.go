@@ -148,12 +148,20 @@ func scheduledFileCount(db *sql.DB, lakeName string) (int64, error) {
 	return n, nil
 }
 
+func (tsm *TieredStorageManager) execFileCleanup(db *sql.DB, locker CatalogLocker, stmt string) error {
+	if tsm.fileCleanupExec != nil {
+		return tsm.fileCleanupExec(db, locker, stmt)
+	}
+	_, err := execWithRetry(db, tieringMaxRetries, tieringBaseBackoff, locker, stmt)
+	return err
+}
+
 // runFileCleanup deletes superseded files and, when due, orphaned files for vol on db.
 func (tsm *TieredStorageManager) runFileCleanup(db *sql.DB, vol *Volume, locker CatalogLocker, cleanupSQL, orphanSQL string, record func(string, error)) {
 	before, countErr := scheduledFileCount(db, vol.LakeName)
-	_, err := execWithRetry(db, tieringMaxRetries, tieringBaseBackoff, locker, cleanupSQL)
+	err := tsm.execFileCleanup(db, locker, cleanupSQL)
 	record(cleanupSQL, err)
-	if err == nil && countErr == nil && before > 0 {
+	if countErr == nil && before > 0 {
 		if after, err := scheduledFileCount(db, vol.LakeName); err == nil && after >= before {
 			logger.Warn("TieredStorageManager: cleanup_old_files did not reduce files scheduled for deletion",
 				"volume", vol.Name,
@@ -172,6 +180,5 @@ func (tsm *TieredStorageManager) runFileCleanup(db *sql.DB, vol *Volume, locker 
 	}
 	// Marked even on failure so a denied or broken sweep is not retried every cycle.
 	tsm.maint.markOrphanScan(vol, now)
-	_, err = execWithRetry(db, tieringMaxRetries, tieringBaseBackoff, locker, orphanSQL)
-	record(orphanSQL, err)
+	record(orphanSQL, tsm.execFileCleanup(db, locker, orphanSQL))
 }
