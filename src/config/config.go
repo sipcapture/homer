@@ -959,6 +959,10 @@ type AuthConfig struct {
 	// DisablePasswordLogin hides internal/LDAP password login from discovery and rejects
 	// POST /api/v4/auth/sessions (OAuth-only deployments).
 	DisablePasswordLogin bool `json:"disable_password_login,omitempty" mapstructure:"disable_password_login" default:"false"`
+	// InternalPosition orders the internal password method in GET /api/v4/auth/providers
+	// against coordinator.ldap.position; the login UI lists methods by ascending position
+	// and preselects the first. Set it above ldap.position to make LDAP the default.
+	InternalPosition int `json:"internal_position,omitempty" mapstructure:"internal_position" default:"0"`
 	// AuthFromInternalString is true when coordinator.auth was the JSON string "internal",
 	// or after normalization when type is "internal" (DuckDB bootstrap path).
 	AuthFromInternalString bool `json:"-" mapstructure:"-"`
@@ -974,8 +978,9 @@ func (a AuthConfig) MarshalJSON() ([]byte, error) {
 			AdminPasswordHash    string `json:"admin_password_hash,omitempty"`
 			FallbackAuthType     string `json:"fallback_auth_type,omitempty"`
 			DisablePasswordLogin bool   `json:"disable_password_login,omitempty"`
+			InternalPosition     int    `json:"internal_position,omitempty"`
 		}
-		o := out{Type: "internal"}
+		o := out{Type: "internal", InternalPosition: a.InternalPosition}
 		if u := strings.TrimSpace(a.AdminUser); u != "" && u != "admin" {
 			o.AdminUser = a.AdminUser
 		}
@@ -996,6 +1001,7 @@ func (a AuthConfig) MarshalJSON() ([]byte, error) {
 		AdminPasswordHash    string `json:"admin_password_hash,omitempty"`
 		FallbackAuthType     string `json:"fallback_auth_type,omitempty"`
 		DisablePasswordLogin bool   `json:"disable_password_login,omitempty"`
+		InternalPosition     int    `json:"internal_position,omitempty"`
 	}
 	return json.Marshal(out{
 		Type:                 strings.TrimSpace(a.Type),
@@ -1003,6 +1009,7 @@ func (a AuthConfig) MarshalJSON() ([]byte, error) {
 		AdminPasswordHash:    a.AdminPasswordHash,
 		FallbackAuthType:     strings.TrimSpace(a.FallbackAuthType),
 		DisablePasswordLogin: a.DisablePasswordLogin,
+		InternalPosition:     a.InternalPosition,
 	})
 }
 
@@ -1088,6 +1095,9 @@ type LDAPConfig struct {
 	GroupFilter         string   `json:"group_filter" mapstructure:"group_filter" default:"(memberUid=%s)"`
 	GroupAttribute      []string `json:"group_attributes" mapstructure:"group_attributes"`
 	UseDNForGroupSearch bool     `json:"use_dn_for_group_search" mapstructure:"use_dn_for_group_search" default:"false"`
+	// Position orders LDAP in GET /api/v4/auth/providers against
+	// coordinator.auth.internal_position (lower is listed first and preselected).
+	Position int `json:"position" mapstructure:"position" default:"1"`
 }
 
 // APISettingsConfig mirrors homer-app api_settings for static API tokens (auth_token table).
@@ -1602,6 +1612,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("coordinator.ldap.admin_mode", false)
 	v.SetDefault("coordinator.ldap.user_mode", false)
 	v.SetDefault("coordinator.ldap.use_dn_for_group_search", false)
+	v.SetDefault("coordinator.ldap.position", 1)
+	v.SetDefault("coordinator.auth.internal_position", 0)
 
 	// Coordinator Lua correlation defaults.
 	//

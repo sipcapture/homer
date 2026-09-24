@@ -27,6 +27,19 @@ If **`coordinator.auth` is omitted** entirely (no `auth` key), the loader behave
 
 Optional **`coordinator.auth.fallback_auth_type`**: **`internal`** or **`ldap`**. On **`POST /api/v4/auth/sessions`** (and legacy v3 login), if authentication with the JSON **`type`** field fails, the coordinator tries **`fallback_auth_type`** once when it differs from the first attempt. Example: UI uses LDAP first; set **`"fallback_auth_type": "internal"`** so local **`users`** can still sign in when LDAP rejects the password or LDAP is temporarily unavailable.
 
+### Default login method
+
+The login UI lists the enabled password methods by ascending **`position`** from `GET /api/v4/auth/providers` and preselects the first. Internal is **0** and LDAP **1** unless configured, so internal is the default. To make LDAP the default while keeping internal login available (for example as a break-glass admin), give internal the higher position:
+
+```json
+"coordinator": {
+  "auth": { "type": "internal", "internal_position": 2 },
+  "ldap": { "enable": true, "host": "ldap.example.org", "position": 1 }
+}
+```
+
+**`auth.type`** is not the way to do this: `"ldap"` also turns off the internal admin bootstrap.
+
 ### Recommended: `coordinator.auth` object with `type`
 
 ```json
@@ -200,6 +213,7 @@ Under the **`coordinator`** object, set **`ldap`** (see `LDAPConfig` in `src/con
 | `group_filter` | Filter with **`%s`** for group search (default `(memberUid=%s)`). |
 | `group_attributes` | LDAP attributes on group entries (default `["memberOf"]` if empty). |
 | `use_dn_for_group_search` | Use user DN instead of login name in `group_filter`. |
+| `position` | Order of LDAP in `GET /auth/providers` (default **1**), compared with **`coordinator.auth.internal_position`** (default **0**). See [Default login method](#default-login-method). |
 
 ### Minimal example (search + user bind)
 

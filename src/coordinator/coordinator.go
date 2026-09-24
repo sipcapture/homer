@@ -242,6 +242,7 @@ func (c *Coordinator) setupRoutes() {
 		strings.TrimSpace(c.config.Auth.FallbackAuthType),
 		c.config.Auth.DisablePasswordLogin,
 	)
+	authHandler.SetPasswordLoginPositions(c.config.Auth.InternalPosition, c.config.LDAP.Position)
 	usersHandler := handlers.NewUsersHandler(userService)
 	userSettingsHandler := handlers.NewUserSettingsHandler(userSettingsService, userMappingService)
 	widgetControl := config.NormalizeWidgetControl(c.config.Widgets.Control)

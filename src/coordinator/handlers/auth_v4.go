@@ -190,12 +190,12 @@ func (h *AuthHandler) V4ListProviders(c echo.Context) error {
 	passwordLogin := h.passwordLoginAllowed()
 	resp.Data.Internal.Enable = passwordLogin
 	resp.Data.Internal.Name = "internal"
-	resp.Data.Internal.Position = 0
+	resp.Data.Internal.Position = h.internalPosition
 	resp.Data.Internal.Type = "internal"
 
 	resp.Data.Ldap.Name = "LDAP"
 	resp.Data.Ldap.Type = "ldap"
-	resp.Data.Ldap.Position = 1
+	resp.Data.Ldap.Position = h.ldapPosition
 	resp.Data.Ldap.Enable = passwordLogin && h.ldapAuth != nil && h.ldapAuth.Enabled()
 
 	resp.Data.Oauth2 = make([]struct {
