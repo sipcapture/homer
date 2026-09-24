@@ -105,6 +105,11 @@ type TieredStorageManager struct {
 
 	// Primary volume for writes (lowest priority number)
 	primaryVolume *Volume
+
+	// maint is a separate DuckDB instance for object-store file cleanup, so
+	// long per-object sweeps never hold the single db connection that also
+	// serves Node hot+cold reads (sipcapture/homer#1037).
+	maint maintenanceDB
 }
 
 // NewTieredStorageManager creates a new tiered storage manager
@@ -257,10 +262,14 @@ func s3SecretSQLForVolume(vol *Volume, replace bool) string {
 }
 
 func (tsm *TieredStorageManager) createVolumeS3Secret(vol *Volume, replace bool) error {
+	return createVolumeS3SecretOn(tsm.db, vol, replace)
+}
+
+func createVolumeS3SecretOn(db *sql.DB, vol *Volume, replace bool) error {
 	secretName := s3SecretName(vol.Name)
 	if !replace {
 		dropSecret := fmt.Sprintf("DROP SECRET IF EXISTS %s;", secretName)
-		if _, err := tsm.db.Exec(dropSecret); err != nil {
+		if _, err := db.Exec(dropSecret); err != nil {
 			logger.Warn("TieredStorageManager: Failed to drop existing secret", "secret", secretName, "error", err)
 		}
 	}
@@ -277,7 +286,7 @@ func (tsm *TieredStorageManager) createVolumeS3Secret(vol *Volume, replace bool)
 			"use_ssl", vol.S3UseSSL)
 	}
 
-	if _, err := tsm.db.Exec(createSecret); err != nil {
+	if _, err := db.Exec(createSecret); err != nil {
 		return fmt.Errorf("failed to create S3 secret for volume %s (DuckDB error omitted to avoid leaking credentials)", vol.Name)
 	}
 	return nil
@@ -409,17 +418,7 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 		catalogPath = strings.TrimSuffix(catalogPath, ".sqlite") + "_" + vol.Name + ".sqlite"
 	}
 
-	// Build attach statement (SQLite catalog only)
-	overrideOpt := ""
-	if vol.OverrideDataPath {
-		overrideOpt = ", OVERRIDE_DATA_PATH TRUE"
-	}
-	attachSQL := fmt.Sprintf(
-		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE%s);",
-		catalogPath, vol.LakeName, vol.Path, overrideOpt,
-	)
-
-	if _, err := tsm.db.Exec(attachSQL); err != nil {
+	if _, err := tsm.db.Exec(volumeAttachSQL(vol, catalogPath)); err != nil {
 		return fmt.Errorf("failed to attach DuckLake for volume %s: %w", vol.Name, err)
 	}
 
@@ -432,6 +431,18 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 		"path", vol.Path)
 
 	return nil
+}
+
+// volumeAttachSQL builds the DuckLake ATTACH for a volume (SQLite catalog only).
+func volumeAttachSQL(vol *Volume, catalogPath string) string {
+	overrideOpt := ""
+	if vol.OverrideDataPath {
+		overrideOpt = ", OVERRIDE_DATA_PATH TRUE"
+	}
+	return fmt.Sprintf(
+		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE%s);",
+		catalogPath, vol.LakeName, vol.Path, overrideOpt,
+	)
 }
 
 // GetDB returns the shared database connection
@@ -858,34 +869,31 @@ func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlder
 		"snapshot_older_than_sec", snapshotOlderThanSec)
 
 	var firstErr error
-	stmts := volumeMaintenanceSQL(vol.LakeName, snapshotOlderThanSec)
-	// expire_snapshots is catalog-only. cleanup_old_files / delete_orphaned_files
-	// open every az:// object through duckdb-azure, which rebuilds the
-	// managed-identity credential per file and trips IMDS 429
-	// (sipcapture/homer#1023). Native SDK cleanup reuses one token cache.
-	nativeAzure := usesAzureNativeFileCleanup(vol)
-	if nativeAzure {
-		stmts = stmts[:1]
-	}
-	for _, stmt := range stmts {
-		if _, err := execWithRetry(
-			tsm.db,
-			tieringMaxRetries,
-			tieringBaseBackoff,
-			locker,
-			stmt,
-		); err != nil {
-			logger.Warn("TieredStorageManager: Volume maintenance step failed",
-				"volume", vol.Name,
-				"lake", vol.LakeName,
-				"sql", stmt,
-				"error", err)
-			if firstErr == nil {
-				firstErr = err
-			}
+	record := func(step string, err error) {
+		if err == nil {
+			return
+		}
+		logger.Warn("TieredStorageManager: Volume maintenance step failed",
+			"volume", vol.Name,
+			"lake", vol.LakeName,
+			"sql", step,
+			"error", err)
+		if firstErr == nil {
+			firstErr = err
 		}
 	}
-	if nativeAzure {
+
+	stmts := volumeMaintenanceSQL(vol.LakeName, snapshotOlderThanSec)
+	expireSQL, cleanupSQL, orphanSQL := stmts[0], stmts[1], stmts[2]
+	// expire_snapshots is catalog-only and stays on the tiering connection.
+	_, err := execWithRetry(tsm.db, tieringMaxRetries, tieringBaseBackoff, locker, expireSQL)
+	record(expireSQL, err)
+
+	// cleanup_old_files / delete_orphaned_files open every az:// object through
+	// duckdb-azure, which rebuilds the managed-identity credential per file and
+	// trips IMDS 429 (sipcapture/homer#1023). Native SDK cleanup reuses one token cache.
+	switch {
+	case usesAzureNativeFileCleanup(vol):
 		logger.Info("TieredStorageManager: Azure credential_chain file cleanup using native SDK",
 			"volume", vol.Name,
 			"lake", vol.LakeName,
@@ -898,16 +906,16 @@ func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlder
 			}
 			err = RunAzureNativeFileCleanup(context.Background(), tsm.db, vol.LakeName, vol.Path, volumeAzureConfig(vol))
 		}()
+		record("azure native cleanup_old_files+delete_orphaned_files", err)
+	case usesDedicatedFileCleanupDB(vol):
+		db, err := tsm.fileCleanupDB(vol)
 		if err != nil {
-			logger.Warn("TieredStorageManager: Volume maintenance step failed",
-				"volume", vol.Name,
-				"lake", vol.LakeName,
-				"sql", "azure native cleanup_old_files+delete_orphaned_files",
-				"error", err)
-			if firstErr == nil {
-				firstErr = err
-			}
+			record("open maintenance DuckDB for file cleanup", err)
+			break
 		}
+		tsm.runFileCleanup(db, vol, locker, cleanupSQL, orphanSQL, record)
+	default:
+		tsm.runFileCleanup(tsm.db, vol, locker, cleanupSQL, orphanSQL, record)
 	}
 
 	if firstErr == nil {
@@ -1063,6 +1071,7 @@ func (tsm *TieredStorageManager) Stop() error {
 	tsm.stopOnce.Do(func() {
 		close(tsm.stopChan)
 		tsm.wg.Wait()
+		tsm.maint.close()
 		if tsm.db != nil {
 			closeErr = tsm.db.Close()
 		}
