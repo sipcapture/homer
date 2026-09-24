@@ -20,7 +20,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/chzyer/readline v1.5.1
 	github.com/duckdb/duckdb-go/v2 v2.10505.0
-	github.com/emiago/sipgo v1.4.1
+	github.com/emiago/sipgo v1.4.3
 	github.com/fasthttp/websocket v1.5.12
 	github.com/gaissmai/cidrtree v0.5.0
 	github.com/gnet-io/tls v0.0.0-20240508094059-f3c43f05f76d
