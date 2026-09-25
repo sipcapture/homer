@@ -47,6 +47,10 @@ type AuthHandler struct {
 	fallbackAuthType string
 	// disablePasswordLogin is coordinator.auth.disable_password_login (OAuth-only UI/API).
 	disablePasswordLogin bool
+	// internalPosition and ldapPosition order the password methods in
+	// GET /api/v4/auth/providers (coordinator.auth.internal_position, coordinator.ldap.position).
+	internalPosition int
+	ldapPosition     int
 }
 
 // OAuthProvider represents a configured OAuth2 provider
@@ -115,7 +119,16 @@ func NewAuthHandlerWithUserService(
 		apiSettings:          apiSettings,
 		fallbackAuthType:     fallbackAuthType,
 		disablePasswordLogin: disablePasswordLogin,
+		internalPosition:     0,
+		ldapPosition:         1,
 	}
+}
+
+// SetPasswordLoginPositions sets the discovery order of the internal and LDAP
+// password methods (defaults 0 and 1). The login UI preselects the lowest.
+func (h *AuthHandler) SetPasswordLoginPositions(internal, ldap int) {
+	h.internalPosition = internal
+	h.ldapPosition = ldap
 }
 
 func (h *AuthHandler) passwordLoginAllowed() bool {

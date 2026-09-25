@@ -98,7 +98,10 @@ export function LoginPage({
     [passwordAuthMethods],
   )
 
-  const [authType, setAuthType] = useState("internal")
+  // Start unset so the effect below preselects the first enabled method, which
+  // honours the server's position order (coordinator.auth.internal_position /
+  // coordinator.ldap.position) instead of always defaulting to internal.
+  const [authType, setAuthType] = useState("")
 
   useEffect(() => {
     if (!enabledPwd.length) return

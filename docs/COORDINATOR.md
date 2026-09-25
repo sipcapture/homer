@@ -311,6 +311,7 @@ Do not use the historical password `sipcapture`; bootstrap and password updates 
 | `admin_user` | string | "admin" | Admin username when **`type`** is **`internal`** (including when `type` is omitted and normalized to internal). |
 | `admin_password_hash` | string | "" | **SHA-256 hex** for bootstrap / **`--reset-admin-password`**, or **bcrypt** when set by the setup wizard. When empty on first bootstrap, the coordinator generates a random admin password and logs it once. API user password changes use bcrypt separately. |
 | `fallback_auth_type` | string | "" | If set to **`internal`** or **`ldap`**, password login tries this backend **after** the client-selected `type` fails (wrong password or backend unavailable). Must not be **`oauth`**. Empty disables the second attempt. |
+| `internal_position` | int | 0 | Order of the internal method in **`GET /auth/providers`**, compared with **`coordinator.ldap.position`** (default 1). The login UI lists password methods by ascending position and preselects the first; set this above `ldap.position` to make LDAP the default. |
 | `disable_password_login` | bool | false | If **`true`**, hide internal/LDAP from **`GET /auth/providers`** and return **403** on **`POST /auth/sessions`**. Use with OAuth2 for IdP-only login. Env: **`HOMER_COORDINATOR_AUTH_DISABLE_PASSWORD_LOGIN`**. |
 
 ### oauth2_provider

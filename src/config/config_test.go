@@ -864,6 +864,38 @@ func TestLoad_CoordinatorAuthFallbackTypeOK(t *testing.T) {
 	}
 }
 
+func TestLoad_PasswordLoginPositionsDefault(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": { "enable": true, "ldap": { "enable": true, "host": "ldap.example" } }
+}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Coordinator.Auth.InternalPosition != 0 || cfg.Coordinator.LDAP.Position != 1 {
+		t.Fatalf("positions: internal=%d ldap=%d, want 0 and 1",
+			cfg.Coordinator.Auth.InternalPosition, cfg.Coordinator.LDAP.Position)
+	}
+}
+
+func TestLoad_PasswordLoginPositionsLDAPFirst(t *testing.T) {
+	path := writeTmpConfig(t, `{
+  "coordinator": {
+    "enable": true,
+    "auth": { "type": "internal", "internal_position": 2 },
+    "ldap": { "enable": true, "host": "ldap.example", "position": 1 }
+  }
+}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Coordinator.Auth.InternalPosition != 2 || cfg.Coordinator.LDAP.Position != 1 {
+		t.Fatalf("positions: internal=%d ldap=%d, want 2 and 1",
+			cfg.Coordinator.Auth.InternalPosition, cfg.Coordinator.LDAP.Position)
+	}
+}
+
 func TestAuthConfigMarshalJSON_Internal(t *testing.T) {
 	b, err := json.Marshal(AuthConfig{
 		AuthFromInternalString: true,

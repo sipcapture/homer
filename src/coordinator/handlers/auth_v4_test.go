@@ -11,6 +11,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
+	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
 	"github.com/sipcapture/homer-core/src/passwordhash"
 
@@ -74,6 +75,40 @@ func TestV4ListProviders_PasswordLoginEnabled(t *testing.T) {
 	}
 	if !resp.Data.Internal.Enable {
 		t.Fatal("internal should be enabled")
+	}
+}
+
+func TestV4ListProviders_PasswordLoginPositions(t *testing.T) {
+	for _, tc := range []struct {
+		name                   string
+		set                    bool
+		internal, ldap         int
+		wantInternal, wantLdap int
+	}{
+		{name: "defaults", wantInternal: 0, wantLdap: 1},
+		{name: "ldap first", set: true, internal: 2, ldap: 1, wantInternal: 2, wantLdap: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewAuthHandlerWithUserService("test-secret-minimum-32-characters-long", 24,
+				config.JWTConfig{}, nil, nil, nil, config.APISettingsConfig{}, nil, "", false)
+			if tc.set {
+				h.SetPasswordLoginPositions(tc.internal, tc.ldap)
+			}
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/api/v4/auth/providers", nil)
+			rec := httptest.NewRecorder()
+			if err := h.V4ListProviders(e.NewContext(req, rec)); err != nil {
+				t.Fatal(err)
+			}
+			var resp ProvidersResponseV4
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatal(err)
+			}
+			if resp.Data.Internal.Position != tc.wantInternal || resp.Data.Ldap.Position != tc.wantLdap {
+				t.Fatalf("positions: internal=%d ldap=%d, want %d and %d",
+					resp.Data.Internal.Position, resp.Data.Ldap.Position, tc.wantInternal, tc.wantLdap)
+			}
+		})
 	}
 }
 

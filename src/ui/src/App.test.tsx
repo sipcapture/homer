@@ -113,6 +113,39 @@ describe('App smoke/integration', () => {
     expect(screen.queryByText('Change default password')).not.toBeInTheDocument()
   })
 
+  it.each([
+    ['internal when the server lists it first', { internal: { enable: true, type: 'internal', position: 0 }, ldap: { enable: true, type: 'ldap', position: 1 } }, 'internal'],
+    ['ldap when the server lists it first', { internal: { enable: true, type: 'internal', position: 2 }, ldap: { enable: true, type: 'ldap', position: 1 } }, 'ldap'],
+  ])('preselects %s', async (_label, providers, wantType) => {
+    let sentType: unknown
+    vi.stubGlobal('fetch', vi.fn(async (url, opts: { method?: string; body?: string } = {}) => {
+      const asString = String(url)
+      if (asString.endsWith('/auth/providers')) {
+        return { ok: true, status: 200, json: async () => ({ data: providers }) }
+      }
+      if (asString.endsWith('/auth/sessions') && opts.method === 'POST') {
+        sentType = JSON.parse(String(opts.body)).type
+        return { ok: false, status: 401, json: async () => ({}) }
+      }
+      if (asString.endsWith('/me')) {
+        return { ok: false, status: 401, json: async () => ({}) }
+      }
+      return { ok: true, status: 200, json: async () => ({ data: {} }) }
+    }))
+
+    renderApp()
+    await waitFor(() => {
+      expect(screen.getByLabelText('Authentication')).toBeInTheDocument()
+    })
+    fireEvent.change(screen.getByLabelText('Login'), { target: { value: 'someone' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    await waitFor(() => {
+      expect(sentType).toBe(wantType)
+    })
+  })
+
   it('defaults to system theme and follows prefers-color-scheme when storage is empty', async () => {
     vi.stubGlobal(
       'matchMedia',
