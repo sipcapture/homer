@@ -8,6 +8,8 @@
 package config
 
 import (
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -916,5 +918,141 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 	// --- log.output ------------------------------------------------
 	if len(cfg.Log.Output) != 1 || cfg.Log.Output[0] != "stdout" {
 		t.Errorf("log.output: want [stdout], got %v", cfg.Log.Output)
+	}
+}
+
+func TestCoordinatorNodeFlightSQLTLSFromEnv(t *testing.T) {
+	for k, v := range map[string]string{
+		"HOMER_COORDINATOR_NODES_0_NAME":                  "node-a",
+		"HOMER_COORDINATOR_NODES_0_HOST":                  "10.0.0.11",
+		"HOMER_COORDINATOR_NODES_0_FLIGHTSQL_PORT":        "50055",
+		"HOMER_COORDINATOR_NODES_0_FLIGHTSQL_TLS":         "true",
+		"HOMER_COORDINATOR_NODES_0_FLIGHTSQL_CA_CERT":     "/etc/homer/ca.pem",
+		"HOMER_COORDINATOR_NODES_0_FLIGHTSQL_SERVER_NAME": "node-a.homer.svc",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_ENABLE":          "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_CERT":            "/etc/homer/tls.crt",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_KEY":             "/etc/homer/tls.key",
+	} {
+		t.Setenv(k, v)
+	}
+
+	cfg, err := Load(writeTmpConfig(t, `{}`))
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if len(cfg.Coordinator.Nodes) != 1 {
+		t.Fatalf("nodes: got %d want 1", len(cfg.Coordinator.Nodes))
+	}
+	n := cfg.Coordinator.Nodes[0]
+	if !n.FlightSQLTLS || n.UseTLS {
+		t.Errorf("FlightSQLTLS=%v UseTLS=%v, want true/false", n.FlightSQLTLS, n.UseTLS)
+	}
+	if n.FlightSQLCACert != "/etc/homer/ca.pem" {
+		t.Errorf("FlightSQLCACert: got %q", n.FlightSQLCACert)
+	}
+	if n.FlightSQLServerName != "node-a.homer.svc" {
+		t.Errorf("FlightSQLServerName: got %q", n.FlightSQLServerName)
+	}
+	fs := cfg.Node.FlightSQLServer
+	if !fs.TLSEnable || fs.TLSCert != "/etc/homer/tls.crt" || fs.TLSKey != "/etc/homer/tls.key" {
+		t.Errorf("node flightsql_server TLS: got %+v", fs)
+	}
+}
+
+func TestLoadRejectsAllInOneLocalNodeFlightSQLTLSMismatch(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOMER_COORDINATOR_SETTINGS_DB_PATH", filepath.Join(dir, "settings.duckdb"))
+	t.Setenv("HOMER_NODE_DUCKLAKE_CATALOG_PATH", filepath.Join(dir, "homer_catalog.sqlite"))
+	for k, v := range map[string]string{
+		"HOMER_COORDINATOR_ENABLE":                  "true",
+		"HOMER_COORDINATOR_FLIGHTSQL_SERVER_ENABLE": "true",
+		"HOMER_NODE_ENABLE":                         "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_ENABLE":        "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_ENABLE":    "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_CERT":      "/etc/homer/tls.crt",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_KEY":       "/etc/homer/tls.key",
+	} {
+		t.Setenv(k, v)
+	}
+
+	// No coordinator.nodes set: applyDefaults auto-injects a local node
+	// pointed at 127.0.0.1, but never carries node.flightsql_server's TLS
+	// setting onto it, so the coordinator's own proxy (enabled here) would
+	// dial its local FlightSQL listener in plaintext against a TLS-only
+	// server.
+	_, err := Load(writeTmpConfig(t, `{}`))
+	if err == nil {
+		t.Fatal("expected Load to reject an all-in-one setup that dials the local FlightSQL listener in plaintext")
+	}
+	if !strings.Contains(err.Error(), "flightsql_tls") {
+		t.Fatalf("expected the error to name flightsql_tls, got: %v", err)
+	}
+}
+
+// The check only protects the coordinator's own FlightSQL proxy dialing
+// coordinator.nodes. If that proxy is disabled, or the coordinator itself
+// is disabled, nothing dials the local listener, so the same node-side TLS
+// settings must not block config loading (used by reset-admin-password,
+// show-config, catalog, migrate-settings, and other commands that also
+// call config.Load).
+func TestLoadAllowsLocalNodeFlightSQLTLSWhenNothingDialsIt(t *testing.T) {
+	baseEnv := map[string]string{
+		"HOMER_NODE_ENABLE":                      "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_ENABLE":     "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_ENABLE": "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_CERT":   "/etc/homer/tls.crt",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_KEY":    "/etc/homer/tls.key",
+	}
+
+	t.Run("coordinator proxy disabled", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("HOMER_COORDINATOR_SETTINGS_DB_PATH", filepath.Join(dir, "settings.duckdb"))
+		t.Setenv("HOMER_NODE_DUCKLAKE_CATALOG_PATH", filepath.Join(dir, "homer_catalog.sqlite"))
+		t.Setenv("HOMER_COORDINATOR_ENABLE", "true")
+		t.Setenv("HOMER_COORDINATOR_FLIGHTSQL_SERVER_ENABLE", "false")
+		for k, v := range baseEnv {
+			t.Setenv(k, v)
+		}
+		if _, err := Load(writeTmpConfig(t, `{}`)); err != nil {
+			t.Fatalf("Load failed even though nothing dials the local FlightSQL listener: %v", err)
+		}
+	})
+
+	t.Run("coordinator disabled", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("HOMER_COORDINATOR_SETTINGS_DB_PATH", filepath.Join(dir, "settings.duckdb"))
+		t.Setenv("HOMER_NODE_DUCKLAKE_CATALOG_PATH", filepath.Join(dir, "homer_catalog.sqlite"))
+		t.Setenv("HOMER_COORDINATOR_ENABLE", "false")
+		for k, v := range baseEnv {
+			t.Setenv(k, v)
+		}
+		if _, err := Load(writeTmpConfig(t, `{}`)); err != nil {
+			t.Fatalf("Load failed even though the coordinator is disabled: %v", err)
+		}
+	})
+}
+
+func TestLoadAllowsAllInOneLocalNodeFlightSQLTLSWhenNodeSetExplicitly(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOMER_COORDINATOR_SETTINGS_DB_PATH", filepath.Join(dir, "settings.duckdb"))
+	t.Setenv("HOMER_NODE_DUCKLAKE_CATALOG_PATH", filepath.Join(dir, "homer_catalog.sqlite"))
+	for k, v := range map[string]string{
+		"HOMER_COORDINATOR_ENABLE":                    "true",
+		"HOMER_COORDINATOR_NODES_0_NAME":              "local",
+		"HOMER_COORDINATOR_NODES_0_HOST":              "127.0.0.1",
+		"HOMER_COORDINATOR_NODES_0_PORT":              "50051",
+		"HOMER_COORDINATOR_NODES_0_FLIGHTSQL_TLS":     "true",
+		"HOMER_COORDINATOR_NODES_0_FLIGHTSQL_CA_CERT": "/etc/homer/local-ca.pem",
+		"HOMER_NODE_ENABLE":                           "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_ENABLE":          "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_ENABLE":      "true",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_CERT":        "/etc/homer/tls.crt",
+		"HOMER_NODE_FLIGHTSQL_SERVER_TLS_KEY":         "/etc/homer/tls.key",
+	} {
+		t.Setenv(k, v)
+	}
+
+	if _, err := Load(writeTmpConfig(t, `{}`)); err != nil {
+		t.Fatalf("Load failed even though the local node entry sets flightsql_tls: %v", err)
 	}
 }

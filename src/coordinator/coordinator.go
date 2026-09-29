@@ -86,7 +86,11 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 		flightService: flightService,
 	}
 	if cfg.FlightSQLServer.Enable {
-		c.fsqlProxy = newFlightSQLProxy(cfg.FlightSQLServer, cfg.Nodes, cfg.LakeName)
+		proxy, err := newFlightSQLProxy(cfg.FlightSQLServer, cfg.Nodes, cfg.LakeName)
+		if err != nil {
+			return nil, err
+		}
+		c.fsqlProxy = proxy
 	}
 
 	// Open settings DuckDB
@@ -768,7 +772,7 @@ func (c *Coordinator) Start() error {
 
 	if c.fsqlProxy != nil {
 		if err := c.fsqlProxy.Start(); err != nil {
-			logger.Error(fmt.Sprintf("Coordinator: FlightSQL proxy failed to start: %v", err))
+			return fmt.Errorf("Coordinator: FlightSQL proxy failed to start: %w", err)
 		}
 	}
 

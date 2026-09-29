@@ -634,6 +634,9 @@ type FlightSQLServerConfig struct {
 	Port                      int    `json:"port" mapstructure:"port" default:"50055"`
 	AuthToken                 string `json:"auth_token" mapstructure:"auth_token" default:""`
 	CatalogRefreshIntervalSec int    `json:"catalog_refresh_interval_sec" mapstructure:"catalog_refresh_interval_sec" default:"30"`
+	TLSEnable                 bool   `json:"tls_enable" mapstructure:"tls_enable" default:"false"`
+	TLSCert                   string `json:"tls_cert" mapstructure:"tls_cert" default:""`
+	TLSKey                    string `json:"tls_key" mapstructure:"tls_key" default:""`
 }
 
 // DuckDBTuning configures DuckDB engine parameters such as the in-RAM
@@ -916,10 +919,16 @@ type NodeEndpoint struct {
 	Host string `json:"host" mapstructure:"host"`
 	Port int    `json:"port" mapstructure:"port" default:"50051"`
 	// FlightSQLPort is the node's Apache Arrow FlightSQL gRPC port (Grafana). Zero = not used by coordinator FlightSQL proxy.
-	FlightSQLPort int    `json:"flightsql_port" mapstructure:"flightsql_port" default:"0"`
-	UseTLS        bool   `json:"use_tls" mapstructure:"use_tls" default:"false"`
-	Token         string `json:"token" mapstructure:"token" default:""`
-	Priority      int    `json:"priority" mapstructure:"priority" default:"0"`
+	FlightSQLPort int  `json:"flightsql_port" mapstructure:"flightsql_port" default:"0"`
+	UseTLS        bool `json:"use_tls" mapstructure:"use_tls" default:"false"`
+	// FlightSQLTLS dials FlightSQLPort over verified TLS. Independent of UseTLS.
+	FlightSQLTLS bool `json:"flightsql_tls" mapstructure:"flightsql_tls" default:"false"`
+	// FlightSQLCACert is a PEM CA bundle for FlightSQLTLS. Empty uses the system trust store.
+	FlightSQLCACert string `json:"flightsql_ca_cert" mapstructure:"flightsql_ca_cert" default:""`
+	// FlightSQLServerName is the name verified against the node's certificate. Empty uses Host.
+	FlightSQLServerName string `json:"flightsql_server_name" mapstructure:"flightsql_server_name" default:""`
+	Token               string `json:"token" mapstructure:"token" default:""`
+	Priority            int    `json:"priority" mapstructure:"priority" default:"0"`
 }
 
 // JWTConfig configures JWT authentication
@@ -1346,6 +1355,10 @@ func Load(configPath string) (*Config, error) {
 		return nil, err
 	}
 
+	if err := validateLocalNodeFlightSQLTLS(&cfg); err != nil {
+		return nil, err
+	}
+
 	MainConfig = &cfg
 	return &cfg, nil
 }
@@ -1472,6 +1485,40 @@ func validateVolumeTypes(cfg *Config) error {
 	for i, v := range cfg.Node.DuckLake.Volumes {
 		if err := check(fmt.Sprintf("node.ducklake.volumes[%d].type", i), v.Type); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// validateLocalNodeFlightSQLTLS rejects an all-in-one setup where the local
+// node's FlightSQL listener requires TLS but the coordinator's own dial to
+// it (auto-injected or hand-written in coordinator.nodes) is not marked
+// flightsql_tls. Silently dialing plaintext into a TLS-only listener fails
+// every proxied query with an opaque "error reading server preface", so
+// this is caught at config load with a fix-it message instead. There is no
+// safe default flightsql_ca_cert / flightsql_server_name to inject here:
+// the node certificate's SAN and trust anchor are operator-chosen.
+func validateLocalNodeFlightSQLTLS(cfg *Config) error {
+	if !cfg.Node.Enable || !cfg.Node.FlightSQLServer.Enable || !cfg.Node.FlightSQLServer.TLSEnable {
+		return nil
+	}
+	// Only the coordinator's own FlightSQL proxy dials coordinator.nodes.
+	// If it's disabled, or the coordinator itself is disabled, nothing
+	// dials the local listener at all, so there's nothing to protect.
+	if !cfg.Coordinator.Enable || !cfg.Coordinator.FlightSQLServer.Enable {
+		return nil
+	}
+	for i, n := range cfg.Coordinator.Nodes {
+		if !IsLoopbackBindHost(n.Host) || n.Port != cfg.Node.FlightServer.Port || n.FlightSQLPort <= 0 {
+			continue
+		}
+		if !n.FlightSQLTLS {
+			return fmt.Errorf(
+				"coordinator.nodes[%d] (%q) dials the local node's FlightSQL listener at 127.0.0.1:%d, "+
+					"but node.flightsql_server.tls_enable is true and this node entry does not set flightsql_tls; "+
+					"set coordinator.nodes[%d].flightsql_tls=true plus flightsql_ca_cert and flightsql_server_name "+
+					"matching the node certificate's SAN, or disable node.flightsql_server.tls_enable",
+				i, n.Name, n.FlightSQLPort, i)
 		}
 	}
 	return nil
