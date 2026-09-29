@@ -93,7 +93,7 @@ Enable the proxy and tell it which gRPC port to use on each node:
 
 If `coordinator.flightsql_server.enable` is true but **no** node has `flightsql_port > 0`, the proxy will return **unavailable** for FlightSQL operations.
 
-**TLS:** today the proxy dials nodes with **insecure** gRPC credentials (same limitation as the reference stack). Terminate TLS on a reverse proxy or extend the dial path when you need mTLS.
+**TLS:** set `flightsql_tls` on a node entry to dial its `flightsql_port` over verified TLS, with `flightsql_ca_cert` and `flightsql_server_name` as needed (see [FLIGHTSQL.md](FLIGHTSQL.md#tls)). `use_tls` does not affect this dial. Client certificates (mTLS) are not supported.
 
 ---
 
@@ -103,7 +103,7 @@ If `coordinator.flightsql_server.enable` is true but **no** node has `flightsql_
 2. Choose **InfluxDB**
 3. Set **Query language** to **FlightSQL** (or the option your build labels as FlightSQL / SQL over Flight)
 4. **URL / Host**: `grpc://<host>:32010` when using the coordinator proxy, or `grpc://<node-host>:50055` for a single node
-5. **TLS**: off unless you terminate TLS elsewhere
+5. **TLS**: off unless the listener you connect to has `tls_enable` set (see [FLIGHTSQL.md](FLIGHTSQL.md#tls))
 6. **Token / API token** (or **Metadata**): set to the same value as `auth_token` on the server you connect to (coordinator proxy or node). Grafana should send it as a Bearer token compatible with homer-core’s gRPC interceptors.
 
 Save and test.

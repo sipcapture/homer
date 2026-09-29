@@ -36,7 +36,40 @@ HOMER_COORDINATOR_NODES_0_FLIGHTSQL_PORT: "50055"
 
 Publish `50055:50055/tcp` only when the process actually listens. Publishing the port without a listener makes `ss` show `LISTEN` (docker-proxy) while every FlightSQL client drops during handshake.
 
-TLS in Grafana must be **off** unless you terminate TLS in front of Homer. The listener is plaintext gRPC. Airport (`grpc://host:50051`) will not complete a FlightSQL handshake.
+Airport (`grpc://host:50051`) will not complete a FlightSQL handshake. Leave TLS off in Grafana unless the FlightSQL listener it connects to has `tls_enable` set (see [TLS](#tls)).
+
+## TLS
+
+Both FlightSQL listeners (`node.flightsql_server` and `coordinator.flightsql_server`) serve server-certificate TLS when `tls_enable` is set. Client certificates are not requested or verified.
+
+| Key | Default | Description |
+|---|---|---|
+| `tls_enable` | `false` | Serve FlightSQL gRPC over TLS |
+| `tls_cert` | `""` | PEM certificate, including any intermediates |
+| `tls_key` | `""` | PEM private key |
+
+The certificate is re-read on the next TLS handshake after either file is replaced or modified, so a renewed certificate (for example a cert-manager Secret mount) is served without a restart. If the new pair fails to load, the previous certificate stays in use and a warning is logged.
+
+The coordinator proxy dials a node's `flightsql_port` over TLS when that `coordinator.nodes[]` entry sets `flightsql_tls`:
+
+| Key | Default | Description |
+|---|---|---|
+| `flightsql_tls` | `false` | Dial `flightsql_port` over verified TLS |
+| `flightsql_ca_cert` | `""` | PEM CA bundle used to verify the node certificate. Empty uses the system trust store |
+| `flightsql_server_name` | `""` | Name verified against the node certificate. Empty uses `host` |
+
+The node certificate needs a SAN matching `flightsql_server_name`, or `host` when that is empty. If `host` is an IP address, the certificate must carry that IP as an IP SAN; otherwise set `flightsql_server_name` to one of its DNS SANs.
+
+`nodes[].use_tls` does not affect FlightSQL. It only switches the coordinator's `/stream` WebSocket to `wss`. The coordinator's `POST /query`, `/health`, and `/metadata/stats` requests to nodes are plaintext HTTP whichever flag is set.
+
+```yaml
+HOMER_NODE_FLIGHTSQL_SERVER_TLS_ENABLE: "true"
+HOMER_NODE_FLIGHTSQL_SERVER_TLS_CERT: /etc/homer/tls/tls.crt
+HOMER_NODE_FLIGHTSQL_SERVER_TLS_KEY: /etc/homer/tls/tls.key
+HOMER_COORDINATOR_NODES_0_FLIGHTSQL_TLS: "true"
+HOMER_COORDINATOR_NODES_0_FLIGHTSQL_CA_CERT: /etc/homer/tls/ca.crt
+HOMER_COORDINATOR_NODES_0_FLIGHTSQL_SERVER_NAME: node-a.example.internal
+```
 
 ## Grafana (InfluxDB datasource, FlightSQL)
 
@@ -44,7 +77,7 @@ Step-by-step datasource setup, proxy configuration, and troubleshooting: **[GRAF
 
 1. Enable `node.flightsql_server.enable` and set `auth_token` (required; Grafana uses this token, not the UI JWT).
 2. Datasource type: **InfluxDB**, version **InfluxQL** or **SQL** / **FlightSQL** per your Grafana build (use the FlightSQL / InfluxDB 3 style URL). GizmoSQL also works.
-3. URL: `grpc://<node-host>:50055` (or `grpc://<coordinator-host>:32010` when using the coordinator proxy and `flightsql_port` on each node entry). Leave TLS disabled.
+3. URL: `grpc://<node-host>:50055` (or `grpc://<coordinator-host>:32010` when using the coordinator proxy and `flightsql_port` on each node entry). Enable TLS only when that listener has `tls_enable` set; Grafana must trust its certificate, and the certificate must match the host in the URL.
 4. Add **Metadata** or **HTTP Headers** so requests include `Authorization: Bearer <token>` (Grafana field names vary by version). Username/password with the token as password is also accepted.
 
 FlightSQL is a protocol for high-performance SQL database access built on Apache Arrow Flight.

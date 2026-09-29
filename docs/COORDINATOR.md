@@ -248,8 +248,12 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
 |-----------|------|---------|-------------|
 | `name` | string | - | Node identifier |
 | `host` | string | - | Node hostname or IP |
-| `port` | int | 50051 | Node FlightSQL port |
-| `use_tls` | bool | false | Use TLS for connection |
+| `port` | int | 50051 | Node Airport (`flight_server`) port; the node HTTP API used by `POST /query` is `port + 1` |
+| `flightsql_port` | int | 0 | Node FlightSQL port dialed by the coordinator FlightSQL proxy. `0` skips the node |
+| `use_tls` | bool | false | Use `wss` for the `/stream` WebSocket. Does not encrypt `POST /query`, `/health`, or FlightSQL |
+| `flightsql_tls` | bool | false | Dial `flightsql_port` over verified TLS ([FLIGHTSQL.md](FLIGHTSQL.md#tls)) |
+| `flightsql_ca_cert` | string | "" | PEM CA bundle for `flightsql_tls`. Empty uses the system trust store |
+| `flightsql_server_name` | string | "" | Name verified against the node certificate for `flightsql_tls`. Empty uses `host` |
 | `token` | string | "" | Authentication token for node |
 | `priority` | int | 1 | Query routing priority (lower = higher priority) |
 
@@ -551,6 +555,6 @@ See examples in the `examples/` directory:
 1. **JWT secret** — Set `coordinator.jwt.secret` (or `HOMER_COORDINATOR_JWT_SECRET`) to a strong random value in production. If omitted, Homer persists **`/.homer_jwt_secret`** beside `settings_db_path` and always enforces JWT on protected routes ([SECURITY.md](./SECURITY.md)).
 2. **Admin password** — Prefer bcrypt via Users API or wizard; explicit `admin_password_hash` (SHA-256 hex) for bootstrap and `--reset-admin-password`. No default cleartext password is injected when hash is omitted.
 3. **Statistics SQL** — `POST /api/v4/statistics/query` validates `rawquery` (same rules as `/api/v4/query`).
-4. **TLS** — Enable `use_tls` for node connections in production
+4. **TLS** — Coordinator → node `POST /query` is plaintext HTTP, so keep that hop on a trusted network. `use_tls` only covers the `/stream` WebSocket; use `flightsql_tls` for the FlightSQL proxy's node dial
 5. **Network** — Restrict coordinator access via firewall/reverse proxy
 6. **OAuth2** — Use HTTPS callback URLs in production

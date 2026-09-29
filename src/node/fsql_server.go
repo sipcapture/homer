@@ -22,6 +22,7 @@ import (
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	"github.com/sipcapture/homer-core/src/fsqlauth"
+	"github.com/sipcapture/homer-core/src/fsqltls"
 	"github.com/sipcapture/homer-core/src/sqlrewrite"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"google.golang.org/grpc"
@@ -184,7 +185,15 @@ func (s *fsqlServer) Start() error {
 		return fmt.Errorf("FlightSQL server already running")
 	}
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
-	s.grpcServer = grpc.NewServer(fsqlauth.ServerOptions(s.cfg.AuthToken)...)
+	opts := fsqlauth.ServerOptions(s.cfg.AuthToken)
+	if s.cfg.TLSEnable {
+		creds, err := fsqltls.ServerCredentials(s.cfg.TLSCert, s.cfg.TLSKey)
+		if err != nil {
+			return fmt.Errorf("FlightSQL server TLS: %w", err)
+		}
+		opts = append(opts, grpc.Creds(creds))
+	}
+	s.grpcServer = grpc.NewServer(opts...)
 	flight.RegisterFlightServiceServer(s.grpcServer, flightsql.NewFlightServer(s))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -197,7 +206,11 @@ func (s *fsqlServer) Start() error {
 		if s.cfg.AuthToken != "" {
 			auth = "bearer"
 		}
-		logger.Info(fmt.Sprintf("Node: Arrow FlightSQL (Grafana) listening on %s auth=%s", addr, auth))
+		tlsStatus := "disabled"
+		if s.cfg.TLSEnable {
+			tlsStatus = "server-cert-only"
+		}
+		logger.Info(fmt.Sprintf("Node: Arrow FlightSQL (Grafana) listening on %s auth=%s tls=%s", addr, auth, tlsStatus))
 		if err := s.grpcServer.Serve(listener); err != nil {
 			logger.Error(fmt.Sprintf("Node: FlightSQL server error: %v", err))
 		}

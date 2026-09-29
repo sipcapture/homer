@@ -21,9 +21,11 @@ import (
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	"github.com/sipcapture/homer-core/src/fsqlauth"
+	"github.com/sipcapture/homer-core/src/fsqltls"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -36,6 +38,7 @@ type flightSQLProxy struct {
 
 	cfg        config.FlightSQLServerConfig
 	nodes      []config.NodeEndpoint
+	nodeCreds  map[string]credentials.TransportCredentials
 	lakeName   string
 	grpcServer *grpc.Server
 	listener   net.Listener
@@ -47,16 +50,31 @@ type flightSQLProxyTicket struct {
 	Query string `json:"q"`
 }
 
-func newFlightSQLProxy(cfg config.FlightSQLServerConfig, nodes []config.NodeEndpoint, lakeName string) *flightSQLProxy {
+func newFlightSQLProxy(cfg config.FlightSQLServerConfig, nodes []config.NodeEndpoint, lakeName string) (*flightSQLProxy, error) {
 	if lakeName == "" {
 		lakeName = "homer_lake"
 	}
-	p := &flightSQLProxy{cfg: cfg, nodes: nodes, lakeName: lakeName}
+	nodeCreds := make(map[string]credentials.TransportCredentials)
+	for _, n := range nodes {
+		if !n.FlightSQLTLS {
+			continue
+		}
+		creds, err := fsqltls.ClientCredentials(n.FlightSQLCACert, n.FlightSQLServerName)
+		if err != nil {
+			return nil, fmt.Errorf("FlightSQL node %s: %w", n.Name, err)
+		}
+		nodeCreds[flightSQLAddr(n)] = creds
+	}
+	p := &flightSQLProxy{cfg: cfg, nodes: nodes, nodeCreds: nodeCreds, lakeName: lakeName}
 	p.RegisterSqlInfo(flightsql.SqlInfoFlightSqlServerName, "homer-core-coordinator")
 	p.RegisterSqlInfo(flightsql.SqlInfoFlightSqlServerVersion, "1.0")
 	p.RegisterSqlInfo(flightsql.SqlInfoFlightSqlServerArrowVersion, "1.3")
 	p.RegisterSqlInfo(flightsql.SqlInfoFlightSqlServerReadOnly, true)
-	return p
+	return p, nil
+}
+
+func flightSQLAddr(n config.NodeEndpoint) string {
+	return fmt.Sprintf("%s:%d", n.Host, n.FlightSQLPort)
 }
 
 func (p *flightSQLProxy) GetFlightInfoCatalogs(_ context.Context, desc *flight.FlightDescriptor) (*flight.FlightInfo, error) {
@@ -214,15 +232,16 @@ func (p *flightSQLProxy) flightSQLNodes() []config.NodeEndpoint {
 }
 
 func (p *flightSQLProxy) dialNode(_ context.Context, node config.NodeEndpoint) (*flightsql.Client, error) {
-	addr := fmt.Sprintf("%s:%d", node.Host, node.FlightSQLPort)
-	var opts []grpc.DialOption
-	if node.UseTLS {
-		// TODO: add TLS credentials when needed
-		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	} else {
-		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	addr := flightSQLAddr(node)
+	creds := insecure.NewCredentials()
+	if node.FlightSQLTLS {
+		c, ok := p.nodeCreds[addr]
+		if !ok {
+			return nil, fmt.Errorf("dial node %s at %s: no TLS credentials", node.Name, addr)
+		}
+		creds = c
 	}
-	client, err := flightsql.NewClient(addr, nil, nil, opts...)
+	client, err := flightsql.NewClient(addr, nil, nil, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("dial node %s at %s: %w", node.Name, addr, err)
 	}
@@ -365,7 +384,15 @@ func (p *flightSQLProxy) Start() error {
 		return fmt.Errorf("FlightSQL proxy already running")
 	}
 	addr := fmt.Sprintf("%s:%d", p.cfg.Host, p.cfg.Port)
-	p.grpcServer = grpc.NewServer(fsqlauth.ServerOptions(p.cfg.AuthToken)...)
+	opts := fsqlauth.ServerOptions(p.cfg.AuthToken)
+	if p.cfg.TLSEnable {
+		creds, err := fsqltls.ServerCredentials(p.cfg.TLSCert, p.cfg.TLSKey)
+		if err != nil {
+			return fmt.Errorf("FlightSQL proxy TLS: %w", err)
+		}
+		opts = append(opts, grpc.Creds(creds))
+	}
+	p.grpcServer = grpc.NewServer(opts...)
 	flight.RegisterFlightServiceServer(p.grpcServer, flightsql.NewFlightServer(p))
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -379,7 +406,11 @@ func (p *flightSQLProxy) Start() error {
 		if p.cfg.AuthToken != "" {
 			auth = "bearer"
 		}
-		logger.Info(fmt.Sprintf("Coordinator: Arrow FlightSQL proxy on %s auth=%s backend_nodes=%d", addr, auth, len(fsqlNodes)))
+		tlsStatus := "disabled"
+		if p.cfg.TLSEnable {
+			tlsStatus = "server-cert-only"
+		}
+		logger.Info(fmt.Sprintf("Coordinator: Arrow FlightSQL proxy on %s auth=%s tls=%s backend_nodes=%d", addr, auth, tlsStatus, len(fsqlNodes)))
 		if err := p.grpcServer.Serve(listener); err != nil {
 			logger.Error(fmt.Sprintf("Coordinator: FlightSQL proxy error: %v", err))
 		}
