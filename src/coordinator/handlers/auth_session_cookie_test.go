@@ -175,3 +175,37 @@ func TestJWTMiddlewareV4_RejectsWhenSecretEmpty(t *testing.T) {
 		t.Fatalf("status: got %d want 500", rec.Code)
 	}
 }
+
+func TestValidateCSRFForCookieAuth_TrustsForwardedHostBehindProxy(t *testing.T) {
+	e := echo.New()
+	// Simulates a TLS-terminating reverse proxy that rewrites Host to its
+	// own upstream address (e.g. localhost:8080) but reports the original
+	// hostname via X-Forwarded-Host, and the original scheme via
+	// X-Forwarded-Proto, as Go's httputil.ReverseProxy.SetXForwarded does.
+	req := httptest.NewRequest(http.MethodPost, "/api/v4/search", nil)
+	req.Host = "localhost:8080"
+	req.Header.Set("X-Forwarded-Host", "homer.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("Origin", "https://homer.example.com")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if !validateCSRFForCookieAuth(c) {
+		t.Fatal("expected CSRF validation to pass when Origin matches X-Forwarded-Host, not the proxy-rewritten Host header")
+	}
+}
+
+func TestValidateCSRFForCookieAuth_RejectsMismatchedOrigin(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/v4/search", nil)
+	req.Host = "localhost:8080"
+	req.Header.Set("X-Forwarded-Host", "homer.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("Origin", "https://evil.example.com")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if validateCSRFForCookieAuth(c) {
+		t.Fatal("expected CSRF validation to fail for a genuinely mismatched Origin")
+	}
+}

@@ -117,7 +117,20 @@ func requestOrigin(c echo.Context) string {
 	if c.Request().TLS != nil || strings.EqualFold(c.Request().Header.Get("X-Forwarded-Proto"), "https") {
 		scheme = "https"
 	}
-	host := c.Request().Host
+	// A TLS-terminating reverse proxy in front of the coordinator (nginx,
+	// a sidecar, etc.) commonly rewrites the Host header to its own
+	// upstream address and reports the original one via X-Forwarded-Host
+	// instead. Since this scheme detection above already trusts
+	// X-Forwarded-Proto from the same request, trust X-Forwarded-Host
+	// too, or every cookie-authed mutating request behind such a proxy
+	// fails CSRF validation against an origin the browser never sent.
+	host := c.Request().Header.Get("X-Forwarded-Host")
+	if idx := strings.IndexByte(host, ','); idx >= 0 {
+		host = strings.TrimSpace(host[:idx])
+	}
+	if host == "" {
+		host = c.Request().Host
+	}
 	if host == "" {
 		host = c.Request().Header.Get("Host")
 	}
