@@ -77,8 +77,29 @@ API clients and SPAs should **exchange** the query `token` for the JWT and then 
   - **Scripts / API clients:** `Authorization: Bearer <jwt>` (unchanged).
   - **WebSocket:** cookie on the handshake when using the UI; API clients may pass `?access_token=<jwt>` (browsers cannot set `Authorization` on WS upgrade).
 - **Lifetime:** `coordinator.jwt.expire_hours` (default 24) and `coordinator.jwt.secret`. If `secret` is empty in config, Homer generates and persists **`/.homer_jwt_secret`** beside `settings_db_path` at startup ([SECURITY.md](./SECURITY.md)).
-- **Cookie settings** (`coordinator.jwt`): `cookie_enable` (default true), `cookie_name` (default `homer_session`), `cookie_same_site` (`Lax` | `Strict` | `None`), `cookie_secure` (optional; auto from TLS / `X-Forwarded-Proto`).
-- **CSRF:** Cookie-authenticated **POST/PUT/PATCH/DELETE** requests validate `Origin` / `Referer` against the request host (defense in depth with `SameSite=Lax`).
+- **Cookie settings** (`coordinator.jwt`): `cookie_enable` (default true), `cookie_name` (default `homer_session`), `cookie_same_site` (`Lax` | `Strict` | `None`), `cookie_secure` (optional; auto from TLS / `X-Forwarded-Proto`), `cookie_trusted_origins` (optional list of public UI origins, see below).
+- **CSRF:** Cookie-authenticated **POST/PUT/PATCH/DELETE** requests validate `Origin` / `Referer` against the request host (defense in depth with `SameSite=Lax`). `X-Forwarded-Host` is **not** trusted for this check: any client can set it, so it would let a cross-origin request pass.
+
+### Reverse proxy that rewrites `Host`
+
+If the proxy in front of the coordinator forwards requests with its upstream address as `Host` (for example nginx `proxy_pass` without `proxy_set_header Host $host`, or Go `httputil.ReverseProxy` with `SetURL`), the browser's `Origin: https://homer.example.com` no longer matches the request host and every cookie-authenticated search, save, or delete returns **403 `CSRF validation failed`**.
+
+Fix it in one of two ways:
+
+1. Preserve the original host at the proxy (nginx: `proxy_set_header Host $host;`). No Homer config change is needed.
+2. List the public UI origin explicitly:
+
+   ```json
+   "coordinator": {
+     "jwt": {
+       "cookie_trusted_origins": ["https://homer.example.com"]
+     }
+   }
+   ```
+
+   Environment form: `HOMER_COORDINATOR_JWT_COOKIE_TRUSTED_ORIGINS_0=https://homer.example.com`.
+
+Each entry must be `scheme://host[:port]` (no path, query, wildcard, or userinfo). Default ports are dropped (`https://h:443` equals `https://h`). An invalid entry makes the coordinator refuse to start.
 - **Logout / revocation:** JWT **`jti`** is the session id. **`DELETE /api/v4/auth/sessions/current`** revokes the caller’s session and clears the cookie (bundled UI logout). **`DELETE /api/v4/auth/sessions/{sessionId}`** revokes a specific `jti` when it matches the Bearer/cookie session.
 
 ### Why not sessionStorage only?

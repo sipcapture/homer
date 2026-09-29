@@ -191,7 +191,7 @@ func (h *AuthHandler) JWTMiddlewareV4() echo.MiddlewareFunc {
 				}
 				return writeError(c, http.StatusUnauthorized, "Unauthorized", "Invalid token")
 			}
-			if src == authSourceCookie && isMutatingHTTPMethod(c.Request().Method) && !validateCSRFForCookieAuth(c) {
+			if src == authSourceCookie && isMutatingHTTPMethod(c.Request().Method) && !h.validateCSRFForCookieAuth(c) {
 				return writeError(c, http.StatusForbidden, "Forbidden", "CSRF validation failed")
 			}
 			if claims.ID != "" && h.sessionStore != nil && h.sessionStore.IsRevoked(claims.ID) {

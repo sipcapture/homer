@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -33,6 +34,8 @@ type AuthHandler struct {
 	cookieName     string
 	cookieSameSite string
 	cookieSecure   *bool
+	// trustedOrigins holds normalized coordinator.jwt.cookie_trusted_origins.
+	trustedOrigins map[string]struct{}
 	userService    *services.UserService
 	ldapAuth       *services.LDAPAuthService
 	sessionStore   *SessionStore
@@ -101,7 +104,16 @@ func NewAuthHandlerWithUserService(
 	if cookieSameSite == "" {
 		cookieSameSite = "Lax"
 	}
+	trustedOrigins := make(map[string]struct{}, len(jwtCookie.CookieTrustedOrigins))
+	for _, o := range jwtCookie.CookieTrustedOrigins {
+		if n, err := config.NormalizeOrigin(o); err == nil {
+			trustedOrigins[n] = struct{}{}
+		} else {
+			slog.Warn("ignoring invalid coordinator.jwt.cookie_trusted_origins entry", "origin", o, "error", err)
+		}
+	}
 	return &AuthHandler{
+		trustedOrigins:       trustedOrigins,
 		jwtSecret:            secret,
 		expireHours:          expireHours,
 		cookieEnable:         cookieEnable,
@@ -340,7 +352,7 @@ func (h *AuthHandler) JWTMiddleware() echo.MiddlewareFunc {
 					"error": "Invalid token",
 				})
 			}
-			if src == authSourceCookie && isMutatingHTTPMethod(c.Request().Method) && !validateCSRFForCookieAuth(c) {
+			if src == authSourceCookie && isMutatingHTTPMethod(c.Request().Method) && !h.validateCSRFForCookieAuth(c) {
 				return c.JSON(http.StatusForbidden, map[string]interface{}{
 					"error": "CSRF validation failed",
 				})
