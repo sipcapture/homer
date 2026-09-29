@@ -944,6 +944,11 @@ type JWTConfig struct {
 	CookieSameSite string `json:"cookie_same_site,omitempty" mapstructure:"cookie_same_site"`
 	// CookieSecure forces the Secure flag; nil = auto (TLS or X-Forwarded-Proto: https).
 	CookieSecure *bool `json:"cookie_secure,omitempty" mapstructure:"cookie_secure"`
+	// CookieTrustedOrigins lists browser origins (scheme://host[:port]) accepted by
+	// the cookie-auth CSRF check in addition to the request's own origin. Set it
+	// to the public UI URL when a reverse proxy rewrites Host. X-Forwarded-Host is
+	// never trusted for this check because clients can set it.
+	CookieTrustedOrigins []string `json:"cookie_trusted_origins,omitempty" mapstructure:"cookie_trusted_origins"`
 }
 
 const (
@@ -1356,6 +1361,10 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	if err := validateLocalNodeFlightSQLTLS(&cfg); err != nil {
+		return nil, err
+	}
+
+	if err := normalizeCookieTrustedOrigins(&cfg); err != nil {
 		return nil, err
 	}
 

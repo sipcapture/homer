@@ -7,9 +7,11 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/labstack/echo/v4"
+	"github.com/sipcapture/homer-core/src/config"
 )
 
 const defaultSessionCookieName = "homer_session"
@@ -127,20 +129,43 @@ func requestOrigin(c echo.Context) string {
 	return scheme + "://" + host
 }
 
+func refererOrigin(referer string) (string, bool) {
+	u, err := url.Parse(referer)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", false
+	}
+	origin, err := config.NormalizeOrigin(u.Scheme + "://" + u.Host)
+	return origin, err == nil
+}
+
+// originAllowed reports whether a browser-supplied origin matches the request's
+// own origin or one of coordinator.jwt.cookie_trusted_origins.
+func (h *AuthHandler) originAllowed(origin, expected string) bool {
+	if strings.EqualFold(origin, expected) {
+		return true
+	}
+	if n, err := config.NormalizeOrigin(expected); err == nil && n == origin {
+		return true
+	}
+	_, ok := h.trustedOrigins[origin]
+	return ok
+}
+
 // validateCSRFForCookieAuth ensures cross-site POST/PUT/PATCH/DELETE cannot
 // ride the browser's session cookie (SameSite=Lax is the primary guard; this
 // is defense in depth for same-site subdomain issues).
-func validateCSRFForCookieAuth(c echo.Context) bool {
+func (h *AuthHandler) validateCSRFForCookieAuth(c echo.Context) bool {
 	expected := requestOrigin(c)
 	if expected == "" {
 		return true
 	}
-	if origin := strings.TrimSpace(c.Request().Header.Get("Origin")); origin != "" {
-		return strings.EqualFold(origin, expected)
+	if raw := strings.TrimSpace(c.Request().Header.Get("Origin")); raw != "" {
+		origin, err := config.NormalizeOrigin(raw)
+		return err == nil && h.originAllowed(origin, expected)
 	}
 	if referer := strings.TrimSpace(c.Request().Header.Get("Referer")); referer != "" {
-		return strings.HasPrefix(strings.ToLower(referer), strings.ToLower(expected)+"/") ||
-			strings.EqualFold(referer, expected)
+		origin, ok := refererOrigin(referer)
+		return ok && h.originAllowed(origin, expected)
 	}
 	// Same-origin navigations and some fetch clients omit both headers.
 	return true
