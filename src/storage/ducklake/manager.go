@@ -256,6 +256,12 @@ func (m *Manager) GetDB() *sql.DB {
 	return m.sharded.Primary().GetDB()
 }
 
+// OpenMaintenanceDB opens a DuckDB instance for compaction on the primary
+// shard's catalog.
+func (m *Manager) OpenMaintenanceDB(memoryLimit string) (*MaintenanceDB, error) {
+	return m.sharded.Primary().OpenMaintenanceDB(memoryLimit)
+}
+
 // GetLakeName returns the DuckLake catalog name
 func (m *Manager) GetLakeName() string {
 	return m.config.LakeName

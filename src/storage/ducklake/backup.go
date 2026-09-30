@@ -5,11 +5,14 @@
 package ducklake
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +52,40 @@ func BackupCatalog(catalogPath string, keep int) (string, error) {
 	return backupCatalog(catalogPath, "", keep)
 }
 
+// CommandRunner runs an external command and returns its combined output.
+type CommandRunner func(ctx context.Context, name string, args ...string) ([]byte, error)
+
+// ExecCommand is the default CommandRunner.
+func ExecCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+}
+
+const backupOutputPrefix = "catalog backup: "
+
+// BackupCatalogOutOfProcess runs `<exe> catalog backup` in a child process.
+// Use it for a catalog that DuckDB in this process has attached: BackupCatalog
+// would open the file with a second SQLite library (see
+// ErrCatalogAttachedInProcess), while a separate process gets correct POSIX
+// locking against the live DuckDB connection.
+func BackupCatalogOutOfProcess(ctx context.Context, exe, catalogPath string, keep int, run CommandRunner) (string, error) {
+	if strings.TrimSpace(catalogPath) == "" {
+		return "", fmt.Errorf("no catalog path")
+	}
+	if run == nil {
+		run = ExecCommand
+	}
+	out, err := run(ctx, exe, "catalog", "backup", "--catalog", catalogPath, "--keep", strconv.Itoa(keep))
+	if err != nil {
+		return "", fmt.Errorf("catalog backup child process: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if dest, ok := strings.CutPrefix(strings.TrimSpace(line), backupOutputPrefix); ok && dest != "" {
+			return dest, nil
+		}
+	}
+	return "", fmt.Errorf("catalog backup child process reported no backup path: %s", strings.TrimSpace(string(out)))
+}
+
 // BackupCatalogTo writes a consistent snapshot to dest (VACUUM INTO). dest is
 // not rotated with the `.bak-*` copies.
 func BackupCatalogTo(catalogPath, dest string) (string, error) {
@@ -65,6 +102,9 @@ func backupCatalog(catalogPath, dest string, keep int) (string, error) {
 	}
 	if _, err := os.Stat(catalogPath); err != nil {
 		return "", fmt.Errorf("stat catalog: %w", err)
+	}
+	if err := ensureCatalogNotAttached(catalogPath); err != nil {
+		return "", err
 	}
 
 	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(30000)", catalogPath)
@@ -196,6 +236,9 @@ func RestoreCatalog(catalogPath, backupPath string) (previous string, err error)
 	if strings.TrimSpace(catalogPath) == "" {
 		return "", fmt.Errorf("no catalog path")
 	}
+	if err := ensureCatalogNotAttached(catalogPath); err != nil {
+		return "", err
+	}
 	backupPath, err = resolveCatalogBackupPath(catalogPath, backupPath)
 	if err != nil {
 		return "", err
@@ -295,6 +338,9 @@ func assertCatalogIdle(catalogPath string) error {
 			return nil
 		}
 		return fmt.Errorf("stat catalog: %w", err)
+	}
+	if err := ensureCatalogNotAttached(catalogPath); err != nil {
+		return err
 	}
 	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(2000)", catalogPath)
 	db, err := sql.Open("sqlite", dsn)

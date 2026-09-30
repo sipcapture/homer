@@ -121,6 +121,9 @@ func RepairCatalogSnapshots(catalogPath string) (RepairResult, error) {
 	if _, err := os.Stat(catalogPath); os.IsNotExist(err) {
 		return res, nil // fresh catalog, nothing to repair
 	}
+	if err := ensureCatalogNotAttached(catalogPath); err != nil {
+		return res, err
+	}
 
 	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(0)", catalogPath)
 	db, err := sql.Open("sqlite", dsn)

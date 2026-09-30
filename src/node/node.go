@@ -2146,6 +2146,9 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 	if _, err := db.Exec(attachSQL); err != nil {
 		return VolumeInfo{}, fmt.Errorf("failed to attach: %w", err)
 	}
+	// Node DuckDB instances are replaced on refresh but live until process
+	// exit, so the mark is never released.
+	_ = ducklake.MarkCatalogAttached(catalogPath)
 
 	return VolumeInfo{
 		Name:     vol.Name,
