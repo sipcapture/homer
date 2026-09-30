@@ -369,7 +369,10 @@ retention on. Only that partition is skipped — every other partition still
 compacts — and it becomes eligible again once the cutoff moves past it.
 
 Additionally, each native cycle takes a `VACUUM INTO` copy of the catalog first
-(keeping the last 3 as `<catalog>.bak-<timestamp>`), and verifies afterwards that
+(keeping the last 3 as `<catalog>.bak-<timestamp>`). The copy is made by a
+`homer catalog backup` child process, never inside the running server (see
+[Catalog protection](#catalog-protection-sipcapturehomer1048)); if it fails, the
+native merge is skipped for that cycle. The cycle also verifies afterwards that
 the catalog still has exactly one latest snapshot and no duplicate `snapshot_id`.
 If that check fails the native engine **switches itself off** until the process
 restarts and falls back to the DuckDB merge. To take an extra snapshot or rewind
@@ -409,6 +412,55 @@ path and would read that component as a column the table does not have.
 ```
 
 Leaving `engine` unset (or `"duckdb"`) uses the DuckLake merge.
+
+### Catalog protection ([sipcapture/homer#1048](https://github.com/sipcapture/homer/issues/1048))
+
+Up to 11.0.355 the native engine backed up the live catalog by opening it with
+a second SQLite library inside the server process (the pure-Go driver), while
+DuckDB's sqlite extension had the same file open. POSIX advisory locks belong to
+the process, so when the second library closed its file descriptor the kernel
+dropped the locks DuckDB relied on
+([How To Corrupt An SQLite Database, §2.2](https://www.sqlite.org/howtocorrupt.html)).
+Writes then ran without mutual exclusion and damaged B-tree pages: `PRAGMA
+integrity_check` reports "2nd reference to page" and freelist errors, rows of
+one catalog table show up in another (`table_id` holding a timestamp,
+`path` holding an integer), and in the worst case the file stops being a
+database. Since 11.0.356:
+
+- **No second SQLite library on a live catalog.** In-process helpers
+  (`BackupCatalog`, auto-repair, restore) refuse a catalog that DuckDB in this
+  process has attached. The pre-merge backup runs as a `homer catalog backup
+  --catalog <path>` child process.
+- **Compaction runs on its own DuckDB instance.** Retention, merge (both
+  engines), expire and file cleanup no longer share the DuckDB instance that
+  serves ingest and search. A DuckLake internal error during a merge (for
+  example `Attempted to dereference shared_ptr that is NULL`) now invalidates
+  only the compaction instance; it is reopened before the next cycle. A table
+  whose merge invalidates DuckDB twice is left out of `merge_adjacent_files`
+  until restart. Its memory budget is `compaction.memory_limit` (default
+  `2GB`, in addition to `tuning.memory_limit`); spill files go to
+  `<temp_directory>/compaction`.
+- **Integrity checks after the merge.** Before expire/cleanup write to the
+  catalog again, compaction checks `ducklake_data_file.table_id` for
+  non-integer values and runs `PRAGMA quick_check` through the `sqlite3` CLI
+  (a separate process; skipped if `sqlite3` is not installed). On damage,
+  compaction **stops until restart** with an error, so the last good
+  `.bak-*` copies are not rotated away.
+- **One malformed row no longer blocks deletion.** Before file cleanup,
+  rows of `ducklake_files_scheduled_for_deletion` that DuckLake cannot parse
+  (non-integer `data_file_id`, empty or numeric `path`, bad `path_is_relative`,
+  unparseable `schedule_start`) are saved to
+  `<catalog>.quarantine-<timestamp>.jsonl` and removed from the queue; the
+  parquet they referenced is reclaimed by `delete_orphaned_files`.
+- **Failing cleanup is an error, not a warning.** From the third consecutive
+  failure of expire, `cleanup_old_files`, `delete_orphaned_files` or the Azure
+  native cleanup, each failure is logged at ERROR with the length of the
+  deletion queue. Counters are also in the compaction stats
+  (`maintenance_consecutive_failures`, `catalog_damage_detected`).
+
+```json
+"compaction": { "enable": true, "memory_limit": "2GB" }
+```
 
 ### Recovering a corrupted catalog
 
@@ -488,8 +540,12 @@ Invalid type in column "table_id": column was declared as integer,
 found "date=YYYY-MM-DD/ducklake-….parquet" of type "text" instead.
 ```
 
-at least one `ducklake_data_file` row has a **parquet path string stored in the
-integer `table_id` column**. Startup auto-repair **detects** this and logs an
+at least one `ducklake_data_file` row has a **non-integer value stored in the
+integer `table_id` column** — a parquet path string, or (as in
+[#1048](https://github.com/sipcapture/homer/issues/1048)) a timestamp with the
+remaining columns NULL. The latter comes from SQLite page damage; check
+`sqlite3 CATALOG 'PRAGMA integrity_check'` and prefer restoring a `.bak-*` copy
+that passes it. Startup auto-repair **detects** this and logs an
 error pointing at `--rebuild-catalog`; it does **not** rewrite those rows
 (doing so safely requires re-registering files). Confirm with:
 

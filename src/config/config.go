@@ -524,10 +524,10 @@ type CoordinatorHepStreamConfig struct {
 
 // MCPConfig configures MCP stdio server module.
 type MCPConfig struct {
-	Enable            bool         `json:"enable" mapstructure:"enable" default:"false"`
-	Mode              string       `json:"mode" mapstructure:"mode" default:"hybrid"` // hybrid|structured|sql
-	HomerBaseURL      string       `json:"homer_base_url" mapstructure:"homer_base_url" default:"http://127.0.0.1:8080"`
-	HomerToken        string       `json:"homer_token" mapstructure:"homer_token" default:""`
+	Enable       bool   `json:"enable" mapstructure:"enable" default:"false"`
+	Mode         string `json:"mode" mapstructure:"mode" default:"hybrid"` // hybrid|structured|sql
+	HomerBaseURL string `json:"homer_base_url" mapstructure:"homer_base_url" default:"http://127.0.0.1:8080"`
+	HomerToken   string `json:"homer_token" mapstructure:"homer_token" default:""`
 	// HomerAuthHeader, when non-empty, is the raw header name (e.g. "Auth-Token")
 	// used to send HomerToken as a static Coordinator Auth-Token secret instead
 	// of "Authorization: Bearer <jwt>". Empty (default) preserves the existing
@@ -853,6 +853,11 @@ type CompactionConfig struct {
 	// containing a row group above this budget are left alone instead. Expect peak
 	// RSS several times the budget. 0 = engine default (256MB).
 	MaxRowGroupBytes int64 `json:"max_row_group_bytes" mapstructure:"max_row_group_bytes" default:"0"`
+	// MemoryLimit is the DuckDB memory_limit of the dedicated compaction
+	// instance (e.g. "2GB"). Compaction runs on its own DuckDB so a fatal merge
+	// error cannot take ingest and search down; this budget is in addition to
+	// storage.ducklake.tuning.memory_limit. Empty = 2GB.
+	MemoryLimit string `json:"memory_limit" mapstructure:"memory_limit" default:""`
 }
 
 // S3Config configures S3 storage for DuckLake
