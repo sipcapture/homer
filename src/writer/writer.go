@@ -344,20 +344,7 @@ func (w *Writer) Start() error {
 	// (disabling inlining alone does not flush rows inlined earlier).
 	compactionEnable := w.storageConfig.DuckLake.Compaction.Enable || w.shouldAutoEnableCompactionForTieredHot()
 	{
-		compactionCfg := CompactionConfig{
-			Enable:                    compactionEnable,
-			CheckIntervalSec:          w.storageConfig.DuckLake.Compaction.CheckIntervalSec,
-			RetentionDays:             w.storageConfig.DuckLake.Compaction.RetentionDays,
-			RetentionDaysByTable:      w.storageConfig.DuckLake.Compaction.RetentionDaysByTable,
-			RetentionUnit:             w.storageConfig.DuckLake.Compaction.RetentionUnit,
-			SnapshotExpireIntervalSec: w.storageConfig.DuckLake.Compaction.SnapshotExpireIntervalSec,
-			MinAgeSec:                 w.storageConfig.DuckLake.Compaction.MinAgeSec,
-			MinFileSizeBytes:          w.storageConfig.DuckLake.Compaction.MinFileSizeBytes,
-			MaxFileSizeBytes:          w.storageConfig.DuckLake.Compaction.MaxFileSizeBytes,
-			MaxCompactedFiles:         w.storageConfig.DuckLake.Compaction.MaxCompactedFiles,
-			Engine:                    w.storageConfig.DuckLake.Compaction.Engine,
-			TargetFileSizeBytes:       w.storageConfig.DuckLake.Compaction.TargetFileSizeBytes,
-		}
+		compactionCfg := compactionConfigFromStorage(w.storageConfig.DuckLake.Compaction, compactionEnable)
 		if !w.storageConfig.DuckLake.Compaction.Enable && w.shouldAutoEnableCompactionForTieredHot() {
 			logger.Info("Writer: DuckLake compaction auto-enabled (tiered storage with local hot volume)",
 				"lake", w.ducklakeManager.GetLakeName())
@@ -1043,6 +1030,26 @@ func (w *Writer) startTieringService() error {
 
 	logger.Info("Writer: Tiering service started", "volumes", len(volumes))
 	return nil
+}
+
+// compactionConfigFromStorage maps storage.ducklake.compaction onto the
+// compaction service config; defaults are applied by the caller.
+func compactionConfigFromStorage(c config.CompactionConfig, enable bool) CompactionConfig {
+	return CompactionConfig{
+		Enable:                    enable,
+		CheckIntervalSec:          c.CheckIntervalSec,
+		RetentionDays:             c.RetentionDays,
+		RetentionDaysByTable:      c.RetentionDaysByTable,
+		RetentionUnit:             c.RetentionUnit,
+		SnapshotExpireIntervalSec: c.SnapshotExpireIntervalSec,
+		MinAgeSec:                 c.MinAgeSec,
+		MinFileSizeBytes:          c.MinFileSizeBytes,
+		MaxFileSizeBytes:          c.MaxFileSizeBytes,
+		MaxCompactedFiles:         c.MaxCompactedFiles,
+		Engine:                    c.Engine,
+		TargetFileSizeBytes:       c.TargetFileSizeBytes,
+		MaxRowGroupBytes:          c.MaxRowGroupBytes,
+	}
 }
 
 // shouldAutoEnableCompactionForTieredHot reports whether DuckLake compaction must
