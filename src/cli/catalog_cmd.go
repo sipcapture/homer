@@ -13,18 +13,20 @@ import (
 
 // CatalogFlags holds flags for the "homer catalog" subcommand.
 type CatalogFlags struct {
-	Action     string // backup | restore | list
-	ConfigPath string
-	Keep       int
-	Out        string
-	From       string
+	Action      string // backup | restore | list
+	ConfigPath  string
+	CatalogPath string
+	Keep        int
+	Out         string
+	From        string
 }
 
 type catalogFlagRefs struct {
-	ConfigPath *string
-	Keep       *int
-	Out        *string
-	From       *string
+	ConfigPath  *string
+	CatalogPath *string
+	Keep        *int
+	Out         *string
+	From        *string
 }
 
 // RegisterCatalogFlags creates a FlagSet for "homer catalog".
@@ -33,6 +35,7 @@ func RegisterCatalogFlags() (*flag.FlagSet, *catalogFlagRefs) {
 	refs := &catalogFlagRefs{}
 
 	refs.ConfigPath = fs.String("config-path", "", "path to config file or directory")
+	refs.CatalogPath = fs.String("catalog", "", "SQLite catalog file (overrides the catalog_path from config)")
 	refs.Keep = fs.Int("keep", ducklake.DefaultCatalogBackupKeep,
 		"rotating `.bak-*` copies to retain (backup only; 0 = keep all)")
 	refs.Out = fs.String("out", "", "write backup to this path instead of a rotating `.bak-*` copy (backup only)")
@@ -58,10 +61,11 @@ Flags:
 // ParseCatalogFlags extracts CatalogFlags from parsed flag refs.
 func ParseCatalogFlags(refs *catalogFlagRefs) CatalogFlags {
 	return CatalogFlags{
-		ConfigPath: *refs.ConfigPath,
-		Keep:       *refs.Keep,
-		Out:        *refs.Out,
-		From:       *refs.From,
+		ConfigPath:  *refs.ConfigPath,
+		CatalogPath: *refs.CatalogPath,
+		Keep:        *refs.Keep,
+		Out:         *refs.Out,
+		From:        *refs.From,
 	}
 }
 
@@ -81,6 +85,13 @@ func RunCatalogCmd(f CatalogFlags) error {
 	}
 }
 
+func catalogPathFromFlags(f CatalogFlags) (string, error) {
+	if p := strings.TrimSpace(f.CatalogPath); p != "" {
+		return p, nil
+	}
+	return catalogPathFromConfig(f.ConfigPath)
+}
+
 func catalogPathFromConfig(configPath string) (string, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -94,7 +105,7 @@ func catalogPathFromConfig(configPath string) (string, error) {
 }
 
 func runCatalogBackup(f CatalogFlags) error {
-	catalogPath, err := catalogPathFromConfig(f.ConfigPath)
+	catalogPath, err := catalogPathFromFlags(f)
 	if err != nil {
 		return err
 	}
@@ -108,12 +119,12 @@ func runCatalogBackup(f CatalogFlags) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("catalog backup: %s\n", dest)
+	fmt.Printf("catalog backup: %s\n", dest) // parsed by ducklake.BackupCatalogOutOfProcess
 	return nil
 }
 
 func runCatalogRestore(f CatalogFlags) error {
-	catalogPath, err := catalogPathFromConfig(f.ConfigPath)
+	catalogPath, err := catalogPathFromFlags(f)
 	if err != nil {
 		return err
 	}
@@ -129,7 +140,7 @@ func runCatalogRestore(f CatalogFlags) error {
 }
 
 func runCatalogList(f CatalogFlags) error {
-	catalogPath, err := catalogPathFromConfig(f.ConfigPath)
+	catalogPath, err := catalogPathFromFlags(f)
 	if err != nil {
 		return err
 	}

@@ -425,6 +425,8 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 	if _, err := tsm.db.Exec(volumeAttachSQL(vol, catalogPath)); err != nil {
 		return fmt.Errorf("failed to attach DuckLake for volume %s: %w", vol.Name, err)
 	}
+	// Tiered DuckDB instances live until process exit; the mark is never released.
+	_ = MarkCatalogAttached(catalogPath)
 
 	vol.CatalogPath = catalogPath
 

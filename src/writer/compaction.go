@@ -223,6 +223,30 @@ type CompactionService struct {
 	// while the first is still rewriting the same parquet (sipcapture/homer#945).
 	cycleRunning atomic.Bool
 
+	// backupCatalog snapshots the SQLite catalog before a native merge; nil
+	// means defaultCatalogBackup.
+	backupCatalog func(ctx context.Context, catalogPath string) (string, error)
+
+	// dbMu guards db, openDB and closeDB. openDB is set when compaction owns a
+	// dedicated DuckDB instance (UseMaintenanceDB); dbBroken marks it for
+	// reopening after a fatal error.
+	dbMu     sync.RWMutex
+	openDB   maintenanceDBOpener
+	closeDB  func() error
+	dbBroken atomic.Bool
+
+	// mergeFatals counts fatal merge errors per table (guarded by mu);
+	// mergeQuarantined holds tables left out of the DuckDB merge until restart.
+	mergeFatals      map[string]int
+	mergeQuarantined unsupportedTables
+
+	// catalogCorrupt latches when an integrity check finds catalog damage.
+	catalogCorrupt atomic.Bool
+
+	// maintenanceFailures counts consecutive failures per maintenance
+	// operation (guarded by mu).
+	maintenanceFailures map[string]int
+
 	// Stats
 	lastCompactionTime time.Time
 	totalCompactions   int64
@@ -253,11 +277,11 @@ func NewCompactionService(db *sql.DB, lakeName, dataPath, catalogPath string, co
 
 // ensureS3ClientSettings reapplies DuckDB SET s3_* before procedures that list s3://.
 func (c *CompactionService) ensureS3ClientSettings() {
-	if c == nil || c.db == nil || c.s3Client == nil {
+	if c == nil || c.database() == nil || c.s3Client == nil {
 		return
 	}
 	s := c.s3Client
-	if err := ducklake.ApplyDuckDBS3ClientSettings(c.db, s.Region, s.AccessKeyID, s.SecretAccessKey, s.Endpoint, s.UseSSL, s.URLStyle); err != nil {
+	if err := ducklake.ApplyDuckDBS3ClientSettings(c.database(), s.Region, s.AccessKeyID, s.SecretAccessKey, s.Endpoint, s.UseSSL, s.URLStyle); err != nil {
 		logger.Warn("CompactionService: ApplyDuckDBS3ClientSettings failed", "error", err)
 	}
 }
@@ -271,14 +295,14 @@ func (c *CompactionService) ensureS3ClientSettings() {
 // Standalone node recreates both Azure and S3 credential_chain secrets on
 // the same 20-minute ticker (see node.refreshCredentialChainSecrets).
 func (c *CompactionService) ensureAzureClientSettings() {
-	if c == nil || c.db == nil || c.azureClient == nil {
+	if c == nil || c.database() == nil || c.azureClient == nil {
 		return
 	}
 	a := c.azureClient
 	if !ducklake.UsesAzureCredentialChain(a.AccountKey, a.ConnectionString) {
 		return
 	}
-	if err := ducklake.EnsureWriterAzureSecret(c.db, a.AccountName, a.AccountKey, a.ConnectionString, a.Endpoint); err != nil {
+	if err := ducklake.EnsureWriterAzureSecret(c.database(), a.AccountName, a.AccountKey, a.ConnectionString, a.Endpoint); err != nil {
 		logger.Warn("CompactionService: EnsureWriterAzureSecret failed", "error", err)
 	}
 }
@@ -354,8 +378,14 @@ func (c *CompactionService) Start() error {
 	// registered in DuckLake metadata but missing on disk (typical after a
 	// force-kill during a flush). The catalog entries are deleted so that
 	// the normal merge/expire/cleanup cycle can proceed cleanly.
+	c.wg.Add(1)
 	go func() {
-		time.Sleep(5 * time.Second) // Wait for system to stabilize
+		defer c.wg.Done()
+		select { // Wait for system to stabilize
+		case <-c.ctx.Done():
+			return
+		case <-time.After(5 * time.Second):
+		}
 		logger.Info("CompactionService: Running initial compaction on startup")
 		c.withCatalogLock(c.recoverGhostFiles)
 		c.runCompaction()
@@ -372,6 +402,7 @@ func (c *CompactionService) Start() error {
 func (c *CompactionService) Stop() {
 	c.cancel()
 	c.wg.Wait()
+	c.closeMaintenanceDB()
 	logger.Info("CompactionService stopped")
 }
 
@@ -438,6 +469,9 @@ func (c *CompactionService) withCatalogLock(fn func()) {
 // inlined. Shared by the full compaction cycle (step 0) and the flush-only
 // loop used when compaction is disabled.
 func (c *CompactionService) flushInlinedData() {
+	if !c.catalogIntegrityOK() || !c.ensureDB() {
+		return
+	}
 	c.withCatalogLock(func() {
 		c.ensureS3ClientSettings()
 		c.ensureAzureClientSettings()
@@ -511,6 +545,16 @@ func (c *CompactionService) runCompaction() {
 		return
 	}
 	defer c.endCycle()
+
+	if !c.catalogIntegrityOK() {
+		logger.Error("CompactionService: compaction stopped after catalog damage was detected; restart homer after repairing the catalog",
+			"lake", c.lakeName, "catalog", c.catalogPath)
+		return
+	}
+	if !c.ensureDB() {
+		logger.Warn("CompactionService: no usable compaction DuckDB instance, skipping cycle", "lake", c.lakeName)
+		return
+	}
 
 	start := time.Now()
 	logger.Info("CompactionService: Starting compaction cycle",
@@ -700,7 +744,12 @@ func (c *CompactionService) runMerge(tables []string) error {
 			logger.Warn("CompactionService: Skipping table with invalid name", "table", table)
 			continue
 		}
+		if reason, skip := c.mergeQuarantined.Load(tableName); skip {
+			logger.Debug("CompactionService: table left out of merge", "table", tableName, "reason", reason)
+			continue
+		}
 
+		fatal := false
 		c.withCatalogLock(func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -733,6 +782,11 @@ func (c *CompactionService) runMerge(tables []string) error {
 					}
 				}
 			}
+			if c.noteDBError(err) {
+				fatal = true
+				c.recordMergeFatal(tableName)
+				return
+			}
 			if err != nil {
 				logger.Warn("CompactionService: merge_adjacent_files failed", "table", tableName, "error", err)
 				if strings.Contains(err.Error(), "Out of Memory") {
@@ -750,6 +804,9 @@ func (c *CompactionService) runMerge(tables []string) error {
 				}
 			}
 		})
+		if fatal {
+			return fmt.Errorf("merge of %s invalidated the compaction DuckDB instance; cycle aborted", tableName)
+		}
 	}
 
 	c.runMaintenanceCalls()
@@ -764,6 +821,10 @@ func (c *CompactionService) runMerge(tables []string) error {
 // Each CALL takes the catalog lock on its own rather than holding it for the
 // whole sequence, so flush and queries are not blocked for the entire cycle.
 func (c *CompactionService) runMaintenanceCalls() {
+	if !c.verifyCatalogIntegrity() {
+		return
+	}
+
 	// 1. Expire old snapshots (AFTER merge) — lock for this call only
 	c.withCatalogLock(func() {
 		expireSeconds := c.config.SnapshotExpireIntervalSec
@@ -778,10 +839,13 @@ func (c *CompactionService) runMaintenanceCalls() {
 			c.lakeName,
 			expireSeconds,
 		)
-		if _, err := c.execWithRetry(expireSQL); err != nil {
+		_, err := c.execWithRetry(expireSQL)
+		if !c.recordMaintenanceResult("expire_snapshots", err) && err != nil {
 			logger.Warn("CompactionService: expire_snapshots failed", "error", err)
 		}
 	})
+
+	c.withCatalogLock(c.quarantineScheduledDeletions)
 
 	if c.useAzureNativeFileCleanup() {
 		// duckdb-azure rebuilds the managed-identity credential per file
@@ -791,8 +855,8 @@ func (c *CompactionService) runMaintenanceCalls() {
 			logger.Info("CompactionService: Azure credential_chain file cleanup using native SDK",
 				"lake", c.lakeName,
 				"workaround", "sipcapture/homer#1023")
-			err := ducklake.RunAzureNativeFileCleanup(c.ctx, c.db, c.lakeName, c.dataPath, ducklakeAzureConfig(c.azureClient))
-			if err != nil {
+			err := ducklake.RunAzureNativeFileCleanup(c.ctx, c.database(), c.lakeName, c.dataPath, ducklakeAzureConfig(c.azureClient))
+			if !c.recordMaintenanceResult("azure native file cleanup", err) && err != nil {
 				c.warnMaintenanceS3Failure("azure native file cleanup", err)
 			}
 		})
@@ -803,7 +867,8 @@ func (c *CompactionService) runMaintenanceCalls() {
 			c.ensureAzureClientSettings()
 			logger.Info("CompactionService: Cleanup old files", "lake", c.lakeName)
 			cleanupSQL := fmt.Sprintf("CALL ducklake_cleanup_old_files('%s', cleanup_all => true)", c.lakeName)
-			if _, err := c.execWithRetry(cleanupSQL); err != nil {
+			_, err := c.execWithRetry(cleanupSQL)
+			if !c.recordMaintenanceResult("cleanup_old_files", err) && err != nil {
 				c.warnMaintenanceS3Failure("cleanup_old_files", err)
 			}
 		})
@@ -814,7 +879,8 @@ func (c *CompactionService) runMaintenanceCalls() {
 			c.ensureAzureClientSettings()
 			logger.Info("CompactionService: Delete orphaned files", "lake", c.lakeName)
 			orphanSQL := fmt.Sprintf("CALL ducklake_delete_orphaned_files('%s', cleanup_all => true)", c.lakeName)
-			if _, err := c.execWithRetry(orphanSQL); err != nil {
+			_, err := c.execWithRetry(orphanSQL)
+			if !c.recordMaintenanceResult("delete_orphaned_files", err) && err != nil {
 				c.warnMaintenanceS3Failure("delete_orphaned_files", err)
 			}
 		})
@@ -858,7 +924,7 @@ func (c *CompactionService) useNativeEngine() bool {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if ok, reason := compactor.SwapSupported(ctx, c.db); !ok {
+	if ok, reason := compactor.SwapSupported(ctx, c.database()); !ok {
 		logger.Warn("CompactionService: native engine selected but this DuckLake build cannot "+
 			"register pre-merged files; falling back to the DuckDB merge",
 			"lake", c.lakeName, "reason", reason)
@@ -875,6 +941,55 @@ func (c *CompactionService) useNativeEngine() bool {
 		return false
 	}
 	return true
+}
+
+// catalogBackupTimeout bounds the out-of-process catalog backup.
+const catalogBackupTimeout = 2 * time.Minute
+
+// defaultCatalogBackup snapshots the live catalog from a child process. The
+// catalog is attached by DuckDB in this process, and opening it here with the
+// pure-Go SQLite driver corrupts it (sipcapture/homer#1048).
+func defaultCatalogBackup(ctx context.Context, catalogPath string) (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve homer executable: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(ctx, catalogBackupTimeout)
+	defer cancel()
+	return ducklake.BackupCatalogOutOfProcess(ctx, exe, catalogPath, ducklake.DefaultCatalogBackupKeep, nil)
+}
+
+// backupBeforeNativeMerge takes the catalog copy that makes a bad native cycle
+// recoverable. It reports false when a catalog is configured but the copy
+// failed; the native merge must not run without it.
+func (c *CompactionService) backupBeforeNativeMerge() bool {
+	path := strings.TrimSpace(c.catalogPath)
+	if path == "" {
+		return true
+	}
+	backup := c.backupCatalog
+	if backup == nil {
+		backup = defaultCatalogBackup
+	}
+	// No catalog lock: VACUUM INTO reads one consistent snapshot, and holding
+	// the lock would stall flush for as long as the child process runs.
+	dest, err := backup(c.context(), path)
+	if err != nil {
+		logger.Warn("CompactionService: catalog backup before native merge failed",
+			"lake", c.lakeName, "error", err)
+		return false
+	}
+	logger.Info("CompactionService: catalog backed up before native merge", "path", dest)
+	return true
+}
+
+// context returns the service context, or Background for services built
+// without NewCompactionService (tests).
+func (c *CompactionService) context() context.Context {
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
 }
 
 // runNativeMerge compacts every table with the native compactor, then runs the
@@ -894,18 +1009,11 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 		return nil
 	}
 
-	// Cheap insurance before metadata-rewriting maintenance: the catalog is
-	// metadata only, so a copy costs little and makes a bad cycle recoverable.
-	if path := strings.TrimSpace(c.catalogPath); path != "" {
-		c.withCatalogLock(func() {
-			dest, err := ducklake.BackupCatalog(path, ducklake.DefaultCatalogBackupKeep)
-			if err != nil {
-				logger.Warn("CompactionService: catalog backup before native merge failed",
-					"lake", c.lakeName, "error", err)
-				return
-			}
-			logger.Info("CompactionService: catalog backed up before native merge", "path", dest)
-		})
+	if !c.backupBeforeNativeMerge() {
+		logger.Warn("CompactionService: skipping native merge this cycle because the catalog backup failed",
+			"lake", c.lakeName)
+		c.runMaintenanceCalls()
+		return nil
 	}
 
 	// Lock/Unlock are passed into the compactor so it holds the CatalogLock only
@@ -930,7 +1038,7 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 		}
 		logger.Info("CompactionService: native merge starting", "table", tableName)
 		res, err := compactor.CompactTable(c.ctx, compactor.Options{
-			DB:                  c.db,
+			DB:                  c.database(),
 			LakeName:            c.lakeName,
 			DataPath:            c.dataPath,
 			TargetFileSizeBytes: c.config.TargetFileSizeBytes,
@@ -939,6 +1047,9 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			Lock:                lockFn,
 			Unlock:              unlockFn,
 		}, tableName)
+		if c.noteDBError(err) {
+			return fmt.Errorf("native merge of %s invalidated the compaction DuckDB instance; cycle aborted", tableName)
+		}
 		if err != nil {
 			logger.Warn("CompactionService: native merge failed", "table", tableName, "error", err)
 			continue
@@ -1027,7 +1138,7 @@ func (u *unsupportedTables) Load(table string) (string, bool) {
 // checkCatalogInvariants verifies the catalog is still queryable after a native
 // cycle.
 func (c *CompactionService) checkCatalogInvariants() error {
-	return verifySnapshotInvariants(c.db, fmt.Sprintf("__ducklake_metadata_%s", c.lakeName))
+	return verifySnapshotInvariants(c.database(), fmt.Sprintf("__ducklake_metadata_%s", c.lakeName))
 }
 
 // verifySnapshotInvariants checks the two properties whose violation makes
@@ -1116,6 +1227,9 @@ func (c *CompactionService) GetStats() map[string]interface{} {
 		"last_compaction_time":    c.lastCompactionTime,
 		"total_compactions":       c.totalCompactions,
 		"total_rows_deleted":      c.totalRowsDeleted,
+
+		"maintenance_consecutive_failures": c.maintenanceFailureStats(),
+		"catalog_damage_detected":          c.catalogCorrupt.Load(),
 	}
 }
 
@@ -1162,7 +1276,7 @@ func (c *CompactionService) buildMergeSQL(tableName string) string {
 // connection with threads=1. Query (not Exec) is required to read the
 // files_processed/files_created result set; Exec always reports 0.
 func (c *CompactionService) mergeAdjacentFiles(tableName string) (filesProcessed, filesCreated int64, err error) {
-	if c.db == nil {
+	if c.database() == nil {
 		return 0, 0, fmt.Errorf("no database")
 	}
 	ctx := c.ctx
@@ -1196,7 +1310,7 @@ func (c *CompactionService) mergeAdjacentFiles(tableName string) (filesProcessed
 }
 
 func (c *CompactionService) mergeAdjacentFilesOnce(ctx context.Context, mergeSQL string) (filesProcessed, filesCreated int64, err error) {
-	conn, err := c.db.Conn(ctx)
+	conn, err := c.database().Conn(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1240,7 +1354,7 @@ func (c *CompactionService) mergeAdjacentFilesOnce(ctx context.Context, mergeSQL
 // proves temp_directory is set and used; all-zero means spilling is off,
 // i.e. the instance runs without a temp_directory).
 func (c *CompactionService) logMemoryBreakdown() {
-	rows, err := c.db.Query(`
+	rows, err := c.database().Query(`
 		SELECT tag,
 		       memory_usage_bytes,
 		       temporary_storage_bytes
@@ -1277,11 +1391,12 @@ func (c *CompactionService) execWithRetry(query string, args ...any) (sql.Result
 
 	for attempt := 1; attempt <= attempts; attempt++ {
 		var result sql.Result
-		result, lastErr = c.db.Exec(query, args...)
+		result, lastErr = c.database().Exec(query, args...)
 		if lastErr == nil {
 			return result, nil
 		}
 		if !isDatabaseLocked(lastErr) {
+			c.noteDBError(lastErr)
 			return nil, lastErr
 		}
 		if attempt < attempts {
@@ -1303,11 +1418,12 @@ func (c *CompactionService) queryWithRetry(query string, args ...any) (*sql.Rows
 
 	for attempt := 1; attempt <= attempts; attempt++ {
 		var rows *sql.Rows
-		rows, lastErr = c.db.Query(query, args...)
+		rows, lastErr = c.database().Query(query, args...)
 		if lastErr == nil {
 			return rows, nil
 		}
 		if !isDatabaseLocked(lastErr) {
+			c.noteDBError(lastErr)
 			return nil, lastErr
 		}
 		if attempt < attempts {

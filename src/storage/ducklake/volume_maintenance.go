@@ -107,6 +107,8 @@ func (tsm *TieredStorageManager) fileCleanupDB(vol *Volume) (*sql.DB, error) {
 		return nil, fmt.Errorf("attach volume %s on maintenance DuckDB: %w", vol.Name, err)
 	}
 	m.attached[vol.LakeName] = true
+	// Tiered DuckDB instances live until process exit; the mark is never released.
+	_ = MarkCatalogAttached(vol.CatalogPath)
 	logger.Info("TieredStorageManager: Volume attached for file cleanup",
 		"volume", vol.Name,
 		"lake", vol.LakeName)

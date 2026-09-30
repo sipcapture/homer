@@ -229,6 +229,10 @@ type MultiTableWriter struct {
 	// it (on Stop) releases the lock. The OS also releases it on process exit.
 	writerLock *os.File
 
+	// releaseAttachMark clears the in-process "catalog attached" mark (see
+	// MarkCatalogAttached) after db is closed.
+	releaseAttachMark func()
+
 	// Centralized single-writer flush queue. When non-nil, all DuckLake INSERT
 	// operations go through a single goroutine, eliminating catalog contention.
 	flushQueueCh chan centralFlushJob
@@ -371,48 +375,21 @@ func (mtw *MultiTableWriter) connect() error {
 		logger.Info(fmt.Sprintf("DuckLake writer holds exclusive catalog lock: %s.lock", mtw.config.CatalogPath))
 	}
 
-	// SET s3_* is session-scoped: replay it on every new pooled connection.
-	// Without this, the pool can hand out a fresh connection without those
-	// settings → intermittent S3 404 / NoSuchBucket on flush.
-	s3Stmts := S3ClientSettingsSQL(
-		mtw.config.S3Region,
-		mtw.config.S3AccessKeyID,
-		mtw.config.S3SecretAccessKey,
-		mtw.config.S3Endpoint,
-		mtw.config.S3UseSSL,
-		mtw.config.S3URLStyle,
-	)
-	connector, err := duckdb.NewConnector("", func(execer driver.ExecerContext) error {
-		for _, stmt := range s3Stmts {
-			if _, err := execer.ExecContext(context.Background(), stmt, nil); err != nil {
-				return fmt.Errorf("duckdb conn init %s: %w", s3SettingName(stmt), err)
-			}
-		}
-		return nil
-	})
+	db, err := newLakeDuckDB(mtw.config, writerPoolConns)
 	if err != nil {
-		return fmt.Errorf("failed to open DuckDB: %w", err)
+		return err
 	}
-	db := sql.OpenDB(connector)
-	db.SetMaxOpenConns(writerPoolConns)
-	db.SetMaxIdleConns(writerPoolConns)
 	mtw.db = db
 
 	// Apply DuckDB engine tuning before LOAD / ATTACH so the limits are
 	// in effect for catalog bring-up too. In-memory DuckDB cannot spill
-	// unless temp_directory is set (search + flush + compaction share the
-	// same memory_limit).
+	// unless temp_directory is set (search + flush share the same
+	// memory_limit; compaction runs on its own instance).
 	ApplyHomerDuckDBDefaults(db, mtw.config.TuningThreads, mtw.config.TuningMemoryLimit,
 		mtw.config.TuningTempDirectory, mtw.config.CatalogPath, "writer")
 
-	// Load DuckLake extension (must be pre-installed via --install-extensions)
-	if _, err := db.Exec("LOAD ducklake;"); err != nil {
-		return fmt.Errorf("failed to load ducklake extension (run homer-core --install-extensions first): %w", err)
-	}
-
-	// Load SQLite extension for the DuckLake catalog file
-	if _, err := db.Exec("LOAD sqlite;"); err != nil {
-		return fmt.Errorf("failed to load sqlite extension (run homer-core --install-extensions first): %w", err)
+	if err := loadLakeExtensions(db); err != nil {
+		return err
 	}
 	// Enable WAL mode for SQLite catalog to allow concurrent reads/writes
 	if err := EnableSQLiteWALMode(mtw.config.CatalogPath); err != nil {
@@ -477,12 +454,13 @@ func (mtw *MultiTableWriter) connect() error {
 				"duplicate_table_names", res.DuplicateTableNames,
 				"catalog", mtw.config.CatalogPath)
 		}
-		// Non-INTEGER table_id values in ducklake_data_file (sipcapture/homer#900)
-		// abort DuckLake file-list resolution with a Mismatch Type Error. Auto-
-		// repair cannot rewrite those rows safely — rebuild from parquet.
+		// Non-INTEGER table_id values in ducklake_data_file (sipcapture/homer#900,
+		// #1048) abort DuckLake file-list resolution with a Mismatch Type Error.
+		// Auto-repair cannot rewrite those rows safely — rebuild from parquet.
 		if err == nil && res.CorruptDataFileTableIDs > 0 {
 			logger.Error("DuckLake catalog has corrupt ducklake_data_file.table_id values "+
-				"(expected INTEGER, found non-integer storage class such as a parquet path). "+
+				"(expected INTEGER, found another value such as a parquet path or a timestamp; "+
+				"this usually comes with SQLite page damage, check `sqlite3 CATALOG 'PRAGMA integrity_check'`). "+
 				"Lake queries will fail with 'Mismatch Type Error: Failed to get data file list'. "+
 				"Stop the writer and run `homer system --rebuild-catalog`.",
 				"corrupt_table_id_rows", res.CorruptDataFileTableIDs,
@@ -490,44 +468,14 @@ func (mtw *MultiTableWriter) connect() error {
 		}
 	}
 
-	// SET s3_* is applied per pooled connection by the connector init above.
-	if isS3Path(mtw.config.DataPath) {
-		if err := EnsureWriterS3Secret(db,
-			mtw.config.S3Region,
-			mtw.config.S3AccessKeyID,
-			mtw.config.S3SecretAccessKey,
-			mtw.config.S3Endpoint,
-			mtw.config.S3UseSSL,
-			mtw.config.S3URLStyle,
-		); err != nil {
-			return fmt.Errorf("failed to configure S3 secret for DuckLake: %w", err)
-		}
+	if err := configureLakeSecrets(db, mtw.config, "writer"); err != nil {
+		return err
 	}
 
-	if isAzurePath(mtw.config.DataPath) {
-		// Best-effort load, same contract as tiered storage's LOAD aws: a
-		// missing azure extension must not block startup for local/S3-only
-		// deployments, but this path only runs when DataPath is az://.
-		EnsureAzureCACertPath()
-		if _, err := db.Exec("LOAD azure;"); err != nil {
-			logger.Warn("DuckLake writer: failed to load azure extension (run --install-extensions)", "error", err)
-		}
-		if err := EnsureWriterAzureSecret(db,
-			mtw.config.AzureAccountName,
-			mtw.config.AzureAccountKey,
-			mtw.config.AzureConnectionString,
-			mtw.config.AzureEndpoint,
-		); err != nil {
-			return fmt.Errorf("failed to configure Azure secret for DuckLake: %w", err)
-		}
-	}
-
-	// Build attach statement (SQLite catalog only)
-	attachSQL := mtw.buildAttachSQL()
-
-	if _, err := db.Exec(attachSQL); err != nil {
+	if _, err := db.Exec(buildLakeAttachSQL(mtw.config)); err != nil {
 		return fmt.Errorf("failed to attach ducklake: %w", err)
 	}
+	mtw.releaseAttachMark = MarkCatalogAttached(mtw.config.CatalogPath)
 
 	logger.Info("DuckLake (multi-table) attached", "catalog", string(mtw.config.CatalogType), "data_path", mtw.config.DataPath)
 
@@ -551,10 +499,90 @@ func (mtw *MultiTableWriter) connect() error {
 
 // buildAttachSQL returns the ATTACH statement for this writer's DuckLake catalog.
 func (mtw *MultiTableWriter) buildAttachSQL() string {
+	return buildLakeAttachSQL(mtw.config)
+}
+
+func buildLakeAttachSQL(cfg Config) string {
 	return fmt.Sprintf(
 		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE);",
-		mtw.config.CatalogPath, mtw.config.LakeName, mtw.config.DataPath,
+		cfg.CatalogPath, cfg.LakeName, cfg.DataPath,
 	)
+}
+
+// newLakeDuckDB opens an in-memory DuckDB instance whose pooled connections
+// replay the session-scoped SET s3_* settings. Without that, the pool can hand
+// out a fresh connection without them → intermittent S3 404 / NoSuchBucket.
+func newLakeDuckDB(cfg Config, poolConns int) (*sql.DB, error) {
+	s3Stmts := S3ClientSettingsSQL(
+		cfg.S3Region,
+		cfg.S3AccessKeyID,
+		cfg.S3SecretAccessKey,
+		cfg.S3Endpoint,
+		cfg.S3UseSSL,
+		cfg.S3URLStyle,
+	)
+	connector, err := duckdb.NewConnector("", func(execer driver.ExecerContext) error {
+		for _, stmt := range s3Stmts {
+			if _, err := execer.ExecContext(context.Background(), stmt, nil); err != nil {
+				return fmt.Errorf("duckdb conn init %s: %w", s3SettingName(stmt), err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open DuckDB: %w", err)
+	}
+	db := sql.OpenDB(connector)
+	db.SetMaxOpenConns(poolConns)
+	db.SetMaxIdleConns(poolConns)
+	return db, nil
+}
+
+// loadLakeExtensions loads DuckLake and the SQLite extension that backs the
+// catalog (both must be pre-installed via --install-extensions).
+func loadLakeExtensions(db *sql.DB) error {
+	if _, err := db.Exec("LOAD ducklake;"); err != nil {
+		return fmt.Errorf("failed to load ducklake extension (run homer-core --install-extensions first): %w", err)
+	}
+	if _, err := db.Exec("LOAD sqlite;"); err != nil {
+		return fmt.Errorf("failed to load sqlite extension (run homer-core --install-extensions first): %w", err)
+	}
+	return nil
+}
+
+// configureLakeSecrets creates the object-store secrets data_path needs.
+func configureLakeSecrets(db *sql.DB, cfg Config, who string) error {
+	if isS3Path(cfg.DataPath) {
+		if err := EnsureWriterS3Secret(db,
+			cfg.S3Region,
+			cfg.S3AccessKeyID,
+			cfg.S3SecretAccessKey,
+			cfg.S3Endpoint,
+			cfg.S3UseSSL,
+			cfg.S3URLStyle,
+		); err != nil {
+			return fmt.Errorf("failed to configure S3 secret for DuckLake: %w", err)
+		}
+	}
+
+	if isAzurePath(cfg.DataPath) {
+		// Best-effort load, same contract as tiered storage's LOAD aws: a
+		// missing azure extension must not block startup for local/S3-only
+		// deployments, but this path only runs when DataPath is az://.
+		EnsureAzureCACertPath()
+		if _, err := db.Exec("LOAD azure;"); err != nil {
+			logger.Warn("DuckLake "+who+": failed to load azure extension (run --install-extensions)", "error", err)
+		}
+		if err := EnsureWriterAzureSecret(db,
+			cfg.AzureAccountName,
+			cfg.AzureAccountKey,
+			cfg.AzureConnectionString,
+			cfg.AzureEndpoint,
+		); err != nil {
+			return fmt.Errorf("failed to configure Azure secret for DuckLake: %w", err)
+		}
+	}
+	return nil
 }
 
 // refreshCatalogCache drops DuckLake's in-memory snapshot/stats cache by
@@ -761,6 +789,9 @@ func (mtw *MultiTableWriter) Stop() error {
 
 		if mtw.db != nil {
 			closeErr = mtw.db.Close()
+		}
+		if mtw.releaseAttachMark != nil {
+			mtw.releaseAttachMark()
 		}
 
 		// Release the exclusive catalog lock last, after the DB is closed.

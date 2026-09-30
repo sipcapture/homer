@@ -34,6 +34,7 @@ homer catalog restore --config-path /etc/homer/homer.json --from homer_catalog.s
 | Flag            | Default | Description |
 |-----------------|---------|-------------|
 | `--config-path` |         | Path to `homer.json` (or a directory containing it) |
+| `--catalog`     |         | SQLite catalog file; overrides `catalog_path` from the config (native compaction uses this for its pre-merge backup) |
 | `--keep`        | `3`     | Rotating `.bak-*` copies to retain (`backup` only; `0` = keep all) |
 | `--out`         |         | Write the snapshot to this path instead of a rotating `.bak-*` copy |
 | `--from`        | newest `.bak-*` | Backup to restore (`restore` only). Absolute path, path relative to cwd, or a basename next to the catalog |

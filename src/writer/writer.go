@@ -408,6 +408,19 @@ func (w *Writer) Start() error {
 			compactionS3,
 			compactionAzure,
 		)
+		memLimit := w.storageConfig.DuckLake.Compaction.MemoryLimit
+		err := w.compactionService.UseMaintenanceDB(func() (*sql.DB, func() error, error) {
+			m, err := w.ducklakeManager.OpenMaintenanceDB(memLimit)
+			if err != nil {
+				return nil, nil, err
+			}
+			return m.DB, m.Close, nil
+		})
+		if err != nil {
+			logger.Warn("Writer: compaction runs on the shared writer DuckDB because its dedicated instance "+
+				"could not be opened; a fatal merge error will then affect ingest and search",
+				"error", err)
+		}
 		if err := w.compactionService.Start(); err != nil {
 			logger.Error(fmt.Sprintf("Writer: Failed to start compaction service: %v", err))
 		}
