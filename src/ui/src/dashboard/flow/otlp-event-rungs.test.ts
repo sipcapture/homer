@@ -49,8 +49,8 @@ describe('otlpRowToRung', () => {
 })
 
 describe('otlpRungLabel', () => {
-  it('prefers HTTP status, then HTTP method, then RPC, then event.name, then body', () => {
-    expect(otlpRungLabel({ attributes: { 'http.response.status_code': 200, 'http.request.method': 'POST' } })).toBe('HTTP 200')
+  it('labels status-only rows, then method + path, then RPC, then event.name, then body', () => {
+    expect(otlpRungLabel({ attributes: { 'http.response.status_code': 200 } })).toBe('HTTP 200')
     expect(otlpRungLabel(request)).toBe('POST /webhook')
     expect(otlpRungLabel({ attributes: { 'rpc.service': 'Agent', 'rpc.method': 'Bridge' } })).toBe('Agent/Bridge')
     expect(otlpRungLabel({ attributes: { 'event.name': 'bridge.connected' } })).toBe('bridge.connected')
@@ -92,7 +92,7 @@ describe('collectOtlpRungs', () => {
     await Promise.resolve()
     expect(started).toEqual(['leg-a', 'leg-b'])
     releases.forEach((release) => release())
-    expect(await pending).toHaveLength(1)
+    expect((await pending).rungs).toHaveLength(1)
   })
 
   it('keeps other legs when one lookup fails', async () => {
@@ -100,6 +100,72 @@ describe('collectOtlpRungs', () => {
       if (legId === 'bad') throw new Error('boom')
       return [request]
     }
-    expect(await collectOtlpRungs(['bad', 'good'], fetchLeg, async () => null)).toHaveLength(1)
+    expect((await collectOtlpRungs(['bad', 'good'], fetchLeg, async () => null)).rungs).toHaveLength(1)
+  })
+})
+
+describe('review follow-ups', () => {
+  it('parses attributes that arrive as a JSON string', () => {
+    const row: OtlpLogRow = { ...request, attributes: JSON.stringify(request.attributes) }
+    expect(otlpRowToRung(row, 'cid-1')).toMatchObject({ src_ip: '10.0.0.1', dst_ip: '10.0.0.2', method: 'POST /webhook' })
+  })
+
+  it('treats unparseable string attributes as no attributes', () => {
+    expect(otlpRowToRung({ ...request, attributes: 'not json' }, 'cid-1')).toBeNull()
+  })
+
+  it('keeps events with distinct span ids apart even when everything else matches', () => {
+    const a = otlpRowToRung({ ...request, span_id: 'aaaa' }, 'cid-1')!
+    const b = otlpRowToRung({ ...request, span_id: 'bbbb' }, 'cid-1')!
+    expect(a.uuid).not.toBe(b.uuid)
+  })
+
+  it('gives the same row the same id whichever leg found it', () => {
+    expect(otlpRowToRung(request, 'leg-a')!.uuid).toBe(otlpRowToRung(request, 'leg-b')!.uuid)
+  })
+
+  it('keeps method and path next to the status', () => {
+    const attributes = { 'http.request.method': 'POST', 'url.path': '/webhook', 'http.response.status_code': 200 }
+    expect(otlpRungLabel({ attributes })).toBe('POST /webhook → 200')
+  })
+
+  it('reads older HTTP semconv names and drops the query string from http.target', () => {
+    expect(otlpRungLabel({ attributes: { 'http.method': 'GET', 'http.target': '/calls?token=secret' } })).toBe('GET /calls')
+    expect(otlpRungLabel({ attributes: { 'http.method': 'GET', 'http.target': '/calls', 'http.status_code': 404 } })).toBe(
+      'GET /calls → 404',
+    )
+  })
+
+  it('does not draw from net.host.* / net.peer.*, which are relative to whoever emitted the log', () => {
+    const row = { timestamp: request.timestamp, attributes: { 'net.host.ip': '10.0.0.5', 'net.peer.ip': '10.0.0.6' } }
+    expect(otlpRowToRung(row, 'cid-1')).toBeNull()
+  })
+
+  it('prefers http.route over the concrete path', () => {
+    const attributes = { 'http.request.method': 'GET', 'http.route': '/calls/{id}', 'url.path': '/calls/abc123' }
+    expect(otlpRungLabel({ attributes })).toBe('GET /calls/{id}')
+  })
+
+  it('takes the path from url.full or http.url on client-side logs, ignoring the query', () => {
+    expect(otlpRungLabel({ attributes: { 'http.request.method': 'POST', 'url.full': 'https://cp.example:9099/webhook?k=v' } })).toBe(
+      'POST /webhook',
+    )
+    expect(otlpRungLabel({ attributes: { 'http.method': 'POST', 'http.url': 'http://10.0.0.2/hook' } })).toBe('POST /hook')
+    expect(otlpRungLabel({ attributes: { 'http.request.method': 'POST', 'url.full': 'not a url' } })).toBe('POST')
+  })
+
+  it('prefers newer endpoint names over older ones', () => {
+    const row = { ...request, attributes: { ...request.attributes, 'net.host.ip': '10.9.9.9', 'net.peer.ip': '10.8.8.8' } }
+    expect(otlpRowToRung(row, 'cid-1')).toMatchObject({ src_ip: '10.0.0.1', dst_ip: '10.0.0.2' })
+  })
+
+  it('reports how many leg lookups failed', async () => {
+    const fetchLeg = async (legId: string) => {
+      if (legId === 'bad') throw new Error('boom')
+      return [request]
+    }
+    const result = await collectOtlpRungs(['bad', 'good'], fetchLeg, async () => null)
+    expect(result.rungs).toHaveLength(1)
+    expect(result.failedLegs).toBe(1)
   })
 })

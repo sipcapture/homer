@@ -39,6 +39,7 @@ import { getMethodColor } from './flow-utils'
 import { resolveTimeRange } from './utils/resolveTimeRange'
 import { hepProtoTypeOf, mergeFlowMessagesByTimestamp, tagHepProtoType } from './flow/hep-proto'
 import { collectOtlpRungs } from './flow/otlp-event-rungs'
+import { toast } from 'sonner'
 import { buildExactAliasMapFromApiItems } from '@/lib/ipAliasDisplay'
 
 /** SIP / transaction message row: DuckLake uses method + response_code, not `event`. */
@@ -683,10 +684,19 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     return () => { cancelled = true }
   }, [modalKey, loading, sipProtoType, items, timeRange, timeZone, sessionKey])
 
+  // Keyed on what the lookups send (legs + window), not the items array, so re-renders don't rescan.
+  const otlpLegIds = [...new Set((items || []).map((m) => String(m.session_id || m.cid || '').trim()).filter(Boolean))]
+  const otlpLegKey = otlpLegIds.join('\0')
+  // A rolling dashboard range resolves from Date.now(), so key the fallback on its settings, not its resolved bounds.
+  const otlpItemsWindow = timeRangeFromMessageItems(items, null, timeZone)
+  const otlpWindowKey = otlpItemsWindow
+    ? `${otlpItemsWindow.from}-${otlpItemsWindow.to}`
+    : `range:${timeRange?.activePreset ?? ''}:${timeRange?.calendarPreset ?? ''}:${timeRange?.from ?? ''}:${timeRange?.to ?? ''}:${timeZone ?? ''}`
+
   // otlp-logs matches a single Call-ID per request, so ask once per leg on the ladder.
   React.useEffect(() => {
-    if (!showOtlpEvents || sipProtoType !== 1 || loading || !items?.length) return
-    const legIds = [...new Set(items.map((m) => String(m.session_id || m.cid || '').trim()).filter(Boolean))]
+    if (!showOtlpEvents || sipProtoType !== 1 || loading || !otlpLegIds.length) return
+    const legIds = otlpLegIds
     let cancelled = false
     const fetchLeg = async (legId) => {
       const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone, { call_id: legId })
@@ -698,11 +708,15 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
       return buildExactAliasMapFromApiItems(data?.data?.items ?? [])
     }
     ;(async () => {
-      const rungs = await collectOtlpRungs(legIds, fetchLeg, fetchAliases)
-      if (!cancelled) setOtlpRungs(rungs)
+      const { rungs, failedLegs } = await collectOtlpRungs(legIds, fetchLeg, fetchAliases)
+      if (cancelled) return
+      setOtlpRungs(rungs)
+      if (failedLegs > 0) {
+        toast.error(`OTLP events: ${failedLegs} of ${legIds.length} lookups failed`, { id: `otlp-events-${modalKey}` })
+      }
     })()
     return () => { cancelled = true }
-  }, [showOtlpEvents, modalKey, loading, sipProtoType, items, timeRange, timeZone, sessionKey])
+  }, [showOtlpEvents, modalKey, loading, sipProtoType, otlpLegKey, otlpWindowKey, sessionKey])
 
   const flowItems = React.useMemo(() => {
     const sipTagged = tagHepProtoType(items || [], sipProtoType)

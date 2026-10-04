@@ -1,4 +1,5 @@
 import type { ExactAliasMap } from '@/lib/ipAliasDisplay'
+import { parseJsonLoose } from '@/lib/jsonDisplay'
 import type { RawMessage } from './flow-data'
 
 /** One otlp_logs row as returned by POST /transactions/otlp-logs. */
@@ -6,11 +7,20 @@ export interface OtlpLogRow {
   timestamp?: string
   body?: string
   service_name?: string
-  attributes?: Record<string, string | number | boolean | null> | null
+  trace_id?: string
+  span_id?: string
+  /** An object from /transactions/otlp-logs today; other lake paths return embedded JSON text. */
+  attributes?: AttrMap | string | null
   [key: string]: unknown
 }
 
-type Attrs = OtlpLogRow['attributes']
+type AttrMap = Record<string, string | number | boolean | null>
+type Attrs = AttrMap | null
+
+function attrsOf(row: OtlpLogRow): Attrs {
+  const parsed = parseJsonLoose(row.attributes)
+  return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as AttrMap) : null
+}
 
 function attr(attrs: Attrs, ...keys: string[]): string {
   for (const key of keys) {
@@ -22,18 +32,40 @@ function attr(attrs: Attrs, ...keys: string[]): string {
 
 const MAX_BODY_LABEL = 40
 
+function pathOfUrl(url: string): string {
+  if (!url) return ''
+  try {
+    return new URL(url).pathname
+  } catch {
+    return ''
+  }
+}
+
+/** Low-cardinality route first, then the concrete path (server: url.path / http.target; client: url.full / http.url). */
+function httpPathOf(attrs: Attrs): string {
+  return (
+    attr(attrs, 'http.route') ||
+    attr(attrs, 'url.path') ||
+    attr(attrs, 'http.target').split('?')[0] ||
+    pathOfUrl(attr(attrs, 'url.full', 'http.url'))
+  )
+}
+
 // SIP rows arrive alias-enriched by the backend; these rows are built client-side, so resolve here.
 function exactAlias(aliases: ExactAliasMap | null | undefined, ip: string, port: string | number): string {
   return aliases?.get(`${ip}:${Number(port) || 0}`) ?? aliases?.get(`${ip}:0`) ?? ''
 }
 
-/** Ladder label from OTel semconv when present (HTTP, RPC), else event.name, else the body. */
+/** Ladder label from OTel semconv (current, then pre-1.21 names), else event.name, else the body. */
 export function otlpRungLabel(row: OtlpLogRow): string {
-  const attrs = row.attributes
-  const status = attr(attrs, 'http.response.status_code')
+  const attrs = attrsOf(row)
+  const httpMethod = attr(attrs, 'http.request.method', 'http.method')
+  const path = httpPathOf(attrs)
+  const status = attr(attrs, 'http.response.status_code', 'http.status_code')
+  const request = httpMethod ? `${httpMethod} ${path}`.trim() : ''
+  if (request && status) return `${request} → ${status}`
   if (status) return `HTTP ${status}`
-  const httpMethod = attr(attrs, 'http.request.method')
-  if (httpMethod) return `${httpMethod} ${attr(attrs, 'url.path')}`.trim()
+  if (request) return request
   const rpcMethod = attr(attrs, 'rpc.method')
   if (rpcMethod) return [attr(attrs, 'rpc.service'), rpcMethod].filter(Boolean).join('/')
   const eventName = attr(attrs, 'event.name')
@@ -42,23 +74,35 @@ export function otlpRungLabel(row: OtlpLogRow): string {
   return body.length > MAX_BODY_LABEL ? `${body.slice(0, MAX_BODY_LABEL - 1)}…` : body
 }
 
+const ENDPOINT_PAIRS = [
+  ['source', 'destination'],
+  ['client', 'server'],
+] as const
+
 /**
- * A log row with semconv endpoints becomes one arrow at its own timestamp: source.* → destination.*
- * (directional), falling back to client.* → server.*. Rows without both endpoints stay log-only.
+ * First complete pair: source → destination, else client → server (request direction). net.host/net.peer
+ * are skipped: they are relative to whichever side emitted the log, so the arrow direction is unknowable.
  */
+function endpointsOf(attrs: Attrs) {
+  for (const [from, to] of ENDPOINT_PAIRS) {
+    const src = attr(attrs, `${from}.address`)
+    const dst = attr(attrs, `${to}.address`)
+    if (src && dst) return { src, dst, srcPort: attr(attrs, `${from}.port`), dstPort: attr(attrs, `${to}.port`) }
+  }
+  return null
+}
+
+/** A log row with semconv endpoints becomes one arrow at its own timestamp; rows without them stay log-only. */
 export function otlpRowToRung(
   row: OtlpLogRow,
   callId: string,
   aliases?: ExactAliasMap | null,
 ): RawMessage | null {
-  const attrs = row.attributes
-  const directional = attr(attrs, 'source.address') && attr(attrs, 'destination.address')
-  const src = directional ? attr(attrs, 'source.address') : attr(attrs, 'client.address')
-  const dst = directional ? attr(attrs, 'destination.address') : attr(attrs, 'server.address')
-  if (!src || !dst || !row.timestamp || Number.isNaN(Date.parse(row.timestamp))) return null
-
-  const srcPort = (directional ? attr(attrs, 'source.port') : attr(attrs, 'client.port')) || 0
-  const dstPort = (directional ? attr(attrs, 'destination.port') : attr(attrs, 'server.port')) || 0
+  const endpoints = endpointsOf(attrsOf(row))
+  if (!endpoints || !row.timestamp || Number.isNaN(Date.parse(row.timestamp))) return null
+  const { src, dst } = endpoints
+  const srcPort = endpoints.srcPort || 0
+  const dstPort = endpoints.dstPort || 0
   const method = otlpRungLabel(row)
   const description = String(row.body ?? '').trim()
   const aliasSrc = exactAlias(aliases, src, srcPort)
@@ -66,7 +110,7 @@ export function otlpRowToRung(
   return {
     ...(aliasSrc ? { aliasSrc } : {}),
     ...(aliasDst ? { aliasDst } : {}),
-    uuid: `otlp-${row.timestamp}-${src}-${dst}-${method}-${description}`,
+    uuid: ['otlp', row.timestamp, row.trace_id, row.span_id, src, dst, method, description].map((p) => p ?? '').join('|'),
     timestamp: row.timestamp,
     session_id: callId,
     cid: callId,
@@ -81,22 +125,27 @@ export function otlpRowToRung(
   }
 }
 
+export interface CollectedOtlpRungs {
+  rungs: RawMessage[]
+  failedLegs: number
+}
+
 /**
  * Looks up every leg and the alias table concurrently. A row matched by several legs is drawn once;
- * a failed lookup only drops that leg's rungs.
+ * a failed leg lookup is counted rather than thrown, so the other legs still draw.
  */
 export async function collectOtlpRungs(
   legIds: string[],
   fetchLeg: (legId: string) => Promise<OtlpLogRow[]>,
   fetchAliases: () => Promise<ExactAliasMap | null>,
-): Promise<RawMessage[]> {
+): Promise<CollectedOtlpRungs> {
   const aliasesPending = fetchAliases().catch(() => null)
   const legsPending = Promise.all(
     legIds.map(async (legId) => {
       try {
-        return { legId, rows: await fetchLeg(legId) }
+        return { legId, rows: await fetchLeg(legId), failed: false }
       } catch {
-        return { legId, rows: [] as OtlpLogRow[] }
+        return { legId, rows: [] as OtlpLogRow[], failed: true }
       }
     }),
   )
@@ -108,5 +157,5 @@ export async function collectOtlpRungs(
       if (rung?.uuid && !rungs.has(rung.uuid)) rungs.set(rung.uuid, rung)
     }
   }
-  return [...rungs.values()]
+  return { rungs: [...rungs.values()], failedLegs: legs.filter((leg) => leg.failed).length }
 }
