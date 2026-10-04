@@ -1,6 +1,6 @@
 // @ts-nocheck - TODO: rewrite with shadcn/ui + TanStack; typed when refactored
 import React from 'react'
-import { apiPost } from '../api'
+import { apiGet, apiPost } from '../api'
 import ExportModal from '../settings/ExportModal'
 import CallFlow from './CallFlow'
 import { getColorByString } from './flow-utils'
@@ -38,6 +38,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { getMethodColor } from './flow-utils'
 import { resolveTimeRange } from './utils/resolveTimeRange'
 import { hepProtoTypeOf, mergeFlowMessagesByTimestamp, tagHepProtoType } from './flow/hep-proto'
+import { otlpRowToRung } from './flow/otlp-event-rungs'
+import { buildExactAliasMapFromApiItems } from '@/lib/ipAliasDisplay'
 
 /** SIP / transaction message row: DuckLake uses method + response_code, not `event`. */
 function messageCallId(row) {
@@ -625,6 +627,9 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
   const [msgSortCol, setMsgSortCol] = React.useState(null)
   const [msgSortDir, setMsgSortDir] = React.useState('asc')
   const [rtcpItems, setRtcpItems] = React.useState([])
+  const [otlpRungs, setOtlpRungs] = React.useState([])
+  const [otlpRungDetails, setOtlpRungDetails] = React.useState([])
+  const [showOtlpEvents, setShowOtlpEvents] = React.useState(false)
 
   // reset per-tab state whenever a new transaction is opened
   React.useEffect(() => {
@@ -638,6 +643,8 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     setMsgSortCol(null)
     setMsgSortDir('asc')
     setRtcpItems([])
+    setOtlpRungs([])
+    setOtlpRungDetails([])
   }, [modal?.modalKey])
 
   React.useEffect(() => {
@@ -676,11 +683,43 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     return () => { cancelled = true }
   }, [modalKey, loading, sipProtoType, items, timeRange, timeZone, sessionKey])
 
+  // otlp-logs matches a single Call-ID per request, so ask once per leg on the ladder.
+  React.useEffect(() => {
+    if (!showOtlpEvents || sipProtoType !== 1 || loading || !items?.length) return
+    const legIds = [...new Set(items.map((m) => String(m.session_id || m.cid || '').trim()).filter(Boolean))]
+    let cancelled = false
+    ;(async () => {
+      let aliases = null
+      try {
+        const data = await apiGet('/aliases', { 'page[limit]': 1000 })
+        aliases = buildExactAliasMapFromApiItems(data?.data?.items ?? [])
+      } catch {
+        // Unlabelled columns are the only cost.
+      }
+      const rungs = new Map()
+      for (const legId of legIds) {
+        try {
+          const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone, { call_id: legId })
+          const data = await apiPost('/transactions/otlp-logs', body)
+          for (const row of data?.data?.items || []) {
+            const rung = otlpRowToRung(row, legId, aliases)
+            if (rung) rungs.set(rung.uuid, rung)
+          }
+        } catch {
+          // A failed lookup only costs the OTLP rungs; the SIP ladder is unaffected.
+        }
+      }
+      if (!cancelled) setOtlpRungs([...rungs.values()])
+    })()
+    return () => { cancelled = true }
+  }, [showOtlpEvents, modalKey, loading, sipProtoType, items, timeRange, timeZone, sessionKey])
+
   const flowItems = React.useMemo(() => {
     const sipTagged = tagHepProtoType(items || [], sipProtoType)
     if (sipProtoType !== 1) return sipTagged
-    return mergeFlowMessagesByTimestamp(sipTagged, tagHepProtoType(rtcpItems, 5))
-  }, [items, rtcpItems, sipProtoType])
+    const withRtcp = mergeFlowMessagesByTimestamp(sipTagged, tagHepProtoType(rtcpItems, 5))
+    return mergeFlowMessagesByTimestamp(withRtcp, otlpRungs)
+  }, [items, rtcpItems, otlpRungs, sipProtoType])
 
   const messageRowsIndexed = React.useMemo(
     () => (items || []).map((row, orig) => ({ row, orig })),
@@ -785,6 +824,10 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
 
   const handleFlowMessageClick = async (flowItem) => {
     const raw = flowItem.raw || flowItem
+    if (raw.flow_payload_type === 'OTLP') {
+      setOtlpRungDetails(prev => (prev.some(d => d.uuid === raw.uuid) ? prev : [...prev, raw]))
+      return
+    }
     const uuid = raw.uuid || raw.id || flowItem.id
     const isConsolidatedParent = Array.isArray(flowItem.subItems) && flowItem.subItems.length > 0
     const captureIdOverride = isConsolidatedParent
@@ -953,7 +996,12 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
 
               <TabsContent value="flow" className="min-h-0 min-w-0 flex-1 overflow-hidden px-4 pb-4">
                 <div className="h-full w-full min-w-0 overflow-auto border border-border bg-card/40">
-                  <CallFlow items={flowItems} timeZone={timeZone} onClickMessage={handleFlowMessageClick} />
+                  <CallFlow
+                    items={flowItems}
+                    timeZone={timeZone}
+                    onClickMessage={handleFlowMessageClick}
+                    onShowOtlpEventsChange={setShowOtlpEvents}
+                  />
                 </div>
               </TabsContent>
 
@@ -1036,6 +1084,24 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
         />
       )}
 
+      {otlpRungDetails.map(d => (
+        <FloatingWindow
+          key={d.uuid}
+          open
+          onClose={() => setOtlpRungDetails(prev => prev.filter(x => x.uuid !== d.uuid))}
+          id={`otlp-rung:${d.uuid}`}
+          title={<span className="truncate font-mono text-xs">{d.method}</span>}
+          defaultWidth={Math.min(900, window.innerWidth - 64)}
+          defaultHeight={Math.min(Math.round(window.innerHeight * 0.78), 720)}
+          minWidth={480}
+          minHeight={320}
+          className="flex min-h-0 flex-col overflow-hidden"
+        >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3 pt-1">
+            <EventRecordDetail row={d.otlp_row} />
+          </div>
+        </FloatingWindow>
+      ))}
       {messageModals.map(m => (
         <MessageModal
           key={m.modalKey}
