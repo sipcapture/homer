@@ -60,12 +60,13 @@ export function otlpRowToRung(
   const srcPort = (directional ? attr(attrs, 'source.port') : attr(attrs, 'client.port')) || 0
   const dstPort = (directional ? attr(attrs, 'destination.port') : attr(attrs, 'server.port')) || 0
   const method = otlpRungLabel(row)
+  const description = String(row.body ?? '').trim()
   const aliasSrc = exactAlias(aliases, src, srcPort)
   const aliasDst = exactAlias(aliases, dst, dstPort)
   return {
     ...(aliasSrc ? { aliasSrc } : {}),
     ...(aliasDst ? { aliasDst } : {}),
-    uuid: `otlp-${row.timestamp}-${src}-${dst}-${method}`,
+    uuid: `otlp-${row.timestamp}-${src}-${dst}-${method}-${description}`,
     timestamp: row.timestamp,
     session_id: callId,
     cid: callId,
@@ -74,8 +75,38 @@ export function otlpRowToRung(
     dst_ip: dst,
     dst_port: dstPort,
     method,
-    otlp_description: String(row.body ?? '').trim(),
+    otlp_description: description,
     flow_payload_type: 'OTLP',
     otlp_row: row,
   }
+}
+
+/**
+ * Looks up every leg and the alias table concurrently. A row matched by several legs is drawn once;
+ * a failed lookup only drops that leg's rungs.
+ */
+export async function collectOtlpRungs(
+  legIds: string[],
+  fetchLeg: (legId: string) => Promise<OtlpLogRow[]>,
+  fetchAliases: () => Promise<ExactAliasMap | null>,
+): Promise<RawMessage[]> {
+  const aliasesPending = fetchAliases().catch(() => null)
+  const legsPending = Promise.all(
+    legIds.map(async (legId) => {
+      try {
+        return { legId, rows: await fetchLeg(legId) }
+      } catch {
+        return { legId, rows: [] as OtlpLogRow[] }
+      }
+    }),
+  )
+  const [aliases, legs] = await Promise.all([aliasesPending, legsPending])
+  const rungs = new Map<string, RawMessage>()
+  for (const { legId, rows } of legs) {
+    for (const row of rows) {
+      const rung = otlpRowToRung(row, legId, aliases)
+      if (rung?.uuid && !rungs.has(rung.uuid)) rungs.set(rung.uuid, rung)
+    }
+  }
+  return [...rungs.values()]
 }

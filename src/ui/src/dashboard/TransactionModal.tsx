@@ -38,7 +38,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { getMethodColor } from './flow-utils'
 import { resolveTimeRange } from './utils/resolveTimeRange'
 import { hepProtoTypeOf, mergeFlowMessagesByTimestamp, tagHepProtoType } from './flow/hep-proto'
-import { otlpRowToRung } from './flow/otlp-event-rungs'
+import { collectOtlpRungs } from './flow/otlp-event-rungs'
 import { buildExactAliasMapFromApiItems } from '@/lib/ipAliasDisplay'
 
 /** SIP / transaction message row: DuckLake uses method + response_code, not `event`. */
@@ -688,28 +688,18 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     if (!showOtlpEvents || sipProtoType !== 1 || loading || !items?.length) return
     const legIds = [...new Set(items.map((m) => String(m.session_id || m.cid || '').trim()).filter(Boolean))]
     let cancelled = false
+    const fetchLeg = async (legId) => {
+      const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone, { call_id: legId })
+      const data = await apiPost('/transactions/otlp-logs', body)
+      return data?.data?.items || []
+    }
+    const fetchAliases = async () => {
+      const data = await apiGet('/aliases', { 'page[limit]': 1000 })
+      return buildExactAliasMapFromApiItems(data?.data?.items ?? [])
+    }
     ;(async () => {
-      let aliases = null
-      try {
-        const data = await apiGet('/aliases', { 'page[limit]': 1000 })
-        aliases = buildExactAliasMapFromApiItems(data?.data?.items ?? [])
-      } catch {
-        // Unlabelled columns are the only cost.
-      }
-      const rungs = new Map()
-      for (const legId of legIds) {
-        try {
-          const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone, { call_id: legId })
-          const data = await apiPost('/transactions/otlp-logs', body)
-          for (const row of data?.data?.items || []) {
-            const rung = otlpRowToRung(row, legId, aliases)
-            if (rung) rungs.set(rung.uuid, rung)
-          }
-        } catch {
-          // A failed lookup only costs the OTLP rungs; the SIP ladder is unaffected.
-        }
-      }
-      if (!cancelled) setOtlpRungs([...rungs.values()])
+      const rungs = await collectOtlpRungs(legIds, fetchLeg, fetchAliases)
+      if (!cancelled) setOtlpRungs(rungs)
     })()
     return () => { cancelled = true }
   }, [showOtlpEvents, modalKey, loading, sipProtoType, items, timeRange, timeZone, sessionKey])

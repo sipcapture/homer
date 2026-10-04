@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildFlow } from './flow-data'
-import { otlpRowToRung, otlpRungLabel } from './otlp-event-rungs'
+import { collectOtlpRungs, otlpRowToRung, otlpRungLabel, type OtlpLogRow } from './otlp-event-rungs'
 import { DEFAULT_FILTERS } from './flowFilterPrefs'
 import { applyFlowFilters } from './useFlowFilters'
 
@@ -69,5 +69,37 @@ describe('OTLP rungs on the ladder', () => {
   it('is hidden unless showOtlpEvents is on', () => {
     expect(applyFlowFilters([rung], DEFAULT_FILTERS)).toHaveLength(0)
     expect(applyFlowFilters([rung], { ...DEFAULT_FILTERS, showOtlpEvents: true })).toHaveLength(1)
+  })
+})
+
+describe('rung identity', () => {
+  it('keeps two same-millisecond rows with the same label apart when their bodies differ', () => {
+    const a = otlpRowToRung({ ...request, body: 'first' }, 'cid-1')!
+    const b = otlpRowToRung({ ...request, body: 'second' }, 'cid-1')!
+    expect(a.uuid).not.toBe(b.uuid)
+  })
+})
+
+describe('collectOtlpRungs', () => {
+  it('queries every leg concurrently and merges rows matched by more than one leg', async () => {
+    const started: string[] = []
+    const releases: Array<() => void> = []
+    const fetchLeg = (legId: string) => {
+      started.push(legId)
+      return new Promise<OtlpLogRow[]>((resolve) => releases.push(() => resolve([request])))
+    }
+    const pending = collectOtlpRungs(['leg-a', 'leg-b'], fetchLeg, async () => null)
+    await Promise.resolve()
+    expect(started).toEqual(['leg-a', 'leg-b'])
+    releases.forEach((release) => release())
+    expect(await pending).toHaveLength(1)
+  })
+
+  it('keeps other legs when one lookup fails', async () => {
+    const fetchLeg = async (legId: string) => {
+      if (legId === 'bad') throw new Error('boom')
+      return [request]
+    }
+    expect(await collectOtlpRungs(['bad', 'good'], fetchLeg, async () => null)).toHaveLength(1)
   })
 })
