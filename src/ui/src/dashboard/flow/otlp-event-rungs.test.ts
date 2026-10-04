@@ -169,3 +169,68 @@ describe('review follow-ups', () => {
     expect(result.failedLegs).toBe(1)
   })
 })
+
+describe('second review round', () => {
+  it('keeps the body out of the rung id', () => {
+    const rung = otlpRowToRung({ ...request, body: 'a very specific body text' }, 'cid-1')!
+    expect(String(rung.uuid)).not.toContain('a very specific body text')
+  })
+
+  it('draws identical retries within one leg as separate arrows', async () => {
+    const { rungs } = await collectOtlpRungs(['leg-a'], async () => [request, request], async () => null)
+    expect(rungs).toHaveLength(2)
+    expect(new Set(rungs.map((r) => r.uuid)).size).toBe(2)
+  })
+
+  it('does not double identical retries that more than one leg returned', async () => {
+    const { rungs } = await collectOtlpRungs(['leg-a', 'leg-b'], async () => [request, request], async () => null)
+    expect(rungs).toHaveLength(2)
+  })
+
+  it('draws as many copies as the leg that returned the most', async () => {
+    const fetchLeg = async (legId: string) => (legId === 'leg-a' ? [request, request] : [request, request, request])
+    expect((await collectOtlpRungs(['leg-a', 'leg-b'], fetchLeg, async () => null)).rungs).toHaveLength(3)
+  })
+
+  it('keeps each row tied to the leg that returned it when lookups finish out of order', async () => {
+    const rowFor = (address: string): OtlpLogRow => ({
+      ...request,
+      attributes: { ...request.attributes, 'source.address': address },
+    })
+    const delays: Record<string, number> = { a: 20, b: 0, c: 10, d: 0, e: 5 }
+    const fetchLeg = (legId: string) =>
+      new Promise<OtlpLogRow[]>((resolve) => setTimeout(() => resolve([rowFor(`10.1.0.${legId.charCodeAt(0)}`)]), delays[legId]))
+    const { rungs } = await collectOtlpRungs(Object.keys(delays), fetchLeg, async () => null)
+    expect(rungs.map((r) => [r.session_id, r.src_ip])).toEqual(
+      Object.keys(delays).map((legId) => [legId, `10.1.0.${legId.charCodeAt(0)}`]),
+    )
+  })
+
+  it('runs at most 4 leg lookups at a time', async () => {
+    let inFlight = 0
+    let peak = 0
+    const releases: Array<() => void> = []
+    const fetchLeg = () => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      return new Promise<OtlpLogRow[]>((resolve) =>
+        releases.push(() => {
+          inFlight -= 1
+          resolve([])
+        }),
+      )
+    }
+    const pending = collectOtlpRungs(['a', 'b', 'c', 'd', 'e', 'f'], fetchLeg, async () => null)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(inFlight).toBe(4)
+    releases.shift()!()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(inFlight).toBe(4)
+    while (releases.length) {
+      releases.shift()!()
+      await new Promise((r) => setTimeout(r, 0))
+    }
+    await pending
+    expect(peak).toBe(4)
+  })
+})

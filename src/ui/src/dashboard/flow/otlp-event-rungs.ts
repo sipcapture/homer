@@ -9,7 +9,7 @@ export interface OtlpLogRow {
   service_name?: string
   trace_id?: string
   span_id?: string
-  /** An object from /transactions/otlp-logs today; other lake paths return embedded JSON text. */
+  /** Allows JSON text, as lib/jsonDisplay.ts treats this field; attrsOf parses either form. */
   attributes?: AttrMap | string | null
   [key: string]: unknown
 }
@@ -31,6 +31,21 @@ function attr(attrs: Attrs, ...keys: string[]): string {
 }
 
 const MAX_BODY_LABEL = 40
+const MAX_CONCURRENT_LOOKUPS = 4
+
+/** cyrb53: a short, stable id for a row's content, so the body never lands in a DOM key or window id. */
+function hashOf(text: string): string {
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i)
+    h1 = Math.imul(h1 ^ ch, 2654435761)
+    h2 = Math.imul(h2 ^ ch, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)
+}
 
 function pathOfUrl(url: string): string {
   if (!url) return ''
@@ -105,12 +120,16 @@ export function otlpRowToRung(
   const dstPort = endpoints.dstPort || 0
   const method = otlpRungLabel(row)
   const description = String(row.body ?? '').trim()
+  const contentKey = [row.timestamp, row.trace_id, row.span_id, src, dst, method, description]
+    .map((p) => p ?? '')
+    .join('\u0000')
   const aliasSrc = exactAlias(aliases, src, srcPort)
   const aliasDst = exactAlias(aliases, dst, dstPort)
   return {
     ...(aliasSrc ? { aliasSrc } : {}),
     ...(aliasDst ? { aliasDst } : {}),
-    uuid: ['otlp', row.timestamp, row.trace_id, row.span_id, src, dst, method, description].map((p) => p ?? '').join('|'),
+    uuid: `otlp-${hashOf(contentKey)}`,
+    otlp_content_key: contentKey,
     timestamp: row.timestamp,
     session_id: callId,
     cid: callId,
@@ -130,9 +149,23 @@ export interface CollectedOtlpRungs {
   failedLegs: number
 }
 
+async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
+}
+
 /**
- * Looks up every leg and the alias table concurrently. A row matched by several legs is drawn once;
- * a failed leg lookup is counted rather than thrown, so the other legs still draw.
+ * Looks up legs at most 4 at a time, alongside the alias table. Identical rows are drawn as many times as
+ * the leg that returned the most of them, so a retry stays visible but a row found by two legs draws once.
+ * A failed leg lookup is counted rather than thrown, so the other legs still draw.
  */
 export async function collectOtlpRungs(
   legIds: string[],
@@ -140,22 +173,40 @@ export async function collectOtlpRungs(
   fetchAliases: () => Promise<ExactAliasMap | null>,
 ): Promise<CollectedOtlpRungs> {
   const aliasesPending = fetchAliases().catch(() => null)
-  const legsPending = Promise.all(
-    legIds.map(async (legId) => {
-      try {
-        return { legId, rows: await fetchLeg(legId), failed: false }
-      } catch {
-        return { legId, rows: [] as OtlpLogRow[], failed: true }
-      }
-    }),
-  )
+  const legsPending = mapWithLimit(legIds, MAX_CONCURRENT_LOOKUPS, async (legId) => {
+    try {
+      return { legId, rows: await fetchLeg(legId), failed: false }
+    } catch {
+      return { legId, rows: [] as OtlpLogRow[], failed: true }
+    }
+  })
   const [aliases, legs] = await Promise.all([aliasesPending, legsPending])
-  const rungs = new Map<string, RawMessage>()
+
+  const byContent = new Map<string, { rung: RawMessage; count: number }>()
   for (const { legId, rows } of legs) {
+    const perLeg = new Map<string, number>()
     for (const row of rows) {
       const rung = otlpRowToRung(row, legId, aliases)
-      if (rung?.uuid && !rungs.has(rung.uuid)) rungs.set(rung.uuid, rung)
+      if (!rung) continue
+      const key = String(rung.otlp_content_key)
+      const seen = (perLeg.get(key) ?? 0) + 1
+      perLeg.set(key, seen)
+      const entry = byContent.get(key)
+      if (!entry) byContent.set(key, { rung, count: seen })
+      else entry.count = Math.max(entry.count, seen)
     }
   }
-  return { rungs: [...rungs.values()], failedLegs: legs.filter((leg) => leg.failed).length }
+
+  const rungs: RawMessage[] = []
+  const usedIds = new Set<string>()
+  for (const { rung, count } of byContent.values()) {
+    for (let n = 0; n < count; n++) {
+      let uuid = `${rung.uuid}-${n}`
+      // Different content hashing to the same id would otherwise share a React key.
+      for (let k = 1; usedIds.has(uuid); k++) uuid = `${rung.uuid}-${n}-${k}`
+      usedIds.add(uuid)
+      rungs.push({ ...rung, uuid })
+    }
+  }
+  return { rungs, failedLegs: legs.filter((leg) => leg.failed).length }
 }
