@@ -54,6 +54,7 @@ export function applyFlowFilters(items: RawMessage[], filters: FlowFilters): Raw
   return items.filter((m) => {
     const payloadType = payloadTypeOf(m)
     if (!filters.showRtcp && payloadType === 'RTCP') return false
+    if (!filters.showOtlpEvents && payloadType === 'OTLP') return false
 
     const src = m.src_ip || ''
     const dst = m.dst_ip || ''
@@ -91,6 +92,7 @@ export function useFlowFilters(items: RawMessage[] | null | undefined): UseFlowF
     filters.isConsolidateCaptureIds,
     filters.consolidationTimeThresholdMs,
     filters.showRtcp,
+    filters.showOtlpEvents,
   ])
 
   const { filterIP, filterMethod, filterPayloadType, filterCallId, filteredItems } = useMemo(() => {

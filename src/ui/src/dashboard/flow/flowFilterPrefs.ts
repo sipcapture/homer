@@ -11,6 +11,7 @@ export interface FlowFilters {
   isConsolidateCaptureIds: boolean
   consolidationTimeThresholdMs: number
   showRtcp: boolean
+  showOtlpEvents: boolean
   hostGrouping: HostGrouping
   ipExcluded: Set<string>
   methodExcluded: Set<string>
@@ -25,6 +26,7 @@ export const DEFAULT_FILTERS: FlowFilters = {
   isConsolidateCaptureIds: false,
   consolidationTimeThresholdMs: 500,
   showRtcp: false,
+  showOtlpEvents: false,
   hostGrouping: 'ungrouped',
   ipExcluded: new Set(),
   methodExcluded: new Set(),
@@ -40,6 +42,7 @@ export interface StoredFlowPrefs {
   isConsolidateCaptureIds?: boolean
   consolidationTimeThresholdMs?: number
   showRtcp?: boolean
+  showOtlpEvents?: boolean
 }
 
 export function isHostGrouping(value: unknown): value is HostGrouping {
@@ -62,6 +65,7 @@ export function loadStoredFlowPrefs(): StoredFlowPrefs {
       out.isConsolidateCaptureIds = parsed.isConsolidateCaptureIds
     }
     if (typeof parsed.showRtcp === 'boolean') out.showRtcp = parsed.showRtcp
+    if (typeof parsed.showOtlpEvents === 'boolean') out.showOtlpEvents = parsed.showOtlpEvents
     if (
       typeof parsed.consolidationTimeThresholdMs === 'number' &&
       Number.isFinite(parsed.consolidationTimeThresholdMs)
@@ -84,6 +88,7 @@ export function saveStoredFlowPrefs(filters: FlowFilters): void {
     isConsolidateCaptureIds: filters.isConsolidateCaptureIds,
     consolidationTimeThresholdMs: filters.consolidationTimeThresholdMs,
     showRtcp: filters.showRtcp,
+    showOtlpEvents: filters.showOtlpEvents,
   }
   try {
     localStorage.setItem(FLOW_FILTER_PREFS_LS_KEY, JSON.stringify(payload))

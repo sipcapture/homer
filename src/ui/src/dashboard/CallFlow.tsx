@@ -13,9 +13,11 @@ interface CallFlowProps {
   items: RawMessage[] | null | undefined
   timeZone?: string
   onClickMessage?: (item: FlowItemData) => void
+  /** Lets the parent skip the otlp-logs lookup while the toggle is off. */
+  onShowOtlpEventsChange?: (show: boolean) => void
 }
 
-export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowProps) {
+export default function CallFlow({ items, timeZone, onClickMessage, onShowOtlpEventsChange }: CallFlowProps) {
   const { resolved: locale } = useLocale()
   const {
     filters,
@@ -28,6 +30,10 @@ export default function CallFlow({ items, timeZone, onClickMessage }: CallFlowPr
   } = useFlowFilters(items)
 
   const [expandedItemKey, setExpandedItemKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    onShowOtlpEventsChange?.(filters.showOtlpEvents)
+  }, [filters.showOtlpEvents, onShowOtlpEventsChange])
 
   const { hosts, flowItems } = useMemo(
     () =>

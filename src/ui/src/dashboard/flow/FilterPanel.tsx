@@ -104,6 +104,14 @@ export function FilterPanel({
                   onCheckedChange={(v) => setFilters((p) => ({ ...p, showRtcp: !!v }))}
                 />
               </div>
+              <div className="callflow-filter-row">
+                <Label htmlFor="flow-otlp-events">OTLP events</Label>
+                <Switch
+                  id="flow-otlp-events"
+                  checked={filters.showOtlpEvents}
+                  onCheckedChange={(v) => setFilters((p) => ({ ...p, showOtlpEvents: !!v }))}
+                />
+              </div>
               {canConsolidateCaptureIds ? (
                 <>
                   <div className="callflow-filter-row">

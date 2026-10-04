@@ -28,6 +28,7 @@ describe('flowFilterPrefs', () => {
       isConsolidateCaptureIds: false,
       consolidationTimeThresholdMs: 500,
       showRtcp: false,
+      showOtlpEvents: false,
     })
   })
 
@@ -74,6 +75,13 @@ describe('flowFilterPrefs', () => {
     saveStoredFlowPrefs({ ...DEFAULT_FILTERS, showRtcp: true })
     expect(loadStoredFlowPrefs()).toMatchObject({ showRtcp: true })
     expect(initialFlowFilters().showRtcp).toBe(true)
+  })
+
+  it('round-trips showOtlpEvents and defaults it to false', () => {
+    expect(DEFAULT_FILTERS.showOtlpEvents).toBe(false)
+    expect(initialFlowFilters().showOtlpEvents).toBe(false)
+    saveStoredFlowPrefs({ ...DEFAULT_FILTERS, showOtlpEvents: true })
+    expect(initialFlowFilters().showOtlpEvents).toBe(true)
   })
 
   it('defaults showRtcp to false', () => {

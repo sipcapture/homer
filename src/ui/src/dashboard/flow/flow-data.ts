@@ -178,6 +178,7 @@ export function protoLabelOf(proto: string | number | undefined): string {
  * Untagged rows default to SIP so existing SIP-only ladders keep working.
  */
 export function payloadTypeOf(msg: RawMessage): string {
+  if (msg.flow_payload_type === 'OTLP') return 'OTLP'
   const hep = hepProtoTypeOf(msg)
   if (hep === 5 || hep === 34) return 'RTCP'
   if (hep === 35) return 'RTP'
@@ -599,6 +600,8 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
       const rtcpLabels = computeRtcpFlowLabels(msg)
       method = rtcpLabels.method
       description = rtcpLabels.description
+    } else if (payloadType === 'OTLP') {
+      description = String(msg.otlp_description ?? '')
     } else if (payloadType === 'SIP') {
       const sipLabels = computeSipFlowLabels(msg as Record<string, unknown>)
       if (sipLabels) {
