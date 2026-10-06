@@ -20,19 +20,35 @@ export const DEFAULT_TRANSACTION_RANGE: TransactionRange = {
   message_to: 300000,
 }
 
-function offset(value: unknown, sign: -1 | 1, fallback: number): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
-  return value * sign >= 0 ? value : fallback
+// Each open scans this whole span of Parquet, so a typo must not widen it unbounded.
+export const MAX_TRANSACTION_OFFSET_MS = 24 * 3600 * 1000
+
+function offset(d: Record<string, unknown>, key: keyof TransactionRange, sign: -1 | 1): number {
+  const value = d[key]
+  const fallback = DEFAULT_TRANSACTION_RANGE[key]
+  if (value === undefined) return fallback
+  if (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value * sign >= 0 &&
+    Math.abs(value) <= MAX_TRANSACTION_OFFSET_MS
+  ) {
+    return value
+  }
+  console.warn(
+    `transaction.range.${key} ${JSON.stringify(value)} must be a number in ${sign < 0 ? `[-${MAX_TRANSACTION_OFFSET_MS}, 0]` : `[0, ${MAX_TRANSACTION_OFFSET_MS}]`} ms, using ${fallback}`,
+  )
+  return fallback
 }
 
 export function parseTransactionRange(data: unknown): TransactionRange {
   if (data == null || typeof data !== 'object' || Array.isArray(data)) return DEFAULT_TRANSACTION_RANGE
   const d = data as Record<string, unknown>
   return {
-    from: offset(d.from, -1, DEFAULT_TRANSACTION_RANGE.from),
-    to: offset(d.to, 1, DEFAULT_TRANSACTION_RANGE.to),
-    message_from: offset(d.message_from, -1, DEFAULT_TRANSACTION_RANGE.message_from),
-    message_to: offset(d.message_to, 1, DEFAULT_TRANSACTION_RANGE.message_to),
+    from: offset(d, 'from', -1),
+    to: offset(d, 'to', 1),
+    message_from: offset(d, 'message_from', -1),
+    message_to: offset(d, 'message_to', 1),
   }
 }
 
@@ -40,11 +56,12 @@ export function transactionWindow(range: TransactionRange, firstMs: number, last
   return { from: firstMs + range.from, to: lastMs + range.to }
 }
 
-export function useTransactionRange(): TransactionRange {
-  const [range, setRange] = useState(DEFAULT_TRANSACTION_RANGE)
-  useEffect(() => {
-    let cancelled = false
-    apiGet('/advanced', {
+let rangePromise: Promise<TransactionRange> | null = null
+
+/** One `/advanced` request per page load, shared by every ResultsPanel; retried after a failure. */
+export function loadTransactionRange(): Promise<TransactionRange> {
+  if (!rangePromise) {
+    rangePromise = apiGet('/advanced', {
       'filter[category]': 'transaction',
       'filter[param]': 'range',
       'page[limit]': 10,
@@ -53,9 +70,28 @@ export function useTransactionRange(): TransactionRange {
         const row = (res?.data?.items || []).find(
           (i: { category?: string; param?: string }) => i?.category === 'transaction' && i?.param === 'range',
         )
-        if (!cancelled && row) setRange(parseTransactionRange(row.data))
+        return row ? parseTransactionRange(row.data) : DEFAULT_TRANSACTION_RANGE
       })
-      .catch(() => {})
+      .catch((err) => {
+        rangePromise = null
+        console.warn('transaction.range: failed to load advanced setting, using ±300s', err)
+        return DEFAULT_TRANSACTION_RANGE
+      })
+  }
+  return rangePromise
+}
+
+export function resetTransactionRangeCache() {
+  rangePromise = null
+}
+
+export function useTransactionRange(): TransactionRange {
+  const [range, setRange] = useState(DEFAULT_TRANSACTION_RANGE)
+  useEffect(() => {
+    let cancelled = false
+    void loadTransactionRange().then((r) => {
+      if (!cancelled) setRange(r)
+    })
     return () => {
       cancelled = true
     }

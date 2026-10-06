@@ -363,7 +363,9 @@ Opening a transaction (or a single message) from a results row loads messages fr
 - **param:** `range`
 - **data:** `{ "from": -600000, "to": 10800000, "message_from": -300000, "message_to": 300000 }`
 
-`from` / `message_from` must be ≤ 0 and `to` / `message_to` ≥ 0; any missing or invalid field keeps its default. A wider `to` scans more Parquet per open.
+`from` / `message_from` must be between -86400000 and 0, and `to` / `message_to` between 0 and 86400000 (24 h). A missing field keeps its default; an invalid or out-of-range one also keeps its default and logs a `console.warn`. A wider window scans more Parquet per open. The setting is read once per page load.
+
+The window is anchored on the clicked row. With an asymmetric range like the example, open a long call from its first message (the INVITE): opening it from the BYE or a late re-INVITE reaches only `from` back and misses the start. To open from anywhere in the call, tick its first and last rows, then click `Tx` on any row (with rows ticked, `Tx` opens the ticked rows), or use a symmetric range.
 
 ## Field Selection
 
