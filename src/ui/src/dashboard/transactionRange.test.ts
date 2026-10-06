@@ -1,3 +1,4 @@
+import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiGet } from '@/api'
 import {
@@ -7,6 +8,7 @@ import {
   parseTransactionRange,
   resetTransactionRangeCache,
   transactionWindow,
+  useTransactionRange,
 } from './transactionRange'
 
 vi.mock('@/api', () => ({ apiGet: vi.fn() }))
@@ -101,13 +103,23 @@ describe('loadTransactionRange', () => {
     vi.restoreAllMocks()
   })
 
-  it('shares one /advanced request across callers', async () => {
+  it('shares one /advanced request across concurrent callers', async () => {
     mockedApiGet.mockResolvedValue({ data: { items: [row] } })
     const [a, b] = await Promise.all([loadTransactionRange(), loadTransactionRange()])
-    await loadTransactionRange()
     expect(mockedApiGet).toHaveBeenCalledTimes(1)
     expect(a).toEqual({ ...DEFAULT_TRANSACTION_RANGE, from: -600000, to: 10800000 })
     expect(b).toBe(a)
+  })
+
+  it('picks up an edited setting on the next mount without a page reload', async () => {
+    mockedApiGet.mockResolvedValueOnce({ data: { items: [{ ...row, data: { to: 3600000 } }] } })
+    const first = renderHook(() => useTransactionRange())
+    await waitFor(() => expect(first.result.current.to).toBe(3600000))
+    first.unmount()
+
+    mockedApiGet.mockResolvedValueOnce({ data: { items: [{ ...row, data: { to: 10800000 } }] } })
+    const second = renderHook(() => useTransactionRange())
+    await waitFor(() => expect(second.result.current.to).toBe(10800000))
   })
 
   it('matches category/param exactly, since the server filter is a substring match', async () => {

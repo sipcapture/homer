@@ -58,27 +58,32 @@ export function transactionWindow(range: TransactionRange, firstMs: number, last
 
 let rangePromise: Promise<TransactionRange> | null = null
 
-/** One `/advanced` request per page load, shared by every ResultsPanel; retried after a failure. */
+/**
+ * ResultsPanels mounting together share one in-flight `/advanced` request. It is not kept after it settles:
+ * closing Settings remounts the dashboard without a page load, and must pick up an edited range.
+ */
 export function loadTransactionRange(): Promise<TransactionRange> {
-  if (!rangePromise) {
-    rangePromise = apiGet('/advanced', {
-      'filter[category]': 'transaction',
-      'filter[param]': 'range',
-      'page[limit]': 10,
+  if (rangePromise) return rangePromise
+  const request: Promise<TransactionRange> = apiGet('/advanced', {
+    'filter[category]': 'transaction',
+    'filter[param]': 'range',
+    'page[limit]': 10,
+  })
+    .then((res) => {
+      const row = (res?.data?.items || []).find(
+        (i: { category?: string; param?: string }) => i?.category === 'transaction' && i?.param === 'range',
+      )
+      return row ? parseTransactionRange(row.data) : DEFAULT_TRANSACTION_RANGE
     })
-      .then((res) => {
-        const row = (res?.data?.items || []).find(
-          (i: { category?: string; param?: string }) => i?.category === 'transaction' && i?.param === 'range',
-        )
-        return row ? parseTransactionRange(row.data) : DEFAULT_TRANSACTION_RANGE
-      })
-      .catch((err) => {
-        rangePromise = null
-        console.warn('transaction.range: failed to load advanced setting, using ±300s', err)
-        return DEFAULT_TRANSACTION_RANGE
-      })
-  }
-  return rangePromise
+    .catch((err) => {
+      console.warn('transaction.range: failed to load advanced setting, using ±300s', err)
+      return DEFAULT_TRANSACTION_RANGE
+    })
+    .finally(() => {
+      if (rangePromise === request) rangePromise = null
+    })
+  rangePromise = request
+  return request
 }
 
 export function resetTransactionRangeCache() {
