@@ -355,6 +355,16 @@ homer search --host coordinator:8081 --user admin --pass secret \
 
 If no row contains a SIP payload after filters, the command fails with a clear error.
 
+### Transaction window (UI)
+
+Opening a transaction (or a single message) from a results row loads messages from `first row time + from` to `last row time + to`; that window also bounds Lua correlation (`ctx.time_from` / `ctx.time_to`). The default is ±5 minutes, so a longer call loses its re-INVITEs and BYE. Widen it in Advanced settings (offsets in ms, Homer 7's `transaction:range`):
+
+- **category:** `transaction`
+- **param:** `range`
+- **data:** `{ "from": -600000, "to": 10800000, "message_from": -300000, "message_to": 300000 }`
+
+`from` / `message_from` must be ≤ 0 and `to` / `message_to` ≥ 0; any missing or invalid field keeps its default. A wider `to` scans more Parquet per open.
+
 ## Field Selection
 
 Show only specific columns with `--fields`:
