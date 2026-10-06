@@ -355,6 +355,18 @@ homer search --host coordinator:8081 --user admin --pass secret \
 
 If no row contains a SIP payload after filters, the command fails with a clear error.
 
+### Transaction window (UI)
+
+Opening a transaction (or a single message) from a results row loads messages from `first row time + from` to `last row time + to`; that window also bounds Lua correlation (`ctx.time_from` / `ctx.time_to`). The default is ±5 minutes, so a longer call loses its re-INVITEs and BYE. Widen it in Advanced settings (offsets in ms, Homer 7's `transaction:range`):
+
+- **category:** `transaction`
+- **param:** `range`
+- **data:** `{ "from": -600000, "to": 10800000, "message_from": -300000, "message_to": 300000 }`
+
+`from` / `message_from` must be between -86400000 and 0, and `to` / `message_to` between 0 and 86400000 (24 h). A missing field keeps its default; an invalid or out-of-range one also keeps its default and logs a `console.warn`. A wider window scans more Parquet per open. The setting is re-read whenever the dashboard loads, so an edit applies as soon as you close Settings.
+
+The window is anchored on the clicked row. With an asymmetric range like the example, open a long call from its first message (the INVITE): opening it from the BYE or a late re-INVITE reaches only `from` back and misses the start. To open from anywhere in the call, tick its first and last rows, then click `Tx` on any row (with rows ticked, `Tx` opens the ticked rows), or use a symmetric range.
+
 ## Field Selection
 
 Show only specific columns with `--fields`:

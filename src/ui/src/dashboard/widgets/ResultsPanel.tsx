@@ -44,6 +44,7 @@ import MessageModal from '../MessageModal'
 import { useLocale } from '@/components/locale/locale-provider'
 import { columnDisplayLabel, columnDisplayTitle } from '../resultColumnLabels'
 import { ensureNodeNameKey, promoteDataExtraNodeName } from '../promoteDataExtraNodeName'
+import { transactionWindow, useTransactionRange } from '../transactionRange'
 import {
   compareSearchResultRows,
   normalizeStoredResultSort,
@@ -272,6 +273,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
   const { apiBase, authHeader, timeRange, timeZone, requestTimeRange, subscribeToTimeRange } = useDashboard()
   const { resolved: locale } = useLocale()
   const searchData = useWidgetSearch(widgetId)
+  const txRange = useTransactionRange()
   const lastSearchDataRef = useRef(null)
   const lastTimerangeBroadcastKeyRef = useRef(null)
   const timeRangeRef = useRef(timeRange)
@@ -627,12 +629,11 @@ export default function ResultsPanel({ widgetId, config: _config }) {
     const protoType = lastSearch?.filter?.proto_type ?? 1
     const eventType = lastSearch?.filter?.event_type ?? 'call'
     const rowMs = pickRowTimestampMs(row)
-    const WIN_MS = 300 * 1000
     const messageContext = { proto_type: protoType, event_type: eventType }
     // Only send timestamp when it comes from the result row. Dashboard time range
     // often does not match SQL rows and causes /messages 404 (partition filter).
     if (rowMs != null) {
-      messageContext.timestamp = { from: rowMs - WIN_MS, to: rowMs + WIN_MS }
+      messageContext.timestamp = { from: rowMs + txRange.message_from, to: rowMs + txRange.message_to }
     }
     const initial = { modalKey, uuid, loading: true, data: null, error: '', messageContext }
     setMessageModals(prev => [...prev, initial])
@@ -667,7 +668,6 @@ export default function ResultsPanel({ widgetId, config: _config }) {
     const lastSearch = lastSearchDataRef.current
     const protoType = Number(lastSearch?.filter?.proto_type ?? lastSearch?.filter?.proto ?? 1) || 1
     const eventType = String(lastSearch?.filter?.event_type ?? lastSearch?.filter?.event ?? 'call')
-    const WIN_MS = 300 * 1000
 
     let sessionIds = []
     let titleId = ''
@@ -709,7 +709,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
       }
       titleId = sessionIds.length === 1 ? sessionIds[0] : `${sessionIds.length} sessions`
       if (tsMs.length > 0) {
-        timeRangeTx = { from: Math.min(...tsMs) - WIN_MS, to: Math.max(...tsMs) + WIN_MS }
+        timeRangeTx = transactionWindow(txRange, Math.min(...tsMs), Math.max(...tsMs))
       } else if (timeRange?.from != null && timeRange?.to != null) {
         timeRangeTx = timeRange
       }
@@ -730,7 +730,7 @@ export default function ResultsPanel({ widgetId, config: _config }) {
       titleId = tid
       const rowMs = pickRowTimestampMs(row)
       timeRangeTx = rowMs != null
-        ? { from: rowMs - WIN_MS, to: rowMs + WIN_MS }
+        ? transactionWindow(txRange, rowMs, rowMs)
         : timeRange
     }
 
