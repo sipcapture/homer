@@ -18,6 +18,7 @@ import (
 
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
+	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"github.com/sipcapture/homer-core/src/utils/metrics"
 )
 
@@ -40,6 +41,10 @@ type Ingester struct {
 
 	tablesMu    sync.Mutex
 	tablesState map[string]map[string]string // fqTable → col → SQL type
+	// dateFill marks tables partitioned by `date`, which writeRows fills
+	// from ts. duckLake caches whether lakeName is DuckLake (-1 = unknown).
+	dateFill map[string]bool
+	duckLake int
 
 	schemasMu      sync.Mutex
 	schemasCreated map[string]bool
@@ -63,6 +68,8 @@ func NewIngester(db *sql.DB, lakeName string, cfg *config.LineProtoConfig) *Inge
 		tablePrefix:     tp,
 		allowHepSipCall: allow,
 		tablesState:     make(map[string]map[string]string),
+		dateFill:        make(map[string]bool),
+		duckLake:        -1,
 		schemasCreated:  make(map[string]bool),
 	}
 }
@@ -253,6 +260,17 @@ func (i *Ingester) writeRows(ctx context.Context, fqTable string, rows []map[str
 	if err := i.ensureTable(ctx, fqTable, colTypes); err != nil {
 		return 0, err
 	}
+	if i.fillsDate(fqTable) {
+		for _, r := range rows {
+			if _, ok := r[ducklake.DateColumn]; ok {
+				continue
+			}
+			// ts is RFC3339 in UTC, so its first 10 bytes are the UTC day.
+			if ts, ok := r["ts"].(string); ok && len(ts) >= 10 {
+				r[ducklake.DateColumn] = ts[:10]
+			}
+		}
+	}
 
 	// Bucket rows by their column signature so we emit one prepared
 	// INSERT per distinct subset (most batches end up in a single
@@ -344,6 +362,10 @@ func (i *Ingester) ensureTable(ctx context.Context, fqTable string, cols map[str
 		if _, ok := cols["ts"]; !ok {
 			cols["ts"] = "TIMESTAMP"
 		}
+		lake := i.isDuckLakeLocked(ctx)
+		if _, ok := cols[ducklake.DateColumn]; !ok && lake {
+			cols[ducklake.DateColumn] = "DATE"
+		}
 		var sb strings.Builder
 		fmt.Fprintf(&sb, "CREATE TABLE IF NOT EXISTS %s (", fqTable)
 		names := sortedStringMapKeys(cols)
@@ -365,6 +387,17 @@ func (i *Ingester) ensureTable(ctx context.Context, fqTable string, cols map[str
 			state[n] = t
 		}
 		i.tablesState[fqTable] = state
+		if lake {
+			schema, table := splitFQTable(fqTable)
+			fill, err := ducklake.EnsureDatePartition(ctx, i.db, i.lakeName, schema, table, "ts")
+			if err != nil {
+				logger.Warn("line-proto: daily partitioning failed", "table", fqTable, "error", err)
+			}
+			if fill {
+				i.dateFill[fqTable] = true
+				state[ducklake.DateColumn] = "DATE"
+			}
+		}
 		return nil
 	}
 
@@ -380,6 +413,38 @@ func (i *Ingester) ensureTable(ctx context.Context, fqTable string, cols map[str
 		state[n] = t
 	}
 	return nil
+}
+
+func (i *Ingester) fillsDate(fqTable string) bool {
+	i.tablesMu.Lock()
+	defer i.tablesMu.Unlock()
+	return i.dateFill[fqTable]
+}
+
+// isDuckLakeLocked caches whether lakeName is a DuckLake catalog. Caller
+// holds tablesMu.
+func (i *Ingester) isDuckLakeLocked(ctx context.Context) bool {
+	if i.duckLake < 0 {
+		i.duckLake = 0
+		if ducklake.IsDuckLakeCatalog(ctx, i.db, i.lakeName) {
+			i.duckLake = 1
+		}
+	}
+	return i.duckLake == 1
+}
+
+// splitFQTable splits "<lake>.<table>" or "<lake>.<schema>.<table>" into
+// schema and table.
+func splitFQTable(fq string) (schema, table string) {
+	parts := strings.Split(fq, ".")
+	switch len(parts) {
+	case 3:
+		return parts[1], parts[2]
+	case 2:
+		return "main", parts[1]
+	default:
+		return "main", fq
+	}
 }
 
 // colType picks a DuckDB type for a given column value. "ts" and columns
@@ -452,6 +517,8 @@ func SanitizeIdent(name string) string {
 func (i *Ingester) resetForTests() {
 	i.tablesMu.Lock()
 	i.tablesState = make(map[string]map[string]string)
+	i.dateFill = make(map[string]bool)
+	i.duckLake = -1
 	i.tablesMu.Unlock()
 	i.schemasMu.Lock()
 	i.schemasCreated = make(map[string]bool)

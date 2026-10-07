@@ -95,7 +95,7 @@ Failures are logged per table; missing Parquet files are skipped and cleaned up 
 
 ### Applies to lake tables
 
-Retention runs on **every HEP table** (`hep_proto_*`) and **every OTLP signal table** (`otlp_traces`, `otlp_metrics`, `otlp_logs`) discovered in the writer DuckLake catalog. Use `retention_days_by_table` when different datasets need different windows — for example keep calls longer than REGISTERs:
+Retention runs on **every HEP table** (`hep_proto_*`), **every OTLP signal table** (`otlp_traces`, `otlp_metrics`, `otlp_logs`) and **every Line Protocol table in `main`** (any table partitioned by `date` with a `ts` column; retention deletes by `ts`) discovered in the writer DuckLake catalog. Use `retention_days_by_table` when different datasets need different windows — for example keep calls longer than REGISTERs:
 
 ```json
 "compaction": {
@@ -122,11 +122,17 @@ capture — an `otlp_logs` override is the usual case:
 }
 ```
 
-The same discovery set is used by the writer compaction cycle, the one-off
-`homer-core system --compaction-retention-days` / `--compaction-force` CLI,
-and `TieredStorageManager` (hot→cold moves and final-volume expiry). Line
-Protocol tables are in neither set; use a non-empty `table_prefix` plus
-external lifecycle rules on object storage, or a dedicated volume.
+Line Protocol tables are named after their measurement, so they are found by
+their daily `date` partition rather than by name. A global `retention_days`
+therefore also applies to them; exempt one with
+`"retention_days_by_table": {"<measurement>": 0}`. LP tables written before
+the upgrade join the set on their first write after it, when they are
+partitioned. LP tables in a `?db=` schema are not covered.
+
+The writer compaction cycle covers all three kinds. The one-off
+`homer-core system --compaction-retention-days` / `--compaction-force` CLI
+and `TieredStorageManager` (hot→cold moves and final-volume expiry) cover
+HEP and OTLP tables only.
 
 OTLP and Line Protocol docs point here: [OTLP.md](OTLP.md), [LINE_PROTOCOL.md](LINE_PROTOCOL.md).
 
