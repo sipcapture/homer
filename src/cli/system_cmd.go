@@ -30,51 +30,6 @@ func tableNameFromFQN(table string) string {
 var reBrokenParquetCLI = regexp.MustCompile(
 	`Cannot open file "([^"]+\.parquet)"|Invalid footer.*for file '([^']+\.parquet)'`)
 
-// catalogPathToAbsCLI converts a DuckLake catalog-relative path to an absolute filesystem path.
-func catalogPathToAbsCLI(dataPath, tableName, catalogPath string) string {
-	if filepath.IsAbs(catalogPath) {
-		return catalogPath
-	}
-	if dataPath == "" {
-		return catalogPath
-	}
-	if strings.HasPrefix(catalogPath, "main/") {
-		return filepath.Join(dataPath, catalogPath)
-	}
-	return filepath.Join(dataPath, "main", tableName, catalogPath)
-}
-
-// isGhostOrCorruptCLI returns true if the given parquet file is missing, too small,
-// or does not have valid Parquet magic bytes ("PAR1") at the start and end.
-func isGhostOrCorruptCLI(path string) bool {
-	f, err := os.Open(path)
-	if err != nil {
-		return os.IsNotExist(err)
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
-	if err != nil {
-		return true
-	}
-	// Minimum valid Parquet: 4 (magic) + 4 (footer len) + 4 (magic) = 12 bytes
-	if info.Size() < 12 {
-		return true
-	}
-
-	head := make([]byte, 4)
-	if _, err := f.Read(head); err != nil || string(head) != "PAR1" {
-		return true
-	}
-
-	tail := make([]byte, 4)
-	if _, err := f.ReadAt(tail, info.Size()-4); err != nil || string(tail) != "PAR1" {
-		return true
-	}
-
-	return false
-}
-
 // SystemFlags holds flags for the "homer system" subcommand.
 type SystemFlags struct {
 	ConfigPath                string
@@ -433,59 +388,36 @@ func discoverDuckLakeTables(db *sql.DB, lakeName string) ([]string, error) {
 //
 // Returns the number of stale/corrupt entries removed.
 func repairCatalog(db *sql.DB, lakeName, dataPath string) (int, error) {
-	metadataSchema := fmt.Sprintf("__ducklake_metadata_%s", lakeName)
-
-	// Scan only active entries to avoid touching already-expired history.
-	rows, err := db.Query(fmt.Sprintf(`
-		SELECT f.data_file_id, t.table_name, f.path
-		FROM %s.ducklake_data_file f
-		JOIN %s.ducklake_table t ON t.table_id = f.table_id
-		WHERE f.end_snapshot IS NULL
-	`, metadataSchema, metadataSchema))
-	if err != nil {
-		return 0, fmt.Errorf("failed to query catalog files: %w", err)
-	}
-
-	type fileEntry struct {
-		id        int64
-		tableName string
-		path      string
-		absPath   string
-	}
-	var stale []fileEntry
-	for rows.Next() {
-		var e fileEntry
-		if err := rows.Scan(&e.id, &e.tableName, &e.path); err != nil {
-			rows.Close()
-			return 0, fmt.Errorf("failed to scan catalog row: %w", err)
-		}
-		e.absPath = catalogPathToAbsCLI(dataPath, e.tableName, e.path)
-		if isGhostOrCorruptCLI(e.absPath) {
-			stale = append(stale, e)
-		}
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-
-	if len(stale) == 0 {
+	if ducklake.IsRemoteLakeDataPath(dataPath) {
 		return 0, nil
 	}
-
-	for _, e := range stale {
-		logger.Info("Removing stale/corrupt catalog entry", "data_file_id", e.id, "table", e.tableName, "path", e.path)
-		if _, err := db.Exec(
-			fmt.Sprintf(`DELETE FROM %s.ducklake_data_file WHERE data_file_id = ?`, metadataSchema),
-			e.id,
-		); err != nil {
-			logger.Warn("Failed to remove stale entry", "data_file_id", e.id, "error", err)
-			continue
-		}
-		_ = os.Remove(e.absPath)
+	scan, err := ducklake.ScanGhostFiles(db.Query, lakeName, dataPath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to scan catalog files: %w", err)
+	}
+	if len(scan.Ghosts) == 0 {
+		return 0, nil
+	}
+	// A removed entry makes its file an orphan for delete_orphaned_files.
+	if scan.Refused {
+		return 0, fmt.Errorf("catalog repair refused, no entry removed: %s (data_path=%s)",
+			scan.RefuseReason, dataPath)
 	}
 
-	return len(stale), nil
+	removed := 0
+	for _, g := range scan.Ghosts {
+		logger.Info("Removing stale/corrupt catalog entry", "data_file_id", g.DataFileID,
+			"table", g.Schema+"."+g.Table, "path", g.Path)
+		if err := ducklake.DeleteDataFileEntry(db.Exec, lakeName, g.DataFileID); err != nil {
+			logger.Warn("Failed to remove stale entry", "data_file_id", g.DataFileID, "error", err)
+			continue
+		}
+		if g.Exists {
+			_ = os.Remove(g.Path)
+		}
+		removed++
+	}
+	return removed, nil
 }
 
 // recoverCatalog re-ingests parquet files from disk into DuckLake tables.
@@ -813,7 +745,7 @@ func registerTableFiles(db *sql.DB, lakeName, dataPath, table string) (filesRegi
 			"table", table, "files", len(files), "error", e.Error())
 		var skipped int
 		for i, file := range files {
-			if isGhostOrCorruptCLI(file) {
+			if ducklake.IsUnreadableParquet(file) {
 				logger.Warn("rebuild-catalog: skipping unreadable/corrupt parquet", "table", table, "file", file)
 				skipped++
 				continue
