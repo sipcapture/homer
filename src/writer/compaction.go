@@ -27,68 +27,6 @@ import (
 var reBrokenParquet = regexp.MustCompile(
 	`Cannot open file "([^"]+\.parquet)"|Invalid footer.*for file '([^']+\.parquet)'`)
 
-// catalogPathToAbs converts a DuckLake catalog-relative path to an absolute filesystem path.
-//
-// DuckLake stores file paths in ducklake_data_file.path relative to the per-table
-// root directory: {DataPath}/main/{tableName}/.  Older catalog entries (written by
-// a previous DuckLake version) include the "main/{table}/" prefix themselves.
-func catalogPathToAbs(dataPath, tableName, catalogPath string) string {
-	if filepath.IsAbs(catalogPath) {
-		return catalogPath
-	}
-	if dataPath == "" {
-		return catalogPath
-	}
-	// Paths that already start with "main/" carry their own table subdirectory.
-	if strings.HasPrefix(catalogPath, "main/") {
-		if ducklake.IsRemoteLakeDataPath(dataPath) {
-			return ducklake.JoinLakeDataPath(dataPath, catalogPath)
-		}
-		return filepath.Join(dataPath, catalogPath)
-	}
-	// Current DuckLake format: path is relative to {DataPath}/main/{tableName}/
-	if ducklake.IsRemoteLakeDataPath(dataPath) {
-		return ducklake.JoinLakeDataPath(dataPath, "main", tableName, catalogPath)
-	}
-	return filepath.Join(dataPath, "main", tableName, catalogPath)
-}
-
-// parquetMagic is the 4-byte magic number at the start and end of every valid Parquet file.
-var parquetMagic = []byte("PAR1")
-
-// isGhostOrCorrupt returns true if the given parquet file is missing, too small,
-// or does not have valid Parquet magic bytes ("PAR1") at the start and end.
-func isGhostOrCorrupt(path string) bool {
-	f, err := os.Open(path)
-	if err != nil {
-		return os.IsNotExist(err)
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
-	if err != nil {
-		return true
-	}
-	// Minimum valid Parquet: 4 (magic) + 4 (footer len) + 4 (magic) = 12 bytes
-	if info.Size() < 12 {
-		return true
-	}
-
-	// Check leading magic "PAR1"
-	head := make([]byte, 4)
-	if _, err := f.Read(head); err != nil || string(head) != string(parquetMagic) {
-		return true
-	}
-
-	// Check trailing magic "PAR1"
-	tail := make([]byte, 4)
-	if _, err := f.ReadAt(tail, info.Size()-4); err != nil || string(tail) != string(parquetMagic) {
-		return true
-	}
-
-	return false
-}
-
 // extractBrokenParquetPath parses the absolute parquet path from a DuckDB error
 // about a file that is missing or has an invalid format (corrupt footer).
 func extractBrokenParquetPath(err error) string {
@@ -1548,55 +1486,43 @@ func (c *CompactionService) recoverGhostFiles() {
 		return
 	}
 
-	metadataSchema := fmt.Sprintf("__ducklake_metadata_%s", c.lakeName)
-
-	// Scan ALL active catalog entries (end_snapshot IS NULL).
-	// We do not limit by snapshot window because ghosts may come from any
-	// past interrupted transaction — not just the most recent one.
-	query := fmt.Sprintf(`
-		SELECT t.table_name, f.path
-		FROM %s.ducklake_data_file f
-		JOIN %s.ducklake_table t ON t.table_id = f.table_id
-		WHERE f.end_snapshot IS NULL
-	`, metadataSchema, metadataSchema)
-
-	rows, err := c.queryWithRetry(query)
+	scan, err := ducklake.ScanGhostFiles(c.queryWithRetry, c.lakeName, c.dataPath)
 	if err != nil {
 		logger.Warn("CompactionService: catalog ghost-file scan failed", "error", err)
 		return
 	}
-	defer rows.Close()
-
-	type entry struct{ table, path string }
-	var ghosts []entry
-	for rows.Next() {
-		var table, catalogPath string
-		if err := rows.Scan(&table, &catalogPath); err != nil {
-			continue
-		}
-		absPath := catalogPathToAbs(c.dataPath, table, catalogPath)
-		if isGhostOrCorrupt(absPath) {
-			ghosts = append(ghosts, entry{table, absPath})
-		}
-	}
-
+	ghosts := scan.Ghosts
 	if len(ghosts) == 0 {
+		return
+	}
+	// A removed entry makes its file an orphan, and the cycle's
+	// ducklake_delete_orphaned_files then deletes it from disk.
+	if scan.Refused {
+		logger.Error("CompactionService: ghost recovery refused, no catalog entry removed; "+
+			"check that the files exist under data_path",
+			"reason", scan.RefuseReason, "data_path", c.dataPath)
 		return
 	}
 
 	logger.Warn("CompactionService: found ghost/corrupt catalog entries",
-		"count", len(ghosts))
+		"count", len(ghosts), "files_checked", scan.FilesChecked)
 
 	start := time.Now()
 	removed, failed := 0, 0
 	const logEvery = 100
 
 	for i, g := range ghosts {
-		if c.removeBrokenCatalogEntry(g.table, g.path) {
-			_ = os.Remove(g.path)
-			removed++
-		} else {
+		if err := ducklake.DeleteDataFileEntry(c.execWithRetry, c.lakeName, g.DataFileID); err != nil {
+			logger.Warn("CompactionService: failed to remove broken catalog entry",
+				"table", g.Schema+"."+g.Table, "path", g.Path, "error", err)
 			failed++
+		} else {
+			logger.Info("CompactionService: removed broken catalog entry",
+				"table", g.Schema+"."+g.Table, "path", g.Path)
+			if g.Exists {
+				_ = os.Remove(g.Path)
+			}
+			removed++
 		}
 		if (i+1)%logEvery == 0 {
 			logger.Info("CompactionService: ghost recovery progress",
