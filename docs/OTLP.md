@@ -102,7 +102,7 @@ When enabled, the DuckLake sink is wrapped in a **bounded channel + single
 worker**: gRPC/HTTP handlers clone the protobuf request, push one job, and
 return success without waiting for `INSERT` into DuckLake.
 
-**Trade-offs (by design, not hepic-lake-style staging):**
+**Trade-offs (by design):**
 
 - **Durability**: After `200 OK` / gRPC OK the batch may still sit in RAM
   until the worker writes it. A crash can **lose** accepted batches that

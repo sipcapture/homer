@@ -1,8 +1,6 @@
 // Copyright (C) 2026 Homer Server Contributors
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//
-// Adapted from hepic-lake/src/writer/lineproto_parser_test.go.
 
 package lineprotoreceiver
 

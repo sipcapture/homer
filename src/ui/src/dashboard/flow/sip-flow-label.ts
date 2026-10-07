@@ -4,7 +4,7 @@ export function sipRawFromMessage(msg: Record<string, unknown>): string {
     'raw',
     'Raw',
     'payload',
-    'Payload', // hepic-lake / DuckLake sip_messages
+    'Payload', // DuckLake sip_messages
     'message',
     'Message',
     'data',

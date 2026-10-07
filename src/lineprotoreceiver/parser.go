@@ -1,11 +1,6 @@
 // Copyright (C) 2026 Homer Server Contributors
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//
-// This file is adapted from hepic-lake/src/writer/lineproto_parser.go
-// (also AGPL-3.0-or-later) — both projects share this implementation
-// of the InfluxDB Line Protocol so that wire-format compatibility is
-// guaranteed across the homer + hepic-lake ecosystem.
 
 // Package lineprotoreceiver implements an InfluxDB Line Protocol HTTP
 // receiver that materialises every measurement as its own DuckLake

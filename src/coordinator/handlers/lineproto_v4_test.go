@@ -53,7 +53,7 @@ func TestFQNOf(t *testing.T) {
 	}{
 		{"", "", "lp_cpu", "lp_cpu"},
 		{"", "main", "lp_cpu", "main.lp_cpu"},
-		{"hepic_lake", "main", "lp_cpu", "hepic_lake.main.lp_cpu"},
+		{"homer_lake", "main", "lp_cpu", "homer_lake.main.lp_cpu"},
 	}
 	for _, c := range cases {
 		if got := fqnOf(c.cat, c.sch, c.name); got != c.want {

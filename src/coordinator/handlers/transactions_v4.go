@@ -43,7 +43,7 @@ func stripB2BSuffix(sid string) string {
 // maxFormMatchValues caps semicolon-separated search tokens (Homer 7 OR/IN).
 const maxFormMatchValues = 64
 
-// splitFormMatchValues splits a dashboard/form value on ';' (Homer 7 / HEPIC).
+// splitFormMatchValues splits a dashboard/form value on ';' (Homer 7).
 // Empty tokens are dropped. Tokens beyond maxFormMatchValues are ignored.
 func splitFormMatchValues(rawValue string) []string {
 	if !strings.Contains(rawValue, ";") {
@@ -107,7 +107,7 @@ func sqlFormMatchJoin(columnExpr string, values []string) string {
 // sqlFormMatchClause builds a dashboard/form string filter: exact equality by
 // default; SQL LIKE only when a token contains '%' (user-supplied wildcards).
 // Semicolon-separated tokens are OR-ed (IN when every token is exact), matching
-// Homer 7 / HEPIC "110;112" multi-number search (#1008).
+// Homer 7 "110;112" multi-number search (#1008).
 func sqlFormMatchClause(columnExpr, rawValue string) string {
 	return sqlFormMatchJoin(columnExpr, splitFormMatchValues(rawValue))
 }
