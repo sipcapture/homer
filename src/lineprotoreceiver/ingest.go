@@ -1,9 +1,6 @@
 // Copyright (C) 2026 Homer Server Contributors
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//
-// This file is adapted from hepic-lake/src/writer/lineproto_ingest.go
-// (also AGPL-3.0-or-later).
 
 package lineprotoreceiver
 

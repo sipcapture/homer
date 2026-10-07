@@ -583,7 +583,7 @@ func TestBuildSearchSQLV4_FormExactMatchUnlessPercent(t *testing.T) {
 }
 
 func TestBuildSearchSQLV4_SemicolonSeparatedOR(t *testing.T) {
-	// Homer 7 / HEPIC: "110;112" means callee IN ('110', '112'), not a literal
+	// Homer 7: "110;112" means callee IN ('110', '112'), not a literal
 	// that the node SQL validator then rejects as a statement separator (#1008).
 	req := SearchObjectV4{}
 	req.Filter.ProtoType = 1
