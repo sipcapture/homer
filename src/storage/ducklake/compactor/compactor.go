@@ -98,7 +98,11 @@ type Result struct {
 	// Unsupported marks a skip caused by the table's schema rather than by its
 	// current contents, so retrying can only waste the same work again. Callers
 	// should stop offering the table for the lifetime of the process.
-	Unsupported         bool
+	Unsupported bool
+	// NoIdentityPartition marks a table the native swap cannot express: it is
+	// not partitioned by a single identity column. Such a table needs the
+	// DuckDB merge instead.
+	NoIdentityPartition bool
 	FilesBefore         int
 	FilesMerged         int
 	FilesCreated        int
@@ -193,9 +197,10 @@ func CompactTable(ctx context.Context, opts Options, tableName string) (Result, 
 	// it. Reading without the lock races a flush's commit and both sides fail with
 	// "database is locked".
 	var (
-		meta       tableMeta
-		partitions map[string][]sourceFile
-		skip       string
+		meta        tableMeta
+		partitions  map[string][]sourceFile
+		skip        string
+		noPartition bool
 	)
 	err := withRetryOnLocked(func() error {
 		opts.lock()
@@ -215,6 +220,7 @@ func CompactTable(ctx context.Context, opts Options, tableName string) (Result, 
 			skip = fmt.Sprintf(
 				"table is not partitioned by a single identity column (column=%q transform=%q type=%q)",
 				meta.partition.columnName, meta.partition.transform, meta.partition.columnType)
+			noPartition = true
 			return nil
 		}
 
@@ -248,7 +254,7 @@ func CompactTable(ctx context.Context, opts Options, tableName string) (Result, 
 		return Result{}, err
 	}
 	if skip != "" {
-		return Result{Skipped: true, SkipReason: skip}, nil
+		return Result{Skipped: true, SkipReason: skip, NoIdentityPartition: noPartition}, nil
 	}
 
 	res := Result{}

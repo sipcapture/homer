@@ -202,9 +202,16 @@ Schema rules:
 - **Table name** = `<table_prefix><sanitised_measurement>` (default
   **empty prefix** ⇒ table name equals the sanitised measurement; set
   `table_prefix` if you want a namespace such as `lp_`).
-- **`time`** column is always created first as `TIMESTAMP` and is the
-  natural sort/filter key. The point timestamp (or "now" if missing) is
+- **`ts`** column is always created as `TIMESTAMP` and is the natural
+  sort/filter key. The point timestamp (or "now" if missing) is
   converted to UTC-`TIMESTAMP` using the negotiated precision.
+- **`date`** (`DATE`, the UTC day of `ts`) partitions the table on
+  DuckLake: `PARTITIONED BY (date)`, `SORTED BY (ts ASC)`, like the HEP
+  and OTLP tables. The receiver fills it on every row. A table created
+  before this column existed gets it, and the partitioning, on its
+  first write after the upgrade; its older rows keep `date` NULL. A
+  measurement that sends its own `date` field keeps that column and is
+  not partitioned.
 - **Tag columns** are always `VARCHAR`.
 - **Field columns** are typed from the *first* observed value:
   - `int64` ⇒ `BIGINT`
@@ -222,6 +229,11 @@ Schema rules:
 
 DDL is serialised per-table with an internal mutex to keep concurrent
 writes safe.
+
+LP tables in `main` are compacted and covered by retention like the
+HEP and OTLP tables (retention deletes by `ts`), see
+[RETENTION.md](RETENTION.md#applies-to-lake-tables). Tables in a
+`?db=` schema are not.
 
 ## Discovery API
 

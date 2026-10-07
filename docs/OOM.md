@@ -340,9 +340,10 @@ Safety checks per partition, all inside the swap transaction: the partition's
 live row count must equal the merged row count both **before** and **after** the
 swap. Any mismatch — a concurrent flush, or rows still inlined in the catalog —
 rolls the transaction back and defers the partition to the next cycle, leaving
-the catalog exactly as it was. Tables with active row-level delete files, tables
-not partitioned by a single identity column, and lakes with un-flushed inlined
-rows are skipped entirely.
+the catalog exactly as it was. Tables with active row-level delete files and
+lakes with un-flushed inlined rows are skipped entirely. Tables not partitioned
+by a single identity column go through `ducklake_merge_adjacent_files` in the
+same cycle instead.
 
 Partitions are skipped individually, so one bad partition never stops the rest of
 a table: a partition is left alone when it holds row-level deletes, when it was
@@ -601,9 +602,10 @@ Requirements and behavior:
 - **Local storage** — for remote (`s3://`) `data_path` the writer **automatically
   falls back to the `duckdb` engine**, so compaction always runs.
 - **Partitioned, append-only tables only** — tables with active row-level delete
-  files, tables not partitioned by a single identity column, and lakes with
-  un-flushed inlined rows are skipped. HEP ingest is append-only and partitioned
-  by `date`, so Homer's tables qualify.
+  files and lakes with un-flushed inlined rows are skipped. Tables not
+  partitioned by a single identity column are handed to
+  `ducklake_merge_adjacent_files`. HEP, OTLP and Line Protocol tables are
+  partitioned by `date`, so they qualify.
 - Holds the `CatalogLock` for the fast metadata reads that plan a cycle and for
   the short per-partition swap transaction, never during the slow merge, so
   flush/ingest stays responsive. Reading the catalog without the lock would make

@@ -192,12 +192,15 @@ type CompactionAzureClient struct {
 
 // CompactionService handles periodic compaction and retention
 type CompactionService struct {
-	db            *sql.DB
-	lakeName      string
-	dataPath      string // root dir for parquet files; catalog paths are relative to this
-	catalogPath   string // DuckLake SQLite catalog file (used by the native engine)
-	config        CompactionConfig
-	tables        []string
+	db          *sql.DB
+	lakeName    string
+	dataPath    string // root dir for parquet files; catalog paths are relative to this
+	catalogPath string // DuckLake SQLite catalog file (used by the native engine)
+	config      CompactionConfig
+	tables      []string
+	// timeColumns maps a discovered table to the column retention deletes
+	// by when it is not `timestamp` (Line Protocol tables use `ts`).
+	timeColumns   map[string]string
 	catalogLocker CatalogLocker // serializes catalog access with writer flush
 	s3Client      *CompactionS3Client
 	azureClient   *CompactionAzureClient
@@ -605,7 +608,9 @@ func (c *CompactionService) runCompaction() {
 		"rows_deleted", totalRowsDeleted)
 }
 
-// discoverTables finds HEP and OTLP tables in the DuckLake catalog
+// discoverTables finds HEP and OTLP tables in the DuckLake catalog, plus
+// tables partitioned by `date` with a `timestamp` or `ts` column (Line
+// Protocol tables, named after their measurement).
 func (c *CompactionService) discoverTables() error {
 	query := `
 		SELECT table_name
@@ -632,8 +637,29 @@ func (c *CompactionService) discoverTables() error {
 		return err
 	}
 
+	seen := make(map[string]bool, len(tables))
+	for _, t := range tables {
+		seen[t] = true
+	}
+	timeColumns := map[string]string{}
+	partitioned, err := ducklake.DatePartitionedTables(c.context(), c.database(), c.lakeName)
+	if err != nil {
+		logger.Warn("CompactionService: Failed to list date-partitioned tables", "error", err)
+	}
+	for _, p := range partitioned {
+		fqn := fmt.Sprintf("%s.main.%s", c.lakeName, p.Name)
+		if p.TimeColumn != "timestamp" {
+			timeColumns[fqn] = p.TimeColumn
+		}
+		if !seen[fqn] {
+			seen[fqn] = true
+			tables = append(tables, fqn)
+		}
+	}
+
 	c.mu.Lock()
 	c.tables = tables
+	c.timeColumns = timeColumns
 	c.mu.Unlock()
 
 	return nil
@@ -679,8 +705,15 @@ func (c *CompactionService) runRetention(table string, retentionValue int) (int6
 	cutoff := config.RetentionCutoff(time.Now(), retentionValue, c.config.RetentionUnit)
 	cutoffStr := cutoff.UTC().Format("2006-01-02 15:04:05")
 
-	query := fmt.Sprintf(`DELETE FROM %s WHERE timestamp < TIMESTAMP '%s'`,
-		table, cutoffStr)
+	timeCol := "timestamp"
+	c.mu.RLock()
+	if col, ok := c.timeColumns[table]; ok {
+		timeCol = col
+	}
+	c.mu.RUnlock()
+
+	query := fmt.Sprintf(`DELETE FROM %s WHERE %s < TIMESTAMP '%s'`,
+		table, timeCol, cutoffStr)
 
 	result, err := c.execWithRetry(query)
 	if err != nil {
@@ -731,6 +764,20 @@ func (c *CompactionService) runMerge(tables []string) error {
 			"disabled_after_failure", c.nativeDisabled.Load())
 	}
 
+	if err := c.mergeTablesDuckDB(tables); err != nil {
+		return err
+	}
+
+	c.runMaintenanceCalls()
+
+	logger.Info("CompactionService: Maintenance completed", "lake", c.lakeName)
+	return nil
+}
+
+// mergeTablesDuckDB runs ducklake_merge_adjacent_files over each table. It
+// returns an error only when a merge invalidated the compaction DuckDB
+// instance and the cycle must stop.
+func (c *CompactionService) mergeTablesDuckDB(tables []string) error {
 	maxFiles := c.effectiveMaxCompactedFiles()
 	maxSize := c.effectiveMaxFileSizeBytes()
 
@@ -808,10 +855,6 @@ func (c *CompactionService) runMerge(tables []string) error {
 			return fmt.Errorf("merge of %s invalidated the compaction DuckDB instance; cycle aborted", tableName)
 		}
 	}
-
-	c.runMaintenanceCalls()
-
-	logger.Info("CompactionService: Maintenance completed", "lake", c.lakeName)
 	return nil
 }
 
@@ -1025,6 +1068,7 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 		unlockFn = c.catalogLocker.CatalogUnlock
 	}
 
+	var duckdbTables []string
 	for _, table := range tables {
 		tableName := tableNameFromFQN(table)
 		if tableName == "" {
@@ -1055,6 +1099,14 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			continue
 		}
 		if res.Skipped {
+			if res.NoIdentityPartition {
+				// Not cached: Line Protocol tables gain a date partition on
+				// their next write and then go through the native merge.
+				logger.Info("CompactionService: table has no identity partition, using the duckdb merge",
+					"table", tableName)
+				duckdbTables = append(duckdbTables, table)
+				continue
+			}
 			if res.Unsupported {
 				// Caused by the table's schema, so every later cycle would repeat
 				// the same merge just to discard it. Remember and stop trying.
@@ -1077,6 +1129,10 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			"partitions_too_fresh", res.PartitionsSkippedYoung,
 			"partitions_with_deletes", res.PartitionsSkippedDeletes,
 			"partitions_row_group_too_big", res.PartitionsSkippedLarge)
+	}
+
+	if err := c.mergeTablesDuckDB(duckdbTables); err != nil {
+		return err
 	}
 
 	// A native cycle must never leave the catalog in the state that produced
