@@ -17,7 +17,7 @@ describe('sipRawFromMessage', () => {
     expect(sipRawFromMessage({ Data: 'OPTIONS sip:c SIP/2.0' })).toContain('OPTIONS')
   })
 
-  it('reads DuckLake/hepic-lake payload column', () => {
+  it('reads DuckLake payload column', () => {
     const sip = 'INVITE sip:alice@10.0.0.2 SIP/2.0\r\n'
     expect(sipRawFromMessage({ payload: sip })).toBe(sip)
     expect(sipRawFromMessage({ Payload: sip })).toBe(sip)
