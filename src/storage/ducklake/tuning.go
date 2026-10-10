@@ -259,6 +259,8 @@ func EnsureWriterAzureSecret(db *sql.DB, accountName, accountKey, connectionStri
 //   - memory_limit   -> SET memory_limit = '<string>'
 //   - temp_directory -> SET temp_directory = '<path>'
 //
+// It also always turns off DuckDB's external file cache (see below).
+//
 // Empty / zero values mean "do not touch this setting" so the function
 // is safe to call unconditionally on every freshly-opened DuckDB
 // connection (writer, node-side reader, CLI, ...).
@@ -270,6 +272,11 @@ func EnsureWriterAzureSecret(db *sql.DB, accountName, accountKey, connectionStri
 func ApplyDuckDBTuning(db *sql.DB, threads int, memoryLimit, tempDirectory, who string) {
 	if db == nil {
 		return
+	}
+	// Compaction reads every small parquet file once and then deletes it, so this cache never
+	// gets a hit; it fills to memory_limit and its churn grows RSS past every limit.
+	if _, err := db.Exec("SET enable_external_file_cache = false"); err != nil {
+		logger.Warn(fmt.Sprintf("DuckDB tuning (%s): SET enable_external_file_cache = false failed: %v", who, err))
 	}
 	if threads > 0 {
 		if _, err := db.Exec(fmt.Sprintf("SET threads = %d", threads)); err != nil {
