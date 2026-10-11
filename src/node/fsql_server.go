@@ -110,7 +110,7 @@ func (s *fsqlServer) GetSchemaStatement(
 	}
 	limitedQuery := fmt.Sprintf("SELECT * FROM (%s) _q LIMIT 0", rewritten)
 	db := s.node.queryDB()
-	rows, err := db.QueryContext(ctx, limitedQuery)
+	rows, err := queryContextRetryingStaleParquet(ctx, db, limitedQuery)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "schema query failed: %v", err)
 	}
@@ -137,7 +137,7 @@ func (s *fsqlServer) DoGetStatement(
 		return nil, nil, status.Errorf(codes.InvalidArgument, "SQL validation failed: %v", err)
 	}
 	db := s.node.queryDB()
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := queryContextRetryingStaleParquet(ctx, db, query)
 	if err != nil {
 		return nil, nil, status.Errorf(codes.Internal, "query failed: %v", err)
 	}

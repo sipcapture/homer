@@ -742,6 +742,14 @@ func runSelectQuery(ctx context.Context, db *sql.DB, query string) ([]map[string
 	if err := ensureReadOnlySingleStatement(query); err != nil {
 		return nil, nil, err
 	}
+	data, cols, err := scanSelectQuery(ctx, db, query)
+	if err == nil || !staleParquetMagic(err) || !dropStaleParquetCache(ctx, db, err) {
+		return data, cols, err
+	}
+	return scanSelectQuery(ctx, db, query)
+}
+
+func scanSelectQuery(ctx context.Context, db *sql.DB, query string) ([]map[string]interface{}, []string, error) {
 	rows, err := db.QueryContext(ctx, query) //nolint:rowserrcheck // scanAllSQLRows checks rows.Err
 	if err != nil {
 		return nil, nil, err
@@ -1212,7 +1220,7 @@ func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, 
 }
 
 func (n *Node) querySelectMerged(ctx context.Context, sharedSQL string, sharedDB *sql.DB, tieredSQL string, tieredDB *sql.DB, originalSQL string) ([]map[string]interface{}, []string, error) {
-	rows1, err := sharedDB.QueryContext(ctx, sharedSQL)
+	rows1, err := queryContextRetryingStaleParquet(ctx, sharedDB, sharedSQL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("shared query: %w", err)
 	}
@@ -1222,7 +1230,7 @@ func (n *Node) querySelectMerged(ctx context.Context, sharedSQL string, sharedDB
 		return nil, nil, err
 	}
 
-	rows2, err := tieredDB.QueryContext(ctx, tieredSQL)
+	rows2, err := queryContextRetryingStaleParquet(ctx, tieredDB, tieredSQL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("tiered query: %w", err)
 	}
