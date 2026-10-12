@@ -415,7 +415,7 @@ func (t *DuckLakeTable) Scan(ctx context.Context, opts *catalog.ScanOptions) (ar
 	}
 
 	// Execute query
-	rows, err := t.db.QueryContext(ctx, query)
+	rows, err := queryContextRetryingStaleParquet(ctx, t.db, query)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
