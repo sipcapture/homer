@@ -67,6 +67,19 @@ func execWithRetry(
 	query string,
 	args ...any,
 ) (sql.Result, error) {
+	return execWithRetryOp("TieredStorageManager", db, maxAttempts, baseBackoff, locker, query, args...)
+}
+
+// execWithRetryOp is execWithRetry with a caller label for the retry log line.
+func execWithRetryOp(
+	op string,
+	db *sql.DB,
+	maxAttempts int,
+	baseBackoff time.Duration,
+	locker CatalogLocker,
+	query string,
+	args ...any,
+) (sql.Result, error) {
 	if maxAttempts <= 0 {
 		maxAttempts = 1
 	}
@@ -90,7 +103,7 @@ func execWithRetry(
 			return nil, lastErr
 		}
 		if attempt < maxAttempts {
-			logger.Warn("TieredStorageManager: retriable catalog error, retrying",
+			logger.Warn(op+": retriable catalog error, retrying",
 				"attempt", attempt,
 				"max_attempts", maxAttempts,
 				"backoff", backoff,
