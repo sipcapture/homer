@@ -7,12 +7,13 @@ Homer 11.0.282–11.0.284 closes three coordinator security issues. **11.0.313**
 | Issue | Risk (before) | Fix | Typical upgrade impact |
 |-------|----------------|-----|-------------------------|
 | Empty `coordinator.jwt.secret` | Protected API routes were **unauthenticated** | JWT middleware always enforced; empty secret → auto-generated persisted secret | Installs with explicit JWT env/config: **no change**. Installs with empty secret: API now requires login or `Auth-Token` |
+| Shipped JWT placeholder `change-this-to-a-secure-random-string-in-production` | Anyone who can reach the coordinator can forge an admin token | Placeholder (and `your-secret-token-here`) is ignored; a random secret is generated and persisted. Official Compose no longer sets it | Installs that set their own secret: **no change**. Installs still using the public string: sessions signed with it stop working |
 | Default admin `sipcapture` | Predictable first-login password | No compose hash; random bcrypt at first boot; JWT `must_change_password` until a new password is set | Existing `users` row with sipcapture hash: **login works**, then the UI/API require a password change |
 | `POST /api/v4/statistics/query` `rawquery` | Unvalidated SQL passthrough | Same `ValidateRawSQL` rules as `/api/v4/query` | Legitimate `SELECT` / `WITH` / `SHOW` queries: **no change** |
 | Node `POST /query` (port+1) | Unauthenticated arbitrary DuckDB SQL / file read | `ValidateRawSQL` always; Bearer auth when `flight_server.auth_token` set; auto-token on non-loopback bind | All-in-one with default `0.0.0.0`: token auto-persisted; coordinator local node gets `token` automatically |
 | `sqlite_scan` / external scanners | Authenticated bypass of SQL denylist | Blocked in `ValidateRawSQL` | Legitimate lake `SELECT`s: **no change** |
 
-GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv), [GHSA-263f-5xrw-c34r](https://github.com/sipcapture/homer/security/advisories/GHSA-263f-5xrw-c34r).
+GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv), [GHSA-263f-5xrw-c34r](https://github.com/sipcapture/homer/security/advisories/GHSA-263f-5xrw-c34r), [GHSA-9crr-mrfj-hjxr](https://github.com/sipcapture/homer/security/advisories/GHSA-9crr-mrfj-hjxr).
 
 ---
 
@@ -38,7 +39,7 @@ GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/
 
 Environment: `HOMER_COORDINATOR_JWT_SECRET`.
 
-**Docker Compose** (`examples/docker/docker-compose.yaml`) already sets `HOMER_COORDINATOR_JWT_SECRET` — no action required.
+**Docker Compose** (`examples/docker/docker-compose.yaml`) does **not** set `HOMER_COORDINATOR_JWT_SECRET`. Homer generates a random key and persists **`.homer_jwt_secret`**. The old public value `change-this-to-a-secure-random-string-in-production` is ignored (11.0.362+, [GHSA-9crr-mrfj-hjxr](https://github.com/sipcapture/homer/security/advisories/GHSA-9crr-mrfj-hjxr)). The node placeholder `your-secret-token-here` is ignored the same way; a non-loopback bind persists **`.homer_node_auth_token`**. Set your own long random values when you want to pin them.
 
 ---
 
@@ -133,7 +134,7 @@ The live HEP WebSocket `/stream` on the same HTTP port is still intended for pri
 
 1. **Review JWT** — If you never set `coordinator.jwt.secret`, after upgrade check coordinator logs for `jwt_secret_file` or set an explicit secret in config.
 2. **Review admin access** — If you relied on open API without JWT, enable `Auth-Token` tokens or use UI login.
-3. **Docker / explicit env** — `HOMER_COORDINATOR_JWT_SECRET` + `HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH` (as in `examples/docker/`) → no credential changes.
+3. **Docker / explicit env** — set `HOMER_COORDINATOR_JWT_SECRET` yourself if you want a pinned key. Official Compose leaves it unset, so Homer generates `.homer_jwt_secret`. A copy that still has `change-this-to-a-secure-random-string-in-production` or `your-secret-token-here` does **not** keep those values. `HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH` (as in `examples/docker/`) is unchanged.
 4. **Automation** — Scripts calling protected endpoints need `Authorization: Bearer …` or `Auth-Token` after upgrade if JWT was previously empty.
 5. **Node `/query`** — After 11.0.313, check logs for `auth_token_file` / Bearer requirement; set matching `coordinator.nodes[].token` for remote nodes; prefer loopback bind for local-only nodes.
 

@@ -42,7 +42,7 @@
     "transaction_view_max_opens": 3,
     "ip_alias_cache_ttl_sec": 30,
     "jwt": {
-      "secret": "change-this-to-a-secure-random-string-in-production",
+      "secret": "",
       "expire_hours": 24
     },
     "auth": { "type": "internal" },

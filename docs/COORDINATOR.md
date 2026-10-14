@@ -552,7 +552,7 @@ See examples in the `examples/` directory:
 
 ## Security Considerations
 
-1. **JWT secret** — Set `coordinator.jwt.secret` (or `HOMER_COORDINATOR_JWT_SECRET`) to a strong random value in production. If omitted, Homer persists **`/.homer_jwt_secret`** beside `settings_db_path` and always enforces JWT on protected routes ([SECURITY.md](./SECURITY.md)).
+1. **JWT secret** — Set `coordinator.jwt.secret` (or `HOMER_COORDINATOR_JWT_SECRET`) to a strong random value in production. If omitted, or if it is the old public placeholder `change-this-to-a-secure-random-string-in-production`, Homer persists **`.homer_jwt_secret`** beside `settings_db_path` and always enforces JWT on protected routes ([SECURITY.md](./SECURITY.md)).
 2. **Admin password** — Prefer bcrypt via Users API or wizard; explicit `admin_password_hash` (SHA-256 hex) for bootstrap and `--reset-admin-password`. No default cleartext password is injected when hash is omitted.
 3. **Statistics SQL** — `POST /api/v4/statistics/query` validates `rawquery` (same rules as `/api/v4/query`).
 4. **TLS** — Coordinator → node `POST /query` is plaintext HTTP, so keep that hop on a trusted network. `use_tls` only covers the `/stream` WebSocket; use `flightsql_tls` for the FlightSQL proxy's node dial

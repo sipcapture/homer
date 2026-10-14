@@ -41,6 +41,28 @@ func TestResolveCoordinatorJWTSecret_PersistAndReload(t *testing.T) {
 	}
 }
 
+func TestResolveCoordinatorJWTSecret_PlaceholderIsGenerated(t *testing.T) {
+	dir := t.TempDir()
+	settings := filepath.Join(dir, "settings.duckdb")
+	const placeholder = "change-this-to-a-secure-random-string-in-production"
+
+	secret1, auto1, file1, err := ResolveCoordinatorJWTSecret(placeholder, settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !auto1 || secret1 == "" || secret1 == placeholder {
+		t.Fatalf("placeholder must be replaced, got secret=%q auto=%v", secret1, auto1)
+	}
+
+	secret2, auto2, _, err := ResolveCoordinatorJWTSecret(placeholder, settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auto2 || secret2 != secret1 || file1 == "" {
+		t.Fatalf("reload: secret=%q auto=%v file=%q", secret2, auto2, file1)
+	}
+}
+
 func TestResolveCoordinatorJWTSecret_LoadExistingFile(t *testing.T) {
 	dir := t.TempDir()
 	settings := filepath.Join(dir, "settings.duckdb")

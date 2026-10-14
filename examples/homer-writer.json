@@ -116,7 +116,7 @@
     "flight_server": {
       "host": "0.0.0.0",
       "port": 50051,
-      "auth_token": "your-secret-token-here",
+      "auth_token": "",
       "max_message_size": 16777216
     },
     "flightsql_server": {

@@ -280,14 +280,14 @@ const (
 )
 
 type wizardModel struct {
-	inputs               []textinput.Model
-	step                 int
-	focused              int // focused field within current step
-	done                 bool
-	saved                bool
-	savedMsg             string
-	errMsg               string
-	output               string // output file path
+	inputs                 []textinput.Model
+	step                   int
+	focused                int // focused field within current step
+	done                   bool
+	saved                  bool
+	savedMsg               string
+	errMsg                 string
+	output                 string // output file path
 	generatedAdminPassword string
 }
 
@@ -914,8 +914,9 @@ func parseRetentionUnit(s string) string {
 func randomHex(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback: deterministic but better than empty
-		return "change-this-to-a-secure-random-string-in-production"
+		// Leave it empty so startup generates a persisted secret. Never write
+		// the public placeholder (GHSA-9crr-mrfj-hjxr).
+		return ""
 	}
 	return hex.EncodeToString(b)
 }

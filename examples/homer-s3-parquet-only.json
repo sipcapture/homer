@@ -95,7 +95,7 @@
     "flight_server": {
       "host": "0.0.0.0",
       "port": 50051,
-      "auth_token": "your-secret-token-here",
+      "auth_token": "",
       "max_message_size": 16777216
     },
     "flightsql_server": {
@@ -140,7 +140,7 @@
         "port": 50051,
         "flightsql_port": 0,
         "use_tls": false,
-        "token": "your-secret-token-here",
+        "token": "",
         "priority": 1
       }
     ],
@@ -153,7 +153,7 @@
     },
     "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
     "jwt": {
-      "secret": "change-this-to-a-secure-random-string-in-production",
+      "secret": "",
       "expire_hours": 24
     },
     "auth": {

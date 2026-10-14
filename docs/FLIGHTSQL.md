@@ -30,7 +30,8 @@ The Flight `Handshake` RPC does not require Bearer metadata (Grafana / GizmoSQL 
 ```yaml
 HOMER_NODE_FLIGHTSQL_SERVER_ENABLE: "true"
 HOMER_NODE_FLIGHTSQL_SERVER_PORT: "50055"
-HOMER_NODE_FLIGHTSQL_SERVER_AUTH_TOKEN: your-secret-token-here
+# Omit AUTH_TOKEN to reuse the generated node token, or set a long random value.
+# Do not use your-secret-token-here.
 HOMER_COORDINATOR_NODES_0_FLIGHTSQL_PORT: "50055"
 ```
 
