@@ -201,7 +201,7 @@ The node process also listens for HTTP on **`flight_server.port + 1`** (default 
 | Endpoint | Auth | Notes |
 |----------|------|--------|
 | `POST /query` | Bearer when `auth_token` set (required on non-loopback after auto-token) | Body `{"sql":"…"}`; SQL must pass `ValidateRawSQL` |
-| `POST /vacuum` | Same Bearer as `/query` | DuckLake maintenance |
+| `POST /vacuum` | Same Bearer as `/query` | DuckLake maintenance. `expire_older_than` is a duration (`1 hour`, `7 days`, or Go `1h`); anything else is **400** and is not interpolated into SQL |
 | `GET /health` | None | Liveness probe |
 | `GET /stream` | None (private network) | Live HEP WebSocket — see [HEP_STREAM.md](HEP_STREAM.md) |
 
