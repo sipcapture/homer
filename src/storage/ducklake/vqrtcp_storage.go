@@ -18,6 +18,15 @@ import (
 
 const vqrtcpTableName = "vqrtcpxr_stats"
 
+// VQ-RTCPXR rows are written one INSERT per report from several worker
+// goroutines, concurrently with the writer flush and compaction that commit
+// to the same SQLite catalog. Hold the catalog lock around each INSERT and
+// retry contention errors so a report is not dropped on "database is locked".
+const (
+	vqrtcpWriteMaxRetries  = 5
+	vqrtcpWriteBaseBackoff = 50 * time.Millisecond
+)
+
 const vqrtcpTableSQL = `
 	uuid VARCHAR,
 	date DATE,
@@ -61,6 +70,7 @@ type VqrtcpRow struct {
 type VqrtcpStorage struct {
 	db       *sql.DB
 	lakeName string
+	locker   CatalogLocker
 	once     sync.Once
 	ddlErr   error
 }
@@ -77,6 +87,7 @@ func (m *Manager) VqrtcpStorage() *VqrtcpStorage {
 	return &VqrtcpStorage{
 		db:       primary.GetDB(),
 		lakeName: primary.GetLakeName(),
+		locker:   m,
 	}
 }
 
@@ -151,7 +162,7 @@ func (s *VqrtcpStorage) WriteRow(ctx context.Context, row VqrtcpRow) error {
 		vlan, capture_ip, proto, node, type, captid, data, message
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
 		s.TableFQN())
-	_, err := s.db.ExecContext(ctx, sql,
+	_, err := execWithRetryOp("VQRTCP storage", s.db, vqrtcpWriteMaxRetries, vqrtcpWriteBaseBackoff, s.locker, sql,
 		id,
 		ts.Format("2006-01-02"),
 		ts,
