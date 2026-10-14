@@ -11,8 +11,9 @@ Homer 11.0.282–11.0.284 closes three coordinator security issues. **11.0.313**
 | `POST /api/v4/statistics/query` `rawquery` | Unvalidated SQL passthrough | Same `ValidateRawSQL` rules as `/api/v4/query` | Legitimate `SELECT` / `WITH` / `SHOW` queries: **no change** |
 | Node `POST /query` (port+1) | Unauthenticated arbitrary DuckDB SQL / file read | `ValidateRawSQL` always; Bearer auth when `flight_server.auth_token` set; auto-token on non-loopback bind | All-in-one with default `0.0.0.0`: token auto-persisted; coordinator local node gets `token` automatically |
 | `sqlite_scan` / external scanners | Authenticated bypass of SQL denylist | Blocked in `ValidateRawSQL` | Legitimate lake `SELECT`s: **no change** |
+| Node `POST /vacuum` `expire_older_than` | SQL injection into `ducklake_expire_snapshots` | Duration is parsed and rendered as integer seconds | `1 hour`, `7 days`, Go durations (`1h`): **no change**. Other values: **400** |
 
-GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv), [GHSA-263f-5xrw-c34r](https://github.com/sipcapture/homer/security/advisories/GHSA-263f-5xrw-c34r).
+GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv), [GHSA-263f-5xrw-c34r](https://github.com/sipcapture/homer/security/advisories/GHSA-263f-5xrw-c34r), [GHSA-q7c2-m23h-43g9](https://github.com/sipcapture/homer/security/advisories/GHSA-q7c2-m23h-43g9).
 
 ---
 
@@ -102,6 +103,7 @@ See [LINE_PROTOCOL.md](./LINE_PROTOCOL.md) (Statistics API section).
 2. When `node.flight_server.auth_token` is non-empty, `/query` and `/vacuum` require `Authorization: Bearer <token>`. `/health` stays open for probes.
 3. If `auth_token` is empty and `flight_server.host` is **not** loopback (default `0.0.0.0`), Homer generates a random token, persists **`.homer_node_auth_token`** beside the DuckLake catalog (mode `0600`), and enables Bearer auth. Loopback-only binds (`127.0.0.1` / `::1` / `localhost`) may keep an empty token.
 4. The coordinator sends `coordinator.nodes[].token` as Bearer on `/query`. Same-process local nodes with empty `token` inherit `node.flight_server.auth_token` automatically.
+5. `POST /vacuum` accepts `expire_older_than` only as a duration (`1 hour`, `7 days`, or a Go duration such as `1h`). The value is converted to integer seconds and passed as `INTERVAL '<n> seconds'`. A quote, semicolon, or other SQL fragment returns **400** and is not executed (11.0.362+, [GHSA-q7c2-m23h-43g9](https://github.com/sipcapture/homer/security/advisories/GHSA-q7c2-m23h-43g9)).
 
 ```json
 "node": {
