@@ -12,8 +12,9 @@ Homer 11.0.282–11.0.284 closes three coordinator security issues. **11.0.313**
 | `POST /api/v4/statistics/query` `rawquery` | Unvalidated SQL passthrough | Same `ValidateRawSQL` rules as `/api/v4/query` | Legitimate `SELECT` / `WITH` / `SHOW` queries: **no change** |
 | Node `POST /query` (port+1) | Unauthenticated arbitrary DuckDB SQL / file read | `ValidateRawSQL` always; Bearer auth when `flight_server.auth_token` set; auto-token on non-loopback bind | All-in-one with default `0.0.0.0`: token auto-persisted; coordinator local node gets `token` automatically |
 | `sqlite_scan` / external scanners | Authenticated bypass of SQL denylist | Blocked in `ValidateRawSQL` | Legitimate lake `SELECT`s: **no change** |
+| `sniff_csv`, unlisted readers, `FROM 'path'` | Authenticated file read past the function denylist | Reader routines blocked by name shape (`read_`, `sniff_`, `parquet_`, `http_`, `iceberg_`, `delta_`, `st_read`, `*_scan`, `*_attach`) plus `getenv` / `duckdb_secrets`; string literals in table position rejected | Legitimate lake `SELECT`s: **no change** |
 
-GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv), [GHSA-263f-5xrw-c34r](https://github.com/sipcapture/homer/security/advisories/GHSA-263f-5xrw-c34r), [GHSA-9crr-mrfj-hjxr](https://github.com/sipcapture/homer/security/advisories/GHSA-9crr-mrfj-hjxr).
+GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv), [GHSA-263f-5xrw-c34r](https://github.com/sipcapture/homer/security/advisories/GHSA-263f-5xrw-c34r), [GHSA-c5mq-r27x-v29v](https://github.com/sipcapture/homer/security/advisories/GHSA-c5mq-r27x-v29v), [GHSA-9crr-mrfj-hjxr](https://github.com/sipcapture/homer/security/advisories/GHSA-9crr-mrfj-hjxr).
 
 ---
 
@@ -39,7 +40,7 @@ GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/
 
 Environment: `HOMER_COORDINATOR_JWT_SECRET`.
 
-**Docker Compose** (`examples/docker/docker-compose.yaml`) does **not** set `HOMER_COORDINATOR_JWT_SECRET`. Homer generates a random key and persists **`.homer_jwt_secret`**. The old public value `change-this-to-a-secure-random-string-in-production` is ignored (11.0.362+, [GHSA-9crr-mrfj-hjxr](https://github.com/sipcapture/homer/security/advisories/GHSA-9crr-mrfj-hjxr)). The node placeholder `your-secret-token-here` is ignored the same way; a non-loopback bind persists **`.homer_node_auth_token`**. Set your own long random values when you want to pin them.
+**Docker Compose** (`examples/docker/docker-compose.yaml`) does **not** set `HOMER_COORDINATOR_JWT_SECRET`. Homer generates a random key and persists **`.homer_jwt_secret`**. The old public value `change-this-to-a-secure-random-string-in-production` is ignored (11.0.363+, [GHSA-9crr-mrfj-hjxr](https://github.com/sipcapture/homer/security/advisories/GHSA-9crr-mrfj-hjxr)). The node placeholder `your-secret-token-here` is ignored the same way; a non-loopback bind persists **`.homer_node_auth_token`**. Set your own long random values when you want to pin them.
 
 ---
 
@@ -86,6 +87,8 @@ See [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#internal-duckdb-authentica
 - No semicolons (multi-statement blocked)
 - Blocked DML/DDL keywords and dangerous functions (token-aware: keywords inside string literals / Call-IDs are ignored; real `CALL` / `DELETE` identifiers remain blocked)
 - External scanners blocked: `sqlite_scan`, `postgres_scan`, `mysql_scan`, `iceberg_scan`, `delta_scan`, `spatial_scan` (11.0.313+)
+- File and network readers are blocked by name shape, not only by an exact list (11.0.362+, [GHSA-c5mq-r27x-v29v](https://github.com/sipcapture/homer/security/advisories/GHSA-c5mq-r27x-v29v)): a call whose name starts with `read_`, `sniff_`, `parquet_`, `http_`, `iceberg_`, `delta_`, or `st_read`, or ends with `_scan` or `_attach`. That covers `sniff_csv`, `parquet_scan`, `read_json_objects`, `arrow_scan`, `sqlite_attach`, and the same class of routine. `getenv` and `duckdb_secrets` are blocked too.
+- A string literal used as a table is rejected (`SELECT * FROM 'file.parquet'`, including parenthesized, comma-joined, escape-string, and dollar-quoted forms). DuckDB replacement scans open that path as a file. String literals in `WHERE`, `VALUES`, and select-list expressions are unchanged.
 
 Invalid SQL returns **400** with `SQL validation failed`. Grafana-style read-only panels using single `SELECT` statements continue to work.
 
