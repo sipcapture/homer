@@ -1801,6 +1801,17 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Duration only. The value is rendered as integer seconds inside the CALL,
+	// so a quote or semicolon cannot start another statement (GHSA-q7c2-m23h-43g9).
+	expireOlderThan, expireSeconds, err := parseExpireOlderThan(r.URL.Query().Get("expire_older_than"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
 	if n.db == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
@@ -1809,18 +1820,12 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get optional parameters
-	expireOlderThan := r.URL.Query().Get("expire_older_than") // e.g., "1 hour", "1 day"
-	if expireOlderThan == "" {
-		expireOlderThan = "1 hour" // default: expire snapshots older than 1 hour
-	}
-
 	var allResults []map[string]interface{}
 	start := time.Now()
 
 	// Run maintenance on all volumes
 	for _, vol := range n.volumes {
-		volResults := n.vacuumVolume(vol.LakeName, expireOlderThan)
+		volResults := n.vacuumVolume(vol.LakeName, expireSeconds)
 		allResults = append(allResults, map[string]interface{}{
 			"volume":  vol.Name,
 			"lake":    vol.LakeName,
@@ -1838,11 +1843,11 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 }
 
 // vacuumVolume runs maintenance on a single volume
-func (n *Node) vacuumVolume(lakeName, expireOlderThan string) []map[string]interface{} {
+func (n *Node) vacuumVolume(lakeName string, expireSeconds int64) []map[string]interface{} {
 	var results []map[string]interface{}
 
 	// 1. Expire old snapshots
-	expireSQL := fmt.Sprintf("CALL ducklake_expire_snapshots('%s', older_than => INTERVAL '%s')", lakeName, expireOlderThan)
+	expireSQL := expireSnapshotsSQL(lakeName, expireSeconds)
 	if _, err := n.db.Exec(expireSQL); err != nil {
 		slog.Warn("ducklake_expire_snapshots failed", "lake", lakeName, "error", err)
 		results = append(results, map[string]interface{}{"step": "expire_snapshots", "error": err.Error()})
