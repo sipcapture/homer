@@ -297,6 +297,94 @@ func TestValidateRawSQL(t *testing.T) {
 	}
 }
 
+func TestGHSA_c5mq_blocksFileReaders(t *testing.T) {
+	readers := []string{
+		`sniff_csv('/etc/passwd', delim='\t', header=true, skip=0)`,
+		`sniff_csv('/etc/shadow')`,
+		`"sniff_csv"('/etc/passwd')`,
+		`main.sniff_csv('/etc/passwd')`,
+		`sniff_csv/**/('/etc/passwd')`,
+		`read_duckdb('/tmp/x.duckdb')`,
+		`parquet_scan('/tmp/x.parquet')`,
+		`parquet_metadata('/tmp/x.parquet')`,
+		`duckdb_scan('/tmp/x.duckdb')`,
+		`sqlite_attach('/tmp/x.sqlite')`,
+		`postgres_attach('host=x')`,
+		`postgres_query('host=x', 'select 1')`,
+		`mysql_query('host=x', 'select 1')`,
+		`read_json_objects('/tmp/x.json')`,
+		`read_json_objects_auto('/tmp/x.json')`,
+		`read_ndjson_objects('/tmp/x.ndjson')`,
+		`arrow_scan('/tmp/x.arrow')`,
+		`ducklake_scan('/tmp/lake')`,
+		`iceberg_metadata('/tmp/iceberg')`,
+		`st_read('/tmp/x.shp')`,
+		`getenv('PATH')`,
+		`duckdb_secrets()`,
+	}
+	for _, fn := range readers {
+		sql := "SELECT * FROM " + fn
+		err := ValidateRawSQL(sql)
+		if err == nil || !strings.Contains(err.Error(), "blocked function") {
+			t.Errorf("%s: got %v, want blocked function", fn, err)
+		}
+	}
+
+	paths := []string{
+		`SELECT * FROM '/etc/passwd'`,
+		`SELECT * FROM '/tmp/x.parquet'`,
+		`SELECT * FROM t, '/tmp/x.parquet'`,
+		`SELECT * FROM t JOIN '/tmp/x.parquet' j`,
+		`SELECT * FROM ('/tmp/x.parquet')`,
+		`SELECT * FROM (t, '/tmp/x.parquet')`,
+		`SELECT * FROM $$/etc/passwd$$`,
+		`SELECT * FROM $tag$/etc/passwd$tag$`,
+		`SELECT * FROM E'/etc/passwd'`,
+		`SELECT * FROM U&'/etc/passwd'`,
+		`SELECT * FROM t UNION SELECT * FROM '/etc/passwd'`,
+	}
+	for _, sql := range paths {
+		err := ValidateRawSQL(sql)
+		if err == nil || !strings.Contains(err.Error(), "file path") {
+			t.Errorf("%s: got %v, want file path rejection", sql, err)
+		}
+	}
+
+	allowed := []string{
+		`SELECT sniff_csv FROM t`,
+		`SELECT * FROM t WHERE path = '/etc/passwd'`,
+		`SELECT * FROM t WHERE id IN ('a', 'b')`,
+		`SELECT * FROM (SELECT '/etc/passwd' AS line) s`,
+		`SELECT * FROM (SELECT 'a', 'b') s`,
+		`SELECT * FROM (VALUES ('/etc/passwd')) v`,
+		`SELECT * FROM t WHERE msg = $$DROP$$`,
+		`SELECT * FROM t WHERE name = E'INVITE'`,
+		`SELECT EXTRACT(YEAR FROM ts), '/etc/passwd' FROM t`,
+		`SELECT EXTRACT(YEAR FROM TIMESTAMP '2020-01-01 00:00:00') FROM t`,
+		`SELECT EXTRACT(EPOCH FROM INTERVAL '1 hour')`,
+		`SELECT * FROM t WHERE ts >= DATE '2020-01-01'`,
+		`SELECT * FROM t WHERE ts >= TIMESTAMP '2020-01-01 00:00:00'`,
+		`SELECT * FROM range(1, 10)`,
+		`SELECT * FROM t CROSS JOIN u`,
+		`SELECT * FROM t LEFT OUTER JOIN u ON t.id = u.id AND u.name = 'x'`,
+		`SELECT concat(a, 'b') FROM t`,
+		`SELECT * FROM homer_lake.main.hep_proto_1_call WHERE method = 'INVITE'`,
+		`SELECT $1`,
+	}
+	for _, sql := range allowed {
+		if err := ValidateRawSQL(sql); err != nil {
+			t.Errorf("%s: unexpected error: %v", sql, err)
+		}
+	}
+
+	if err := ValidateExpression(`sniff_csv('/etc/passwd')`, ExprSelect); err == nil || !strings.Contains(err.Error(), "blocked function") {
+		t.Errorf("expression sniff_csv: got %v", err)
+	}
+	if err := ValidateExpression(`CASE WHEN x = $$a--b$$ THEN 1 END`, ExprSelect); err != nil {
+		t.Errorf("dollar-quoted comment marker: %v", err)
+	}
+}
+
 func TestValidateWriteSQL(t *testing.T) {
 	tests := []struct {
 		name    string

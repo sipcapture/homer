@@ -140,6 +140,16 @@ func tokenize(sql string) []token {
 			continue
 		}
 
+		// Dollar-quoted string: $$...$$ or $tag$...$tag$.
+		// $1 stays a parameter (operator + number), not a string.
+		if ch == '$' {
+			if end, ok := tryDollarString(runes, i); ok {
+				tokens = append(tokens, token{kind: tkString, value: string(runes[i:end])})
+				i = end
+				continue
+			}
+		}
+
 		// Identifier or keyword
 		if unicode.IsLetter(ch) || ch == '_' {
 			start := i
@@ -187,6 +197,41 @@ func tokenize(sql string) []token {
 	}
 
 	return tokens
+}
+
+// tryDollarString reports whether runes[i] opens a dollar-quoted string and,
+// when it does, the index just after the closing delimiter. An unclosed quote
+// consumes the rest of the input so its contents are not tokenized as SQL.
+func tryDollarString(runes []rune, i int) (int, bool) {
+	n := len(runes)
+	if i >= n || runes[i] != '$' {
+		return i, false
+	}
+	j := i + 1
+	if j < n && runes[j] == '$' {
+		return closeDollarString(runes, j+1, "$$"), true
+	}
+	if j >= n || (!unicode.IsLetter(runes[j]) && runes[j] != '_') {
+		return i, false
+	}
+	k := j
+	for k < n && (unicode.IsLetter(runes[k]) || unicode.IsDigit(runes[k]) || runes[k] == '_') {
+		k++
+	}
+	if k >= n || runes[k] != '$' {
+		return i, false
+	}
+	tag := string(runes[j:k])
+	return closeDollarString(runes, k+1, "$"+tag+"$"), true
+}
+
+func closeDollarString(runes []rune, bodyStart int, closer string) int {
+	rest := string(runes[bodyStart:])
+	idx := strings.Index(rest, closer)
+	if idx < 0 {
+		return len(runes)
+	}
+	return bodyStart + idx + len(closer)
 }
 
 // ---- Blocked keyword sets --------------------------------------------------
@@ -244,6 +289,33 @@ var blockedFunctions = map[string]bool{
 	"ICEBERG_SCAN":  true,
 	"DELTA_SCAN":    true,
 	"SPATIAL_SCAN":  true,
+	// Remote query wrappers and host disclosure (GHSA-c5mq-r27x-v29v).
+	"POSTGRES_QUERY": true,
+	"MYSQL_QUERY":    true,
+	"GETENV":         true,
+	"DUCKDB_SECRETS": true,
+}
+
+// isBlockedRoutine reports a DuckDB routine that can read or write files,
+// open a network or external-database scan, or disclose host secrets.
+// Prefixes and suffixes cover readers that are not spelled out above, so the
+// next unlisted scanner does not reopen file access (GHSA-c5mq-r27x-v29v).
+// Call sites still require '(', so a column that only shares the name is allowed.
+func isBlockedRoutine(upper string) bool {
+	if blockedFunctions[upper] {
+		return true
+	}
+	switch {
+	case strings.HasPrefix(upper, "READ_"),
+		strings.HasPrefix(upper, "SNIFF_"),
+		strings.HasPrefix(upper, "PARQUET_"),
+		strings.HasPrefix(upper, "HTTP_"),
+		strings.HasPrefix(upper, "ICEBERG_"),
+		strings.HasPrefix(upper, "DELTA_"),
+		strings.HasPrefix(upper, "ST_READ"):
+		return true
+	}
+	return strings.HasSuffix(upper, "_SCAN") || strings.HasSuffix(upper, "_ATTACH")
 }
 
 // allowedStatementStarts are the only statement types allowed in raw SQL.
@@ -412,11 +484,15 @@ func rejectSQLHazards(tokens []token, skipDML map[string]bool) error {
 		if tok.kind != tkIdent {
 			continue
 		}
-		if blockedFunctions[tok.upper] {
+		if isBlockedRoutine(tok.upper) {
 			if i+1 < len(tokens) && tokens[i+1].kind == tkLParen {
 				return fmt.Errorf("blocked function %q (filesystem/network access is not allowed)", tok.value)
 			}
 		}
+	}
+
+	if err := rejectFilePathRelations(tokens); err != nil {
+		return err
 	}
 
 	selectSeen := false
@@ -444,6 +520,130 @@ func rejectSQLHazards(tokens []token, skipDML map[string]bool) error {
 	}
 
 	return nil
+}
+
+// rejectFilePathRelations rejects DuckDB replacement scans, which read a file
+// when a string literal is used as a table: SELECT * FROM '/path/file.parquet'.
+// There is no function name for the routine denylist to see (GHSA-c5mq-r27x-v29v).
+func rejectFilePathRelations(tokens []token) error {
+	depth := 0
+	relationList := map[int]bool{}
+	expecting := map[int]bool{}
+
+	for i, tok := range tokens {
+		switch tok.kind {
+		case tkLParen:
+			if expecting[depth] {
+				expecting[depth+1] = true
+			}
+			depth++
+		case tkRParen:
+			delete(expecting, depth)
+			delete(relationList, depth)
+			if depth > 0 {
+				depth--
+			}
+		case tkComma:
+			if relationList[depth] {
+				expecting[depth] = true
+			}
+		case tkString:
+			if expecting[depth] {
+				return fmt.Errorf("file path table references are not allowed")
+			}
+		case tkIdent:
+			upper := tok.upper
+			if upper == "FROM" || upper == "JOIN" {
+				expecting[depth] = true
+				relationList[depth] = true
+				continue
+			}
+			if isRelationNoise(upper) {
+				continue
+			}
+			if relationList[depth] && isFromListEnd(upper) {
+				relationList[depth] = false
+				expecting[depth] = false
+				continue
+			}
+			if upper == "ON" || upper == "USING" {
+				expecting[depth] = false
+				continue
+			}
+			if !expecting[depth] {
+				continue
+			}
+			// EXTRACT(YEAR FROM TIMESTAMP '...') and similar typed literals are
+			// values, not replacement-scan paths.
+			if isTypedLiteralPrefix(upper) && i+1 < len(tokens) && tokens[i+1].kind == tkString {
+				expecting[depth] = false
+				continue
+			}
+			if isEscapeStringPrefix(upper) && i+1 < len(tokens) && tokens[i+1].kind == tkString {
+				return fmt.Errorf("file path table references are not allowed")
+			}
+			if upper == "U" && i+2 < len(tokens) &&
+				tokens[i+1].kind == tkOp && tokens[i+1].value == "&" &&
+				tokens[i+2].kind == tkString {
+				return fmt.Errorf("file path table references are not allowed")
+			}
+			if !startsSubquery(upper) {
+				relationList[depth] = true
+			}
+			expecting[depth] = false
+		}
+	}
+	return nil
+}
+
+func isRelationNoise(upper string) bool {
+	switch upper {
+	case "AS", "LATERAL", "ONLY", "NATURAL", "INNER", "OUTER",
+		"LEFT", "RIGHT", "FULL", "CROSS", "SEMI", "ANTI", "POSITIONAL":
+		return true
+	default:
+		return false
+	}
+}
+
+func isFromListEnd(upper string) bool {
+	switch upper {
+	case "WHERE", "GROUP", "ORDER", "LIMIT", "OFFSET", "HAVING",
+		"QUALIFY", "WINDOW", "UNION", "EXCEPT", "INTERSECT", "FETCH":
+		return true
+	default:
+		return false
+	}
+}
+
+func startsSubquery(upper string) bool {
+	switch upper {
+	case "SELECT", "WITH", "VALUES":
+		return true
+	default:
+		return false
+	}
+}
+
+func isEscapeStringPrefix(upper string) bool {
+	switch upper {
+	case "E", "X", "B", "N":
+		return true
+	default:
+		return false
+	}
+}
+
+func isTypedLiteralPrefix(upper string) bool {
+	switch upper {
+	case "TIMESTAMP", "TIMESTAMPTZ", "DATE", "TIME", "INTERVAL",
+		"VARCHAR", "CHAR", "CHARACTER", "BOOLEAN", "BOOL", "BLOB",
+		"JSON", "UUID", "TINYINT", "SMALLINT", "INTEGER", "INT", "BIGINT",
+		"HUGEINT", "FLOAT", "DOUBLE", "DECIMAL", "NUMERIC", "REAL":
+		return true
+	default:
+		return false
+	}
 }
 
 // ---- ExprType --------------------------------------------------------------
@@ -547,7 +747,7 @@ func ValidateExpression(expr string, exprType ExprType) error {
 		if tok.kind != tkIdent {
 			continue
 		}
-		if blockedFunctions[tok.upper] {
+		if isBlockedRoutine(tok.upper) {
 			if i+1 < len(tokens) && tokens[i+1].kind == tkLParen {
 				return fmt.Errorf("blocked function %q in %s expression", tok.value, exprTypeName(exprType))
 			}
@@ -676,6 +876,14 @@ func ContainsUnsafeComment(sql string) bool {
 				i++
 			}
 			continue
+		}
+
+		// Skip dollar-quoted strings so "--" / "/*" inside them are data.
+		if ch == '$' {
+			if end, ok := tryDollarString(runes, i); ok {
+				i = end
+				continue
+			}
 		}
 
 		// Skip double-quoted identifiers (including "" escape)
