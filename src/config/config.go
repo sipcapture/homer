@@ -2016,6 +2016,17 @@ func applyDefaults(cfg *Config) {
 		cfg.MCP.LLM.MaxTokens = 400
 	}
 
+	// Official Compose used to ship these strings. They are public, so treat
+	// them as unset and let the generators below persist a random value
+	// (GHSA-9crr-mrfj-hjxr).
+	cfg.Coordinator.JWT.Secret = DiscardShippedPlaceholderSecret("coordinator.jwt.secret", cfg.Coordinator.JWT.Secret)
+	cfg.Node.FlightServer.AuthToken = DiscardShippedPlaceholderSecret("node.flight_server.auth_token", cfg.Node.FlightServer.AuthToken)
+	cfg.Node.FlightSQLServer.AuthToken = DiscardShippedPlaceholderSecret("node.flightsql_server.auth_token", cfg.Node.FlightSQLServer.AuthToken)
+	cfg.Coordinator.FlightSQLServer.AuthToken = DiscardShippedPlaceholderSecret("coordinator.flightsql_server.auth_token", cfg.Coordinator.FlightSQLServer.AuthToken)
+	for i := range cfg.Coordinator.Nodes {
+		cfg.Coordinator.Nodes[i].Token = DiscardShippedPlaceholderSecret("coordinator.nodes.token", cfg.Coordinator.Nodes[i].Token)
+	}
+
 	// Resolve node HTTP / Airport Bearer token before wiring coordinator nodes.
 	// Exposed binds (default 0.0.0.0) with empty auth_token get an auto-generated
 	// persisted token (GHSA-rm5w-rqr7-2h54). Loopback-only binds may stay empty.

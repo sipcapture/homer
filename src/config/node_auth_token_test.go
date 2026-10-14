@@ -38,6 +38,47 @@ func TestResolveNodeFlightAuthTokenConfiguredWins(t *testing.T) {
 	}
 }
 
+func TestResolveNodeFlightAuthTokenPlaceholderIsGenerated(t *testing.T) {
+	dir := t.TempDir()
+	catalog := filepath.Join(dir, "homer_catalog.sqlite")
+	tok, auto, file, err := ResolveNodeFlightAuthToken("0.0.0.0", "your-secret-token-here", catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !auto || tok == "" || tok == "your-secret-token-here" || file == "" {
+		t.Fatalf("placeholder must be replaced, got tok=%q auto=%v file=%q", tok, auto, file)
+	}
+}
+
+func TestApplyDefaultsDiscardsShippedPlaceholders(t *testing.T) {
+	dir := t.TempDir()
+	catalog := filepath.Join(dir, "cat.sqlite")
+	cfg := Config{}
+	cfg.Node.Enable = true
+	cfg.Coordinator.Enable = true
+	cfg.Node.FlightServer.Host = "0.0.0.0"
+	cfg.Node.FlightServer.Port = 50051
+	cfg.Node.FlightServer.AuthToken = "your-secret-token-here"
+	cfg.Node.DuckLake.CatalogPath = catalog
+	cfg.Coordinator.JWT.Secret = "change-this-to-a-secure-random-string-in-production"
+	cfg.Coordinator.Nodes = []NodeEndpoint{{
+		Name:  "local",
+		Host:  "127.0.0.1",
+		Port:  50051,
+		Token: "your-secret-token-here",
+	}}
+	applyDefaults(&cfg)
+	if cfg.Coordinator.JWT.Secret != "" {
+		t.Fatalf("jwt placeholder should be cleared, got %q", cfg.Coordinator.JWT.Secret)
+	}
+	if cfg.Node.FlightServer.AuthToken == "" || cfg.Node.FlightServer.AuthToken == "your-secret-token-here" {
+		t.Fatalf("flight token = %q", cfg.Node.FlightServer.AuthToken)
+	}
+	if cfg.Coordinator.Nodes[0].Token != cfg.Node.FlightServer.AuthToken {
+		t.Fatalf("node token %q != flight %q", cfg.Coordinator.Nodes[0].Token, cfg.Node.FlightServer.AuthToken)
+	}
+}
+
 func TestResolveNodeFlightAuthTokenLoopbackStaysEmpty(t *testing.T) {
 	tok, auto, file, err := ResolveNodeFlightAuthToken("127.0.0.1", "", t.TempDir()+"/cat.sqlite")
 	if err != nil {

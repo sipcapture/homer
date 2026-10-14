@@ -87,7 +87,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		// === node / flight server ===
 		"HOMER_NODE_FLIGHT_SERVER_HOST":             "0.0.0.0",
 		"HOMER_NODE_FLIGHT_SERVER_PORT":             "50051",
-		"HOMER_NODE_FLIGHT_SERVER_AUTH_TOKEN":       "your-secret-token-here",
+		"HOMER_NODE_FLIGHT_SERVER_AUTH_TOKEN":       "env-flight-token",
 		"HOMER_NODE_FLIGHT_SERVER_MAX_MESSAGE_SIZE": "16777216",
 		"HOMER_NODE_FLIGHTSQL_SERVER_ENABLE":        "false",
 		"HOMER_NODE_DUCKLAKE_LAKE_NAME":             "homer_lake",
@@ -99,7 +99,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		"HOMER_COORDINATOR_HTTP_SERVER_STATIC_PATH":  "/usr/local/homer-core/dist",
 		"HOMER_COORDINATOR_SETTINGS_DB_PATH":         "/data/homer/homer_settings.duckdb",
 		"HOMER_COORDINATOR_FLIGHTSQL_SERVER_ENABLE":  "false",
-		"HOMER_COORDINATOR_JWT_SECRET":               "change-this-to-a-secure-random-string-in-production",
+		"HOMER_COORDINATOR_JWT_SECRET":               "env-jwt-secret",
 		"HOMER_COORDINATOR_JWT_EXPIRE_HOURS":         "24",
 		"HOMER_COORDINATOR_AUTH_ADMIN_USER":          "admin",
 		"HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH": "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90",
@@ -177,7 +177,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 
 		// node
 		{"Node.FlightServer.Port", cfg.Node.FlightServer.Port, 50051},
-		{"Node.FlightServer.AuthToken", cfg.Node.FlightServer.AuthToken, "your-secret-token-here"},
+		{"Node.FlightServer.AuthToken", cfg.Node.FlightServer.AuthToken, "env-flight-token"},
 		{"Node.FlightServer.MaxMessageSize", cfg.Node.FlightServer.MaxMessageSize, 16777216},
 		{"Node.DuckLake.LakeName", cfg.Node.DuckLake.LakeName, "homer_lake"},
 
@@ -185,7 +185,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		{"Coordinator.HTTPServer.Port", cfg.Coordinator.HTTPServer.Port, 8080},
 		{"Coordinator.HTTPServer.StaticPath", cfg.Coordinator.HTTPServer.StaticPath, "/usr/local/homer-core/dist"},
 		{"Coordinator.SettingsDBPath", cfg.Coordinator.SettingsDBPath, "/data/homer/homer_settings.duckdb"},
-		{"Coordinator.JWT.Secret", cfg.Coordinator.JWT.Secret, "change-this-to-a-secure-random-string-in-production"},
+		{"Coordinator.JWT.Secret", cfg.Coordinator.JWT.Secret, "env-jwt-secret"},
 		{"Coordinator.JWT.ExpireHours", cfg.Coordinator.JWT.ExpireHours, 24},
 		{"Coordinator.Auth.AdminUser", cfg.Coordinator.Auth.AdminUser, "admin"},
 		{"Coordinator.Auth.AdminPasswordHash", cfg.Coordinator.Auth.AdminPasswordHash, "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"},
@@ -406,7 +406,7 @@ func TestLoad_EnvSlice_CoordinatorNodes(t *testing.T) {
 		"HOMER_COORDINATOR_NODES_0_PORT":           "50051",
 		"HOMER_COORDINATOR_NODES_0_FLIGHTSQL_PORT": "0",
 		"HOMER_COORDINATOR_NODES_0_USE_TLS":        "false",
-		"HOMER_COORDINATOR_NODES_0_TOKEN":          "your-secret-token-here",
+		"HOMER_COORDINATOR_NODES_0_TOKEN":          "env-flight-token",
 		"HOMER_COORDINATOR_NODES_0_PRIORITY":       "1",
 	}
 	for k, v := range envs {
@@ -432,8 +432,8 @@ func TestLoad_EnvSlice_CoordinatorNodes(t *testing.T) {
 	if n.Port != 50051 {
 		t.Errorf("nodes[0].port: want 50051, got %d", n.Port)
 	}
-	if n.Token != "your-secret-token-here" {
-		t.Errorf("nodes[0].token: want your-secret-token-here, got %q", n.Token)
+	if n.Token != "env-flight-token" {
+		t.Errorf("nodes[0].token: want env-flight-token, got %q", n.Token)
 	}
 	if n.Priority != 1 {
 		t.Errorf("nodes[0].priority: want 1, got %d", n.Priority)
@@ -694,7 +694,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 		// Node: flight server + ducklake
 		"HOMER_NODE_FLIGHT_SERVER_HOST":             "0.0.0.0",
 		"HOMER_NODE_FLIGHT_SERVER_PORT":             "50051",
-		"HOMER_NODE_FLIGHT_SERVER_AUTH_TOKEN":       "your-secret-token-here",
+		"HOMER_NODE_FLIGHT_SERVER_AUTH_TOKEN":       "env-flight-token",
 		"HOMER_NODE_FLIGHT_SERVER_MAX_MESSAGE_SIZE": "16777216",
 		"HOMER_NODE_FLIGHTSQL_SERVER_ENABLE":        "false",
 		"HOMER_NODE_DUCKLAKE_LAKE_NAME":             "homer_lake",
@@ -724,7 +724,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 		"HOMER_COORDINATOR_HTTP_SERVER_STATIC_PATH":  "/usr/local/homer-core/dist",
 		"HOMER_COORDINATOR_SETTINGS_DB_PATH":         "/data/homer/homer_settings.duckdb",
 		"HOMER_COORDINATOR_FLIGHTSQL_SERVER_ENABLE":  "false",
-		"HOMER_COORDINATOR_JWT_SECRET":               "change-this-to-a-secure-random-string-in-production",
+		"HOMER_COORDINATOR_JWT_SECRET":               "env-jwt-secret",
 		"HOMER_COORDINATOR_JWT_EXPIRE_HOURS":         "24",
 		"HOMER_COORDINATOR_AUTH_ADMIN_USER":          "admin",
 		"HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH": "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90",
@@ -733,7 +733,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 		"HOMER_COORDINATOR_NODES_0_PORT":             "50051",
 		"HOMER_COORDINATOR_NODES_0_FLIGHTSQL_PORT":   "0",
 		"HOMER_COORDINATOR_NODES_0_USE_TLS":          "false",
-		"HOMER_COORDINATOR_NODES_0_TOKEN":            "your-secret-token-here",
+		"HOMER_COORDINATOR_NODES_0_TOKEN":            "env-flight-token",
 		"HOMER_COORDINATOR_NODES_0_PRIORITY":         "1",
 
 		// Log + Prometheus
@@ -824,7 +824,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 		// node
 		{"Node.FlightServer.Host", cfg.Node.FlightServer.Host, "0.0.0.0"},
 		{"Node.FlightServer.Port", cfg.Node.FlightServer.Port, 50051},
-		{"Node.FlightServer.AuthToken", cfg.Node.FlightServer.AuthToken, "your-secret-token-here"},
+		{"Node.FlightServer.AuthToken", cfg.Node.FlightServer.AuthToken, "env-flight-token"},
 		{"Node.FlightServer.MaxMessageSize", cfg.Node.FlightServer.MaxMessageSize, 16777216},
 		{"Node.FlightSQLServer.Enable", cfg.Node.FlightSQLServer.Enable, false},
 		{"Node.DuckLake.LakeName", cfg.Node.DuckLake.LakeName, "homer_lake"},
@@ -836,7 +836,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 		{"Coordinator.HTTPServer.StaticPath", cfg.Coordinator.HTTPServer.StaticPath, "/usr/local/homer-core/dist"},
 		{"Coordinator.SettingsDBPath", cfg.Coordinator.SettingsDBPath, "/data/homer/homer_settings.duckdb"},
 		{"Coordinator.FlightSQLServer.Enable", cfg.Coordinator.FlightSQLServer.Enable, false},
-		{"Coordinator.JWT.Secret", cfg.Coordinator.JWT.Secret, "change-this-to-a-secure-random-string-in-production"},
+		{"Coordinator.JWT.Secret", cfg.Coordinator.JWT.Secret, "env-jwt-secret"},
 		{"Coordinator.JWT.ExpireHours", cfg.Coordinator.JWT.ExpireHours, 24},
 		{"Coordinator.Auth.AdminUser", cfg.Coordinator.Auth.AdminUser, "admin"},
 		{"Coordinator.Auth.AdminPasswordHash", cfg.Coordinator.Auth.AdminPasswordHash, "883ffc1f37fd0fe542b0fb9740035c4383e7d976c411161d24e62edace280f90"},
@@ -911,7 +911,7 @@ func TestLoad_RealProductionEnvSet(t *testing.T) {
 	n := cfg.Coordinator.Nodes[0]
 	if n.Name != "local" || n.Host != "127.0.0.1" || n.Port != 50051 ||
 		n.FlightSQLPort != 0 || n.UseTLS ||
-		n.Token != "your-secret-token-here" || n.Priority != 1 {
+		n.Token != "env-flight-token" || n.Priority != 1 {
 		t.Errorf("coordinator.nodes[0] mismatch: %+v", n)
 	}
 
