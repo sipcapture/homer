@@ -57,6 +57,24 @@ jobs:
         run: |
           cd src && go mod tidy
 
+      - name: Pin Dockerfile Go image
+        if: steps.check.outputs.needed == 'true'
+        env:
+          LATEST: ${{ steps.latest.outputs.version }}
+        run: |
+          TOKEN=$(curl -fsSL "https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/golang:pull" | jq -r .token)
+          DIGEST=$(curl -fsSL -D - -o /dev/null \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json" \
+            "https://registry-1.docker.io/v2/library/golang/manifests/${LATEST}-bookworm" \
+            | awk 'tolower($1)=="docker-content-digest:" {gsub(/\r/,""); print $2; exit}')
+          if ! printf '%s' "$DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "failed to resolve golang:${LATEST}-bookworm digest (got: ${DIGEST:-empty})" >&2
+            exit 1
+          fi
+          sed -i -E "s|^FROM golang:.* AS devbase\$|FROM golang:${LATEST}-bookworm@${DIGEST} AS devbase|" Dockerfile
+          grep -n '^FROM golang:' Dockerfile
+
       - name: Open pull request
         if: steps.check.outputs.needed == 'true'
         uses: peter-evans/create-pull-request@v7
@@ -72,7 +90,8 @@ jobs:
             This automated PR updates the project Go version from `${{ steps.current.outputs.version }}` to `${{ steps.latest.outputs.version }}`.
 
             ### Files changed
-            - `src/go.mod` — `go` directive (workflow files: update manually if needed)
+            - `src/go.mod` — `go` directive
+            - `Dockerfile` — `golang` devbase image, digest-pinned to the same version
 
             ### Why
             Keeping the project up-to-date with Go releases ensures access to the latest bug fixes, security patches, and performance improvements.
