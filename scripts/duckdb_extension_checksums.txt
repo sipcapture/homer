@@ -6,15 +6,15 @@
 # Refresh when DUCKDB_VERSION changes:
 #   curl -fsSL "https://extensions.duckdb.org/${VER}/${PLAT}/${NAME}.duckdb_extension.gz" | sha256sum
 #
-# Recorded 2026-08-20 from extensions.duckdb.org for v1.5.5.
+# Recorded 2026-10-20 from extensions.duckdb.org for v1.5.6.
 
-733ccf19fedcfd5e0bfaf85993219145181099cc411076cabf14933ea16ab452  v1.5.5/linux_amd64/ducklake.duckdb_extension.gz
-7cdd52a3135388718884a9b71e3987ba723002121e8e9de399c4ed619d824a05  v1.5.5/linux_amd64/httpfs.duckdb_extension.gz
-7454a7830b21e678f1700c6cc428540be3a688e959c81515fd1bfc0a538db3b3  v1.5.5/linux_amd64/aws.duckdb_extension.gz
-01292812092200c2d0b76324df9568d336ddaa5a198e7cc8fed124e84088e14e  v1.5.5/linux_amd64/sqlite_scanner.duckdb_extension.gz
-3dc0d1c338285afb580b56d82ebedd1b97ada7d5386044c56fcc3181624906e0  v1.5.5/linux_amd64/azure.duckdb_extension.gz
-1813f74b24060d6ae97187b87d221c7ecbae67e5321929bc543bc5fdb1dc95b4  v1.5.5/linux_arm64/ducklake.duckdb_extension.gz
-0820e0b5b74efaa23608c239df8e744a68943318d530b483a529eace19cb5475  v1.5.5/linux_arm64/httpfs.duckdb_extension.gz
-c0c2ff813d07a1f69a3c06fb69663b93299f1145dbaab9aaeee1be4003da7170  v1.5.5/linux_arm64/aws.duckdb_extension.gz
-59e3d3197d8767e51c3df10157d4423f4df58f97d85ffe0eb0bf752325f76641  v1.5.5/linux_arm64/sqlite_scanner.duckdb_extension.gz
-a9f9bdf8f764444d9073d5cd008cac2fdcfa58252870914fde9aaa6f70787d71  v1.5.5/linux_arm64/azure.duckdb_extension.gz
+38da09c6a8949ff41fdd711d677d5d877f24d93fca5d33e15590f046a86d1214  v1.5.6/linux_amd64/ducklake.duckdb_extension.gz
+19e6906934a845487c96f9c94beee250c71e32bb9be260eb27ad96939a1df5f0  v1.5.6/linux_amd64/httpfs.duckdb_extension.gz
+9d9bbd40e131f5e1314d6a7a82584b680f64a38fe771d4048275d48aa405852e  v1.5.6/linux_amd64/aws.duckdb_extension.gz
+edc79e292b069187f9dc95bfa735fbe578718e0b1df71d4f9ce2ca671b6dd51b  v1.5.6/linux_amd64/sqlite_scanner.duckdb_extension.gz
+f345ba67cbd31a2329f4b1d3a25971c72e6f4bd21a3b8c18acdbd083802db7bb  v1.5.6/linux_amd64/azure.duckdb_extension.gz
+2adc22ad439044ba11ac96a66529f8ae5091b2601b0a246eeaf29fba3dae4442  v1.5.6/linux_arm64/ducklake.duckdb_extension.gz
+b18472a0e85cbf15ca4ebbe335173f87b62a074cd0f26072d4c756205c6239d0  v1.5.6/linux_arm64/httpfs.duckdb_extension.gz
+7be5627a03495959bc033755fe4184db6cbc1d391c16790d3dad06fc14c79606  v1.5.6/linux_arm64/aws.duckdb_extension.gz
+f6afdebec449521c68adc17019d55c93179fa0a4b7f0d655b53caa12366ef0fe  v1.5.6/linux_arm64/sqlite_scanner.duckdb_extension.gz
+4d12f7501bd2ee325c50307d31e897a6264bb6de9fe81c6b3a7ce954986328ed  v1.5.6/linux_arm64/azure.duckdb_extension.gz
