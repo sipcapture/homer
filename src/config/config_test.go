@@ -394,14 +394,16 @@ func TestLoad_DuckDBTuningPropagates(t *testing.T) {
       "tuning": {
         "memory_limit": "4GB",
         "threads": 4,
-        "temp_directory": "/var/lib/homer/spill"
+        "temp_directory": "/var/lib/homer/spill",
+        "external_file_cache": true
       }
     }
   },
   "node": {
     "ducklake": {
       "tuning": {
-        "memory_limit": "2GB"
+        "memory_limit": "2GB",
+        "external_file_cache": false
       }
     }
   }
@@ -422,10 +424,16 @@ func TestLoad_DuckDBTuningPropagates(t *testing.T) {
 	if stw.TempDirectory != "/var/lib/homer/spill" {
 		t.Errorf("storage.ducklake.tuning.temp_directory: want /var/lib/homer/spill, got %q", stw.TempDirectory)
 	}
+	if stw.ExternalFileCache == nil || !*stw.ExternalFileCache {
+		t.Errorf("storage.ducklake.tuning.external_file_cache: want true, got %v", stw.ExternalFileCache)
+	}
 
 	node := cfg.Node.DuckLake.Tuning
 	if node.MemoryLimit != "2GB" {
 		t.Errorf("node.ducklake.tuning.memory_limit: want 2GB, got %q", node.MemoryLimit)
+	}
+	if node.ExternalFileCache == nil || *node.ExternalFileCache {
+		t.Errorf("node.ducklake.tuning.external_file_cache: want false, got %v", node.ExternalFileCache)
 	}
 }
 
@@ -658,7 +666,7 @@ func TestLoad_DuckDBTuningEmptySectionStaysZero(t *testing.T) {
 	}
 
 	tn := cfg.Storage.DuckLake.Tuning
-	if tn.MemoryLimit != "" || tn.Threads != 0 || tn.TempDirectory != "" {
+	if tn.MemoryLimit != "" || tn.Threads != 0 || tn.TempDirectory != "" || tn.ExternalFileCache != nil {
 		t.Errorf("expected zero-valued tuning, got %+v", tn)
 	}
 }

@@ -56,15 +56,16 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		"HOMER_INGEST_HEP_DEDUPLICATE":            "false",
 
 		// === storage / DuckLake ===
-		"HOMER_STORAGE_DUCKLAKE_CATALOG_TYPE":          "sqlite",
-		"HOMER_STORAGE_DUCKLAKE_CATALOG_PATH":          "/data/homer/homer_catalog.sqlite",
-		"HOMER_STORAGE_DUCKLAKE_DATA_PATH":             "/data/homer/parquet",
-		"HOMER_STORAGE_DUCKLAKE_LAKE_NAME":             "homer_lake",
-		"HOMER_STORAGE_DUCKLAKE_BATCH_SIZE":            "10000",
-		"HOMER_STORAGE_DUCKLAKE_FLUSH_INTERVAL_SEC":    "30",
-		"HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT":   "4GB",
-		"HOMER_STORAGE_DUCKLAKE_TUNING_THREADS":        "2",
-		"HOMER_STORAGE_DUCKLAKE_TUNING_TEMP_DIRECTORY": "/data/homer/.duckdb_spill",
+		"HOMER_STORAGE_DUCKLAKE_CATALOG_TYPE":               "sqlite",
+		"HOMER_STORAGE_DUCKLAKE_CATALOG_PATH":               "/data/homer/homer_catalog.sqlite",
+		"HOMER_STORAGE_DUCKLAKE_DATA_PATH":                  "/data/homer/parquet",
+		"HOMER_STORAGE_DUCKLAKE_LAKE_NAME":                  "homer_lake",
+		"HOMER_STORAGE_DUCKLAKE_BATCH_SIZE":                 "10000",
+		"HOMER_STORAGE_DUCKLAKE_FLUSH_INTERVAL_SEC":         "30",
+		"HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT":        "4GB",
+		"HOMER_STORAGE_DUCKLAKE_TUNING_THREADS":             "2",
+		"HOMER_STORAGE_DUCKLAKE_TUNING_TEMP_DIRECTORY":      "/data/homer/.duckdb_spill",
+		"HOMER_STORAGE_DUCKLAKE_TUNING_EXTERNAL_FILE_CACHE": "true",
 
 		// === storage / compaction ===
 		"HOMER_STORAGE_DUCKLAKE_COMPACTION_ENABLE":                       "true",
@@ -159,6 +160,7 @@ func TestLoad_EnvScalars_AllSections(t *testing.T) {
 		{"Storage.DuckLake.Tuning.MemoryLimit", cfg.Storage.DuckLake.Tuning.MemoryLimit, "4GB"},
 		{"Storage.DuckLake.Tuning.Threads", cfg.Storage.DuckLake.Tuning.Threads, 2},
 		{"Storage.DuckLake.Tuning.TempDirectory", cfg.Storage.DuckLake.Tuning.TempDirectory, "/data/homer/.duckdb_spill"},
+		{"Storage.DuckLake.Tuning.ExternalFileCache", cfg.Storage.DuckLake.Tuning.ExternalFileCache != nil && *cfg.Storage.DuckLake.Tuning.ExternalFileCache, true},
 
 		// compaction
 		{"Compaction.Enable", cfg.Storage.DuckLake.Compaction.Enable, true},
