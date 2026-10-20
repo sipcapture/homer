@@ -4,7 +4,7 @@
 # -> ~/.duckdb/extensions/<version>/<platform>/...
 #
 # DUCKDB_VERSION must stay in sync with embedded DuckDB from
-# github.com/duckdb/duckdb-go-bindings in src/go.mod (e.g. v0.10505.x -> v1.5.5).
+# github.com/duckdb/duckdb-go-bindings in src/go.mod (e.g. v0.10506.x -> v1.5.6).
 #
 # Gzip blobs are SHA-256 pinned in scripts/duckdb_extension_checksums.txt
 # (GHSA-vqh9-j3rh-cj62). Update that file when bumping DUCKDB_VERSION.
@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-DUCKDB_VERSION="${DUCKDB_VERSION:-v1.5.5}"
+DUCKDB_VERSION="${DUCKDB_VERSION:-v1.5.6}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHECKSUMS="${SCRIPT_DIR}/duckdb_extension_checksums.txt"
 
