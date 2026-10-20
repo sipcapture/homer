@@ -115,9 +115,16 @@ func localParquetHasMagic(path string) bool {
 }
 
 // resetExternalFileCache drops cached file ranges. SetEnabled is a no-op when
-// the flag does not change, and the default is on, so the cache is cleared
-// only by the transition to false.
+// the flag does not change, so the cache is cleared only by the transition to
+// false. ApplyDuckDBTuning turns it off on lake instances; leave it off then.
 func resetExternalFileCache(ctx context.Context, db *sql.DB) error {
+	var enabled bool
+	if err := db.QueryRowContext(ctx, "SELECT current_setting('enable_external_file_cache')").Scan(&enabled); err != nil {
+		return err
+	}
+	if !enabled {
+		return nil
+	}
 	if _, err := db.ExecContext(ctx, "SET enable_external_file_cache = false"); err != nil {
 		return err
 	}
