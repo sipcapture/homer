@@ -89,6 +89,8 @@ type TieredStorageConfig struct {
 	TuningThreads       int
 	TuningMemoryLimit   string
 	TuningTempDirectory string
+	// TuningExternalFileCache: nil = auto, see ApplyExternalFileCachePolicy.
+	TuningExternalFileCache *bool
 }
 
 // TieredStorageManager manages multiple storage volumes with automatic tiering
@@ -159,6 +161,15 @@ func (tsm *TieredStorageManager) applyDuckDBTuning() {
 	}
 	ApplyHomerDuckDBDefaults(tsm.db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,
 		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering")
+	ApplyExternalFileCachePolicy(tsm.db, tsm.config.TuningExternalFileCache, tsm.volumePaths(), "tiering")
+}
+
+func (tsm *TieredStorageManager) volumePaths() []string {
+	paths := make([]string, 0, len(tsm.config.Volumes))
+	for _, v := range tsm.config.Volumes {
+		paths = append(paths, v.Path)
+	}
+	return paths
 }
 
 // Start initializes all volumes and starts the tiering service

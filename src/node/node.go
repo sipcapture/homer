@@ -2045,6 +2045,11 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 	if len(volumeConfigs) == 0 {
 		return nil, fmt.Errorf("no volumes configured in node.ducklake.volumes")
 	}
+	volumePaths := make([]string, 0, len(volumeConfigs))
+	for _, vol := range volumeConfigs {
+		volumePaths = append(volumePaths, vol.Path)
+	}
+	ducklake.ApplyExternalFileCachePolicy(db, cfg.DuckLake.Tuning.ExternalFileCache, volumePaths, "node")
 
 	var volumes []VolumeInfo
 	for _, vol := range volumeConfigs {

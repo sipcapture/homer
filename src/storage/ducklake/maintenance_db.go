@@ -71,6 +71,7 @@ func OpenMaintenanceDB(cfg Config, memoryLimit string, reference *sql.DB) (*Main
 
 	ApplyHomerDuckDBDefaults(db, cfg.TuningThreads, memoryLimit,
 		maintenanceSpillDirectory(cfg), cfg.CatalogPath, "compaction")
+	ApplyExternalFileCachePolicy(db, cfg.TuningExternalFileCache, []string{cfg.DataPath}, "compaction")
 
 	if err := loadLakeExtensions(db); err != nil {
 		return fail(err)

@@ -260,19 +260,20 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 
 	// Initialize DuckLake storage
 	duckCfg := ducklake.Config{
-		CatalogType:          ducklake.CatalogType(storageCfg.DuckLake.CatalogType),
-		CatalogPath:          storageCfg.DuckLake.CatalogPath,
-		DataPath:             storageCfg.DuckLake.DataPath,
-		LakeName:             storageCfg.DuckLake.LakeName,
-		BatchSize:            storageCfg.DuckLake.BatchSize,
-		FlushInterval:        time.Duration(storageCfg.DuckLake.FlushInterval) * time.Second,
-		SearchBuffer:         storageCfg.DuckLake.SearchBuffer,
-		ShardCount:           storageCfg.DuckLake.ShardCount,
-		FlushQueue:           storageCfg.DuckLake.FlushQueue,
-		DataInliningRowLimit: storageCfg.DuckLake.DataInliningRowLimit,
-		TuningThreads:        storageCfg.DuckLake.Tuning.Threads,
-		TuningMemoryLimit:    storageCfg.DuckLake.Tuning.MemoryLimit,
-		TuningTempDirectory:  storageCfg.DuckLake.Tuning.TempDirectory,
+		CatalogType:             ducklake.CatalogType(storageCfg.DuckLake.CatalogType),
+		CatalogPath:             storageCfg.DuckLake.CatalogPath,
+		DataPath:                storageCfg.DuckLake.DataPath,
+		LakeName:                storageCfg.DuckLake.LakeName,
+		BatchSize:               storageCfg.DuckLake.BatchSize,
+		FlushInterval:           time.Duration(storageCfg.DuckLake.FlushInterval) * time.Second,
+		SearchBuffer:            storageCfg.DuckLake.SearchBuffer,
+		ShardCount:              storageCfg.DuckLake.ShardCount,
+		FlushQueue:              storageCfg.DuckLake.FlushQueue,
+		DataInliningRowLimit:    storageCfg.DuckLake.DataInliningRowLimit,
+		TuningThreads:           storageCfg.DuckLake.Tuning.Threads,
+		TuningMemoryLimit:       storageCfg.DuckLake.Tuning.MemoryLimit,
+		TuningTempDirectory:     storageCfg.DuckLake.Tuning.TempDirectory,
+		TuningExternalFileCache: storageCfg.DuckLake.Tuning.ExternalFileCache,
 		// Writer path: take an exclusive catalog lock so a second writer process
 		// (e.g. a duplicate container) refuses to start instead of corrupting
 		// the SQLite catalog.
@@ -992,19 +993,20 @@ func (w *Writer) startTieringService() error {
 
 	// Create tiered storage manager
 	tsmConfig := ducklake.TieredStorageConfig{
-		Enable:              policy.Enable,
-		Volumes:             volumes,
-		TTLMoveIntervalSec:  policy.TTLMoveIntervalSec,
-		MoveFactor:          policy.MoveFactor,
-		ConcurrentMoves:     policy.ConcurrentMoves,
-		MoveOnStartup:       policy.MoveOnStartup,
-		MoveEngine:          policy.MoveEngine,
-		CatalogType:         ducklake.CatalogType(w.storageConfig.DuckLake.CatalogType),
-		CatalogPath:         w.storageConfig.DuckLake.CatalogPath,
-		CatalogLocker:       w.ducklakeManager,
-		TuningThreads:       w.storageConfig.DuckLake.Tuning.Threads,
-		TuningMemoryLimit:   w.storageConfig.DuckLake.Tuning.MemoryLimit,
-		TuningTempDirectory: w.storageConfig.DuckLake.Tuning.TempDirectory,
+		Enable:                  policy.Enable,
+		Volumes:                 volumes,
+		TTLMoveIntervalSec:      policy.TTLMoveIntervalSec,
+		MoveFactor:              policy.MoveFactor,
+		ConcurrentMoves:         policy.ConcurrentMoves,
+		MoveOnStartup:           policy.MoveOnStartup,
+		MoveEngine:              policy.MoveEngine,
+		CatalogType:             ducklake.CatalogType(w.storageConfig.DuckLake.CatalogType),
+		CatalogPath:             w.storageConfig.DuckLake.CatalogPath,
+		CatalogLocker:           w.ducklakeManager,
+		TuningThreads:           w.storageConfig.DuckLake.Tuning.Threads,
+		TuningMemoryLimit:       w.storageConfig.DuckLake.Tuning.MemoryLimit,
+		TuningTempDirectory:     w.storageConfig.DuckLake.Tuning.TempDirectory,
+		TuningExternalFileCache: w.storageConfig.DuckLake.Tuning.ExternalFileCache,
 	}
 
 	tsm, err := ducklake.NewTieredStorageManager(tsmConfig)

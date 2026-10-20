@@ -523,3 +523,39 @@ func TestTieredStorageManager_applyDuckDBTuning(t *testing.T) {
 		t.Fatalf("temp_directory = %q, want path containing %q", got, spill)
 	}
 }
+
+func TestTieredStorageManager_applyDuckDBTuningExternalFileCache(t *testing.T) {
+	cases := []struct {
+		name    string
+		volumes []Volume
+		want    string
+	}{
+		{"local volumes", []Volume{{Name: "hot", Path: "/data/hot"}, {Name: "warm", Path: "/data/warm"}}, "false"},
+		{"remote cold volume", []Volume{{Name: "hot", Path: "/data/hot"}, {Name: "cold", Path: "s3://cold/data"}}, "true"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, err := sql.Open("duckdb", "")
+			if err != nil {
+				t.Fatalf("open duckdb: %v", err)
+			}
+			defer db.Close()
+
+			tmp := t.TempDir()
+			tsm := &TieredStorageManager{
+				db: db,
+				config: TieredStorageConfig{
+					Volumes:             tc.volumes,
+					CatalogPath:         tmp + "/hot.sqlite",
+					TuningThreads:       1,
+					TuningMemoryLimit:   "256MB",
+					TuningTempDirectory: tmp + "/spill",
+				},
+			}
+			tsm.applyDuckDBTuning()
+			if got := getSetting(t, db, "enable_external_file_cache"); got != tc.want {
+				t.Fatalf("enable_external_file_cache = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

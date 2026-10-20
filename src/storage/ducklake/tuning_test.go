@@ -259,6 +259,46 @@ func TestEnsureWriterAzureSecret_EmptyCredsFailsFast(t *testing.T) {
 	}
 }
 
+// TestApplyExternalFileCachePolicy covers sipcapture/homer#1076: DuckLake
+// reads its parquet files without cache validation, so the cache is off by
+// default for local lakes and stays on when any lake is remote.
+func TestApplyExternalFileCachePolicy(t *testing.T) {
+	on, off := true, false
+	cases := []struct {
+		name      string
+		enabled   *bool
+		dataPaths []string
+		want      string
+	}{
+		{"local lake disables", nil, []string{"/var/lib/homer/parquet"}, "false"},
+		{"all local volumes disable", nil, []string{"/hot", "", "/cold"}, "false"},
+		{"remote lake keeps default", nil, []string{"s3://bucket/lake"}, "true"},
+		{"mixed volumes keep default", nil, []string{"/hot", "az://container/cold"}, "true"},
+		{"no lake paths keep default", nil, nil, "true"},
+		{"explicit on wins for local", &on, []string{"/var/lib/homer/parquet"}, "true"},
+		{"explicit off wins for remote", &off, []string{"s3://bucket/lake"}, "false"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, err := sql.Open("duckdb", "")
+			if err != nil {
+				t.Fatalf("open duckdb: %v", err)
+			}
+			defer db.Close()
+
+			ApplyExternalFileCachePolicy(db, tc.enabled, tc.dataPaths, "test")
+
+			if got := getSetting(t, db, "enable_external_file_cache"); got != tc.want {
+				t.Fatalf("enable_external_file_cache = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestApplyExternalFileCachePolicy_NilDB(t *testing.T) {
+	ApplyExternalFileCachePolicy(nil, nil, []string{"/data"}, "test")
+}
+
 func getSetting(t *testing.T, db *sql.DB, name string) string {
 	t.Helper()
 	var v string

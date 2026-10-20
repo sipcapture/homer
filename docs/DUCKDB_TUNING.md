@@ -60,6 +60,33 @@ per-connection DuckDB SET statements:
   - node connection — opened in `src/node/node.go`,
     reads `node.ducklake.tuning`.
 
+## External file cache
+
+`tuning.external_file_cache` (on both `storage.ducklake` and
+`node.ducklake`) maps to DuckDB's instance-global
+`enable_external_file_cache`, an in-memory cache of parquet byte ranges.
+
+- Not set (default): the cache is **off** when every lake path of the
+  DuckDB instance is local, and left at DuckDB's default (on) when any
+  path is `s3://` or `az://`. Each instance decides on its own paths:
+  the writer on `data_path`, the tiering instances on their volumes,
+  the node on `node.ducklake.volumes`.
+- `true` / `false`: force the setting on that instance.
+- Env: `HOMER_STORAGE_DUCKLAKE_TUNING_EXTERNAL_FILE_CACHE`,
+  `HOMER_NODE_DUCKLAKE_TUNING_EXTERNAL_FILE_CACHE`.
+
+DuckLake opens its data files with `validate_external_file_cache=false`,
+so a bad byte range in the cache is served until the process restarts.
+Searches then fail on files that are valid on disk with
+`No magic bytes found at end of file`
+([#1061](https://github.com/sipcapture/homer/issues/1061)) or
+`TProtocolException: Invalid data`
+([#1076](https://github.com/sipcapture/homer/issues/1076)). Local files
+are already held by the OS page cache, and the DuckDB cache takes its
+memory from `memory_limit`, which flush, compaction and search share.
+The startup log shows the decision:
+`DuckDB tuning: external file cache set ... enable_external_file_cache=false reason="local data_path"`.
+
 ## Recommended values per role
 
 | Role            | `memory_limit`       | `threads`              | `temp_directory`              |
