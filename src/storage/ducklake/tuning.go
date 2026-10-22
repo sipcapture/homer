@@ -387,6 +387,53 @@ func ApplyDuckDBMemorySafety(db *sql.DB, who string) {
 	}
 }
 
+// ApplyExternalFileCachePolicy sets the instance-global
+// enable_external_file_cache for a DuckDB whose lakes live under dataPaths.
+// An explicit enabled value wins. Otherwise the cache is turned off when every
+// path is local and left at DuckDB's default when any is remote or none is
+// known.
+//
+// DuckLake opens its data files with validate_external_file_cache=false, so a
+// bad byte range in the cache is served until the process restarts
+// (sipcapture/homer#1061, #1076). For local files the OS page cache already
+// holds the bytes, and the DuckDB cache only takes memory_limit away from
+// flush, compaction and search.
+func ApplyExternalFileCachePolicy(db *sql.DB, enabled *bool, dataPaths []string, who string) {
+	if db == nil {
+		return
+	}
+	on, reason := false, "explicit"
+	switch {
+	case enabled != nil:
+		on = *enabled
+	case allLocalLakePaths(dataPaths):
+		reason = "local data_path"
+	default:
+		return
+	}
+	if _, err := db.Exec(fmt.Sprintf("SET enable_external_file_cache = %t", on)); err != nil {
+		logger.Warn(fmt.Sprintf("DuckDB tuning (%s): SET enable_external_file_cache = %t failed: %v", who, on, err))
+		return
+	}
+	logger.Info("DuckDB tuning: external file cache set",
+		"where", who, "enable_external_file_cache", on, "reason", reason)
+}
+
+func allLocalLakePaths(paths []string) bool {
+	seen := false
+	for _, p := range paths {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if IsRemoteLakeDataPath(p) {
+			return false
+		}
+		seen = true
+	}
+	return seen
+}
+
 // AutoThreads is the writer/node default when tuning.threads is 0:
 // min(NumCPU/2, 4), at least 1. Leaves headroom for Go ingest goroutines
 // and matches DuckDB's own advice to lower threads under memory pressure.

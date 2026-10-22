@@ -126,6 +126,7 @@ func (tsm *TieredStorageManager) openMaintenanceDB() (*sql.DB, error) {
 	db.SetMaxIdleConns(1)
 	ApplyHomerDuckDBDefaults(db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,
 		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering-maintenance")
+	ApplyExternalFileCachePolicy(db, tsm.config.TuningExternalFileCache, tsm.volumePaths(), "tiering-maintenance")
 
 	for _, ext := range []string{"ducklake", "sqlite"} {
 		if _, err := db.Exec("LOAD " + ext + ";"); err != nil {

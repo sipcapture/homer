@@ -665,6 +665,12 @@ type DuckDBTuning struct {
 	// Pin this to a fast SSD volume on busy nodes so spill traffic
 	// does not contend with the catalog disk.
 	TempDirectory string `json:"temp_directory" mapstructure:"temp_directory" default:""`
+	// ExternalFileCache sets DuckDB's enable_external_file_cache. nil = auto:
+	// off when every lake path of the instance is local, DuckDB default
+	// (on) when any is remote. DuckLake reads its files without cache
+	// validation, so a bad cached range fails searches until restart
+	// (sipcapture/homer#1061, #1076).
+	ExternalFileCache *bool `json:"external_file_cache" mapstructure:"external_file_cache"`
 }
 
 // DuckLakeConfig configures DuckLake storage
