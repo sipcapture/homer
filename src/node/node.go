@@ -54,11 +54,6 @@ type Node struct {
 	db            *sql.DB
 	sharedDB      *sql.DB // shared with writer module for real-time visibility
 	tieredQueryDB *sql.DB // writer TieredStorageManager DuckDB (homer_lake_hot / _cold)
-	// tieredFailMsg is the last cold-tier error already logged at Warn.
-	// The same binder failure on every poll is Debug after that
-	// (sipcapture/homer#1081).
-	tieredFailMu  sync.Mutex
-	tieredFailMsg string
 	mu            sync.RWMutex
 	running       bool
 	volumes       []VolumeInfo // Attached storage volumes for tiered storage
@@ -81,6 +76,11 @@ type Node struct {
 	// When nil the /stream endpoint responds with 503 so the coordinator
 	// can cleanly skip this node during fan-out.
 	broker *hepstream.Broker
+
+	// coldTierWarn remembers the last cold-tiered query error so the same
+	// binder failure is not logged on every API poll (sipcapture/homer#1081).
+	coldTierWarnMu sync.Mutex
+	coldTierWarn   string
 }
 
 // SetBroker wires the live-stream broker into the node so handleStream
@@ -1256,30 +1256,6 @@ func (n *Node) tieredQueryDBForRead() *sql.DB {
 	return n.tieredQueryDB
 }
 
-// warnColdTieredQuery logs a failed hot+cold read. A polling client repeats
-// the same binder error; that repeat is Debug so the log is not one warning
-// per request.
-func (n *Node) warnColdTieredQuery(err error) {
-	msg := err.Error()
-	n.tieredFailMu.Lock()
-	repeat := n.tieredFailMsg == msg
-	if !repeat {
-		n.tieredFailMsg = msg
-	}
-	n.tieredFailMu.Unlock()
-	fields := []any{
-		"error", err,
-		"volumes", len(n.volumes),
-		"tieredDB_set", n.tieredQueryDB != nil,
-		"sharedDB_set", n.sharedDB != nil,
-	}
-	if repeat {
-		logger.Debug("Node: cold tiered query failed", fields...)
-		return
-	}
-	logger.Warn("Node: cold tiered query failed", fields...)
-}
-
 // handleQuery handles POST /query requests
 func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1373,30 +1349,33 @@ func (n *Node) handleQuery(w http.ResponseWriter, r *http.Request) {
 		tieredResults, tieredCols, terr := runSelectQuery(r.Context(), tieredDB, tieredUnion)
 		if terr != nil {
 			n.warnColdTieredQuery(terr)
-		} else if sqlIsAggregateShape(req.SQL) {
-			// Aggregate rows cannot be merged across DuckDB instances (the
-			// uuid/timestamp dedup keys collapse them). The tiered union
-			// already spans hot+cold with correct aggregate semantics, and
-			// the hot tier shares the writer's catalog, so it covers all
-			// committed data; only unflushed memory-buffer rows are
-			// excluded from aggregates.
-			results, columns = tieredResults, tieredCols
-		} else if len(sharedResults) == 0 {
-			// Shared query returned no rows (e.g. historical range where
-			// the hot catalog is empty). Use the tiered query directly so
-			// that cold data is always included — fixing issue #870 where
-			// Form search returned 0 rows for historical ranges.
-			results, columns = tieredResults, tieredCols
 		} else {
-			// Merge shared (hot+memory) with tiered (hot+cold). Hot data
-			// may appear twice; the limit trim at the end keeps the most
-			// recent rows and drops late duplicates.
-			limit := extractSQLLimit(req.SQL)
-			if sqlOrderByTimestampAscRegexp.MatchString(req.SQL) {
-				results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, 0)
-				results = sortMergedRowsForQueryOrder(results, req.SQL, limit)
+			n.noteColdTieredQueryOK()
+			if sqlIsAggregateShape(req.SQL) {
+				// Aggregate rows cannot be merged across DuckDB instances (the
+				// uuid/timestamp dedup keys collapse them). The tiered union
+				// already spans hot+cold with correct aggregate semantics, and
+				// the hot tier shares the writer's catalog, so it covers all
+				// committed data; only unflushed memory-buffer rows are
+				// excluded from aggregates.
+				results, columns = tieredResults, tieredCols
+			} else if len(sharedResults) == 0 {
+				// Shared query returned no rows (e.g. historical range where
+				// the hot catalog is empty). Use the tiered query directly so
+				// that cold data is always included — fixing issue #870 where
+				// Form search returned 0 rows for historical ranges.
+				results, columns = tieredResults, tieredCols
 			} else {
-				results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, limit)
+				// Merge shared (hot+memory) with tiered (hot+cold). Hot data
+				// may appear twice; the limit trim at the end keeps the most
+				// recent rows and drops late duplicates.
+				limit := extractSQLLimit(req.SQL)
+				if sqlOrderByTimestampAscRegexp.MatchString(req.SQL) {
+					results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, 0)
+					results = sortMergedRowsForQueryOrder(results, req.SQL, limit)
+				} else {
+					results, columns = mergeSelectResults(results, tieredResults, columns, tieredCols, limit)
+				}
 			}
 		}
 		logger.Info("Node: handleQuery: returning merged results", "rows", len(results), "columns", fmt.Sprintf("%v", columns))
@@ -1774,10 +1753,9 @@ func scanLakeTableRefs(sql, base string) []lakeTableRef {
 // Every table in the statement is rewritten. Leaving a later
 // homer_lake.main.<table> in place makes the tiered DuckDB raise
 // Catalog "homer_lake" does not exist on each poll (sipcapture/homer#1081).
-//
-// Volumes where the table is missing in the target DuckDB instance are
-// skipped so a cold lake without a given hep_proto_* table does not break
-// the whole query.
+// A table missing from every volume aborts the rewrite, so the statement is
+// not sent with a leftover base-catalog name. A volume that lacks one table
+// is skipped when another volume still has it.
 func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 	if len(n.volumes) <= 1 || n.config == nil {
 		return "", false
@@ -1793,6 +1771,8 @@ func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 	if len(refs) == 0 {
 		return "", false
 	}
+	// Longer names first so hep_proto_1_call is not rewritten inside
+	// hep_proto_1_call_extra.
 	sort.SliceStable(refs, func(i, j int) bool {
 		return len(refs[i].fqn(baseLakeName)) > len(refs[j].fqn(baseLakeName))
 	})
@@ -1806,7 +1786,6 @@ func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 		return "", false
 	}
 
-	changed := false
 	for _, ref := range refs {
 		var branches []string
 		for _, vol := range vols {
@@ -1821,17 +1800,51 @@ func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 			branch += " FROM " + ref.qualified(vol.cat)
 			branches = append(branches, branch)
 		}
+		// No volume has this table. Rewriting the others would leave this
+		// homer_lake reference in the statement and the tiered query would
+		// fail on every poll.
 		if len(branches) == 0 {
-			continue
+			return "", false
 		}
 		derived := "(" + strings.Join(branches, " UNION ALL ") + ")"
 		sql = replaceTableWithDerived(sql, ref.fqn(baseLakeName), derived, ref.name)
-		changed = true
-	}
-	if !changed {
-		return "", false
 	}
 	return sql, true
+}
+
+// warnColdTieredQuery logs a cold-tiered failure once per distinct message.
+// The same binder error on every API poll stays quiet until a cold query
+// succeeds or the error text changes (sipcapture/homer#1081).
+func (n *Node) warnColdTieredQuery(err error) {
+	if n == nil || err == nil {
+		return
+	}
+	msg := err.Error()
+	n.coldTierWarnMu.Lock()
+	if n.coldTierWarn == msg {
+		n.coldTierWarnMu.Unlock()
+		return
+	}
+	n.coldTierWarn = msg
+	n.coldTierWarnMu.Unlock()
+
+	n.mu.RLock()
+	volumes := len(n.volumes)
+	tieredSet := n.tieredQueryDB != nil
+	sharedSet := n.sharedDB != nil
+	n.mu.RUnlock()
+	logger.Warn("Node: cold tiered query failed; further identical failures will not be logged until a cold query succeeds",
+		"error", err,
+		"volumes", volumes, "tieredDB_set", tieredSet, "sharedDB_set", sharedSet)
+}
+
+func (n *Node) noteColdTieredQueryOK() {
+	if n == nil {
+		return
+	}
+	n.coldTierWarnMu.Lock()
+	n.coldTierWarn = ""
+	n.coldTierWarnMu.Unlock()
 }
 
 // sqlKeywordsAfterTableRef are keywords that may legally follow a table
