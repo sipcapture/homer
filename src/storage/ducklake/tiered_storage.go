@@ -556,13 +556,18 @@ const (
 	partitionMoveNone partitionMoveAction = iota
 	partitionMoveCopy
 	partitionMoveDeleteSourceOnly
+	// partitionMoveReplaceDest deletes the destination partition and copies
+	// again. A non-zero destination whose row count differs from the source is
+	// an incomplete or duplicated prior copy (sipcapture/homer#1025, #1080).
+	// The source stays until a later attempt sees equal counts (#866).
+	partitionMoveReplaceDest
 )
 
 // partitionMovePlan decides how MovePartition should proceed.
 //
-// A non-zero destination with a different row count is an incomplete prior copy
-// (sipcapture/homer#1025). Returning an error leaves the source untouched:
-// delete-only retry is only safe when dstCount == srcCount (#866).
+// Delete-only retry is only safe when dstCount == srcCount (#866). Any other
+// non-empty destination is discarded and copied again so a failed attempt
+// cannot stick forever (#1080).
 func partitionMovePlan(srcCount, dstCount int64) (partitionMoveAction, error) {
 	if srcCount < 0 || dstCount < 0 {
 		return partitionMoveNone, fmt.Errorf(
@@ -578,9 +583,7 @@ func partitionMovePlan(srcCount, dstCount int64) (partitionMoveAction, error) {
 	if dstCount == srcCount {
 		return partitionMoveDeleteSourceOnly, nil
 	}
-	return partitionMoveNone, fmt.Errorf(
-		"destination partition is incomplete: source_rows=%d destination_rows=%d",
-		srcCount, dstCount)
+	return partitionMoveReplaceDest, nil
 }
 
 // MovePartition moves a partition (date) from source to destination volume.
@@ -633,19 +636,25 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 
 	action, err := partitionMovePlan(srcCount, dstCount)
 	if err != nil {
-		logger.Error("TieredStorageManager: Destination partition is incomplete; refusing source delete",
+		logger.Error("TieredStorageManager: refusing partition move",
 			"table", tableName,
 			"date", date,
 			"source_rows", srcCount,
-			"destination_rows", dstCount)
+			"destination_rows", dstCount,
+			"error", err)
 		return err
 	}
-	if action == partitionMoveDeleteSourceOnly {
+	switch action {
+	case partitionMoveDeleteSourceOnly:
 		logger.Info("TieredStorageManager: Destination already has partition; retrying source delete only",
 			"table", tableName,
 			"date", date,
 			"rows", dstCount)
 		return tsm.deleteSourcePartition(srcTable, date, tableName, srcCount, dstCount, hotLocker)
+	case partitionMoveReplaceDest:
+		if err := tsm.discardIncompleteDestination(dstTable, date, tableName, dstVol, srcCount, dstCount); err != nil {
+			return err
+		}
 	}
 
 	if tsm.useNativeMove(srcVol, dstVol) {
@@ -774,6 +783,37 @@ func (tsm *TieredStorageManager) movePartitionDuckDB(srcTable, dstTable, tableNa
 		return fmt.Errorf("failed to insert into destination: %w", err)
 	}
 	return tsm.deleteSourcePartition(srcTable, date, tableName, srcCount, 0, hotLocker)
+}
+
+// discardIncompleteDestination removes one date partition from the destination
+// so the following copy starts from an empty partition. The source is not
+// touched (sipcapture/homer#1080).
+func (tsm *TieredStorageManager) discardIncompleteDestination(dstTable, date, tableName string, dstVol *Volume, srcCount, dstCount int64) error {
+	volumeName := ""
+	var locker CatalogLocker
+	if dstVol != nil {
+		volumeName = dstVol.Name
+		locker = tsm.hotCatalogLocker(dstVol)
+	}
+	logger.Warn("TieredStorageManager: discarding incomplete destination partition before retry",
+		"table", tableName,
+		"date", date,
+		"volume", volumeName,
+		"source_rows", srcCount,
+		"destination_rows", dstCount)
+
+	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE date = ?", dstTable)
+	if _, err := execWithRetry(
+		tsm.db,
+		tieringMaxRetries,
+		tieringBaseBackoff,
+		locker,
+		deleteSQL,
+		date,
+	); err != nil {
+		return fmt.Errorf("failed to discard incomplete destination partition: %w", err)
+	}
+	return nil
 }
 
 func (tsm *TieredStorageManager) deleteSourcePartition(srcTable, date, tableName string, srcCount, dstCount int64, hotLocker CatalogLocker) error {
