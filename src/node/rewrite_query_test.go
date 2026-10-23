@@ -2,6 +2,7 @@ package node
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -183,6 +184,88 @@ func TestTryBuildVolumeUnionSQL_aggregateQuery(t *testing.T) {
 	}
 	if !strings.Contains(out, "FROM (SELECT *") || !strings.Contains(out, ") AS hep_proto_1_default WHERE date") {
 		t.Fatalf("expected derived-table substitution before WHERE: %s", out)
+	}
+}
+
+func TestTryBuildVolumeUnionSQL_rewritesEveryTable(t *testing.T) {
+	n := multiVolumeNode()
+	sqlIn := "SELECT c.sid FROM homer_lake.main.hep_proto_1_call c JOIN homer_lake.main.hep_proto_1_default d ON c.sid = d.sid"
+	out, ok := n.tryBuildVolumeUnionSQL(sqlIn)
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if strings.Contains(out, "homer_lake.main.") {
+		t.Fatalf("base catalog still referenced: %s", out)
+	}
+	for _, table := range []string{"hep_proto_1_call", "hep_proto_1_default"} {
+		if !strings.Contains(out, "homer_lake_hot.main."+table) || !strings.Contains(out, "homer_lake_cold.main."+table) {
+			t.Fatalf("expected hot+cold union for %s: %s", table, out)
+		}
+	}
+	if err := validateUserSQL(out); err != nil {
+		t.Fatalf("rewritten join rejected: %v\nsql: %s", err, out)
+	}
+}
+
+func TestTryBuildVolumeUnionSQL_abortsWhenOneTableMissing(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	for _, stmt := range []string{
+		"ATTACH ':memory:' AS homer_lake_hot",
+		"ATTACH ':memory:' AS homer_lake_cold",
+		"CREATE TABLE homer_lake_hot.main.hep_proto_1_call (sid VARCHAR)",
+		"CREATE TABLE homer_lake_cold.main.hep_proto_1_call (sid VARCHAR)",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("setup %q: %v", stmt, err)
+		}
+	}
+
+	n := multiVolumeNode()
+	n.tieredQueryDB = db
+	sqlIn := "SELECT c.sid FROM homer_lake.main.hep_proto_1_call c JOIN homer_lake.main.hep_proto_1_default d ON c.sid = d.sid"
+	if _, ok := n.tryBuildVolumeUnionSQL(sqlIn); ok {
+		t.Fatal("join must not be partially rewritten when one table is absent from every volume")
+	}
+}
+
+func TestLakeTableFQNStopsAtCR(t *testing.T) {
+	got := lakeTableFQNs("SELECT * FROM homer_lake.main.hep_proto_1_call\rWHERE 1=1", "homer_lake")
+	if len(got) != 1 || got[0] != "homer_lake.main.hep_proto_1_call" {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestColdTieredWarnOnce(t *testing.T) {
+	n := multiVolumeNode()
+	n.tieredQueryDB = new(sql.DB)
+	errSame := errors.New(`Binder Error: Catalog "homer_lake" does not exist!`)
+	n.warnColdTieredQuery(errSame)
+	n.warnColdTieredQuery(errSame)
+	n.coldTierWarnMu.Lock()
+	got := n.coldTierWarn
+	n.coldTierWarnMu.Unlock()
+	if got != errSame.Error() {
+		t.Fatalf("stored warning = %q", got)
+	}
+	n.noteColdTieredQueryOK()
+	n.coldTierWarnMu.Lock()
+	got = n.coldTierWarn
+	n.coldTierWarnMu.Unlock()
+	if got != "" {
+		t.Fatalf("success should clear the warning, got %q", got)
+	}
+	other := errors.New("Binder Error: Catalog \"other\" does not exist!")
+	n.warnColdTieredQuery(other)
+	n.coldTierWarnMu.Lock()
+	got = n.coldTierWarn
+	n.coldTierWarnMu.Unlock()
+	if got != other.Error() {
+		t.Fatalf("new error should replace the warning, got %q", got)
 	}
 }
 
