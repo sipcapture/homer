@@ -1597,27 +1597,167 @@ func tieredTableExists(db *sql.DB, lakeName, tableName string) bool {
 	return count > 0
 }
 
-// tryBuildVolumeUnionSQL rewrites a query referencing <baseLake>.main.<table>
-// so it reads from every configured volume: the table reference is replaced
-// in place with a derived table that UNION ALLs the per-volume catalogs,
-// aliased back to the table name so column references keep resolving.
+// lakeTableRef is one base-catalog table mention in a query.
+// main is true for catalog.main.table; false for the two-part catalog.table form.
+type lakeTableRef struct {
+	name string
+	main bool
+}
+
+func (r lakeTableRef) fqn(base string) string {
+	if r.main {
+		return base + ".main." + r.name
+	}
+	return base + "." + r.name
+}
+
+func (r lakeTableRef) qualified(catalog string) string {
+	if r.main {
+		return catalog + ".main." + r.name
+	}
+	return catalog + "." + r.name
+}
+
+type resolvedVolume struct {
+	info VolumeInfo
+	cat  string
+}
+
+// resolveVolumeCatalogs picks the catalog name that is actually attached on db.
+// The node labels volumes homer_lake_<name>, but a hot volume still on the
+// legacy writer catalog is attached as homer_lake (sipcapture/homer#1081).
+// That base name is used for at most one volume, so cold does not re-read hot.
+func (n *Node) resolveVolumeCatalogs(db *sql.DB) []resolvedVolume {
+	base := ""
+	if n.config != nil {
+		base = n.config.DuckLake.LakeName
+	}
+	baseClaimed := false
+	out := make([]resolvedVolume, 0, len(n.volumes))
+	for _, vol := range n.volumes {
+		cat := n.duckLakeCatalogForQuery(vol)
+		if db != nil && !tieredCatalogAttached(db, cat) {
+			if base != "" && cat != base && !baseClaimed && tieredCatalogAttached(db, base) {
+				baseClaimed = true
+				cat = base
+			} else {
+				continue
+			}
+		}
+		out = append(out, resolvedVolume{info: vol, cat: cat})
+	}
+	return out
+}
+
+func tieredCatalogAttached(db *sql.DB, name string) bool {
+	if db == nil || name == "" {
+		return false
+	}
+	q := fmt.Sprintf(
+		`SELECT COUNT(*) FROM information_schema.schemata WHERE catalog_name = '%s'`,
+		tieredSQLIdentLiteral(name),
+	)
+	var count int
+	if err := db.QueryRow(q).Scan(&count); err != nil {
+		return false
+	}
+	return count > 0
+}
+
+func isSQLIdentByte(c byte) bool {
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+func isSQLIdentStart(c byte) bool {
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+func leadingSQLIdent(s string) (string, int) {
+	if s == "" || !isSQLIdentStart(s[0]) {
+		return "", 0
+	}
+	j := 1
+	for j < len(s) && isSQLIdentByte(s[j]) {
+		j++
+	}
+	return s[:j], j
+}
+
+// scanLakeTableRefs lists distinct base-catalog table references outside
+// string literals, in source order. Three-part names (catalog.main.table)
+// and two-part names (catalog.table) are both included.
+func scanLakeTableRefs(sql, base string) []lakeTableRef {
+	if base == "" {
+		return nil
+	}
+	prefix := base + "."
+	var refs []lakeTableRef
+	seen := map[string]bool{}
+	inStr := false
+	for i := 0; i < len(sql); {
+		if sql[i] == '\'' {
+			if inStr && i+1 < len(sql) && sql[i+1] == '\'' {
+				i += 2
+				continue
+			}
+			inStr = !inStr
+			i++
+			continue
+		}
+		if inStr || i+len(prefix) > len(sql) || !strings.HasPrefix(sql[i:], prefix) || (i > 0 && isSQLIdentByte(sql[i-1])) {
+			i++
+			continue
+		}
+		rest := sql[i+len(prefix):]
+		ident, n := leadingSQLIdent(rest)
+		if n == 0 {
+			i++
+			continue
+		}
+		table := ident
+		main := false
+		consumed := n
+		if ident == "main" && n < len(rest) && rest[n] == '.' {
+			if t2, n2 := leadingSQLIdent(rest[n+1:]); n2 > 0 {
+				table = t2
+				main = true
+				consumed = n + 1 + n2
+			}
+		}
+		if table != "" && table != "main" {
+			key := table
+			if main {
+				key = "main." + table
+			}
+			if !seen[key] {
+				seen[key] = true
+				refs = append(refs, lakeTableRef{name: table, main: main})
+			}
+		}
+		i += len(prefix) + consumed
+	}
+	return refs
+}
+
+// tryBuildVolumeUnionSQL rewrites every <baseLake>.main.<table> and
+// <baseLake>.<table> reference so each reads from every configured volume.
+// The reference is replaced in place with a derived table that UNION ALLs
+// the per-volume catalogs, aliased back to the table name so column
+// references keep resolving.
 //
 // Unlike unioning whole queries, this substitution preserves the statement
 // shape: the result still starts with SELECT/WITH (passes the read-only SQL
 // validators), works inside CTEs, and keeps aggregate/GROUP BY/ORDER BY
 // semantics correct because they run once over the combined rows.
 //
-// Volumes where the table is missing in the target DuckDB instance are
-// skipped so a cold lake without a given hep_proto_* table does not break
-// the whole query.
+// Every table in the statement is rewritten. Leaving a later
+// homer_lake.main.<table> in place makes the tiered DuckDB raise
+// Catalog "homer_lake" does not exist on each poll (sipcapture/homer#1081).
+// A table missing from every volume aborts the rewrite, so the statement is
+// not sent with a leftover base-catalog name. A volume that lacks one table
+// is skipped when another volume still has it.
 func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
-	if len(n.volumes) <= 1 {
-		return "", false
-	}
-
-	baseLakeName := n.config.DuckLake.LakeName
-	fqns := lakeTableFQNs(sql, baseLakeName)
-	if len(fqns) == 0 {
+	if len(n.volumes) <= 1 || n.config == nil {
 		return "", false
 	}
 
@@ -1626,81 +1766,50 @@ func (n *Node) tryBuildVolumeUnionSQL(sql string) (string, bool) {
 		return "", false
 	}
 
+	baseLakeName := n.config.DuckLake.LakeName
+	refs := scanLakeTableRefs(sql, baseLakeName)
+	if len(refs) == 0 {
+		return "", false
+	}
 	// Longer names first so hep_proto_1_call is not rewritten inside
 	// hep_proto_1_call_extra.
-	sort.Slice(fqns, func(i, j int) bool { return len(fqns[i]) > len(fqns[j]) })
+	sort.SliceStable(refs, func(i, j int) bool {
+		return len(refs[i].fqn(baseLakeName)) > len(refs[j].fqn(baseLakeName))
+	})
 
 	// When the query already carries storage_* labels (a node-side rewrite ran
 	// before us), skip adding them in the branches to avoid duplicate columns.
 	addStorageCols := !strings.Contains(strings.ToLower(sql), "storage_lake")
 	presenceDB := n.duckDBForTieredTablePresence()
-	prefix := baseLakeName + ".main."
-
-	// Every referenced table must be rewritten. A join that still names
-	// homer_lake.main.<other> fails on the tiered connection with
-	// Catalog "homer_lake" does not exist (sipcapture/homer#1081).
-	out := sql
-	for _, tableFQN := range fqns {
-		tableName := tableFQN[len(prefix):]
-		derived, ok := n.volumeUnionDerived(tableName, addStorageCols, presenceDB)
-		if !ok {
-			return "", false
-		}
-		out = replaceTableWithDerived(out, tableFQN, derived, tableName)
-	}
-	return out, true
-}
-
-// lakeTableFQNs returns each baseLake.main.<table> reference in sql, in order,
-// without duplicates. A query that joins two HEP tables must rewrite every
-// reference: leaving homer_lake.main.<other> makes the tiered connection fail
-// with Catalog "homer_lake" does not exist (sipcapture/homer#1081).
-func lakeTableFQNs(sql, baseLakeName string) []string {
-	pattern := baseLakeName + ".main."
-	var out []string
-	seen := make(map[string]bool)
-	rest := sql
-	for {
-		idx := strings.Index(rest, pattern)
-		if idx == -1 {
-			return out
-		}
-		end := idx + len(pattern)
-		for end < len(rest) {
-			ch := rest[end]
-			if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == ',' || ch == ')' || ch == ';' {
-				break
-			}
-			end++
-		}
-		fqn := rest[idx:end]
-		if !seen[fqn] {
-			seen[fqn] = true
-			out = append(out, fqn)
-		}
-		rest = rest[end:]
-	}
-}
-
-func (n *Node) volumeUnionDerived(tableName string, addStorageCols bool, presenceDB *sql.DB) (string, bool) {
-	var branches []string
-	for _, vol := range n.volumes {
-		cat := n.duckLakeCatalogForQuery(vol)
-		if presenceDB != nil && !tieredTableExists(presenceDB, cat, tableName) {
-			continue
-		}
-		branch := "SELECT *"
-		if addStorageCols {
-			branch += fmt.Sprintf(", %s AS storage_lake, %s AS storage_volume",
-				sqlStringLiteral(cat), sqlStringLiteral(vol.Name))
-		}
-		branch += " FROM " + cat + ".main." + tableName
-		branches = append(branches, branch)
-	}
-	if len(branches) == 0 {
+	vols := n.resolveVolumeCatalogs(presenceDB)
+	if len(vols) == 0 {
 		return "", false
 	}
-	return "(" + strings.Join(branches, " UNION ALL ") + ")", true
+
+	for _, ref := range refs {
+		var branches []string
+		for _, vol := range vols {
+			if presenceDB != nil && !tieredTableExists(presenceDB, vol.cat, ref.name) {
+				continue
+			}
+			branch := "SELECT *"
+			if addStorageCols {
+				branch += fmt.Sprintf(", %s AS storage_lake, %s AS storage_volume",
+					sqlStringLiteral(vol.cat), sqlStringLiteral(vol.info.Name))
+			}
+			branch += " FROM " + ref.qualified(vol.cat)
+			branches = append(branches, branch)
+		}
+		// No volume has this table. Rewriting the others would leave this
+		// homer_lake reference in the statement and the tiered query would
+		// fail on every poll.
+		if len(branches) == 0 {
+			return "", false
+		}
+		derived := "(" + strings.Join(branches, " UNION ALL ") + ")"
+		sql = replaceTableWithDerived(sql, ref.fqn(baseLakeName), derived, ref.name)
+	}
+	return sql, true
 }
 
 // warnColdTieredQuery logs a cold-tiered failure once per distinct message.
@@ -1782,21 +1891,56 @@ func sqlHasExplicitAliasAfter(rest string) bool {
 	return !(known && isClauseKeyword)
 }
 
+// indexOutsideString returns the next ident that is not inside a SQL string
+// and is not a prefix of a longer identifier.
+func indexOutsideString(sql, ident string) int {
+	if ident == "" {
+		return -1
+	}
+	inStr := false
+	for i := 0; i < len(sql); {
+		if sql[i] == '\'' {
+			if inStr && i+1 < len(sql) && sql[i+1] == '\'' {
+				i += 2
+				continue
+			}
+			inStr = !inStr
+			i++
+			continue
+		}
+		if !inStr && strings.HasPrefix(sql[i:], ident) && (i == 0 || !isSQLIdentByte(sql[i-1])) {
+			end := i + len(ident)
+			if end >= len(sql) || !isSQLIdentByte(sql[end]) {
+				return i
+			}
+		}
+		i++
+	}
+	return -1
+}
+
 // replaceTableWithDerived substitutes every occurrence of tableFQN with the
 // derived-table expression, appending "AS <alias>" only where the original
-// query does not already alias the table reference.
+// query does not already alias the table reference. Matches inside string
+// literals are left alone.
 func replaceTableWithDerived(sql, tableFQN, derived, alias string) string {
 	var b strings.Builder
 	rest := sql
 	for {
-		idx := strings.Index(rest, tableFQN)
+		idx := indexOutsideString(rest, tableFQN)
 		if idx == -1 {
 			b.WriteString(rest)
 			return b.String()
 		}
 		b.WriteString(rest[:idx])
-		b.WriteString(derived)
 		rest = rest[idx+len(tableFQN):]
+		// homer_lake.main.t.col is a column of t. The union needs an alias
+		// inside the parentheses so .col still binds: ((union) AS t).col.
+		if len(rest) > 0 && rest[0] == '.' {
+			b.WriteString("(" + derived + " AS " + alias + ")")
+			continue
+		}
+		b.WriteString(derived)
 		if !sqlHasExplicitAliasAfter(rest) {
 			b.WriteString(" AS " + alias)
 		}

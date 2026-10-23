@@ -207,6 +207,64 @@ func TestTryBuildVolumeUnionSQL_rewritesEveryTable(t *testing.T) {
 	}
 }
 
+func TestTryBuildVolumeUnionSQL_rewritesUnionOfTwoTables(t *testing.T) {
+	n := multiVolumeNode()
+	sqlIn := "SELECT count(*) FROM homer_lake.main.hep_proto_1_call UNION ALL SELECT count(*) FROM homer_lake.main.hep_proto_1_registration"
+	out, ok := n.tryBuildVolumeUnionSQL(sqlIn)
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if strings.Contains(out, "homer_lake.main.") {
+		t.Fatalf("base catalog still referenced:\n%s", out)
+	}
+	for _, table := range []string{"hep_proto_1_call", "hep_proto_1_registration"} {
+		if !strings.Contains(out, "homer_lake_hot.main."+table) || !strings.Contains(out, "homer_lake_cold.main."+table) {
+			t.Fatalf("expected hot+cold union for %s:\n%s", table, out)
+		}
+	}
+}
+
+func TestTryBuildVolumeUnionSQL_rewritesTwoPartCatalogTable(t *testing.T) {
+	n := multiVolumeNode()
+	sqlIn := "SELECT * FROM homer_lake.main.hep_proto_1_call c JOIN homer_lake.vqrtcpxr_stats q ON 1=1"
+	out, ok := n.tryBuildVolumeUnionSQL(sqlIn)
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if strings.Contains(out, "homer_lake.vqrtcpxr_stats") || strings.Contains(out, "homer_lake.main.") {
+		t.Fatalf("base catalog still referenced:\n%s", out)
+	}
+	if !strings.Contains(out, "homer_lake_cold.vqrtcpxr_stats") || !strings.Contains(out, "homer_lake_hot.main.hep_proto_1_call") {
+		t.Fatalf("expected both tables rewritten:\n%s", out)
+	}
+}
+
+func TestTryBuildVolumeUnionSQL_leavesQuotedTableName(t *testing.T) {
+	n := multiVolumeNode()
+	sqlIn := "SELECT * FROM homer_lake.main.hep_proto_1_call WHERE payload = 'homer_lake.main.hep_proto_1_call'"
+	out, ok := n.tryBuildVolumeUnionSQL(sqlIn)
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if !strings.Contains(out, "'homer_lake.main.hep_proto_1_call'") {
+		t.Fatalf("quoted name was rewritten:\n%s", out)
+	}
+	if strings.Contains(out, "FROM homer_lake.main.") {
+		t.Fatalf("FROM still uses the base catalog:\n%s", out)
+	}
+}
+
+func TestTryBuildVolumeUnionSQL_columnQualifierKeepsAlias(t *testing.T) {
+	n := multiVolumeNode()
+	out, ok := n.tryBuildVolumeUnionSQL("SELECT homer_lake.main.hep_proto_1_call.sid FROM homer_lake.main.hep_proto_1_call")
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if !strings.Contains(out, ") AS hep_proto_1_call).sid") {
+		t.Fatalf("column qualifier lost its table alias:\n%s", out)
+	}
+}
+
 func TestTryBuildVolumeUnionSQL_abortsWhenOneTableMissing(t *testing.T) {
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
@@ -234,8 +292,8 @@ func TestTryBuildVolumeUnionSQL_abortsWhenOneTableMissing(t *testing.T) {
 }
 
 func TestLakeTableFQNStopsAtCR(t *testing.T) {
-	got := lakeTableFQNs("SELECT * FROM homer_lake.main.hep_proto_1_call\rWHERE 1=1", "homer_lake")
-	if len(got) != 1 || got[0] != "homer_lake.main.hep_proto_1_call" {
+	got := scanLakeTableRefs("SELECT * FROM homer_lake.main.hep_proto_1_call\rWHERE 1=1", "homer_lake")
+	if len(got) != 1 || !got[0].main || got[0].name != "hep_proto_1_call" {
 		t.Fatalf("got %#v", got)
 	}
 }
@@ -413,6 +471,45 @@ func TestTryBuildVolumeUnionSQL_executesOnDuckDB(t *testing.T) {
 		}
 	})
 
+	t.Run("two tables both span hot and cold", func(t *testing.T) {
+		for _, stmt := range []string{
+			"CREATE TABLE homer_lake_hot.main.hep_proto_1_registration (uuid VARCHAR, date DATE, timestamp TIMESTAMP, sid VARCHAR)",
+			"CREATE TABLE homer_lake_cold.main.hep_proto_1_registration (uuid VARCHAR, date DATE, timestamp TIMESTAMP, sid VARCHAR)",
+			"INSERT INTO homer_lake_cold.main.hep_proto_1_registration VALUES ('r1', DATE '2026-07-12', TIMESTAMP '2026-07-12 09:00:00', 'z')",
+		} {
+			if _, err := db.Exec(stmt); err != nil {
+				t.Fatal(err)
+			}
+		}
+		sqlIn := "SELECT count(*) AS n FROM homer_lake.main.hep_proto_1_default UNION ALL SELECT count(*) AS n FROM homer_lake.main.hep_proto_1_registration"
+		out, ok := n.tryBuildVolumeUnionSQL(sqlIn)
+		if !ok {
+			t.Fatal("expected ok")
+		}
+		if strings.Contains(out, "homer_lake.main.") {
+			t.Fatalf("base catalog still referenced:\n%s", out)
+		}
+		rows, err := db.Query(out)
+		if err != nil {
+			t.Fatalf("query failed: %v\nsql: %s", err, out)
+		}
+		defer rows.Close()
+		var counts []int
+		for rows.Next() {
+			var n int
+			if err := rows.Scan(&n); err != nil {
+				t.Fatal(err)
+			}
+			counts = append(counts, n)
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		if len(counts) != 2 || counts[0] != 3 || counts[1] != 1 {
+			t.Fatalf("expected counts [3 1], got %v\nsql: %s", counts, out)
+		}
+	})
+
 	t.Run("missing table on cold is skipped", func(t *testing.T) {
 		if _, err := db.Exec("CREATE TABLE homer_lake_hot.main.hep_proto_1_call (uuid VARCHAR, date DATE, timestamp TIMESTAMP, sid VARCHAR)"); err != nil {
 			t.Fatal(err)
@@ -428,6 +525,46 @@ func TestTryBuildVolumeUnionSQL_executesOnDuckDB(t *testing.T) {
 			t.Fatalf("expected 0 rows, got %d", got)
 		}
 	})
+}
+
+func TestTryBuildVolumeUnionSQL_legacyHotUsesAttachedBaseCatalog(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	for _, stmt := range []string{
+		"ATTACH ':memory:' AS homer_lake",
+		"ATTACH ':memory:' AS homer_lake_cold",
+		"CREATE TABLE homer_lake.main.hep_proto_1_call (uuid VARCHAR)",
+		"CREATE TABLE homer_lake_cold.main.hep_proto_1_call (uuid VARCHAR)",
+		"INSERT INTO homer_lake.main.hep_proto_1_call VALUES ('hot')",
+		"INSERT INTO homer_lake_cold.main.hep_proto_1_call VALUES ('cold')",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("setup %q: %v", stmt, err)
+		}
+	}
+	n := multiVolumeNode()
+	n.tieredQueryDB = db
+	out, ok := n.tryBuildVolumeUnionSQL("SELECT count(*) FROM homer_lake.main.hep_proto_1_call")
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if strings.Contains(out, "homer_lake_hot") {
+		t.Fatalf("hot branch must use the attached legacy catalog:\n%s", out)
+	}
+	if !strings.Contains(out, "FROM homer_lake.main.hep_proto_1_call") || !strings.Contains(out, "homer_lake_cold.main.hep_proto_1_call") {
+		t.Fatalf("expected legacy hot plus cold:\n%s", out)
+	}
+	var got int
+	if err := db.QueryRow(out).Scan(&got); err != nil {
+		t.Fatalf("query failed: %v\nsql: %s", err, out)
+	}
+	if got != 2 {
+		t.Fatalf("expected hot+cold rows, got %d\nsql: %s", got, out)
+	}
 }
 
 func TestSortMergedRowsForQueryOrder(t *testing.T) {
