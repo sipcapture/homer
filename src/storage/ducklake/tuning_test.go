@@ -40,6 +40,22 @@ func TestApplyDuckDBTuning_AllSet(t *testing.T) {
 	}
 }
 
+// TestApplyDuckDBTuning_DisablesExternalFileCache: every instance must come up with the
+// external file cache off (see ApplyDuckDBTuning).
+func TestApplyDuckDBTuning_DisablesExternalFileCache(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatalf("open duckdb: %v", err)
+	}
+	defer db.Close()
+
+	ApplyDuckDBTuning(db, 0, "", "", "test")
+
+	if got := getSetting(t, db, "enable_external_file_cache"); got != "false" {
+		t.Fatalf("enable_external_file_cache = %q, want %q", got, "false")
+	}
+}
+
 // TestApplyDuckDBTuning_NoOpsLeaveDefaults verifies that empty values
 // do not touch the corresponding setting, so callers can pass whatever
 // the operator left zero-valued in JSON without surprises.
