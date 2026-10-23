@@ -43,6 +43,12 @@ type TieringService struct {
 	mu            sync.Mutex
 	isRunning     bool
 	stopOnce      sync.Once
+
+	// moveFails counts consecutive failures of one table+date move so a
+	// partition that cannot move is reported once, then once more as a
+	// warning, and stays quiet until it succeeds (sipcapture/homer#1080).
+	failMu    sync.Mutex
+	moveFails map[string]int
 }
 
 // NewTieringService creates a new tiering service
@@ -278,6 +284,13 @@ func (ts *TieringService) moveOldestPartitions(srcVol, dstVol *ducklake.Volume, 
 			if movedBytes >= bytesToMove {
 				break
 			}
+			if partitionStillOpen(partition, time.Now()) {
+				logger.Info("TieringService: skipping open partition on size move",
+					"table", tableName,
+					"date", partition,
+					"reason", "size move leaves the UTC day that is still being written")
+				continue
+			}
 
 			wg.Add(1)
 			semaphore <- struct{}{}
@@ -294,12 +307,10 @@ func (ts *TieringService) moveOldestPartitions(srcVol, dstVol *ducklake.Volume, 
 				}
 
 				if err := ts.tieredStorage.MovePartition(table, date, srcVol, dstVol); err != nil {
-					logger.Error("TieringService: Failed to move partition",
-						"table", table,
-						"date", date,
-						"error", err)
+					ts.reportMoveFailure(table, date, err)
 					return
 				}
+				ts.clearMoveFailure(table, date)
 
 				mu.Lock()
 				totalMoved++
@@ -315,6 +326,9 @@ func (ts *TieringService) moveOldestPartitions(srcVol, dstVol *ducklake.Volume, 
 
 // moveOldPartitions moves partitions older than max_data_age_days from source to destination
 func (ts *TieringService) moveOldPartitions(srcVol, dstVol *ducklake.Volume) (int64, error) {
+	// MaxDataAgeDays is at least 1 here, so the cutoff is yesterday or older.
+	// The UTC day still being written is not selected; size moves apply
+	// partitionStillOpen for that case (sipcapture/homer#1080).
 	cutoffDate := time.Now().AddDate(0, 0, -srcVol.MaxDataAgeDays).Format("2006-01-02")
 
 	logger.Info("TieringService: TTL partition scan",
@@ -379,12 +393,10 @@ func (ts *TieringService) moveOldPartitions(srcVol, dstVol *ducklake.Volume) (in
 
 				// Move the partition
 				if err := ts.tieredStorage.MovePartition(table, date, srcVol, dstVol); err != nil {
-					logger.Error("TieringService: Failed to move partition",
-						"table", table,
-						"date", date,
-						"error", err)
+					ts.reportMoveFailure(table, date, err)
 					return
 				}
+				ts.clearMoveFailure(table, date)
 
 				mu.Lock()
 				totalMoved++
@@ -585,6 +597,96 @@ func (ts *TieringService) ensureTableExists(srcVol, dstVol *ducklake.Volume, tab
 		"partitioned", hasDateColumn)
 
 	return nil
+}
+
+// moveFailNotice is how many times reportMoveFailure should speak about one
+// partition. The first failure is an error, the second is a single warning,
+// and later repeats stay quiet until the move succeeds.
+type moveFailNotice int
+
+const (
+	moveFailFirst moveFailNotice = iota
+	moveFailRepeat
+	moveFailSilent
+)
+
+func moveFailKey(table, date string) string {
+	return table + "\x00" + date
+}
+
+// recordMoveFailure increments the consecutive-failure count for one partition.
+func (ts *TieringService) recordMoveFailure(table, date string) moveFailNotice {
+	if ts == nil {
+		return moveFailFirst
+	}
+	ts.failMu.Lock()
+	defer ts.failMu.Unlock()
+	if ts.moveFails == nil {
+		ts.moveFails = make(map[string]int)
+	}
+	key := moveFailKey(table, date)
+	ts.moveFails[key]++
+	switch ts.moveFails[key] {
+	case 1:
+		return moveFailFirst
+	case 2:
+		return moveFailRepeat
+	default:
+		return moveFailSilent
+	}
+}
+
+func (ts *TieringService) clearMoveFailure(table, date string) {
+	if ts == nil {
+		return
+	}
+	ts.failMu.Lock()
+	delete(ts.moveFails, moveFailKey(table, date))
+	ts.failMu.Unlock()
+}
+
+func (ts *TieringService) reportMoveFailure(table, date string, err error) {
+	switch ts.recordMoveFailure(table, date) {
+	case moveFailFirst:
+		logger.Error("TieringService: Failed to move partition",
+			"table", table,
+			"date", date,
+			"error", err)
+	case moveFailRepeat:
+		logger.Warn("TieringService: partition move still failing; further repeats will not be logged until it succeeds",
+			"table", table,
+			"date", date,
+			"error", err)
+	}
+}
+
+// partitionStillOpen reports whether a lake partition date is the UTC calendar
+// day of now, or later. Size-based moves must leave that partition on the
+// source: it is still receiving rows, so a row-count check cannot succeed
+// (sipcapture/homer#1080).
+func partitionStillOpen(raw string, now time.Time) bool {
+	day, ok := partitionDayUTC(raw)
+	if !ok {
+		return false
+	}
+	u := now.UTC()
+	today := time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
+	return !day.Before(today)
+}
+
+// partitionDayUTC reads the calendar day from a DuckDB DATE scanned into a
+// string. The driver formats DATE as RFC3339 (2026-10-20T00:00:00Z); SQL
+// cutoffs use 2006-01-02. Both share a YYYY-MM-DD prefix.
+func partitionDayUTC(raw string) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
+	if len(raw) < 10 {
+		return time.Time{}, false
+	}
+	day, err := time.Parse("2006-01-02", raw[:10])
+	if err != nil {
+		return time.Time{}, false
+	}
+	return day, true
 }
 
 // Stop stops the tiering service
