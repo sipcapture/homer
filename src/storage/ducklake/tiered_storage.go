@@ -89,7 +89,7 @@ type TieredStorageConfig struct {
 	TuningThreads       int
 	TuningMemoryLimit   string
 	TuningTempDirectory string
-	// TuningExternalFileCache: nil = auto, see ApplyExternalFileCachePolicy.
+	// TuningExternalFileCache: nil = off, see ApplyWritePathExternalFileCache.
 	TuningExternalFileCache *bool
 }
 
@@ -161,7 +161,7 @@ func (tsm *TieredStorageManager) applyDuckDBTuning() {
 	}
 	ApplyHomerDuckDBDefaults(tsm.db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,
 		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering")
-	ApplyExternalFileCachePolicy(tsm.db, tsm.config.TuningExternalFileCache, tsm.volumePaths(), "tiering")
+	ApplyWritePathExternalFileCache(tsm.db, tsm.config.TuningExternalFileCache, "tiering")
 }
 
 func (tsm *TieredStorageManager) volumePaths() []string {

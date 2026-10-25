@@ -99,7 +99,7 @@ type Config struct {
 	TuningThreads       int
 	TuningMemoryLimit   string
 	TuningTempDirectory string
-	// TuningExternalFileCache: nil = auto, see ApplyExternalFileCachePolicy.
+	// TuningExternalFileCache: nil = off, see ApplyWritePathExternalFileCache.
 	TuningExternalFileCache *bool
 
 	// ExclusiveLock, when true, makes the writer take an exclusive OS file lock
@@ -389,8 +389,7 @@ func (mtw *MultiTableWriter) connect() error {
 	// memory_limit; compaction runs on its own instance).
 	ApplyHomerDuckDBDefaults(db, mtw.config.TuningThreads, mtw.config.TuningMemoryLimit,
 		mtw.config.TuningTempDirectory, mtw.config.CatalogPath, "writer")
-	ApplyExternalFileCachePolicy(db, mtw.config.TuningExternalFileCache,
-		[]string{mtw.config.DataPath}, "writer")
+	ApplyWritePathExternalFileCache(db, mtw.config.TuningExternalFileCache, "writer")
 
 	if err := loadLakeExtensions(db); err != nil {
 		return err

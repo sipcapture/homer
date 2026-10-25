@@ -48,15 +48,22 @@ func dropStaleParquetCache(ctx context.Context, db *sql.DB, err error) bool {
 	if !ok || !parquetWorthCacheReset(path) {
 		return false
 	}
-	logger.Warn("Node: parquet read failed on a file that is valid on disk; dropping DuckDB external file cache and retrying",
-		"path", path,
-		"issue", "https://github.com/sipcapture/homer/issues/1061")
 	parquetCacheResetMu.Lock()
 	defer parquetCacheResetMu.Unlock()
-	if resetErr := resetExternalFileCache(ctx, db); resetErr != nil {
+	reset, resetErr := resetExternalFileCache(ctx, db)
+	if resetErr != nil {
 		logger.Warn("Node: failed to reset DuckDB external file cache", "error", resetErr)
 		return false
 	}
+	if !reset {
+		logger.Warn("Node: external file cache is off; retrying once",
+			"path", path,
+			"issue", "https://github.com/sipcapture/homer/issues/1061")
+		return true
+	}
+	logger.Warn("Node: parquet read failed on a file that is valid on disk; dropping DuckDB external file cache and retrying",
+		"path", path,
+		"issue", "https://github.com/sipcapture/homer/issues/1061")
 	return true
 }
 
@@ -114,20 +121,25 @@ func localParquetHasMagic(path string) bool {
 	return true
 }
 
-// resetExternalFileCache drops cached file ranges. SetEnabled is a no-op when
-// the flag does not change, so the cache is cleared only by the transition to
-// false. ApplyDuckDBTuning turns it off on lake instances; leave it off then.
-func resetExternalFileCache(ctx context.Context, db *sql.DB) error {
-	var enabled bool
-	if err := db.QueryRowContext(ctx, "SELECT current_setting('enable_external_file_cache')").Scan(&enabled); err != nil {
-		return err
+// resetExternalFileCache drops cached file ranges by toggling the setting off
+// and back on. SetEnabled is a no-op when the flag does not change, so the
+// cache is cleared only by the transition to false. When the cache is already
+// off (local node, or tuning.external_file_cache = false) the toggle would
+// turn it on for the rest of the process, and there is no cached footer to
+// drop. reset reports whether a flush actually ran.
+func resetExternalFileCache(ctx context.Context, db *sql.DB) (bool, error) {
+	var setting string
+	if err := db.QueryRowContext(ctx, "SELECT current_setting('enable_external_file_cache')").Scan(&setting); err != nil {
+		return false, err
 	}
-	if !enabled {
-		return nil
+	if strings.EqualFold(strings.TrimSpace(setting), "false") {
+		return false, nil
 	}
 	if _, err := db.ExecContext(ctx, "SET enable_external_file_cache = false"); err != nil {
-		return err
+		return false, err
 	}
-	_, err := db.ExecContext(ctx, "SET enable_external_file_cache = true")
-	return err
+	if _, err := db.ExecContext(ctx, "SET enable_external_file_cache = true"); err != nil {
+		return false, err
+	}
+	return true, nil
 }

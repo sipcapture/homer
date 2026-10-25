@@ -531,7 +531,7 @@ func TestTieredStorageManager_applyDuckDBTuningExternalFileCache(t *testing.T) {
 		want    string
 	}{
 		{"local volumes", []Volume{{Name: "hot", Path: "/data/hot"}, {Name: "warm", Path: "/data/warm"}}, "false"},
-		{"remote cold volume", []Volume{{Name: "hot", Path: "/data/hot"}, {Name: "cold", Path: "s3://cold/data"}}, "true"},
+		{"remote cold volume", []Volume{{Name: "hot", Path: "/data/hot"}, {Name: "cold", Path: "s3://cold/data"}}, "false"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
