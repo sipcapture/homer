@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
 )
@@ -261,5 +262,241 @@ func TestQueryTransactionMessages_CorrelationOn_NoKeyMatch_NoCorrelateCall(t *te
 	}
 	if len(sqls) != 1 {
 		t.Fatalf("expected exactly 1 SQL call, got %d", len(sqls))
+	}
+}
+
+func TestFetchTransactionRows_Correlate_ExpandsExportToCorrelatedLegs(t *testing.T) {
+	var sqls []string
+	// 1st call: base rows for the clicked callee leg (correlation input).
+	// 2nd call: export query over the expanded set.
+	h, done := newTestSearchHandler(t, [][]map[string]interface{}{
+		{{"session_id": "b1"}},
+		{{"session_id": "a"}, {"session_id": "b1"}, {"session_id": "b2"}},
+	}, &sqls)
+	defer done()
+
+	corr := &fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a", "b2"}}}
+	h.SetCorrelator(corr)
+
+	c := echo.New().NewContext(httptest.NewRequest(http.MethodPost, "/", nil), httptest.NewRecorder())
+	rows, filename, err := h.fetchTransactionRowsWithRequest(c, &TransactionSessionRequestV4{
+		SessionID: "b1",
+		ProtoType: 1,
+		EventType: "call",
+		Correlate: true,
+	}, "pcap")
+	if err != nil {
+		t.Fatalf("fetch failed: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(rows))
+	}
+	if len(sqls) != 2 {
+		t.Fatalf("expected 2 SQL calls, got %d: %v", len(sqls), sqls)
+	}
+	for _, sid := range []string{"a", "b1", "b2"} {
+		if !strings.Contains(sqls[1], "'"+sid+"'") {
+			t.Fatalf("export SQL missing session %q: %s", sid, sqls[1])
+		}
+	}
+	if filename != "homer_b1.pcap" {
+		t.Fatalf("filename should follow the clicked session, got %q", filename)
+	}
+}
+
+func TestFetchTransactionRows_CorrelateOff_IgnoresCorrelator(t *testing.T) {
+	var sqls []string
+	h, done := newTestSearchHandler(t, [][]map[string]interface{}{
+		{{"session_id": "b1"}},
+	}, &sqls)
+	defer done()
+
+	corr := &fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a"}}}
+	h.SetCorrelator(corr)
+
+	c := echo.New().NewContext(httptest.NewRequest(http.MethodPost, "/", nil), httptest.NewRecorder())
+	_, _, err := h.fetchTransactionRowsWithRequest(c, &TransactionSessionRequestV4{
+		SessionID: "b1",
+		ProtoType: 1,
+		EventType: "call",
+	}, "txt")
+	if err != nil {
+		t.Fatalf("fetch failed: %v", err)
+	}
+	if atomic.LoadInt32(&corr.correlates) != 0 {
+		t.Fatalf("Correlate must not run without correlate=true")
+	}
+	if len(sqls) != 1 || strings.Contains(sqls[0], "'a'") {
+		t.Fatalf("expected one query for b1 only, got %v", sqls)
+	}
+}
+
+func TestExpandCorrelatedSessionIDs_FailOpen(t *testing.T) {
+	ids := []string{"b1"}
+	req := &TransactionSessionRequestV4{ProtoType: 1, EventType: "call", Correlate: true}
+
+	t.Run("no correlator", func(t *testing.T) {
+		var sqls []string
+		h, done := newTestSearchHandler(t, [][]map[string]interface{}{{{"session_id": "b1"}}}, &sqls)
+		defer done()
+		if got := h.expandCorrelatedSessionIDs(context.Background(), req, ids); !reflect.DeepEqual(got, ids) {
+			t.Fatalf("got %v", got)
+		}
+		if len(sqls) != 0 {
+			t.Fatalf("no query expected, got %v", sqls)
+		}
+	})
+
+	t.Run("event_type all skips correlation", func(t *testing.T) {
+		var sqls []string
+		h, done := newTestSearchHandler(t, [][]map[string]interface{}{{{"session_id": "b1"}}}, &sqls)
+		defer done()
+		corr := &fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a"}}}
+		h.SetCorrelator(corr)
+		allReq := *req
+		allReq.EventType = "all"
+		if got := h.expandCorrelatedSessionIDs(context.Background(), &allReq, ids); !reflect.DeepEqual(got, ids) {
+			t.Fatalf("got %v", got)
+		}
+		if atomic.LoadInt32(&corr.correlates) != 0 {
+			t.Fatalf("Correlate must not run for event_type all")
+		}
+	})
+
+	t.Run("script not registered", func(t *testing.T) {
+		var sqls []string
+		h, done := newTestSearchHandler(t, [][]map[string]interface{}{{{"session_id": "b1"}}}, &sqls)
+		defer done()
+		h.SetCorrelator(&fakeCorrelator{hasReturn: false})
+		if got := h.expandCorrelatedSessionIDs(context.Background(), req, ids); !reflect.DeepEqual(got, ids) {
+			t.Fatalf("got %v", got)
+		}
+	})
+
+	t.Run("nil result", func(t *testing.T) {
+		var sqls []string
+		h, done := newTestSearchHandler(t, [][]map[string]interface{}{{{"session_id": "b1"}}}, &sqls)
+		defer done()
+		h.SetCorrelator(&fakeCorrelator{hasReturn: true, result: nil})
+		if got := h.expandCorrelatedSessionIDs(context.Background(), req, ids); !reflect.DeepEqual(got, ids) {
+			t.Fatalf("got %v", got)
+		}
+	})
+}
+
+func TestTransactionSessionRequestV4_correlateJSON(t *testing.T) {
+	var req TransactionSessionRequestV4
+	if err := json.Unmarshal([]byte(`{"session_id":"x","correlate":true}`), &req); err != nil {
+		t.Fatal(err)
+	}
+	if !req.Correlate {
+		t.Fatal("correlate not parsed")
+	}
+}
+
+func TestShareExportPayload_correlateRoundTrip(t *testing.T) {
+	// Share links store the raw POST body and replay it through the same fetch path.
+	var sqls []string
+	h, done := newTestSearchHandler(t, [][]map[string]interface{}{
+		{{"session_id": "b1"}},
+		{{"session_id": "a"}, {"session_id": "b1"}},
+	}, &sqls)
+	defer done()
+	h.SetCorrelator(&fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a"}}})
+
+	stored := []byte(`{"session_id":"b1","proto_type":1,"event_type":"call","correlate":true}`)
+	var req TransactionSessionRequestV4
+	if err := json.Unmarshal(stored, &req); err != nil {
+		t.Fatal(err)
+	}
+	c := echo.New().NewContext(httptest.NewRequest(http.MethodGet, "/", nil), httptest.NewRecorder())
+	rows, _, err := h.fetchTransactionRowsWithRequest(c, &req, "txt")
+	if err != nil {
+		t.Fatalf("replay failed: %v", err)
+	}
+	if len(rows) != 2 || !strings.Contains(sqls[len(sqls)-1], "'a'") {
+		t.Fatalf("share replay did not include correlated leg: rows=%d sqls=%v", len(rows), sqls)
+	}
+}
+
+func TestExpandCorrelatedSessionIDs_BaseQueryFailureFailsOpen(t *testing.T) {
+	// A node that answers every query with an error: QueryWithRange returns an error
+	// because no node succeeded.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	u, _ := url.Parse(srv.URL)
+	httpPort, _ := strconv.Atoi(u.Port())
+	fs := services.NewFlightService([]config.NodeEndpoint{{Name: "n1", Host: u.Hostname(), Port: httpPort - 1}}, 0, false)
+	_ = fs.ConnectAll()
+	defer fs.CloseAll()
+	fs.SetLakeName("homer_lake")
+	h := NewSearchHandler(fs, nil, &config.MCPConfig{}, nil, nil, 0, nil, "", 0)
+	corr := &fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a"}}}
+	h.SetCorrelator(corr)
+
+	ids := []string{"b1"}
+	got := h.expandCorrelatedSessionIDs(context.Background(),
+		&TransactionSessionRequestV4{ProtoType: 1, EventType: "call", Correlate: true}, ids)
+	if !reflect.DeepEqual(got, ids) {
+		t.Fatalf("expected requested ids on base query failure, got %v", got)
+	}
+	if atomic.LoadInt32(&corr.correlates) != 0 {
+		t.Fatalf("Correlate must not run when the base query failed")
+	}
+}
+
+func TestExpandCorrelatedSessionIDs_PassesBaseRowsAndWindowToCorrelator(t *testing.T) {
+	var sqls []string
+	h, done := newTestSearchHandler(t, [][]map[string]interface{}{{{"session_id": "b1", "x_call_id": "a"}}}, &sqls)
+	defer done()
+	corr := &fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a", "b2"}}}
+	h.SetCorrelator(corr)
+
+	req := &TransactionSessionRequestV4{ProtoType: 1, EventType: "call", Correlate: true}
+	req.Timestamp.From, req.Timestamp.To = 1000, 2000
+	got := h.expandCorrelatedSessionIDs(context.Background(), req, []string{"b1"})
+
+	if want := []string{"b1", "a", "b2"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	in := corr.lastInput
+	if len(in.BaseRows) != 1 || in.TimeFrom != 1000 || in.TimeTo != 2000 || !reflect.DeepEqual(in.SessionIDs, []string{"b1"}) {
+		t.Fatalf("unexpected correlator input: %+v", in)
+	}
+}
+
+func TestV4TransactionExportText_Correlate_ThroughHandler(t *testing.T) {
+	var sqls []string
+	h, done := newTestSearchHandler(t, [][]map[string]interface{}{
+		{{"session_id": "b1"}},
+		{
+			{"session_id": "a", "src_ip": "10.0.0.1", "dst_ip": "10.0.0.2", "src_port": 5060, "dst_port": 5060, "payload": "INVITE A"},
+			{"session_id": "b1", "src_ip": "10.0.0.2", "dst_ip": "10.0.0.11", "src_port": 5060, "dst_port": 5060, "payload": "INVITE B1"},
+		},
+	}, &sqls)
+	defer done()
+	h.SetCorrelator(&fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a"}}})
+
+	post := func(body string) string {
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		if err := h.V4TransactionExportText(echo.New().NewContext(req, rec)); err != nil {
+			t.Fatalf("handler error: %v", err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+		}
+		return rec.Body.String()
+	}
+
+	out := post(`{"session_id":"b1","proto_type":1,"event_type":"call","correlate":true}`)
+	if !strings.Contains(out, "INVITE A") || !strings.Contains(out, "INVITE B1") {
+		t.Fatalf("correlated export missing legs: %q", out)
 	}
 }

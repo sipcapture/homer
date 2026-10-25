@@ -10,6 +10,9 @@ import { useDashboard } from './context/DashboardContext'
 import { getAuthToken, isCookieSessionMarker } from '@/lib/authTokenStorage'
 import MultiSelectInput from './components/MultiSelectInput'
 import { useExportExclusionHosts } from './useExportExclusionHosts'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { loadExportCorrelate, saveExportCorrelate } from './exportTabPrefs'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -440,6 +443,8 @@ export default function ExportTab({
   const { options: exclusionOptions, selectedIPs, setSelectedIPs, loading: exclusionLoading } =
     useExportExclusionHosts(items)
 
+  const [correlate, setCorrelate] = useState(loadExportCorrelate)
+
   const multiSelectOptions = useMemo(
     () => exclusionOptions.map((o) => ({ value: o.ip, name: o.label })),
     [exclusionOptions],
@@ -456,13 +461,40 @@ export default function ExportTab({
     if (selectedIPs.length > 0) {
       body.whitelist = selectedIPs
     }
+    if (correlate) {
+      body.correlate = true
+    }
     return body
-  }, [ids, sessionId, protoType, eventType, timeRange, timeZone, selectedIPs])
+  }, [ids, sessionId, protoType, eventType, timeRange, timeZone, selectedIPs, correlate])
 
   const safeSid = (ids ? `multi_${ids.length}_sessions` : sessionId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64)
 
   return (
     <div className="h-full overflow-auto p-4 space-y-3">
+      <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="export-correlate"
+            checked={correlate}
+            onCheckedChange={(c) => {
+              const v = c === true
+              setCorrelate(v)
+              saveExportCorrelate(v)
+            }}
+            className="mt-0.5"
+          />
+          <div>
+            <Label htmlFor="export-correlate" className="cursor-pointer text-sm font-medium">
+              Include correlated legs
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              Also export the call legs correlated with this call (B2BUA / X-CID), as shown in the call flow.
+              Applies to Text, PCAP and share links.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-lg border border-border bg-card p-4 space-y-2">
         <div>
           <p className="text-sm font-medium">Export Exclusion</p>
