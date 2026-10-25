@@ -291,6 +291,37 @@ func TestTryBuildVolumeUnionSQL_abortsWhenOneTableMissing(t *testing.T) {
 	}
 }
 
+func TestTieredTableExistsBindsNames(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	for _, stmt := range []string{
+		"ATTACH ':memory:' AS homer_lake_hot",
+		"CREATE TABLE homer_lake_hot.main.hep_proto_1_call (sid VARCHAR)",
+		`CREATE TABLE homer_lake_hot.main."odd'name" (sid VARCHAR)`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("setup %q: %v", stmt, err)
+		}
+	}
+
+	if !tieredTableExists(db, "homer_lake_hot", "hep_proto_1_call") {
+		t.Fatal("expected hep_proto_1_call")
+	}
+	if !tieredTableExists(db, "homer_lake_hot", "odd'name") {
+		t.Fatal("expected quoted table name to match as a bound value")
+	}
+	if tieredTableExists(db, "homer_lake_hot", "hep_proto_1_call' OR '1'='1") {
+		t.Fatal("injected fragment must not match a table")
+	}
+	if tieredTableExists(db, "homer_lake_cold", "hep_proto_1_call") {
+		t.Fatal("wrong catalog must not match")
+	}
+}
+
 func TestLakeTableFQNStopsAtCR(t *testing.T) {
 	got := scanLakeTableRefs("SELECT * FROM homer_lake.main.hep_proto_1_call\rWHERE 1=1", "homer_lake")
 	if len(got) != 1 || !got[0].main || got[0].name != "hep_proto_1_call" {

@@ -1580,18 +1580,20 @@ func tieredSQLIdentLiteral(s string) string {
 }
 
 // tieredTableExists reports whether main.<tableName> exists in lake <lakeName> on db.
+// lakeName and tableName are taken from the user query, so they are bound
+// parameters rather than interpolated (CodeQL go/sql-injection, alert 49).
 func tieredTableExists(db *sql.DB, lakeName, tableName string) bool {
 	if db == nil {
 		return false
 	}
-	q := fmt.Sprintf(`
+	const q = `
 		SELECT COUNT(*) FROM information_schema.tables
-		WHERE table_catalog = '%s'
+		WHERE table_catalog = ?
 		  AND table_schema = 'main'
-		  AND table_name = '%s'
-	`, tieredSQLIdentLiteral(lakeName), tieredSQLIdentLiteral(tableName))
+		  AND table_name = ?
+	`
 	var count int
-	if err := db.QueryRow(q).Scan(&count); err != nil {
+	if err := db.QueryRow(q, lakeName, tableName).Scan(&count); err != nil {
 		return false
 	}
 	return count > 0
