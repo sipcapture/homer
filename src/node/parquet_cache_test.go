@@ -125,6 +125,25 @@ func TestQueryRetriesAfterStaleParquetCache(t *testing.T) {
 	}
 }
 
+// TestResetExternalFileCacheKeepsItOff: tuning turns the cache off on every
+// lake instance, and a #1061 recovery must not turn it back on.
+func TestResetExternalFileCacheKeepsItOff(t *testing.T) {
+	db := openCacheTestDB(t)
+	if _, err := db.Exec("SET enable_external_file_cache = false"); err != nil {
+		t.Fatal(err)
+	}
+	if err := resetExternalFileCache(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	var v string
+	if err := db.QueryRow("SELECT current_setting('enable_external_file_cache')::VARCHAR").Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	if v != "false" {
+		t.Fatalf("enable_external_file_cache = %q after reset, want false", v)
+	}
+}
+
 func openCacheTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("duckdb", "")
