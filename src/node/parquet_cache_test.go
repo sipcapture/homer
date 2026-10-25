@@ -125,6 +125,30 @@ func TestQueryRetriesAfterStaleParquetCache(t *testing.T) {
 	}
 }
 
+// TestResetExternalFileCacheKeepsItOff: a local node, and an operator who set
+// external_file_cache = false, already have the cache off. A #1061 recovery
+// must not turn it back on.
+func TestResetExternalFileCacheKeepsItOff(t *testing.T) {
+	db := openCacheTestDB(t)
+	if _, err := db.Exec("SET enable_external_file_cache = false"); err != nil {
+		t.Fatal(err)
+	}
+	reset, err := resetExternalFileCache(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reset {
+		t.Fatal("reset = true, want false when the cache is already off")
+	}
+	var v string
+	if err := db.QueryRow("SELECT current_setting('enable_external_file_cache')::VARCHAR").Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	if v != "false" {
+		t.Fatalf("enable_external_file_cache = %q after reset, want false", v)
+	}
+}
+
 func openCacheTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("duckdb", "")

@@ -66,11 +66,14 @@ per-connection DuckDB SET statements:
 `node.ducklake`) maps to DuckDB's instance-global
 `enable_external_file_cache`, an in-memory cache of parquet byte ranges.
 
-- Not set (default): the cache is **off** when every lake path of the
-  DuckDB instance is local, and left at DuckDB's default (on) when any
-  path is `s3://` or `az://`. Each instance decides on its own paths:
-  the writer on `data_path`, the tiering instances on their volumes,
-  the node on `node.ducklake.volumes`.
+- Not set (default), writer / compaction / tiering: the cache is **off**,
+  including when `data_path` is `s3://` or `az://`. Those instances read
+  each small parquet once and then delete it. With the cache left on, it
+  fills toward `memory_limit` and process RSS keeps growing
+  ([#1074](https://github.com/sipcapture/homer/pull/1074)).
+- Not set (default), node: the cache is **off** when every volume path is
+  local, and left at DuckDB's default (on) when any path is `s3://` or
+  `az://`. Repeated searches of a remote tier do hit the cache.
 - `true` / `false`: force the setting on that instance.
 - Env: `HOMER_STORAGE_DUCKLAKE_TUNING_EXTERNAL_FILE_CACHE`,
   `HOMER_NODE_DUCKLAKE_TUNING_EXTERNAL_FILE_CACHE`.
@@ -84,8 +87,9 @@ Searches then fail on files that are valid on disk with
 ([#1076](https://github.com/sipcapture/homer/issues/1076)). Local files
 are already held by the OS page cache, and the DuckDB cache takes its
 memory from `memory_limit`, which flush, compaction and search share.
-The startup log shows the decision:
-`DuckDB tuning: external file cache set ... enable_external_file_cache=false reason="local data_path"`.
+The startup log shows the decision, for example
+`DuckDB tuning: external file cache set ... enable_external_file_cache=false reason="write path"`
+or `reason="local data_path"` on the node.
 
 ## Recommended values per role
 

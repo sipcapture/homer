@@ -397,7 +397,8 @@ func ApplyDuckDBMemorySafety(db *sql.DB, who string) {
 // enable_external_file_cache for a DuckDB whose lakes live under dataPaths.
 // An explicit enabled value wins. Otherwise the cache is turned off when every
 // path is local and left at DuckDB's default when any is remote or none is
-// known.
+// known. The node uses this: repeated searches of a remote tier do hit the
+// cache.
 //
 // DuckLake opens its data files with validate_external_file_cache=false, so a
 // bad byte range in the cache is served until the process restarts
@@ -417,6 +418,28 @@ func ApplyExternalFileCachePolicy(db *sql.DB, enabled *bool, dataPaths []string,
 	default:
 		return
 	}
+	setExternalFileCache(db, on, reason, who)
+}
+
+// ApplyWritePathExternalFileCache turns the cache off unless the operator set
+// tuning.external_file_cache. Writer, compaction and tiering read each small
+// parquet once and then delete it. With the cache left on, that churn fills
+// toward memory_limit and process RSS keeps growing after duckdb_memory() has
+// already plateaued (sipcapture/homer#1074). An explicit true still turns the
+// cache on.
+func ApplyWritePathExternalFileCache(db *sql.DB, enabled *bool, who string) {
+	if db == nil {
+		return
+	}
+	on, reason := false, "write path"
+	if enabled != nil {
+		on = *enabled
+		reason = "explicit"
+	}
+	setExternalFileCache(db, on, reason, who)
+}
+
+func setExternalFileCache(db *sql.DB, on bool, reason, who string) {
 	if _, err := db.Exec(fmt.Sprintf("SET enable_external_file_cache = %t", on)); err != nil {
 		logger.Warn(fmt.Sprintf("DuckDB tuning (%s): SET enable_external_file_cache = %t failed: %v", who, on, err))
 		return

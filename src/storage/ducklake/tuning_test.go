@@ -304,6 +304,41 @@ func TestApplyExternalFileCachePolicy_NilDB(t *testing.T) {
 	ApplyExternalFileCachePolicy(nil, nil, []string{"/data"}, "test")
 }
 
+// TestApplyWritePathExternalFileCache covers sipcapture/homer#1074: writer,
+// compaction and tiering read each parquet once and delete it, so the cache
+// stays off even for a remote lake unless the operator forces it on.
+func TestApplyWritePathExternalFileCache(t *testing.T) {
+	on, off := true, false
+	cases := []struct {
+		name    string
+		enabled *bool
+		want    string
+	}{
+		{"default off", nil, "false"},
+		{"explicit on", &on, "true"},
+		{"explicit off", &off, "false"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, err := sql.Open("duckdb", "")
+			if err != nil {
+				t.Fatalf("open duckdb: %v", err)
+			}
+			defer db.Close()
+
+			ApplyWritePathExternalFileCache(db, tc.enabled, "test")
+
+			if got := getSetting(t, db, "enable_external_file_cache"); got != tc.want {
+				t.Fatalf("enable_external_file_cache = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestApplyWritePathExternalFileCache_NilDB(t *testing.T) {
+	ApplyWritePathExternalFileCache(nil, nil, "test")
+}
+
 func TestS3SecretVisibleOnOtherPoolConnections(t *testing.T) {
 	connector, err := duckdb.NewConnector("", func(execer driver.ExecerContext) error { return nil })
 	if err != nil {
