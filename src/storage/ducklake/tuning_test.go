@@ -8,12 +8,14 @@
 package ducklake
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"os"
 	"strings"
 	"testing"
 
-	_ "github.com/duckdb/duckdb-go/v2"
+	duckdb "github.com/duckdb/duckdb-go/v2"
 )
 
 // TestApplyDuckDBTuning_AllSet opens a fresh in-memory DuckDB, applies
@@ -227,6 +229,9 @@ func TestS3ClientSettingsSQL_CustomURLStyle(t *testing.T) {
 	if !strings.Contains(joined, "SET s3_url_style = 'vhost';") {
 		t.Fatalf("S3ClientSettingsSQL should set vhost URL style:\n%s", joined)
 	}
+	if !strings.Contains(joined, "SET s3_session_token = '';") {
+		t.Fatalf("S3ClientSettingsSQL should clear ambient session token:\n%s", joined)
+	}
 }
 
 // TestEnsureWriterAzureSecret_EmptyCredsFailsFast is a regression test for
@@ -297,6 +302,49 @@ func TestApplyExternalFileCachePolicy(t *testing.T) {
 
 func TestApplyExternalFileCachePolicy_NilDB(t *testing.T) {
 	ApplyExternalFileCachePolicy(nil, nil, []string{"/data"}, "test")
+}
+
+func TestS3SecretVisibleOnOtherPoolConnections(t *testing.T) {
+	connector, err := duckdb.NewConnector("", func(execer driver.ExecerContext) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	db := sql.OpenDB(connector)
+	defer db.Close()
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
+
+	ctx := context.Background()
+	c1, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c1.Close()
+	if _, err := c1.ExecContext(ctx, `
+CREATE SECRET homer_writer_s3 (
+	TYPE S3,
+	KEY_ID 'k',
+	SECRET 's',
+	REGION 'us-east-1',
+	ENDPOINT '127.0.0.1:9000',
+	URL_STYLE 'path',
+	USE_SSL false
+);`); err != nil {
+		t.Fatal(err)
+	}
+
+	c2, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c2.Close()
+	var n int
+	if err := c2.QueryRowContext(ctx, `SELECT count(*) FROM duckdb_secrets() WHERE name = 'homer_writer_s3'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("secret created on c1 is not visible on c2 (count=%d)", n)
+	}
 }
 
 func getSetting(t *testing.T, db *sql.DB, name string) string {
