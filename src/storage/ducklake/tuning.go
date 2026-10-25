@@ -24,7 +24,10 @@ import (
 // connector init in MultiTableWriter.connect). Values are embedded as
 // single-quote-escaped literals so the statements are self-contained.
 //
-// If accessKeyID is empty, returns nil (nothing to apply).
+// If accessKeyID is empty, returns nil (nothing to apply). Static keys also
+// clear s3_session_token: httpfs otherwise forwards AWS_SESSION_TOKEN from the
+// process environment and Ceph-compatible stores reject the request with
+// HTTP 400 (sipcapture/homer#1086).
 //
 // When endpoint is non-empty, the scheme is stripped (DuckDB expects host:port)
 // and s3_url_style defaults to path — required for most S3-compatible stores
@@ -47,6 +50,13 @@ func S3ClientSettingsSQL(region, accessKeyID, secretAccessKey, endpoint string, 
 		fmt.Sprintf("SET s3_region = '%s';", quote(reg)),
 		fmt.Sprintf("SET s3_access_key_id = '%s';", quote(accessKeyID)),
 		fmt.Sprintf("SET s3_secret_access_key = '%s';", quote(secretAccessKey)),
+		// httpfs copies AWS_SESSION_TOKEN into the session even when this
+		// connection uses static keys. S3-compatible stores (Ceph RGW, Vultr)
+		// answer the extra X-Amz-Security-Token with HTTP 400. Homer has no
+		// session-token field; credential_chain (empty access key) does not
+		// reach this function and keeps the ambient token.
+		// See duckdb/duckdb-httpfs#254 and sipcapture/homer#1086.
+		"SET s3_session_token = '';",
 	}
 	if epRaw != "" {
 		ep := strings.TrimPrefix(strings.TrimPrefix(epRaw, "http://"), "https://")
@@ -104,9 +114,12 @@ func ApplyDuckDBS3ClientSettings(db *sql.DB, region, accessKeyID, secretAccessKe
 // attachVolume / node volume behaviour on MinIO, RustFS, and R2.
 const writerLakeS3Secret = "homer_writer_s3"
 
-// EnsureWriterS3Secret creates a session-scoped DuckDB TYPE S3 secret so DuckLake
-// internals hit the same endpoint as ApplyDuckDBS3ClientSettings. Call after
-// ApplyDuckDBS3ClientSettings and before ATTACH ducklake. No-op if accessKeyID is empty.
+// EnsureWriterS3Secret creates a temporary DuckDB TYPE S3 secret so DuckLake
+// internals hit the same endpoint as ApplyDuckDBS3ClientSettings. The secret
+// is stored for the life of this DuckDB instance and is visible to every
+// pooled connection; SET s3_* is not, which is why newLakeDuckDB replays it.
+// Call after ApplyDuckDBS3ClientSettings and before ATTACH ducklake.
+// No-op if accessKeyID is empty.
 func EnsureWriterS3Secret(db *sql.DB, region, accessKeyID, secretAccessKey, endpoint string, useSSL bool, urlStyle string) error {
 	if db == nil || strings.TrimSpace(accessKeyID) == "" {
 		return nil
