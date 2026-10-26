@@ -2817,6 +2817,15 @@ components:
           items:
             type: string
           example: ["10.0.0.1", "192.168.0.1"]
+        correlate:
+          type: boolean
+          default: false
+          description: >
+            PCAP/text export only. When true, also export the call legs that the call flow correlates
+            with the requested session id(s) (B2BUA / X-CID, via the enabled correlation script for
+            the proto_type/event_type), instead of only the requested ids. Skipped for event_type
+            "all"; falls back to the requested ids if correlation is unavailable or fails.
+            Applied on POST /transactions/export/pcap, /transactions/export/text, and share export links.
     ProtocolHeader:
       type: object
       properties:

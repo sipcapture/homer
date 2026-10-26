@@ -335,6 +335,28 @@ Default exclusions for the UI multiselect can be stored in Advanced settings:
 
 Share export links (`POST /api/v4/transactions/export/link`) persist the full request body; public PCAP/text downloads honor `whitelist` the same way.
 
+### Export correlated legs (PCAP / text)
+
+By default, transaction export contains only the requested `session_id` / `session_ids`.
+For B2BUA calls, the call flow also shows the legs correlated with the clicked call (for example via `X-CID`, see [LUA_CORRELATION.md](LUA_CORRELATION.md)).
+Set `correlate: true` on the export request to export those legs too:
+
+```json
+{
+  "session_id": "callee-leg@host",
+  "proto_type": 1,
+  "event_type": "call",
+  "correlate": true
+}
+```
+
+- Uses the same enabled correlation script as `POST /api/v4/transactions/messages`.
+- Without an enabled script for the `proto_type` / `event_type`, with `event_type: "all"`, or if correlation fails, only the requested ids are exported.
+- The correlated id set is capped at 50 session ids, like the call flow.
+- The file name follows the requested session id, not the expanded set.
+- Share export links persist `correlate`, so public PCAP/text downloads include the correlated legs too.
+- In the UI, this is the **Include correlated legs** checkbox on the Export tab (remembered in local storage).
+
 **Requirements:**
 
 - **`--output path`** or **`-o path`** — required (binary output is never written to stdout).

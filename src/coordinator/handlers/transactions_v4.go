@@ -477,6 +477,9 @@ type TransactionSessionRequestV4 struct {
 	EventType  string   `json:"event_type"`
 	// Whitelist lists IPs to exclude from PCAP/text export (legacy Homer 7 name; not an allow-list).
 	Whitelist []string `json:"whitelist,omitempty"`
+	// Correlate makes PCAP/text export include the legs the call flow correlates with the
+	// requested session ids (B2BUA / X-CID), instead of only the requested ids.
+	Correlate bool `json:"correlate,omitempty"`
 	Timestamp struct {
 		From int64 `json:"from,omitempty"`
 		To   int64 `json:"to,omitempty"`
@@ -1253,6 +1256,47 @@ func (h *SearchHandler) queryTransactionMessages(ctx context.Context, req *Trans
 	return expandedRows, nil
 }
 
+// expandCorrelatedSessionIDs returns ids plus the session ids the correlation script finds for them,
+// the same expansion queryTransactionMessages does for the call flow. It is fail-open: when
+// correlation is unavailable, skipped (event_type "all") or errors, ids is returned unchanged.
+func (h *SearchHandler) expandCorrelatedSessionIDs(ctx context.Context, req *TransactionSessionRequestV4, ids []string) []string {
+	protoType := req.ProtoType
+	if protoType == 0 {
+		protoType = 1
+	}
+	eventType := req.EventType
+	if eventType == "" {
+		eventType = "call"
+	}
+	if h.correlation == nil || isAllEventType(eventType) || !h.correlation.Has(protoType, eventType) {
+		return ids
+	}
+
+	table := getTableName(h.flightService.LakeName(), protoType, eventType)
+	baseRows, err := h.executeTransactionMessagesSQL(ctx, table, ids, req.Timestamp.From, req.Timestamp.To)
+	if err != nil {
+		logger.Warn("transaction export: correlation base query failed, exporting requested sessions only",
+			"err", err.Error(), "proto", protoType, "event", eventType)
+		return ids
+	}
+	sortTransactionMessageRowsByTimestampAsc(baseRows)
+
+	corrRes := h.correlation.Correlate(ctx, CorrelationInput{
+		HepID:      protoType,
+		Profile:    eventType,
+		ProtoType:  protoType,
+		EventType:  eventType,
+		BaseRows:   baseRows,
+		SessionIDs: ids,
+		TimeFrom:   req.Timestamp.From,
+		TimeTo:     req.Timestamp.To,
+	})
+	if corrRes == nil || len(corrRes.ExtraSessionIDs) == 0 {
+		return ids
+	}
+	return mergeSessionIDs(ids, corrRes.ExtraSessionIDs)
+}
+
 // transactionMessagesSelectSQL builds the SELECT used by POST /transactions/messages.
 // Package tests assert OTLP trace/log tables filter on trace_id and apply a row cap.
 func transactionMessagesSelectSQL(table string, sessionIDs []string, from, to int64) string {
@@ -1957,7 +2001,22 @@ func (h *SearchHandler) hasTransactionMessages(ctx context.Context, req *Transac
 
 // fetchTransactionRowsWithRequest loads SIP rows for export (authenticated or share replay).
 func (h *SearchHandler) fetchTransactionRowsWithRequest(c echo.Context, req *TransactionSessionRequestV4, ext string) ([]map[string]interface{}, string, error) {
-	sqlStr, ids, err := h.buildTransactionExportSQL(req)
+	_, ids, err := h.buildTransactionExportSQL(req)
+	if err != nil {
+		return nil, "", writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
+	}
+	// ids (the requested sessions) name the file; the query may run on a wider correlated set.
+	queryReq := req
+	if req.Correlate {
+		expanded := h.expandCorrelatedSessionIDs(c.Request().Context(), req, ids)
+		if len(expanded) > len(ids) {
+			cp := *req
+			cp.SessionID = ""
+			cp.SessionIDs = expanded
+			queryReq = &cp
+		}
+	}
+	sqlStr, _, err := h.buildTransactionExportSQL(queryReq)
 	if err != nil {
 		return nil, "", writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
 	}
