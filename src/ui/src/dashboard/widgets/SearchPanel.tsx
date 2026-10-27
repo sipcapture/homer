@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { getMergedFields, useMappings } from '@/hooks/useMappings'
 import { buildSearchDeepLinkURL } from '../searchDeepLink'
+import { assignLegacyMethodFilter } from './searchMethodFilter'
 
 const METHOD_OPTIONS = [
   ['', 'Any'], ['INVITE', 'INVITE'], ['ACK', 'ACK'], ['BYE', 'BYE'],
@@ -460,7 +461,7 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
       // Legacy static mode
       const protoType = form.proto_type ? Number(form.proto_type) : 0
       filter = { proto_type: isNaN(protoType) ? 0 : protoType, event_type: form.event_type }
-      if (form.method) filter.method = form.method
+      assignLegacyMethodFilter(filter, form.method)
       if (form.call_id) filter.call_id = form.call_id
       if (form.from_user) filter.from_user = form.from_user
       if (form.to_user) filter.to_user = form.to_user
@@ -551,24 +552,30 @@ export default function SearchPanel({ config, onConfigChange, widgetId }) {
     </div>
   )
 
-  const selectField = (id, label, options) => (
-    <div className="grid gap-1" key={id}>
-      <Label htmlFor={`sp-${id}`} className="text-[11px] text-muted-foreground">{label}</Label>
-      <Select
-        value={form[id] || '__any'}
-        onValueChange={(v) => handleChange(id, v === '__any' ? '' : v)}
-      >
-        <SelectTrigger id={`sp-${id}`} className="h-7 text-xs">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map(([v, l]) => (
-            <SelectItem key={v || '__any'} value={v || '__any'}>{l}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
+  const selectField = (id, label, options) => {
+    // method defaults to [] (multiselect store shape). Radix Select needs a string;
+    // an empty array is truthy and would not show "Any".
+    const raw = form[id]
+    const value = typeof raw === 'string' && raw !== '' ? raw : '__any'
+    return (
+      <div className="grid gap-1" key={id}>
+        <Label htmlFor={`sp-${id}`} className="text-[11px] text-muted-foreground">{label}</Label>
+        <Select
+          value={value}
+          onValueChange={(v) => handleChange(id, v === '__any' ? '' : v)}
+        >
+          <SelectTrigger id={`sp-${id}`} className="h-7 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map(([v, l]) => (
+              <SelectItem key={v || '__any'} value={v || '__any'}>{l}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    )
+  }
 
   // Render a single dynamic field from fields_mapping metadata
   const renderDynamicField = (field) => {
