@@ -73,9 +73,10 @@ export function parseLoginProvidersPayload(payload: unknown): ParsedLoginProvide
     if (!row.enable || typeof row.name !== 'string') return
     const n = row.name.trim()
     if (!n) return
+    const fallbackName = n.charAt(0).toUpperCase() + n.slice(1)
     out.oauthProviders.push({
       name: n,
-      provider_name: typeof row.provider_name === 'string' ? row.provider_name.trim() || n : n,
+      provider_name: typeof row.provider_name === 'string' ? row.provider_name.trim() || fallbackName : fallbackName,
     })
     if (row.auto_redirect) {
       out.autoOAuthProvider = n
@@ -100,12 +101,13 @@ export function parseLoginProvidersPayload(payload: unknown): ParsedLoginProvide
             ? (x as { name: string }).name
             : ''
       if (n) {
+        const fallbackName = n.charAt(0).toUpperCase() + n.slice(1)
         const providerName = x && typeof x === 'object'
           ? (x as { provider_name?: unknown }).provider_name
           : undefined
         out.oauthProviders.push({
           name: n,
-          provider_name: typeof providerName === 'string' ? providerName.trim() || n : n,
+          provider_name: typeof providerName === 'string' ? providerName.trim() || fallbackName : fallbackName,
         })
         break
       }
