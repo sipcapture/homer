@@ -7,9 +7,14 @@ export interface PasswordAuthMethodRow {
   position: number
 }
 
+export interface OAuthLoginProvider {
+  name: string
+  provider_name: string
+}
+
 export interface ParsedLoginProviders {
   passwordMethods: PasswordAuthMethodRow[]
-  oauthProviderNames: string[]
+  oauthProviders: OAuthLoginProvider[]
   /** Single OAuth provider with auto_redirect (only one provider is supported). */
   autoOAuthProvider: string | null
 }
@@ -21,7 +26,7 @@ export interface ParsedLoginProviders {
 export function parseLoginProvidersPayload(payload: unknown): ParsedLoginProviders {
   const out: ParsedLoginProviders = {
     passwordMethods: [],
-    oauthProviderNames: [],
+    oauthProviders: [],
     autoOAuthProvider: null,
   }
   if (!payload || typeof payload !== 'object') {
@@ -64,11 +69,15 @@ export function parseLoginProvidersPayload(payload: unknown): ParsedLoginProvide
   const oauth2 = d.oauth2
   const consumeOAuthRow = (p: unknown) => {
     if (!p || typeof p !== 'object') return
-    const row = p as { enable?: boolean; name?: string; auto_redirect?: boolean }
+    const row = p as { enable?: boolean; name?: string; provider_name?: string; auto_redirect?: boolean }
     if (!row.enable || typeof row.name !== 'string') return
     const n = row.name.trim()
     if (!n) return
-    out.oauthProviderNames.push(n)
+    const fallbackName = n.charAt(0).toUpperCase() + n.slice(1)
+    out.oauthProviders.push({
+      name: n,
+      provider_name: typeof row.provider_name === 'string' ? row.provider_name.trim() || fallbackName : fallbackName,
+    })
     if (row.auto_redirect) {
       out.autoOAuthProvider = n
     }
@@ -83,7 +92,7 @@ export function parseLoginProvidersPayload(payload: unknown): ParsedLoginProvide
   }
 
   const items = d.items
-  if (Array.isArray(items) && out.oauthProviderNames.length === 0) {
+  if (Array.isArray(items) && out.oauthProviders.length === 0) {
     for (const x of items) {
       const n =
         typeof x === 'string'
@@ -92,7 +101,14 @@ export function parseLoginProvidersPayload(payload: unknown): ParsedLoginProvide
             ? (x as { name: string }).name
             : ''
       if (n) {
-        out.oauthProviderNames.push(n)
+        const fallbackName = n.charAt(0).toUpperCase() + n.slice(1)
+        const providerName = x && typeof x === 'object'
+          ? (x as { provider_name?: unknown }).provider_name
+          : undefined
+        out.oauthProviders.push({
+          name: n,
+          provider_name: typeof providerName === 'string' ? providerName.trim() || fallbackName : fallbackName,
+        })
         break
       }
     }
