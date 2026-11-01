@@ -34,7 +34,7 @@ require (
 	github.com/hugr-lab/airport-go v0.2.1
 	github.com/ijt/go-anytime/v2 v2.1.1
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/labstack/echo/v4 v4.16.1
+	github.com/labstack/echo/v4 v4.16.3
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/lmittmann/tint v1.1.3
 	github.com/mark3labs/mcp-go v0.44.0
