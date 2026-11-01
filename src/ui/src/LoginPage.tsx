@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import type { PasswordAuthMethodRow } from "./loginProviders"
+import type { OAuthLoginProvider, PasswordAuthMethodRow } from "./loginProviders"
 
 /** Outlined input + label that floats up on focus or when non-empty. */
 function FloatingAuthField({
@@ -71,8 +71,8 @@ interface LoginPageProps {
   apiBase: string
   /** Password backends (internal DB, LDAP) from GET /auth/providers. */
   passwordAuthMethods: PasswordAuthMethodRow[]
-  /** Enabled OAuth2 provider keys for redirect. */
-  oauthProviderNames: string[]
+  /** Enabled OAuth2 providers with redirect keys and display names. */
+  oauthProviders: OAuthLoginProvider[]
   /** If set, immediately redirect to OAuth (homer-app auto_redirect). */
   autoOAuthProvider: string | null
   onLogin: (token: string, remember?: boolean) => void
@@ -82,7 +82,7 @@ interface LoginPageProps {
 export function LoginPage({
   apiBase,
   passwordAuthMethods,
-  oauthProviderNames,
+  oauthProviders,
   autoOAuthProvider,
   onLogin,
   onOAuth2,
@@ -170,7 +170,7 @@ export function LoginPage({
 
   const showAuthTypeSelect = enabledPwd.length > 1
   const showPasswordForm = enabledPwd.length > 0
-  const oauthOnly = !showPasswordForm && oauthProviderNames.length > 0
+  const oauthOnly = !showPasswordForm && oauthProviders.length > 0
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4">
@@ -288,7 +288,7 @@ export function LoginPage({
             </form>
             )}
 
-            {oauthProviderNames.length > 0 && (
+            {oauthProviders.length > 0 && (
               <>
                 {showPasswordForm && (
                 <div className="relative my-5">
@@ -306,15 +306,15 @@ export function LoginPage({
                 )}
 
                 <div className="flex flex-col gap-2">
-                  {oauthProviderNames.map((provider) => (
+                  {oauthProviders.map((provider) => (
                     <Button
-                      key={provider}
+                      key={provider.name}
                       variant="outline"
-                      className="w-full capitalize"
-                      onClick={() => onOAuth2(provider)}
+                      className="w-full"
+                      onClick={() => onOAuth2(provider.name)}
                       disabled={loading}
                     >
-                      Continue with {provider}
+                      Continue with {provider.provider_name}
                     </Button>
                   ))}
                 </div>

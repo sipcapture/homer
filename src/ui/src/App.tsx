@@ -34,7 +34,7 @@ import { WindowDock } from "@/components/ui/window-dock"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { LoginPage } from './LoginPage'
 import { ForcePasswordChange } from './ForcePasswordChange'
-import { parseLoginProvidersPayload, type PasswordAuthMethodRow } from './loginProviders'
+import { parseLoginProvidersPayload, type PasswordAuthMethodRow, type OAuthLoginProvider } from './loginProviders'
 import { toast } from 'sonner'
 import {
   clearAuthToken,
@@ -82,7 +82,7 @@ function App() {
   /** False while not on Users settings; used to load immediately on enter and debounce filter changes. */
   const usersSettingsActiveRef = useRef(false)
   const [passwordAuthMethods, setPasswordAuthMethods] = useState<PasswordAuthMethodRow[]>([])
-  const [oauthProviderNames, setOauthProviderNames] = useState<string[]>([])
+  const [oauthProviders, setOauthProviders] = useState<OAuthLoginProvider[]>([])
   const [autoOAuthProvider, setAutoOAuthProvider] = useState<string | null>(null)
   const role = useMemo(() => detectRole(me), [me])
   const usersPerms = useMemo(() => getSectionPerms(role, 'users'), [role])
@@ -180,7 +180,7 @@ function App() {
         const payload = await res.json()
         const parsed = parseLoginProvidersPayload(payload)
         setPasswordAuthMethods(parsed.passwordMethods)
-        setOauthProviderNames(parsed.oauthProviderNames)
+        setOauthProviders(parsed.oauthProviders)
         setAutoOAuthProvider(parsed.autoOAuthProvider)
       }
     } catch {
@@ -606,7 +606,7 @@ function App() {
             <LoginPage
               apiBase={apiBase}
               passwordAuthMethods={passwordAuthMethods}
-              oauthProviderNames={oauthProviderNames}
+              oauthProviders={oauthProviders}
               autoOAuthProvider={autoOAuthProvider}
               onLogin={persistToken}
               onOAuth2={loginOAuth2}
