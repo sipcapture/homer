@@ -80,9 +80,12 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 	flightService := services.NewFlightService(cfg.Nodes, queryTimeout, cfg.SmartRouting.Enable)
 	flightService.SetLakeName(cfg.LakeName)
 
+	e := echo.New()
+	// v4.16.3 stops trusting client-supplied forwarding headers unless this is set.
+	e.IPExtractor = clientIPExtractor()
 	c := &Coordinator{
 		config:        cfg,
-		echo:          echo.New(),
+		echo:          e,
 		flightService: flightService,
 	}
 	if cfg.FlightSQLServer.Enable {
@@ -558,21 +561,21 @@ func mapOAuthProvider(p *config.OAuthProviderConfig) []handlers.OAuthProvider {
 	}
 	adminGroups := append([]string(nil), p.AdminGroups...)
 	return []handlers.OAuthProvider{{
-		Enable:              true,
-		Name:                strings.TrimSpace(p.Name),
-		Position:            p.Position,
-		Type:                typ,
-		ProviderImage:       p.ProviderImage,
-		ProviderName:        displayName,
-		URL:                 "",
-		AutoRedirect:        p.AutoRedirect,
-		CallbackURL:         p.CallbackURL,
-		OAuth2Config:        oauthCfg,
-		ProfileURL:          strings.TrimSpace(p.ProfileURL),
-		UsePKCE:             p.UsePKCE,
-		SkipAutoProvision:   p.SkipAutoProvision,
-		AdminGroups:         adminGroups,
-		GroupClaim:          groupClaim,
+		Enable:            true,
+		Name:              strings.TrimSpace(p.Name),
+		Position:          p.Position,
+		Type:              typ,
+		ProviderImage:     p.ProviderImage,
+		ProviderName:      displayName,
+		URL:               "",
+		AutoRedirect:      p.AutoRedirect,
+		CallbackURL:       p.CallbackURL,
+		OAuth2Config:      oauthCfg,
+		ProfileURL:        strings.TrimSpace(p.ProfileURL),
+		UsePKCE:           p.UsePKCE,
+		SkipAutoProvision: p.SkipAutoProvision,
+		AdminGroups:       adminGroups,
+		GroupClaim:        groupClaim,
 	}}
 }
 
