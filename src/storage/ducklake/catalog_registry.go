@@ -43,7 +43,7 @@ func catalogKey(path string) string {
 // catalogPath. The returned release function is idempotent; call it after that
 // DuckDB instance is closed.
 func MarkCatalogAttached(catalogPath string) (release func()) {
-	if catalogPath == "" {
+	if catalogPath == "" || IsPostgresCatalogPath(catalogPath) {
 		return func() {}
 	}
 	key := catalogKey(catalogPath)
@@ -68,7 +68,7 @@ func MarkCatalogAttached(catalogPath string) (release func()) {
 // IsCatalogAttachedInProcess reports whether a DuckDB instance in this process
 // currently has catalogPath attached.
 func IsCatalogAttachedInProcess(catalogPath string) bool {
-	if catalogPath == "" {
+	if catalogPath == "" || IsPostgresCatalogPath(catalogPath) {
 		return false
 	}
 	key := catalogKey(catalogPath)

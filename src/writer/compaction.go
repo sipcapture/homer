@@ -489,7 +489,7 @@ func (c *CompactionService) runCompaction() {
 
 	if !c.catalogIntegrityOK() {
 		logger.Error("CompactionService: compaction stopped after catalog damage was detected; restart homer after repairing the catalog",
-			"lake", c.lakeName, "catalog", c.catalogPath)
+			"lake", c.lakeName, "catalog", ducklake.CatalogDisplayPath(c.catalogPath))
 		return
 	}
 	if !c.ensureDB() {
@@ -891,6 +891,11 @@ func (c *CompactionService) runMaintenanceCalls() {
 // ducklake_add_data_files there is no way to hand a pre-written parquet file to
 // DuckLake, and we stay on the DuckDB merge.
 func (c *CompactionService) useNativeEngine() bool {
+	// Native compaction's safety backup is SQLite-specific. PostgreSQL uses
+	// DuckLake's own merge engine and PostgreSQL-managed catalog backups.
+	if ducklake.IsPostgresCatalogPath(c.catalogPath) {
+		return false
+	}
 	if c.config.Engine != EngineNativeGo {
 		// empty/default and "duckdb" → DuckLake merge.
 		return false

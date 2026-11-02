@@ -73,10 +73,14 @@ func OpenMaintenanceDB(cfg Config, memoryLimit string, reference *sql.DB) (*Main
 		maintenanceSpillDirectory(cfg), cfg.CatalogPath, "compaction")
 	ApplyWritePathExternalFileCache(db, cfg.TuningExternalFileCache, "compaction")
 
-	if err := loadLakeExtensions(db); err != nil {
+	ct, err := ResolveCatalogType(cfg.CatalogType, cfg.CatalogPath)
+	if err != nil {
 		return fail(err)
 	}
-	if reference != nil {
+	if err := loadLakeExtensions(db, ct); err != nil {
+		return fail(err)
+	}
+	if reference != nil && ct == CatalogSQLite {
 		if err := sameSQLiteExtension(reference, db); err != nil {
 			return fail(err)
 		}
@@ -85,7 +89,7 @@ func OpenMaintenanceDB(cfg Config, memoryLimit string, reference *sql.DB) (*Main
 		return fail(err)
 	}
 	if _, err := db.Exec(buildLakeAttachSQL(cfg)); err != nil {
-		return fail(fmt.Errorf("maintenance DuckDB: attach ducklake: %w", err))
+		return fail(CatalogError(cfg.CatalogPath, "maintenance attach", err))
 	}
 	return &MaintenanceDB{DB: db, release: MarkCatalogAttached(cfg.CatalogPath)}, nil
 }

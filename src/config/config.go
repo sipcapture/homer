@@ -678,7 +678,7 @@ type DuckDBTuning struct {
 
 // DuckLakeConfig configures DuckLake storage
 type DuckLakeConfig struct {
-	CatalogType   string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"` // DuckLake catalog — sqlite
+	CatalogType   string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"` // DuckLake catalog — sqlite or postgres
 	CatalogPath   string `json:"catalog_path" mapstructure:"catalog_path" default:"homer_catalog.sqlite"`
 	DataPath      string `json:"data_path" mapstructure:"data_path" default:"/var/lib/homer/parquet"`
 	LakeName      string `json:"lake_name" mapstructure:"lake_name" default:"homer_lake"`
@@ -768,7 +768,7 @@ type VolumeConfig struct {
 	Name                  string `json:"name" mapstructure:"name"`                                       // Volume name (e.g., "hot", "cold")
 	Type                  string `json:"type" mapstructure:"type" default:"local"`                       // "local", "s3", or "azure"
 	Path                  string `json:"path" mapstructure:"path"`                                       // Data path: local path, S3 URL (s3://bucket/path/), or Azure URL (az://container/path/)
-	CatalogType           string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"`      // DuckLake catalog — sqlite
+	CatalogType           string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"`      // DuckLake catalog — sqlite or postgres
 	CatalogPath           string `json:"catalog_path" mapstructure:"catalog_path"`                       // Catalog path for this volume
 	Priority              int    `json:"priority" mapstructure:"priority" default:"0"`                   // Lower = higher priority (writes go to lowest)
 	MaxDataAgeDays        int    `json:"max_data_age_days" mapstructure:"max_data_age_days" default:"0"` // Move data older than N days to next volume (0 = no limit)
@@ -1434,37 +1434,45 @@ func EnsureNodeDuckLakeVolumes(dl *DuckLakeConfig) {
 	dl.Volumes = []VolumeConfig{vol}
 }
 
-// validateDuckLakeCatalogTypes ensures catalog_type is sqlite (or empty).
+// validateDuckLakeCatalogTypes accepts SQLite paths or PostgreSQL catalog DSNs.
 func validateDuckLakeCatalogTypes(cfg *Config) error {
-	check := func(field, v string) error {
-		s := strings.TrimSpace(v)
-		if s == "" {
+	check := func(field string, typ *string, path string) error {
+		value := strings.ToLower(strings.TrimSpace(*typ))
+		if value != "" && value != "sqlite" && value != "postgres" && value != "postgresql" {
+			return fmt.Errorf("%s: expected sqlite or postgres (got %q)", field, *typ)
+		}
+		if IsPostgresSettingsPath(path) {
+			*typ = "postgres"
 			return nil
 		}
-		if strings.EqualFold(s, "sqlite") {
-			return nil
+		if value == "postgres" || value == "postgresql" {
+			return fmt.Errorf("%s: postgres requires a PostgreSQL connection string in catalog_path", field)
 		}
-		return fmt.Errorf("%s: DuckLake catalog — sqlite (got %q)", field, v)
+		return nil
 	}
-	if err := check("storage.ducklake.catalog_type", cfg.Storage.DuckLake.CatalogType); err != nil {
+	if err := check("storage.ducklake.catalog_type", &cfg.Storage.DuckLake.CatalogType, cfg.Storage.DuckLake.CatalogPath); err != nil {
 		return err
 	}
-	for i, v := range cfg.Storage.DuckLake.Volumes {
-		if err := check(fmt.Sprintf("storage.ducklake.volumes[%d].catalog_type", i), v.CatalogType); err != nil {
-			return err
-		}
-	}
-	for i, v := range cfg.Storage.DuckLake.StoragePolicy.Volumes {
-		if err := check(fmt.Sprintf("storage.ducklake.storage_policy.volumes[%d].catalog_type", i), v.CatalogType); err != nil {
-			return err
-		}
-	}
-	if err := check("node.ducklake.catalog_type", cfg.Node.DuckLake.CatalogType); err != nil {
+	if err := check("node.ducklake.catalog_type", &cfg.Node.DuckLake.CatalogType, cfg.Node.DuckLake.CatalogPath); err != nil {
 		return err
 	}
-	for i, v := range cfg.Node.DuckLake.Volumes {
-		if err := check(fmt.Sprintf("node.ducklake.volumes[%d].catalog_type", i), v.CatalogType); err != nil {
-			return err
+	if cfg.Storage.DuckLake.CatalogType == "postgres" && cfg.Storage.DuckLake.ShardCount > 1 && cfg.Storage.DuckLake.StoragePolicy.Enable {
+		return fmt.Errorf("PostgreSQL DuckLake sharding cannot be combined with storage_policy: tiering currently manages a single hot catalog")
+	}
+	lists := []struct {
+		name    string
+		volumes []VolumeConfig
+	}{
+		{"storage.ducklake.volumes", cfg.Storage.DuckLake.Volumes},
+		{"storage.ducklake.storage_policy.volumes", cfg.Storage.DuckLake.StoragePolicy.Volumes},
+		{"node.ducklake.volumes", cfg.Node.DuckLake.Volumes},
+	}
+	for _, list := range lists {
+		for i := range list.volumes {
+			v := &list.volumes[i]
+			if err := check(fmt.Sprintf("%s[%d].catalog_type", list.name, i), &v.CatalogType, v.CatalogPath); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

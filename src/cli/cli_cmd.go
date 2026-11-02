@@ -160,6 +160,23 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 	}
 
 	dataPath := cfg.DataPath
+	if ducklake.IsPostgresCatalogPath(cfg.CatalogPath) {
+		if _, err := db.Exec("LOAD ducklake; LOAD postgres;"); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+		stmt, err := ducklake.CatalogAttachSQL(cfg.CatalogType, cfg.CatalogPath, cfg.LakeName, dataPath, false)
+		if err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+		stmt = strings.TrimSuffix(stmt, ");") + ", READ_ONLY);"
+		if _, err := db.Exec(stmt); err != nil {
+			_ = db.Close()
+			return nil, ducklake.CatalogError(cfg.CatalogPath, "CLI attach", err)
+		}
+		return db, nil
+	}
 	fmt.Printf("Data path: %s\n", dataPath)
 
 	viewsCreated, err := createParquetViews(db, cfg.LakeName, dataPath)

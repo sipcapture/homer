@@ -329,7 +329,7 @@ func (w *Writer) Start() error {
 		return fmt.Errorf("failed to start DuckLake manager: %w", err)
 	}
 	logger.Info("Writer: DuckLake storage started",
-		"catalog", w.storageConfig.DuckLake.CatalogPath,
+		"catalog", ducklake.CatalogDisplayPath(w.storageConfig.DuckLake.CatalogPath),
 		"data", w.storageConfig.DuckLake.DataPath)
 
 	// Start compaction service if enabled (on primary shard only — each shard

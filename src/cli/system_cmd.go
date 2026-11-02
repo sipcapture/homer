@@ -502,6 +502,9 @@ func rebuildCatalog(f SystemFlags) error {
 	duckCfg := duckLakeConfigFromModular(cfg)
 	dataPath := duckCfg.DataPath
 	catalogPath := duckCfg.CatalogPath
+	if ducklake.IsPostgresCatalogPath(catalogPath) {
+		return fmt.Errorf("rebuild-catalog requires a SQLite file; PostgreSQL catalog recovery must use PostgreSQL tools")
+	}
 
 	if ducklake.IsRemoteLakeDataPath(dataPath) {
 		return fmt.Errorf("rebuild-catalog requires a local data_path; got %q", dataPath)

@@ -78,6 +78,15 @@ func TestSettingsDBFilePathIsNotRedacted(t *testing.T) {
 	}
 }
 
+func TestPostgresCatalogPathIsRedacted(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Storage.DuckLake.CatalogPath = "postgres://homer:private-password@localhost/lake"
+	out, err := formatRunningConfig(cfg, ShowConfigFlags{Section: "storage.ducklake.catalog_path"})
+	if err != nil || strings.Contains(string(out), "private-password") || !strings.Contains(string(out), redactedSecret) {
+		t.Fatalf("catalog credential leak: %s %v", out, err)
+	}
+}
+
 func TestSettingsMigrationRejectsPostgresDestination(t *testing.T) {
 	for _, dsn := range []string{"postgres://user:private@localhost/settings", "host=localhost dbname=settings"} {
 		if _, err := resolveSettingsDBPath(MigrateFlags{DuckDBPath: dsn}); err == nil || strings.Contains(err.Error(), "private") {

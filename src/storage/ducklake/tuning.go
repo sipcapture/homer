@@ -359,6 +359,9 @@ func ApplyHomerDuckDBDefaults(db *sql.DB, threads int, memoryLimit, tempDirector
 // The directory is created eagerly; on failure an empty string is returned
 // and the caller should leave temp_directory untouched.
 func DefaultSpillDirectory(catalogPath string) string {
+	if IsPostgresCatalogPath(catalogPath) {
+		return ""
+	}
 	dir := strings.TrimSpace(filepath.Dir(strings.TrimSpace(catalogPath)))
 	if dir == "" || dir == "." {
 		return ""

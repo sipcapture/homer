@@ -27,7 +27,7 @@ type ShardedWriter struct {
 }
 
 // NewShardedWriter creates N MultiTableWriter shards. Each shard gets its own
-// catalog file (e.g. homer_catalog_0.sqlite, homer_catalog_1.sqlite) and lake name
+// catalog file or PostgreSQL database (suffixed _0, _1, ...) and lake name
 // (homer_lake_0, homer_lake_1) but shares the same data directory.
 func NewShardedWriter(config Config) (*ShardedWriter, error) {
 	n := config.ShardCount
@@ -44,9 +44,23 @@ func NewShardedWriter(config Config) (*ShardedWriter, error) {
 	for i := 0; i < n; i++ {
 		shardCfg := config
 		if n > 1 {
-			shardCfg.CatalogPath = shardCatalogPath(config.CatalogPath, i)
+			if IsPostgresCatalogPath(config.CatalogPath) {
+				var err error
+				shardCfg.CatalogPath, err = suffixedPostgresCatalog(config.CatalogPath, fmt.Sprint(i))
+				if err != nil {
+					for j := 0; j < i; j++ {
+						_ = sw.shards[j].Stop()
+					}
+					return nil, err
+				}
+			} else {
+				shardCfg.CatalogPath = shardCatalogPath(config.CatalogPath, i)
+			}
 			shardCfg.LakeName = fmt.Sprintf("%s_%d", config.LakeName, i)
 			shardCfg.DataPath = config.DataPath
+			if config.TuningTempDirectory != "" {
+				shardCfg.TuningTempDirectory = filepath.Join(config.TuningTempDirectory, fmt.Sprintf("shard_%d", i))
+			}
 		}
 		// ShardCount=1 inside each shard to avoid recursion
 		shardCfg.ShardCount = 1

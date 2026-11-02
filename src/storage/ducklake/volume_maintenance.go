@@ -104,7 +104,7 @@ func (tsm *TieredStorageManager) fileCleanupDB(vol *Volume) (*sql.DB, error) {
 		return nil, fmt.Errorf("volume %s has no resolved catalog path", vol.Name)
 	}
 	if _, err := m.db.Exec(volumeAttachSQL(vol, vol.CatalogPath)); err != nil {
-		return nil, fmt.Errorf("attach volume %s on maintenance DuckDB: %w", vol.Name, err)
+		return nil, CatalogError(vol.CatalogPath, "maintenance attach volume "+vol.Name, err)
 	}
 	m.attached[vol.LakeName] = true
 	// Tiered DuckDB instances live until process exit; the mark is never released.
@@ -128,11 +128,9 @@ func (tsm *TieredStorageManager) openMaintenanceDB() (*sql.DB, error) {
 		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering-maintenance")
 	ApplyWritePathExternalFileCache(db, tsm.config.TuningExternalFileCache, "tiering-maintenance")
 
-	for _, ext := range []string{"ducklake", "sqlite"} {
-		if _, err := db.Exec("LOAD " + ext + ";"); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("maintenance DuckDB: load %s extension: %w", ext, err)
-		}
+	if err := loadLakeExtensions(db, tsm.config.CatalogType); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 	if _, err := db.Exec("LOAD aws;"); err != nil {
 		logger.Warn("TieredStorageManager: maintenance DuckDB failed to load aws extension (credential_chain unavailable)", "error", err)

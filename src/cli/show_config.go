@@ -145,7 +145,7 @@ func redactJSONSecrets(v any) {
 	switch n := v.(type) {
 	case map[string]any:
 		for k, child := range n {
-			if s, ok := child.(string); ok && strings.EqualFold(k, "settings_db_path") && config.IsPostgresSettingsPath(s) {
+			if s, ok := child.(string); ok && (strings.EqualFold(k, "settings_db_path") || strings.EqualFold(k, "catalog_path")) && config.IsPostgresSettingsPath(s) {
 				n[k] = redactedSecret
 				continue
 			}

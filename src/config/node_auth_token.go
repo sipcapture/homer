@@ -48,11 +48,11 @@ func DiscardShippedPlaceholderSecret(setting, value string) string {
 }
 
 // NodeAuthTokenFilePath returns the persisted node HTTP auth token path
-// beside the DuckLake catalog file.
+// beside a local DuckLake catalog, or under /data for PostgreSQL or no catalog.
 func NodeAuthTokenFilePath(catalogPath string) string {
 	catalogPath = strings.TrimSpace(catalogPath)
-	if catalogPath == "" {
-		catalogPath = "/data/homer_catalog.sqlite"
+	if catalogPath == "" || IsPostgresSettingsPath(catalogPath) {
+		return filepath.Join("/data", homerNodeAuthTokenFileName)
 	}
 	return filepath.Join(filepath.Dir(catalogPath), homerNodeAuthTokenFileName)
 }
