@@ -29,9 +29,9 @@ credentials. If FlightSQL is enabled, configure its authentication token as well
 the existing node-token inheritance is supported. Startup rejects missing required
 secrets instead of generating local secret files.
 
-See [PostgreSQL settings](postgres-settings-compatibility.md) for the DuckDB
+See [PostgreSQL settings](POSTGRES_SETTINGS.md) for the DuckDB
 extension limitations and direct PostgreSQL `RETURNING` workaround, and
-[PostgreSQL catalogs](postgres-ducklake.md) for catalog and shard configuration.
+[PostgreSQL catalogs](POSTGRES_DUCKLAKE.md) for catalog and shard configuration.
 
 ## Configure one combined pod
 
