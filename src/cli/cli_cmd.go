@@ -66,7 +66,7 @@ func RunCLICmd(f CLIFlags) error {
 	}
 	defer db.Close()
 
-	return runCLI(db, duckCfg.LakeName, duckCfg.DataPath, f.Query, f.NoLimit)
+	return runCLI(db, duckCfg.LakeName, duckCfg.DataPath, duckCfg.CatalogPath, f.Query, f.NoLimit)
 }
 
 // ---- config helper ---------------------------------------------------------
@@ -175,17 +175,17 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 			_ = db.Close()
 			return nil, ducklake.CatalogError(cfg.CatalogPath, "CLI attach", err)
 		}
-		return db, nil
-	}
-	fmt.Printf("Data path: %s\n", dataPath)
+	} else {
+		fmt.Printf("Data path: %s\n", dataPath)
 
-	viewsCreated, err := createParquetViews(db, cfg.LakeName, dataPath)
-	if err != nil {
-		fmt.Printf("Note: Could not auto-create views: %v\n", err)
-		fmt.Printf("You can query parquet files directly:\n")
-		fmt.Printf("  SELECT * FROM read_parquet('%s/*/**/*.parquet', hive_partitioning=true) LIMIT 10;\n\n", ducklake.JoinLakeDataPath(dataPath, "main"))
-	} else if viewsCreated > 0 {
-		fmt.Printf("Created %d table views\n", viewsCreated)
+		viewsCreated, err := createParquetViews(db, cfg.LakeName, dataPath)
+		if err != nil {
+			fmt.Printf("Note: Could not auto-create views: %v\n", err)
+			fmt.Printf("You can query parquet files directly:\n")
+			fmt.Printf("  SELECT * FROM read_parquet('%s/*/**/*.parquet', hive_partitioning=true) LIMIT 10;\n\n", ducklake.JoinLakeDataPath(dataPath, "main"))
+		} else if viewsCreated > 0 {
+			fmt.Printf("Created %d table views\n", viewsCreated)
+		}
 	}
 
 	useSQL := fmt.Sprintf("USE %s", cfg.LakeName)
@@ -287,7 +287,7 @@ func createCommonViews(db *sql.DB, lakeName, dataPath string) (int, error) {
 
 // ---- interactive SQL CLI ---------------------------------------------------
 
-func runCLI(db *sql.DB, lakeName, dataPath, singleQuery string, noLimit bool) error {
+func runCLI(db *sql.DB, lakeName, dataPath, catalogPath, singleQuery string, noLimit bool) error {
 	fmt.Println("Homer DuckLake SQL CLI (read-only)")
 	fmt.Println("===================================")
 	fmt.Printf("Schema: %s\n", lakeName)
@@ -298,7 +298,7 @@ func runCLI(db *sql.DB, lakeName, dataPath, singleQuery string, noLimit bool) er
 	fmt.Println("TAB completes SQL keywords, tables, columns, and parquet paths")
 	fmt.Println()
 
-	tables := discoverSchemaViews(db, lakeName)
+	tables := discoverSchemaViews(db, lakeName, catalogPath)
 
 	if singleQuery != "" {
 		return executeSQLQuery(db, singleQuery, noLimit)
@@ -342,7 +342,7 @@ func runCLI(db *sql.DB, lakeName, dataPath, singleQuery string, noLimit bool) er
 			printCLIHelp(lakeName, tables, noLimit)
 			continue
 		case "tables", "\\dt":
-			tables = discoverSchemaViews(db, lakeName)
+			tables = discoverSchemaViews(db, lakeName, catalogPath)
 			printTables(tables)
 			fmt.Println("Table list refreshed for TAB completion.")
 			continue
@@ -545,10 +545,15 @@ func printTables(tables []string) {
 	fmt.Println()
 }
 
-func discoverSchemaViews(db *sql.DB, schemaName string) []string {
+func discoverSchemaViews(db *sql.DB, schemaName, catalogPath string) []string {
 	var tables []string
-	query := fmt.Sprintf("SELECT table_name FROM information_schema.tables WHERE table_schema = '%s'", schemaName)
-	rows, err := db.Query(query)
+	var query string
+	if ducklake.IsPostgresCatalogPath(catalogPath) {
+		query = "SELECT table_name FROM information_schema.tables WHERE table_catalog = ? AND table_schema = 'main'"
+	} else {
+		query = "SELECT table_name FROM information_schema.tables WHERE table_schema = ?"
+	}
+	rows, err := db.Query(query, schemaName)
 	if err != nil {
 		return tables
 	}

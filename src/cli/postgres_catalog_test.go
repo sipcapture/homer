@@ -66,8 +66,11 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 	}
 	defer reader.Close()
 	var id int
-	if err := reader.QueryRow("SELECT id FROM lake.test").Scan(&id); err != nil || id != 42 {
+	if err := reader.QueryRow("SELECT id FROM test").Scan(&id); err != nil || id != 42 {
 		t.Fatalf("metadata read: %d %v", id, err)
+	}
+	if got := discoverSchemaViews(reader, cfg.LakeName, cfg.CatalogPath); len(got) != 1 || got[0] != "lake.test" {
+		t.Fatalf("discovered tables = %v, want [lake.test]", got)
 	}
 	if _, err := reader.Exec("INSERT INTO lake.test VALUES (43)"); err == nil {
 		t.Fatal("CLI opened a writable PostgreSQL DuckLake catalog")
