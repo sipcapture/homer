@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -696,7 +697,7 @@ func (mtw *MultiTableWriter) Start() {
 // starve compaction and amplify S3/catalog races.
 func (mtw *MultiTableWriter) flushQueueWorker() {
 	for job := range mtw.flushQueueCh {
-		job.tw.flushSlotDirect(job.slotIdx, &mtw.catalogMu)
+		_ = job.tw.flushSlotDirect(job.slotIdx, &mtw.catalogMu)
 		mtw.flushQueueWg.Done()
 	}
 }
@@ -762,12 +763,7 @@ func (mtw *MultiTableWriter) flushAll() {
 	if mtw.flushQueueCh != nil {
 		// Centralized flush queue: swap buffers, then enqueue INSERT jobs.
 		for _, tw := range tables {
-			if err := tw.flushBatch(); err != nil {
-				logger.Warn(fmt.Sprintf("Failed to drain batch before swap for %s: %v", tw.tableFQN, err))
-			}
-			old := int(tw.activeIdx.Load())
-			next := 1 - old
-			tw.activeIdx.Store(int32(next))
+			old := tw.swapBuffer()
 			mtw.flushQueueWg.Add(1)
 			mtw.flushQueueCh <- centralFlushJob{tw: tw, slotIdx: old}
 		}
@@ -800,12 +796,13 @@ func (mtw *MultiTableWriter) Stop() error {
 		for _, tw := range mtw.tables {
 			if err := tw.Close(); err != nil {
 				logger.Warn(fmt.Sprintf("failed to close table writer %s: %v", tw.TableFQN(), err))
+				closeErr = errors.Join(closeErr, err)
 			}
 		}
 		mtw.mu.RUnlock()
 
 		if mtw.db != nil {
-			closeErr = mtw.db.Close()
+			closeErr = errors.Join(closeErr, mtw.db.Close())
 		}
 		if mtw.releaseAttachMark != nil {
 			mtw.releaseAttachMark()
