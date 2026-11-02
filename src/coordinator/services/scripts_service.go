@@ -138,7 +138,11 @@ func (s *ScriptsService) Create(ctx context.Context, item HepScript) (string, er
 		escapeJSONData(item.Script),
 	)
 	var guid string
-	if err := s.db.QueryRowContext(ctx, insertSQL).Scan(&guid); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, insertSQL).Scan(&guid); err != nil {
 		return item.GUID, err
 	}
 	return guid, nil
@@ -163,7 +167,11 @@ func (s *ScriptsService) Update(ctx context.Context, guid string, item HepScript
 		escapeSQL(guid),
 	)
 	var updated string
-	if err := s.db.QueryRowContext(ctx, updateSQL).Scan(&updated); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, updateSQL).Scan(&updated); err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
@@ -181,7 +189,11 @@ func (s *ScriptsService) Delete(ctx context.Context, guid string) (bool, error) 
 		CorrelationScriptsTable, escapeSQL(guid),
 	)
 	var id int64
-	if err := s.db.QueryRowContext(ctx, deleteSQL).Scan(&id); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, deleteSQL).Scan(&id); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}

@@ -118,7 +118,7 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, username, dashbo
 	guid := newGUID()
 	sqlInsert := fmt.Sprintf(
 		`INSERT INTO dashboard_settings (guid, username, partid, dashboard_id, data, create_date)
-		 VALUES ('%s', '%s', %d, '%s', ?, current_timestamp)
+		 VALUES ('%s', '%s', %d, '%s', $1, current_timestamp)
 		 RETURNING guid`,
 		escapeSQL(guid),
 		escapeSQL(username),
@@ -126,7 +126,11 @@ func (s *DashboardService) CreateDashboard(ctx context.Context, username, dashbo
 		escapeSQL(dashboardID),
 	)
 	var inserted string
-	if err := s.db.QueryRowContext(ctx, sqlInsert, jsonDataParam(string(data))).Scan(&inserted); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, sqlInsert, jsonDataParam(string(data))).Scan(&inserted); err != nil {
 		return guid, err
 	}
 	if inserted != "" {
@@ -159,13 +163,17 @@ func (s *DashboardService) UpdateDashboard(ctx context.Context, username, dashbo
 	// Key by guid so a shared id like "home" cannot clobber another user's row.
 	sqlUpdate := fmt.Sprintf(
 		`UPDATE dashboard_settings
-		 SET data = ?
+		 SET data = $1
 		 WHERE guid = '%s'
 		 RETURNING guid`,
 		escapeSQL(target.GUID),
 	)
 	var guid string
-	if err := s.db.QueryRowContext(ctx, sqlUpdate, jsonDataParam(string(data))).Scan(&guid); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, sqlUpdate, jsonDataParam(string(data))).Scan(&guid); err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
@@ -209,7 +217,11 @@ func (s *DashboardService) DeleteDashboard(ctx context.Context, username, dashbo
 		escapeSQL(dashboardID),
 	)
 	var deletedID int64
-	if err := s.db.QueryRowContext(ctx, query).Scan(&deletedID); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, query).Scan(&deletedID); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}

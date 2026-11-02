@@ -366,7 +366,7 @@ type CoordinatorConfig struct {
 	// Nodes to query via FlightSQL
 	Nodes []NodeEndpoint `json:"nodes" mapstructure:"nodes"`
 
-	// DuckDB file path for users/settings storage
+	// DuckDB file path or PostgreSQL connection string for users/settings storage.
 	SettingsDBPath string `json:"settings_db_path" mapstructure:"settings_db_path" default:"/var/lib/homer/homer_settings.duckdb"`
 
 	// LakeName is the DuckLake catalog name used in all SQL queries.
@@ -2072,7 +2072,7 @@ func applyDefaults(cfg *Config) {
 				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
 			}
 		}
-		settingsPath := strings.TrimSpace(cfg.Coordinator.SettingsDBPath)
+		settingsPath := SettingsDBLocalPath(strings.TrimSpace(cfg.Coordinator.SettingsDBPath))
 		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath)
 		if err == nil {
 			cfg.Coordinator.FlightSQLServer.AuthToken = tok

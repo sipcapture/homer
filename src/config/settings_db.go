@@ -1,0 +1,42 @@
+// Copyright (C) 2026 Homer Server Contributors
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package config
+
+import "strings"
+
+const defaultSettingsDBPath = "/var/lib/homer/homer_settings.duckdb"
+
+// IsPostgresSettingsPath recognizes PostgreSQL URLs and libpq keyword DSNs.
+// Detect the syntax before parsing so malformed PostgreSQL strings do not
+// silently fall back to being used as local database filenames.
+func IsPostgresSettingsPath(value string) bool {
+	value = strings.TrimSpace(value)
+	lower := strings.ToLower(value)
+	if strings.HasPrefix(lower, "postgres://") || strings.HasPrefix(lower, "postgresql://") {
+		return true
+	}
+	key, _, found := strings.Cut(value, "=")
+	if !found {
+		return false
+	}
+	switch strings.TrimSpace(key) {
+	case "host", "hostaddr", "port", "dbname", "user", "password", "passfile", "service", "servicefile",
+		"sslmode", "sslcert", "sslkey", "sslrootcert", "sslpassword", "sslcrl", "sslcrldir", "sslsni",
+		"connect_timeout", "options", "application_name", "fallback_application_name", "client_encoding",
+		"target_session_attrs", "channel_binding", "gssencmode", "krbsrvname", "gsslib",
+		"keepalives", "keepalives_idle", "keepalives_interval", "keepalives_count", "tcp_user_timeout":
+		return true
+	}
+	return false
+}
+
+// SettingsDBLocalPath provides a local anchor for coordinator secret files.
+// A PostgreSQL DSN is never interpreted as a filesystem path.
+func SettingsDBLocalPath(value string) string {
+	if strings.TrimSpace(value) == "" || IsPostgresSettingsPath(value) {
+		return defaultSettingsDBPath
+	}
+	return value
+}

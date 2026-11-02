@@ -855,7 +855,7 @@ func installDuckDBExtensions() error {
 	}
 	defer db.Close()
 
-	extensions := []string{"ducklake", "sqlite", "httpfs", "aws", "azure"}
+	extensions := []string{"ducklake", "sqlite", "httpfs", "aws", "azure", "postgres"}
 
 	for _, ext := range extensions {
 		fmt.Printf("Installing %s extension...\n", ext)

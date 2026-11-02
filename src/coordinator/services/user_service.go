@@ -215,7 +215,11 @@ func (s *UserService) CreateUser(ctx context.Context, username, password, email,
 	)
 
 	var id int64
-	if err := s.db.QueryRowContext(ctx, query).Scan(&id); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, query).Scan(&id); err != nil {
 		return 0, err
 	}
 	return id, nil
@@ -262,7 +266,11 @@ func (s *UserService) UpdateUser(ctx context.Context, id int64, email, password,
 	)
 
 	var updatedID int64
-	if err := s.db.QueryRowContext(ctx, query).Scan(&updatedID); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, query).Scan(&updatedID); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}
@@ -279,7 +287,11 @@ func (s *UserService) DeleteUser(ctx context.Context, id int64) (bool, error) {
 
 	query := fmt.Sprintf(`DELETE FROM users WHERE id = %d RETURNING id`, id)
 	var deletedID int64
-	if err := s.db.QueryRowContext(ctx, query).Scan(&deletedID); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, query).Scan(&deletedID); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}

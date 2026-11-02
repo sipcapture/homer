@@ -130,10 +130,14 @@ func (s *TransactionViewTokenService) ConsumePayload(ctx context.Context, id str
 
 	id = strings.TrimSpace(strings.ToLower(id))
 	var raw string
-	err := s.db.QueryRowContext(ctx,
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	err := queryRow(ctx,
 		`UPDATE transaction_view_tokens
 		 SET open_count = open_count + 1
-		 WHERE id = ? AND expires_at > now() AND open_count < max_opens
+		 WHERE id = $1 AND expires_at > now() AND open_count < max_opens
 		 RETURNING payload`,
 		id,
 	).Scan(&raw)

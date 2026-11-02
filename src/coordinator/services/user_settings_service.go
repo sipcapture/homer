@@ -99,7 +99,11 @@ func (s *UserSettingsService) UpsertByCategory(ctx context.Context, username, ca
 		escapeSQL(param),
 	)
 	var updatedGUID string
-	if err := s.db.QueryRowContext(ctx, updateSQL).Scan(&updatedGUID); err == nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, updateSQL).Scan(&updatedGUID); err == nil {
 		return updatedGUID, nil
 	} else if err != sql.ErrNoRows {
 		return "", err
@@ -119,7 +123,7 @@ func (s *UserSettingsService) UpsertByCategory(ctx context.Context, username, ca
 		escapeJSONData(dataStr),
 	)
 	var inserted string
-	if err := s.db.QueryRowContext(ctx, insertSQL).Scan(&inserted); err != nil {
+	if err := queryRow(ctx, insertSQL).Scan(&inserted); err != nil {
 		return guid, err
 	}
 	if inserted != "" {
@@ -209,7 +213,11 @@ func (s *UserSettingsService) DeleteByCategoryAndParam(ctx context.Context, user
 		escapeSQL(param),
 	)
 	var deletedID int64
-	if err := s.db.QueryRowContext(ctx, query).Scan(&deletedID); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, query).Scan(&deletedID); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}
@@ -231,7 +239,11 @@ func (s *UserSettingsService) DeleteByCategory(ctx context.Context, username, ca
 		escapeSQL(category),
 	)
 	var deletedID int64
-	if err := s.db.QueryRowContext(ctx, query).Scan(&deletedID); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, query).Scan(&deletedID); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}

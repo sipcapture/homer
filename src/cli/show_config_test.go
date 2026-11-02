@@ -51,6 +51,41 @@ func TestIsSecretJSONKey(t *testing.T) {
 	}
 }
 
+func TestSettingsPostgresDSNRedactedInSelectedSection(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Coordinator.SettingsDBPath = "postgres://homer:private-password@localhost/settings"
+	for _, section := range []string{"", "coordinator", "coordinator.settings_db_path"} {
+		out, err := formatRunningConfig(cfg, ShowConfigFlags{Section: section})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(out), "private-password") || !strings.Contains(string(out), redactedSecret) {
+			t.Fatalf("DSN not redacted for section %q", section)
+		}
+	}
+	out, err := formatRunningConfig(cfg, ShowConfigFlags{Section: "coordinator.settings_db_path", IncludeSecrets: true})
+	if err != nil || !strings.Contains(string(out), "private-password") {
+		t.Fatalf("explicit include-secrets: %s %v", out, err)
+	}
+}
+
+func TestSettingsDBFilePathIsNotRedacted(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Coordinator.SettingsDBPath = "/data/homer/settings.duckdb"
+	out, err := formatRunningConfig(cfg, ShowConfigFlags{Section: "coordinator.settings_db_path"})
+	if err != nil || !strings.Contains(string(out), cfg.Coordinator.SettingsDBPath) {
+		t.Fatalf("local settings path was hidden: %s %v", out, err)
+	}
+}
+
+func TestSettingsMigrationRejectsPostgresDestination(t *testing.T) {
+	for _, dsn := range []string{"postgres://user:private@localhost/settings", "host=localhost dbname=settings"} {
+		if _, err := resolveSettingsDBPath(MigrateFlags{DuckDBPath: dsn}); err == nil || strings.Contains(err.Error(), "private") {
+			t.Fatalf("expected a credential-free error for PostgreSQL migration destination: %v", err)
+		}
+	}
+}
+
 func TestRedactJSONSecrets_nested(t *testing.T) {
 	root := map[string]any{
 		"coordinator": map[string]any{

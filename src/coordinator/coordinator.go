@@ -119,12 +119,16 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 	// Always log how coordinator.auth was interpreted (no secrets). If
 	// auth_internal_string_form is false, JSON "internal" was not used
 	// and bootstrap admin user is skipped.
+	settingsLocation := cfg.SettingsDBPath
+	if config.IsPostgresSettingsPath(settingsLocation) {
+		settingsLocation = "PostgreSQL"
+	}
 	logger.Info("coordinator: auth settings snapshot",
 		"auth_type", cfg.Auth.Type,
 		"auth_internal_bootstrap", cfg.Auth.AuthFromInternalString,
 		"admin_user", cfg.Auth.AdminUser,
 		"admin_password_hash_configured", strings.TrimSpace(cfg.Auth.AdminPasswordHash) != "",
-		"settings_db_path", cfg.SettingsDBPath)
+		"settings_db_path", settingsLocation)
 	if cfg.Auth.AuthFromInternalString {
 		bootstrapPassword, err := services.EnsureBootstrapAdminUser(context.Background(), settingsDB,
 			cfg.Auth.AdminUser, cfg.Auth.AdminPasswordHash)
@@ -138,7 +142,7 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 				"bootstrap_password", bootstrapPassword)
 		}
 		logger.Info("coordinator: internal authentication enabled",
-			"settings_db_path", cfg.SettingsDBPath,
+			"settings_db_path", settingsLocation,
 			"admin_user", cfg.Auth.AdminUser)
 	}
 	// First-run defaults for Settings → Protocol Mappings (SIP call / default / registration).

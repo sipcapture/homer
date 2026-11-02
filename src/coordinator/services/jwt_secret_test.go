@@ -10,6 +10,14 @@ import (
 	"testing"
 )
 
+func TestJWTSecretFilePathWithPostgresSettings(t *testing.T) {
+	for _, dsn := range []string{"postgres://user:private@localhost/settings", "host=localhost dbname=settings password=private"} {
+		if got := JWTSecretFilePath(dsn); got != "/var/lib/homer/.homer_jwt_secret" {
+			t.Fatalf("DSN interpreted as a secret directory: %q", got)
+		}
+	}
+}
+
 func TestResolveCoordinatorJWTSecret_ConfiguredWins(t *testing.T) {
 	secret, auto, path, err := ResolveCoordinatorJWTSecret("configured-secret", t.TempDir())
 	if err != nil {

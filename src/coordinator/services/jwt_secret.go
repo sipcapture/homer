@@ -17,12 +17,11 @@ import (
 
 const homerJWTSecretFileName = ".homer_jwt_secret"
 
-// JWTSecretFilePath returns the persisted JWT secret path beside settingsDBPath.
+// JWTSecretFilePath returns the persisted JWT secret path beside a local
+// settings file, or in the default settings directory for PostgreSQL.
 func JWTSecretFilePath(settingsDBPath string) string {
 	settingsDBPath = strings.TrimSpace(settingsDBPath)
-	if settingsDBPath == "" {
-		settingsDBPath = "/var/lib/homer/homer_settings.duckdb"
-	}
+	settingsDBPath = config.SettingsDBLocalPath(settingsDBPath)
 	return filepath.Join(filepath.Dir(settingsDBPath), homerJWTSecretFileName)
 }
 
