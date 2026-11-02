@@ -334,6 +334,9 @@ type StorageConfig struct {
 
 // NodeConfig configures the FlightSQL node module
 type NodeConfig struct {
+	// LocalSecretsDir stores generated secrets when the database uses PostgreSQL.
+	LocalSecretsDir string `json:"local_secrets_dir" mapstructure:"local_secrets_dir"`
+
 	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
 
 	// FlightSQL server settings
@@ -355,6 +358,9 @@ type SmartRoutingConfig struct {
 
 // CoordinatorConfig configures the API coordinator module
 type CoordinatorConfig struct {
+	// LocalSecretsDir stores generated secrets when the database uses PostgreSQL.
+	LocalSecretsDir string `json:"local_secrets_dir" mapstructure:"local_secrets_dir"`
+
 	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
 
 	// SmartRouting: skip nodes with no data in the query time range (UI path).
@@ -2056,6 +2062,7 @@ func applyDefaults(cfg *Config) {
 			cfg.Node.FlightServer.Host,
 			cfg.Node.FlightServer.AuthToken,
 			catalogPath,
+			cfg.Node.LocalSecretsDir,
 		)
 		if err == nil {
 			cfg.Node.FlightServer.AuthToken = tok
@@ -2065,7 +2072,7 @@ func applyDefaults(cfg *Config) {
 			if fsqlTok == "" {
 				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
 			}
-			tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, catalogPath)
+			tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, catalogPath, cfg.Node.LocalSecretsDir)
 			if err == nil {
 				cfg.Node.FlightSQLServer.AuthToken = tok
 			}
@@ -2080,8 +2087,8 @@ func applyDefaults(cfg *Config) {
 				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
 			}
 		}
-		settingsPath := SettingsDBLocalPath(strings.TrimSpace(cfg.Coordinator.SettingsDBPath))
-		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath)
+		settingsPath := SettingsDBLocalPath(strings.TrimSpace(cfg.Coordinator.SettingsDBPath), cfg.Coordinator.LocalSecretsDir)
+		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath, cfg.Coordinator.LocalSecretsDir)
 		if err == nil {
 			cfg.Coordinator.FlightSQLServer.AuthToken = tok
 		}

@@ -4,7 +4,10 @@
 
 package config
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 const defaultSettingsDBPath = "/var/lib/homer/homer_settings.duckdb"
 
@@ -33,9 +36,13 @@ func IsPostgresSettingsPath(value string) bool {
 }
 
 // SettingsDBLocalPath provides a local anchor for coordinator secret files.
-// A PostgreSQL DSN is never interpreted as a filesystem path.
-func SettingsDBLocalPath(value string) string {
+// PostgreSQL secrets use localSecretsDir when set, otherwise the
+// default settings directory. A DSN is never interpreted as a filesystem path.
+func SettingsDBLocalPath(value, localSecretsDir string) string {
 	if strings.TrimSpace(value) == "" || IsPostgresSettingsPath(value) {
+		if dir := strings.TrimSpace(localSecretsDir); dir != "" {
+			return filepath.Join(dir, filepath.Base(defaultSettingsDBPath))
+		}
 		return defaultSettingsDBPath
 	}
 	return value

@@ -16,7 +16,7 @@ func TestIsPostgresSettingsPath(t *testing.T) {
 		if !IsPostgresSettingsPath(value) {
 			t.Errorf("did not recognize PostgreSQL syntax: %q", value)
 		}
-		if SettingsDBLocalPath(value) != defaultSettingsDBPath {
+		if SettingsDBLocalPath(value, "") != defaultSettingsDBPath {
 			t.Error("DSN used as local secret path")
 		}
 	}
@@ -27,7 +27,7 @@ func TestIsPostgresSettingsPath(t *testing.T) {
 		if IsPostgresSettingsPath(value) {
 			t.Errorf("misclassified local path: %q", value)
 		}
-		if value != "" && SettingsDBLocalPath(value) != value {
+		if value != "" && SettingsDBLocalPath(value, "") != value {
 			t.Errorf("changed local path: %q", value)
 		}
 	}

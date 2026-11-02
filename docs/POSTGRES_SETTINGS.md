@@ -75,8 +75,20 @@ The administrator password reset command uses the configured settings backend.
 The existing migration command requires a local DuckDB destination; when your
 coordinator uses PostgreSQL, supply a local file with `--duckdb`.
 
-With PostgreSQL settings, local JWT and coordinator authentication secrets use
-`/var/lib/homer`. Make that directory writable and persistent for your deployment.
+With PostgreSQL settings or catalogs, configure the same writable, persistent
+local directory for generated JWT and node/coordinator authentication secrets:
+
+```json
+{
+  "node": {"local_secrets_dir": "/data/homer/secrets"},
+  "coordinator": {"local_secrets_dir": "/data/homer/secrets"}
+}
+```
+
+The default is `/var/lib/homer`. Environment overrides use
+`HOMER_NODE_LOCAL_SECRETS_DIR` and `HOMER_COORDINATOR_LOCAL_SECRETS_DIR`.
+Mount the directory with write permissions for the Homer process. Move existing
+generated secrets into it to preserve tokens and JWT sessions.
 With file-backed settings, those secrets remain beside the settings file.
 
 Config display redacts the connection string unless you supply
@@ -90,7 +102,7 @@ Connection strings are not logged as file paths.
 | Settings initialization fails | Confirm that the database already exists, the credentials work, and the role can create tables in `public`. |
 | PostgreSQL extension cannot load | Install extensions using the same DuckDB engine and OS user that run Homer. |
 | Existing settings are missing after switching | Local settings are not migrated automatically. Check which backend is configured. |
-| Local authentication secrets cannot be saved | Check permissions and persistence for `/var/lib/homer`. |
+| Local authentication secrets cannot be saved | Check permissions and persistence for the configured `local_secrets_dir` (default `/var/lib/homer`). |
 | Migration command rejects PostgreSQL | Supply a local DuckDB destination with `--duckdb`. |
 
 ## Query behavior

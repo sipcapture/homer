@@ -141,8 +141,13 @@ validation rejects the combination instead of attaching an empty base catalog.
 ## Local secrets and connection details
 
 Catalog DSNs are redacted from config output and attachment errors. Node auth
-secrets use the normal local `/data` fallback rather than treating the DSN as a
-filesystem directory.
+and JWT secrets use `node.local_secrets_dir` and
+`coordinator.local_secrets_dir` (default `/var/lib/homer`). Configure both to the
+same writable, persistent directory, for example `/data/homer/secrets`.
+Environment overrides are `HOMER_NODE_LOCAL_SECRETS_DIR` and
+`HOMER_COORDINATOR_LOCAL_SECRETS_DIR`. When upgrading, move the existing
+`/data/.homer_node_auth_token` and JWT secret into that directory to preserve
+authentication. DSNs are never treated as filesystem directories.
 
 ## Troubleshooting
 
