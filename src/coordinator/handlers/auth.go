@@ -28,6 +28,7 @@ import (
 
 // AuthHandler handles authentication-related API endpoints
 type AuthHandler struct {
+	runtimeState   *services.RuntimeState
 	jwtSecret      string
 	expireHours    int
 	cookieEnable   bool
@@ -358,7 +359,7 @@ func (h *AuthHandler) JWTMiddleware() echo.MiddlewareFunc {
 				})
 			}
 
-			if claims.ID != "" && h.sessionStore != nil && h.sessionStore.IsRevoked(claims.ID) {
+			if claims.ID != "" && h.sessionStore != nil && h.sessionIsRevoked(c, claims.ID) {
 				return c.JSON(http.StatusUnauthorized, map[string]interface{}{
 					"error": "Token revoked",
 				})

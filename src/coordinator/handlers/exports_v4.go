@@ -13,12 +13,31 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/sipcapture/homer-core/src/coordinator/services"
 )
 
 type ExportsHandler struct {
-	store *ExportStore
+	store  *ExportStore
+	shared *services.RuntimeState
+}
+
+func (h *ExportsHandler) SetRuntimeState(state *services.RuntimeState) { h.shared = state }
+
+type sharedExport struct {
+	Job     exportJob
+	Payload []byte
+}
+
+func (h *ExportsHandler) sharedExport(c echo.Context, id string) (sharedExport, bool, error) {
+	payload, found, err := h.shared.Get(c.Request().Context(), "export", id, false)
+	var result sharedExport
+	if err == nil && found {
+		err = json.Unmarshal(payload, &result)
+	}
+	return result, found, err
 }
 
 func NewExportsHandler(store *ExportStore) *ExportsHandler {
@@ -63,16 +82,29 @@ func (h *ExportsHandler) V4ExportsCreate(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid export type")
 	}
 
-	job := h.store.Create(strings.ToLower(req.Type))
-	filePath, contentType, err := writeExportFile(job.ID, job.Type, req.Query)
-	if err != nil {
-		return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to create export file")
-	}
-	job.FilePath = filePath
-	job.ContentType = contentType
-	job.Status = "completed"
+	job := exportJob{ID: newExportID(), Type: strings.ToLower(req.Type), CreatedAt: time.Now().UTC(), Status: "completed"}
 	job.DownloadURL = "/api/v4/exports/" + job.ID + "/download"
-	h.store.Update(job)
+	if h.shared != nil {
+		payload, contentType, err := exportPayload(job.ID, job.Type, req.Query)
+		if err != nil {
+			return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to create export")
+		}
+		job.ContentType = contentType
+		data, err := json.Marshal(sharedExport{Job: job, Payload: payload})
+		if err != nil {
+			return err
+		}
+		if err := h.shared.Put(c.Request().Context(), "export", job.ID, data, time.Now().Add(24*time.Hour)); err != nil {
+			return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to store export")
+		}
+	} else {
+		filePath, contentType, err := writeExportFile(job.ID, job.Type, req.Query)
+		if err != nil {
+			return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to create export file")
+		}
+		job.FilePath, job.ContentType = filePath, contentType
+		h.store.Update(job)
+	}
 	resp := ExportResponseV4{Meta: buildMeta(c, "")}
 	resp.Data.ExportID = job.ID
 	resp.Data.Status = job.Status
@@ -90,6 +122,13 @@ func (h *ExportsHandler) V4ExportsGet(c echo.Context) error {
 	}
 
 	job, ok := h.store.Get(exportID)
+	if h.shared != nil {
+		shared, found, err := h.sharedExport(c, exportID)
+		if err != nil {
+			return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to retrieve export")
+		}
+		job, ok = shared.Job, found
+	}
 	if !ok {
 		return writeError(c, http.StatusNotFound, "Not Found", "Export not found")
 	}
@@ -111,6 +150,16 @@ func (h *ExportsHandler) V4ExportsDownload(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Export id is required")
 	}
 
+	if h.shared != nil {
+		shared, found, err := h.sharedExport(c, exportID)
+		if err != nil {
+			return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to retrieve export")
+		}
+		if !found {
+			return writeError(c, http.StatusNotFound, "Not Found", "Export not found")
+		}
+		return c.Blob(http.StatusOK, shared.Job.ContentType, shared.Payload)
+	}
 	job, ok := h.store.Get(exportID)
 	if !ok || job.FilePath == "" {
 		return writeError(c, http.StatusNotFound, "Not Found", "Export not found")
@@ -151,18 +200,7 @@ func writeExportFile(exportID, exportType string, query interface{}) (string, st
 	}
 
 	filePath := filepath.Join(baseDir, exportID+ext)
-	if strings.ToLower(exportType) == "pcap" {
-		if err := os.WriteFile(filePath, []byte{}, 0o644); err != nil {
-			return "", "", err
-		}
-		return filePath, contentType, nil
-	}
-
-	payload, err := json.MarshalIndent(map[string]interface{}{
-		"export_id": exportID,
-		"type":      exportType,
-		"query":     query,
-	}, "", "  ")
+	payload, _, err := exportPayload(exportID, exportType, query)
 	if err != nil {
 		return "", "", err
 	}
@@ -170,4 +208,16 @@ func writeExportFile(exportID, exportType string, query interface{}) (string, st
 		return "", "", err
 	}
 	return filePath, contentType, nil
+}
+
+func exportPayload(exportID, exportType string, query interface{}) ([]byte, string, error) {
+	if strings.EqualFold(exportType, "pcap") {
+		return []byte{}, "application/vnd.tcpdump.pcap", nil
+	}
+	payload, err := json.MarshalIndent(map[string]interface{}{
+		"export_id": exportID,
+		"type":      exportType,
+		"query":     query,
+	}, "", "  ")
+	return payload, "text/plain", err
 }

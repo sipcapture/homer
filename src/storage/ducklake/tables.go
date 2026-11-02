@@ -11,6 +11,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -106,7 +107,7 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				"uuid", "timestamp", "session_id", "caller", "callee",
 				"src_ip", "dst_ip", "src_port", "dst_port",
 				"method", "response_code", "cseq_method",
-				"protocol", "node_id", "cid", "payload", "data_extra", "isup_body",
+				"protocol", "node_id", "cid", "payload", "data_extra",
 			},
 			CreateSQL: `
 				uuid VARCHAR,
@@ -126,13 +127,12 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				node_id VARCHAR,
 				cid VARCHAR,
 				payload VARCHAR,
-				data_extra JSON,
-				isup_body BLOB
+				data_extra JSON
 			`,
 			InsertSQL: `(uuid, date, timestamp, session_id, caller, callee, src_ip, dst_ip,
 				src_port, dst_port, method, response_code, cseq_method,
-				protocol, node_id, cid, payload, data_extra, isup_body)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, ?)`,
+				protocol, node_id, cid, payload, data_extra)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
 		},
 
 		// SIP Registration - REGISTER
@@ -145,7 +145,7 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				"aor", "contact", "expires", "user_agent",
 				"src_ip", "dst_ip", "src_port", "dst_port",
 				"method", "response_code",
-				"protocol", "node_id", "payload", "data_extra", "isup_body",
+				"protocol", "node_id", "payload", "data_extra",
 			},
 			CreateSQL: `
 				uuid VARCHAR,
@@ -165,13 +165,12 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				protocol UINTEGER,
 				node_id VARCHAR,
 				payload VARCHAR,
-				data_extra JSON,
-				isup_body BLOB
+				data_extra JSON
 			`,
 			InsertSQL: `(uuid, date, timestamp, session_id, aor, contact, expires, user_agent,
 				src_ip, dst_ip, src_port, dst_port, method, response_code,
-				protocol, node_id, payload, data_extra, isup_body)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, ?)`,
+				protocol, node_id, payload, data_extra)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
 		},
 
 		// SIPREC - signaling from in-process SRS
@@ -183,7 +182,7 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				"uuid", "timestamp", "session_id", "caller", "callee",
 				"src_ip", "dst_ip", "src_port", "dst_port",
 				"method", "response_code", "cseq_method",
-				"protocol", "node_id", "cid", "payload", "data_extra", "isup_body",
+				"protocol", "node_id", "cid", "payload", "data_extra",
 			},
 			CreateSQL: `
 				uuid VARCHAR,
@@ -203,13 +202,12 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				node_id VARCHAR,
 				cid VARCHAR,
 				payload VARCHAR,
-				data_extra JSON,
-				isup_body BLOB
+				data_extra JSON
 			`,
 			InsertSQL: `(uuid, date, timestamp, session_id, caller, callee, src_ip, dst_ip,
 				src_port, dst_port, method, response_code, cseq_method,
-				protocol, node_id, cid, payload, data_extra, isup_body)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, ?)`,
+				protocol, node_id, cid, payload, data_extra)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
 		},
 
 		// SIP Default - OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE
@@ -221,7 +219,7 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				"uuid", "timestamp", "session_id",
 				"src_ip", "dst_ip", "src_port", "dst_port",
 				"method", "response_code",
-				"protocol", "node_id", "cid", "payload", "data_extra", "isup_body",
+				"protocol", "node_id", "cid", "payload", "data_extra",
 			},
 			CreateSQL: `
 				uuid VARCHAR,
@@ -238,13 +236,12 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				node_id VARCHAR,
 				cid VARCHAR,
 				payload VARCHAR,
-				data_extra JSON,
-				isup_body BLOB
+				data_extra JSON
 			`,
 			InsertSQL: `(uuid, date, timestamp, session_id, src_ip, dst_ip,
 				src_port, dst_port, method, response_code,
-				protocol, node_id, cid, payload, data_extra, isup_body)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, ?)`,
+				protocol, node_id, cid, payload, data_extra)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
 		},
 
 		// RTCP JSON - reports with stats
@@ -459,11 +456,8 @@ func putRowSlice(row []interface{}) {
 //     DuckDB Appender API (bypasses SQL parsing entirely).
 //   - Periodically the active and standby memory tables are swapped atomically.
 //     The now-standby table (full of data) is sent to the flush goroutine which
-//     copies rows to DuckLake and truncates the standby table under that
-//     table's write lock. New writes continue into the new active table. If a
-//     queued flush runs after a later swap has made its table active again,
-//     appends to that table wait for the whole INSERT and TRUNCATE; appends to
-//     the other table are not blocked.
+//     copies rows to DuckLake and truncates the standby table. New writes use
+//     the other buffer, waiting if its previous flush has not finished.
 //   - Catalog contention is handled with exponential-backoff retry.
 type TableWriter struct {
 	db       *sql.DB
@@ -474,11 +468,10 @@ type TableWriter struct {
 	// activeIdx 0 → memTables[0] is active (receives writes), memTables[1] is standby.
 	memTables [2]string
 	activeIdx atomic.Int32
-
-	// memMu[i] guards memTables[i]: an append holds the read lock until its
-	// Appender has committed, and a flush holds the write lock across its
-	// INSERT ... SELECT and TRUNCATE, so no row can land between the two.
-	memMu [2]sync.RWMutex
+	// Reserved before enqueue, released by the flush worker after INSERT/TRUNCATE.
+	slotMu [2]sync.Mutex
+	// A committed slot only needs clearing if TRUNCATE previously failed.
+	slotCommitted [2]bool
 
 	batchMu   sync.Mutex
 	batch     [][]interface{}
@@ -492,16 +485,10 @@ type TableWriter struct {
 	flushCh   chan flushJob
 	flushWg   sync.WaitGroup
 	catalogMu *sync.Mutex // shared catalog lock from MultiTableWriter
-
-	// onFatalFlush, when set, is called after a flush fails with an error
-	// that isDuckDBFatalError matches.
-	onFatalFlush func(error)
 }
 
 // NewTableWriter creates a new table writer with a DuckLake table and
-// two in-memory buffer tables (double-buffer). It also starts a dedicated
-// flush goroutine that processes swap+flush jobs; appends wait for a flush
-// only when it holds the table they write to (see copyAndClearSlot).
+// two in-memory buffer tables (double-buffer) and a dedicated flush goroutine.
 // catalogMu is the shared lock from MultiTableWriter that serializes
 // catalog-modifying operations (flush to DuckLake, compaction).
 func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize int, catalogMu *sync.Mutex) (*TableWriter, error) {
@@ -566,17 +553,6 @@ func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize 
 		}
 	}
 
-	// Existing lakes were created before isup_body. ADD COLUMN leaves old
-	// Parquet files readable: the new column is NULL on those rows.
-	if strings.Contains(schema.CreateSQL, "isup_body") {
-		for _, table := range append([]string{tableFQN}, tw.memTables[:]...) {
-			alter := fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS isup_body BLOB", table)
-			if _, err := db.Exec(alter); err != nil {
-				return nil, fmt.Errorf("add isup_body to %s: %w", table, err)
-			}
-		}
-	}
-
 	// Start dedicated flush goroutine
 	tw.flushWg.Add(1)
 	go tw.flushWorker()
@@ -614,13 +590,21 @@ var batchSlicePool sync.Pool // elements: *[][]interface{}
 // flushBatch drains the Go-side batch into the currently active in-memory
 // DuckDB table using the Appender API. This bypasses SQL parsing entirely —
 // rows are written directly via DuckDB's columnar DataChunk interface.
-// It holds the read lock of the active slot (see lockActiveMem) until the
-// Appender has committed, so a flush of that slot waits for the append.
+// batchMu serializes appends with swaps; slotMu prevents reuse of a queued or
+// flushing slot. Holding batchMu while waiting also bounds the Go-side batch.
 func (tw *TableWriter) flushBatch() error {
 	tw.batchMu.Lock()
+	defer tw.batchMu.Unlock()
 	if len(tw.batch) == 0 {
-		tw.batchMu.Unlock()
 		return nil
+	}
+	slot := int(tw.activeIdx.Load())
+	tw.slotMu[slot].Lock()
+	defer tw.slotMu[slot].Unlock()
+	if tw.slotCommitted[slot] {
+		if err := tw.clearSlot(slot); err != nil {
+			return err
+		}
 	}
 	// Swap batch with a recycled slice to avoid allocation on the hot path.
 	// We get a recycled slice from the pool, assign it to tw.batch, and later
@@ -634,12 +618,6 @@ func (tw *TableWriter) flushBatch() error {
 			tw.batch = (*recycled)[:0]
 		}
 	}
-	tw.batchMu.Unlock()
-
-	// Lock before taking a pool connection: a flush that holds the write
-	// lock of this slot may be waiting for a connection itself.
-	slot := tw.lockActiveMem()
-	defer tw.memMu[slot].RUnlock()
 
 	start := time.Now()
 	nRows := len(rows)
@@ -720,49 +698,42 @@ func (tw *TableWriter) flushBatch() error {
 	return nil
 }
 
-// lockActiveMem read-locks the active memory table and returns its slot.
-// activeIdx is read again once the lock is held: if a swap happened in
-// between, that slot may already be flushing or flushed, so the lock is
-// released and the new active slot is used instead. Rows therefore only go
-// into the slot that the next swap hands to a flush.
-func (tw *TableWriter) lockActiveMem() int {
-	for {
-		slot := int(tw.activeIdx.Load())
-		tw.memMu[slot].RLock()
-		if int(tw.activeIdx.Load()) == slot {
-			return slot
-		}
-		tw.memMu[slot].RUnlock()
-	}
-}
-
 // Close flushes remaining records and stops the flush goroutine.
 func (tw *TableWriter) Close() error {
-	if err := tw.flushBatch(); err != nil {
-		logger.Warn(fmt.Sprintf("flushBatch on close for %s: %v", tw.tableFQN, err))
-	}
+	closeErr := tw.flushBatch()
 	close(tw.flushCh)
 	tw.flushWg.Wait()
-	return nil
+	// Retry retained slots and flush any final batch after queued jobs finish.
+	for slot := range tw.memTables {
+		tw.slotMu[slot].Lock()
+		var n int
+		err := tw.db.QueryRow("SELECT count(*) FROM " + tw.memTables[slot]).Scan(&n)
+		if err != nil || (n == 0 && !tw.slotCommitted[slot]) {
+			tw.slotMu[slot].Unlock()
+			closeErr = errors.Join(closeErr, err)
+			continue
+		}
+		closeErr = errors.Join(closeErr, tw.flushSlotDirect(slot, tw.catalogMu))
+	}
+	return closeErr
 }
 
-// SwapAndFlush drains Go-side batches into the active memory table, then
-// atomically swaps active↔standby and enqueues the now-standby slot for
-// asynchronous flush to DuckLake. Writers to the new active slot do not wait
-// for that flush. If the job runs after a later swap has made the slot active
-// again, appends to it wait on the slot's write lock for the whole INSERT and
-// TRUNCATE; appends to the other slot are not blocked.
-func (tw *TableWriter) SwapAndFlush() {
+// swapBuffer reserves the old active slot until its queued flush finishes.
+// Appenders serialize with the swap and wait before reusing a busy slot.
+func (tw *TableWriter) swapBuffer() int {
 	if err := tw.flushBatch(); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to drain batch before swap for %s: %v", tw.tableFQN, err))
 	}
-
-	// Swap: the slot that was active becomes standby (to be flushed).
+	tw.batchMu.Lock()
+	defer tw.batchMu.Unlock()
 	old := int(tw.activeIdx.Load())
-	next := 1 - old
-	tw.activeIdx.Store(int32(next))
+	tw.slotMu[old].Lock()
+	tw.activeIdx.Store(int32(1 - old))
+	return old
+}
 
-	tw.flushCh <- flushJob{slotIdx: old}
+func (tw *TableWriter) SwapAndFlush() {
+	tw.flushCh <- flushJob{slotIdx: tw.swapBuffer()}
 }
 
 // Flush is a synchronous convenience wrapper: swap buffers and wait for
@@ -833,25 +804,44 @@ func logFlushFailure(memName, tableFQN string, attempts int, err error) {
 func (tw *TableWriter) flushWorker() {
 	defer tw.flushWg.Done()
 	for job := range tw.flushCh {
-		tw.flushSlotDirect(job.slotIdx, tw.catalogMu)
+		_ = tw.flushSlotDirect(job.slotIdx, tw.catalogMu)
 	}
 }
 
-// flushSlotDirect copies rows from the given memory table slot to DuckLake,
-// then truncates the memory table. It is used by the per-table flush worker
-// and by the central flush queue. When catalogMu is non-nil, it is locked only
-// around each INSERT attempt (not during backoff sleep), allowing compaction
-// CatalogLock to run between retries on the same shared *sql.DB.
-func (tw *TableWriter) flushSlotDirect(slot int, catalogMu *sync.Mutex) {
+// clearSlot is called with slotMu held. A failed clear retains the committed
+// marker, so subsequent retries do not insert the same rows again.
+func (tw *TableWriter) clearSlot(slot int) error {
+	if _, err := tw.db.Exec(tw.flushTruncateSQL[slot]); err != nil {
+		return fmt.Errorf("clear memory table %s: %w", tw.memTables[slot], err)
+	}
+	tw.slotCommitted[slot] = false
+	return nil
+}
+
+// flushSlotDirect copies rows from the given memory table slot to DuckLake.
+// The caller reserves slotMu before enqueueing; this function releases it.
+// When catalogMu is non-nil, it is locked only around each db.Exec attempt (not
+// during backoff sleep), allowing compaction between retries.
+func (tw *TableWriter) flushSlotDirect(slot int, catalogMu *sync.Mutex) error {
+	defer tw.slotMu[slot].Unlock()
+	if tw.slotCommitted[slot] {
+		return tw.clearSlot(slot)
+	}
 	start := time.Now()
 	memName := tw.memTables[slot]
 
-	var rowsFlushed int64
+	var result sql.Result
 	var err error
 	backoff := flushBaseBackoff
 
 	for attempt := 0; attempt <= flushMaxRetries; attempt++ {
-		rowsFlushed, err = tw.copyAndClearSlot(slot, catalogMu)
+		if catalogMu != nil {
+			catalogMu.Lock()
+		}
+		result, err = tw.db.Exec(tw.flushInsertSQL[slot])
+		if catalogMu != nil {
+			catalogMu.Unlock()
+		}
 		if err == nil {
 			break
 		}
@@ -859,10 +849,7 @@ func (tw *TableWriter) flushSlotDirect(slot int, catalogMu *sync.Mutex) {
 		if !isFlushRetriableError(errStr) || attempt == flushMaxRetries {
 			metrics.RecordPipelineStageError("ducklake", "flush", "insert_error")
 			logFlushFailure(memName, tw.tableFQN, attempt+1, err)
-			if tw.onFatalFlush != nil && isDuckDBFatalError(errStr) {
-				tw.onFatalFlush(err)
-			}
-			return
+			return err
 		}
 		logger.Warn(fmt.Sprintf("flush %s: retriable error (attempt %d/%d), retrying in %v: %v",
 			memName, attempt+1, flushMaxRetries+1, backoff, err))
@@ -870,47 +857,25 @@ func (tw *TableWriter) flushSlotDirect(slot int, catalogMu *sync.Mutex) {
 		backoff *= 2
 	}
 
+	rowsFlushed, _ := result.RowsAffected()
 	elapsed := time.Since(start)
 	elapsedSec := elapsed.Seconds()
 
 	metrics.RecordDucklakeTableFlushDuration(tw.tableFQN, elapsedSec)
 	if rowsFlushed == 0 {
-		return
+		return nil
 	}
 	metrics.RecordDucklakeTableFlushedRows(tw.tableFQN, rowsFlushed)
 
+	tw.slotCommitted[slot] = true
+	if err := tw.clearSlot(slot); err != nil {
+		logger.Warn(err.Error())
+		return err
+	}
+
 	logger.Info("💾 Flushed rows", "count", rowsFlushed, "from", memName, "to", tw.tableFQN,
 		"elapsed", elapsed.Round(time.Millisecond), "rec_per_sec", fmt.Sprintf("%.0f", float64(rowsFlushed)/elapsedSec))
-}
-
-// copyAndClearSlot runs one INSERT ... SELECT of the slot into the lake table
-// and, if it copied any rows, the TRUNCATE of the slot. Both run under the
-// slot's write lock, so a concurrent append either commits before the INSERT
-// and is copied, or waits until the TRUNCATE is done. Appends to the other
-// slot are not blocked. catalogMu, when non-nil, is taken before the slot
-// lock and released after the INSERT: a flush that waits for compaction
-// holds no slot lock, so appends go on even if the slot is active again.
-func (tw *TableWriter) copyAndClearSlot(slot int, catalogMu *sync.Mutex) (int64, error) {
-	if catalogMu != nil {
-		catalogMu.Lock()
-	}
-	tw.memMu[slot].Lock()
-	defer tw.memMu[slot].Unlock()
-
-	result, err := tw.db.Exec(tw.flushInsertSQL[slot])
-	if catalogMu != nil {
-		catalogMu.Unlock()
-	}
-	if err != nil {
-		return 0, err
-	}
-	rows, _ := result.RowsAffected()
-	if rows > 0 {
-		if _, err := tw.db.Exec(tw.flushTruncateSQL[slot]); err != nil {
-			logger.Warn(fmt.Sprintf("Failed to clear memory table %s: %v", tw.memTables[slot], err))
-		}
-	}
-	return rows, nil
+	return nil
 }
 
 // GetStats returns statistics for this table
