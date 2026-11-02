@@ -59,8 +59,9 @@ func openPostgresSettingsForTest(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Rebuild a libpq DSN for the local disposable test database.
-	testDSN := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+	// Exclude public from search_path to verify schema DDL qualifies every
+	// table, sequence and sequence default rather than relying on session state.
+	testDSN := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable options='-c search_path=pg_catalog'",
 		libpqTestValue(cfg.Host), cfg.Port, libpqTestValue(cfg.User), libpqTestValue(cfg.Password), name)
 	db, err := OpenSettingsDB(testDSN)
 	if err != nil {

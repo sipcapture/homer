@@ -59,10 +59,17 @@ func EnsureSettingsSchema(db *sql.DB) error {
 	if postgres {
 		// The DuckDB PostgreSQL extension cannot create sequences or resolve
 		// their defaults. Schema statements contain no bound parameters; send
-		// the complete DDL to PostgreSQL through the extension connection.
+		// each DDL statement to PostgreSQL through the extension connection.
+		// Qualify objects rather than relying on the connection's search_path.
+		qualify := strings.NewReplacer(
+			"CREATE SEQUENCE IF NOT EXISTS ", "CREATE SEQUENCE IF NOT EXISTS public.",
+			"CREATE TABLE IF NOT EXISTS ", "CREATE TABLE IF NOT EXISTS public.",
+			"ALTER TABLE ", "ALTER TABLE public.",
+			"nextval('", "nextval('public.",
+		)
 		exec = func(query string, _ ...any) (sql.Result, error) {
 			return db.Exec("CALL postgres_execute('"+settingsPostgresCatalog+"', ?)",
-				"SET LOCAL search_path = public; "+query)
+				qualify.Replace(query))
 		}
 	}
 	statements := []string{
