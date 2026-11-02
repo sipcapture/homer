@@ -1,14 +1,36 @@
-# PostgreSQL DuckLake catalogs
+# Configure PostgreSQL DuckLake catalogs
 
-DuckDB continues to execute lake queries and write Parquet. PostgreSQL replaces
-SQLite only for the DuckLake metadata catalog. Application settings can also use
-PostgreSQL through `coordinator.settings_db_path`; that is a separate connection
-and should normally use its own PostgreSQL database.
+This guide explains how to use PostgreSQL for DuckLake metadata catalogs.
+DuckDB continues to execute lake queries and write Parquet files.
 
-## One catalog
+For application settings, follow
+[Configure PostgreSQL-backed settings](POSTGRES_SETTINGS.md). Settings use a
+separate connection and should normally have their own PostgreSQL database.
 
-Provision a PostgreSQL database owned by the Homer role, install extensions using
-`homer-core --install-extensions`, and configure the existing catalog fields:
+## Before you begin
+
+You need:
+
+- A PostgreSQL database owned by the Homer role, reachable from writers and nodes.
+- A data location that writers and nodes can both access.
+- A writable local spill directory for each Homer process.
+
+Existing SQLite catalogs are not migrated automatically. Use this procedure for
+a new PostgreSQL-backed catalog; converting an existing catalog requires a
+separate migration.
+
+## 1. Install the extensions
+
+Run this command using the DuckDB engine and OS user that run Homer:
+
+```sh
+homer-core --install-extensions
+```
+
+## 2. Configure a single catalog
+
+Set the writer and node catalog fields in your Homer configuration. Replace the
+connection details and filesystem paths for your deployment:
 
 ```json
 {
@@ -43,10 +65,13 @@ Data paths can still be local, S3, or Azure using the existing credential settin
 Writers and nodes must see the same data files. Configure an explicit local spill
 directory: a connection string has no catalog directory from which to derive one.
 
-No catalog data is migrated automatically. This enables new PostgreSQL-backed
-catalogs; converting existing SQLite catalogs requires a separate migration.
+## 3. Start Homer and verify access
 
-## Shards
+Start or restart the writer and node with the updated configuration. Ingest data
+through your normal input, then search for it through Homer to check that the
+writer and node can access the catalog and its data files.
+
+## Configure multiple shards
 
 Each writer shard keeps an independent catalog, matching the SQLite design:
 
@@ -93,7 +118,7 @@ attaches the PostgreSQL catalog selected by its configuration, including inline
 rows, in read-only mode. To inspect a shard with the CLI, select that shard's DSN;
 the CLI does not automatically union PostgreSQL shard catalogs.
 
-## Maintenance and tiering
+## Maintain PostgreSQL catalogs
 
 DuckLake SQL compaction and separate maintenance DuckDB attachments support
 PostgreSQL. Existing automatic compaction still targets the primary writer shard;
@@ -105,17 +130,32 @@ DuckLake SQL operations for PostgreSQL. Manage PostgreSQL catalog backups and
 recovery with PostgreSQL tools. SQLite-only catalog backup/restore/rebuild CLI
 commands reject PostgreSQL paths rather than trying to open them as files.
 
+## Configure tiered volumes
+
 For a single writer catalog with tiered volumes, the priority-zero hot volume uses
 the base database and other volumes use `<base_database>_<volume_name>`. Provision
 those databases as well. Sharding and tiering cannot currently be combined for
 PostgreSQL: the existing tier manager manages one hot catalog, and configuration
 validation rejects the combination instead of attaching an empty base catalog.
 
+## Local secrets and connection details
+
 Catalog DSNs are redacted from config output and attachment errors. Node auth
 secrets use the normal local `/data` fallback rather than treating the DSN as a
 filesystem directory.
 
-## Tests
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| Catalog connection fails | Confirm the database exists, the Homer role owns it, and the connection details work from the writer and node. |
+| PostgreSQL catalog configuration is rejected | Set `catalog_path` to a connection string when using `catalog_type=postgres`. |
+| Node cannot read ingested data | Check that writer and node use the same catalog and can access the same data files. For shards, configure one node volume per shard. |
+| Spill directory is missing or unwritable | Set an explicit local `tuning.temp_directory` for the process. |
+| Sharding and tiering configuration is rejected | Use either PostgreSQL sharding or tiered volumes; combining them is not supported. |
+| Catalog backup, restore, or rebuild CLI command rejects the path | Those commands support SQLite catalog files. Use PostgreSQL backup and recovery tools for PostgreSQL catalogs. |
+
+## Run regression tests
 
 With a disposable PostgreSQL server and an administrative test DSN (CREATE
 DATABASE required for the tests only), run from `src`:
@@ -130,4 +170,7 @@ shutdown, independent shard databases and spill paths, maintenance attachment an
 merge calls, tiered catalog isolation, node reads, inline-row CLI reads, DSN
 handling, and the SQLite-specific maintenance guards.
 
-Reference: [DuckLake catalog connection options](https://ducklake.select/docs/stable/duckdb/usage/connecting).
+## Further reading
+
+- [Configure PostgreSQL-backed settings](POSTGRES_SETTINGS.md)
+- [DuckLake catalog connection options](https://ducklake.select/docs/stable/duckdb/usage/connecting)
