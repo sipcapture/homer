@@ -49,6 +49,7 @@ type Coordinator struct {
 	flightService *services.FlightService
 	streamService *services.StreamService
 	settingsDB    *sql.DB
+	runtimeState  *services.RuntimeState
 	correlation   *correlation.CorrelationEngine
 	syncCancel    context.CancelFunc
 	lpMappingSync *services.LPMappingSyncService
@@ -77,6 +78,9 @@ func (c *Coordinator) SetLocalBroker(b *hepstream.Broker) {
 
 // New creates a new Coordinator module
 func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
+	if cfg.Stateless && (!config.IsPostgresSettingsPath(cfg.SettingsDBPath) || strings.TrimSpace(cfg.JWT.Secret) == "" || config.IsShippedPlaceholderSecret(cfg.JWT.Secret)) {
+		return nil, fmt.Errorf("stateless coordinator requires PostgreSQL settings and an explicitly configured JWT secret")
+	}
 	// Create FlightSQL service
 	queryTimeout := time.Duration(cfg.QueryTimeoutSec) * time.Second
 	flightService := services.NewFlightService(cfg.Nodes, queryTimeout, cfg.SmartRouting.Enable)
@@ -106,6 +110,14 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 	settingsDB, err := services.OpenSettingsDB(cfg.SettingsDBPath, settingsDBType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open settings db: %w", err)
+	}
+	if cfg.Stateless {
+		release, err := services.LockSettingsBootstrap(settingsDB)
+		if err != nil {
+			_ = settingsDB.Close()
+			return nil, err
+		}
+		defer release()
 	}
 	if err := services.EnsureSettingsSchema(settingsDB); err != nil {
 		_ = settingsDB.Close()
@@ -157,6 +169,13 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 		return nil, fmt.Errorf("failed to seed default protocol mappings: %w", err)
 	}
 	c.settingsDB = settingsDB
+	if cfg.Stateless {
+		c.runtimeState, err = services.NewRuntimeState(settingsDB)
+		if err != nil {
+			_ = settingsDB.Close()
+			return nil, err
+		}
+	}
 
 	// Seed disabled default correlation templates on first run so the
 	// Settings → Scripts UI is never empty out of the box. The seeds are
@@ -260,6 +279,9 @@ func (c *Coordinator) setupRoutes() {
 		c.config.Auth.DisablePasswordLogin,
 	)
 	authHandler.SetPasswordLoginPositions(c.config.Auth.InternalPosition, c.config.LDAP.Position)
+	if c.runtimeState != nil {
+		authHandler.SetRuntimeState(c.runtimeState)
+	}
 	usersHandler := handlers.NewUsersHandler(userService)
 	userSettingsHandler := handlers.NewUserSettingsHandler(userSettingsService, userMappingService)
 	widgetControl := config.NormalizeWidgetControl(c.config.Widgets.Control)
@@ -272,6 +294,9 @@ func (c *Coordinator) setupRoutes() {
 	authTokensHandler := handlers.NewAuthTokensHandler(authTokenSvc)
 	agentSubsHandler := handlers.NewAgentSubscriptionsHandler(services.NewAgentSubscriptionService(c.settingsDB))
 	exportsHandler := handlers.NewExportsHandler(handlers.NewExportStore())
+	if c.runtimeState != nil {
+		exportsHandler.SetRuntimeState(c.runtimeState)
+	}
 	importsHandler := handlers.NewImportsHandler(c.flightService)
 	nodesHandler := handlers.NewNodesHandlerWithFlight(mapNodeEndpoints(c.config.Nodes), c.flightService, c.config.LakeName)
 	advancedHandler := handlers.NewAdvancedHandler(services.NewGlobalSettingsService(c.settingsDB))
@@ -289,12 +314,10 @@ func (c *Coordinator) setupRoutes() {
 	logsHandler := handlers.NewLogsHandler()
 	integrationsHandler := handlers.NewIntegrationsHandler()
 	streamHandler := handlers.NewStreamHandler()
-	// Netris (PvP SIPetris) lobby + relay. The hub keeps no
-	// persistent state across coordinator restarts — players just
-	// reconnect and re-pair. Always wired (no separate config knob)
-	// because it costs nothing when nobody is playing.
+	// Multiplayer hubs own rooms in memory. Stateless replicas leave them
+	// disabled until matchmaking and room ownership can be shared.
 	gamesHandler := handlers.NewGamesHandler()
-	if config.WidgetCategoryEnabled(widgetControl, "games") {
+	if !c.config.Stateless && config.WidgetCategoryEnabled(widgetControl, "games") {
 		gamesHandler.SetNetrisHub(netris.NewHub(netris.Config{}))
 		gamesHandler.SetNetChessHub(netchess.NewHub(netchess.Config{}))
 	}

@@ -72,6 +72,7 @@ nav:
   - Getting started:
       - Config wizard: WIZARD.md
       - Environment variables: ENVIRONMENT_VARIABLES.md
+      - Stateless deployment & scaling: STATELESS_DEPLOYMENT.md
       - Search CLI: SEARCH.md
       - Catalog backup: CATALOG.md
       - Dashboard URL search: SEARCH_URL.md

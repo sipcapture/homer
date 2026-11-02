@@ -159,7 +159,9 @@ func (h *AuthHandler) V4DeleteSession(c echo.Context) error {
 		if claims.ExpiresAt != nil {
 			exp = claims.ExpiresAt.Time
 		}
-		h.sessionStore.Revoke(sessionID, exp)
+		if err := h.revokeSession(c, sessionID, exp); err != nil {
+			return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to revoke session")
+		}
 	}
 
 	h.clearSessionCookie(c)
@@ -178,7 +180,9 @@ func (h *AuthHandler) V4LogoutCurrentSession(c echo.Context) error {
 		if claims.ExpiresAt != nil {
 			exp = claims.ExpiresAt.Time
 		}
-		h.sessionStore.Revoke(claims.ID, exp)
+		if err := h.revokeSession(c, claims.ID, exp); err != nil {
+			return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to revoke session")
+		}
 	}
 	h.clearSessionCookie(c)
 	return c.NoContent(http.StatusNoContent)
@@ -249,7 +253,7 @@ func (h *AuthHandler) V4OAuth2TokenExchange(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Token is required")
 	}
 
-	username, isAdmin, ok := h.oneTimeStore.Consume(req.Token)
+	username, isAdmin, ok := h.consumeOneTimeToken(c, req.Token)
 	if !ok {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Invalid or expired token")
 	}
@@ -352,7 +356,9 @@ func (h *AuthHandler) V4PatchMe(c echo.Context) error {
 			if claims.ExpiresAt != nil {
 				exp = claims.ExpiresAt.Time
 			}
-			h.sessionStore.Revoke(claims.ID, exp)
+			if err := h.revokeSession(c, claims.ID, exp); err != nil {
+				return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to revoke session")
+			}
 		}
 		newToken, _, err := h.generateToken(claims.Username, claims.Admin, false)
 		if err != nil {
