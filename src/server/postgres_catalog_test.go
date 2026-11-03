@@ -48,6 +48,7 @@ func TestPostgresLegacyCatalogLogRedaction(t *testing.T) {
 	homerconfig.MainConfig = &homerconfig.HomerServerConfig{Setting: &homerconfig.HomerServerSettings{}}
 	settings := &homerconfig.MainConfig.Setting.DUCKLAKE_SETTINGS
 	settings.Enable = true
+	settings.CatalogType = "postgres"
 	settings.CatalogPath = u.String()
 	settings.DataPath = t.TempDir()
 	settings.LakeName = "homer_lake"

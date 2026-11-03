@@ -37,7 +37,7 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 	t.Cleanup(func() { _, _ = admin.Exec(ctx, "DROP DATABASE "+name+" WITH (FORCE)"); _ = admin.Close(ctx) })
 	pg, _ := pgx.ParseConfig(dsn)
 	u := url.URL{Scheme: "postgresql", Host: net.JoinHostPort(pg.Host, strconv.Itoa(int(pg.Port))), User: url.UserPassword(pg.User, pg.Password), Path: "/" + name, RawQuery: "sslmode=disable"}
-	cfg := ducklake.Config{CatalogPath: u.String(), LakeName: "lake", DataPath: filepath.Join(t.TempDir(), "data")}
+	cfg := ducklake.Config{CatalogType: ducklake.CatalogPostgres, CatalogPath: u.String(), LakeName: "lake", DataPath: filepath.Join(t.TempDir(), "data")}
 	writer, err := sql.Open("duckdb", "")
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 			t.Fatalf("load checksum-verified %s extension (run scripts/download_duckdb_extensions.sh): %v", ext, err)
 		}
 	}
-	stmt, err := ducklake.CatalogAttachSQL("", cfg.CatalogPath, cfg.LakeName, cfg.DataPath, false)
+	stmt, err := ducklake.CatalogAttachSQL(ducklake.CatalogPostgres, cfg.CatalogPath, cfg.LakeName, cfg.DataPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}

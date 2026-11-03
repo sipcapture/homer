@@ -1448,6 +1448,9 @@ func validateDuckLakeCatalogTypes(cfg *Config) error {
 			return fmt.Errorf("%s: expected sqlite or postgres (got %q)", field, *typ)
 		}
 		if IsPostgresSettingsPath(path) {
+			if value != "postgres" && value != "postgresql" {
+				return fmt.Errorf("%s: PostgreSQL catalog_path requires catalog_type=postgres", field)
+			}
 			*typ = "postgres"
 			return nil
 		}

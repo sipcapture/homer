@@ -12,7 +12,7 @@ import (
 func TestLoadPostgresDuckLakeCatalog(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "homer.json")
-	if err := os.WriteFile(file, []byte(`{"coordinator":{"local_secrets_dir":"`+dir+`"},"storage":{"ducklake":{"catalog_path":"postgres://homer:private@localhost/lake"}},"node":{"local_secrets_dir":"`+dir+`","ducklake":{"catalog_type":"postgres","catalog_path":"host=localhost dbname=lake"}}}`), 0600); err != nil {
+	if err := os.WriteFile(file, []byte(`{"coordinator":{"local_secrets_dir":"`+dir+`"},"storage":{"ducklake":{"catalog_type":"postgres","catalog_path":"postgres://homer:private@localhost/lake"}},"node":{"local_secrets_dir":"`+dir+`","ducklake":{"catalog_type":"postgres","catalog_path":"host=localhost dbname=lake"}}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := Load(file)
@@ -44,9 +44,28 @@ func TestLoadPostgresDuckLakeCatalog(t *testing.T) {
 func TestPostgresShardsRejectSingleCatalogTiering(t *testing.T) {
 	cfg := &Config{}
 	cfg.Storage.DuckLake.CatalogPath = "postgres://homer:private@localhost/lake"
+	cfg.Storage.DuckLake.CatalogType = "postgres"
 	cfg.Storage.DuckLake.ShardCount = 2
 	cfg.Storage.DuckLake.StoragePolicy.Enable = true
 	if err := validateDuckLakeCatalogTypes(cfg); err == nil || !strings.Contains(err.Error(), "storage_policy") {
 		t.Fatalf("unsafe sharded tiering accepted: %v", err)
+	}
+}
+
+func TestPostgresCatalogTypeMismatch(t *testing.T) {
+	for _, typ := range []string{"", "sqlite"} {
+		cfg := &Config{}
+		cfg.Storage.DuckLake.CatalogType = typ
+		cfg.Storage.DuckLake.CatalogPath = "POSTGRES://user:private@localhost/lake"
+		err := validateDuckLakeCatalogTypes(cfg)
+		if err == nil || !strings.Contains(err.Error(), "catalog_type=postgres") {
+			t.Fatalf("type %q: expected mismatch error, got %v", typ, err)
+		}
+		if cfg.Storage.DuckLake.CatalogType != typ {
+			t.Fatal("configured backend was overridden")
+		}
+		if strings.Contains(err.Error(), "private") {
+			t.Fatal("error exposed credentials")
+		}
 	}
 }

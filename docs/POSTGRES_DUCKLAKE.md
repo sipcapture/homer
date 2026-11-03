@@ -56,9 +56,9 @@ connection details and filesystem paths for your deployment:
 ```
 
 Libpq keyword DSNs such as `host=localhost dbname=homer_catalog user=homer` also
-work. A connection string in `catalog_path` selects PostgreSQL even when
-`catalog_type` retains its SQLite default. Setting `catalog_type=postgres` with
-a file path is rejected. Empty catalog type and a normal file path preserve the
+work. Set `catalog_type=postgres` explicitly when using a PostgreSQL connection
+string in `catalog_path`. A SQLite catalog type with a PostgreSQL connection
+string, or a PostgreSQL catalog type with a file path, is rejected. Empty catalog type and a normal file path preserve the
 existing SQLite backend. `postgresql` is accepted as a catalog type alias.
 
 Data paths can still be local, S3, or Azure using the existing credential settings.

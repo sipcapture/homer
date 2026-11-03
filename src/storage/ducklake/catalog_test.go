@@ -13,10 +13,10 @@ import (
 
 func TestAttachSQLBuildersReturnErrors(t *testing.T) {
 	const invalidDSN = "postgres://user:private@host:%zz/catalog"
-	if stmt, err := buildLakeAttachSQL(Config{CatalogPath: invalidDSN}); err == nil || stmt != "" {
+	if stmt, err := buildLakeAttachSQL(Config{CatalogType: CatalogPostgres, CatalogPath: invalidDSN}); err == nil || stmt != "" {
 		t.Fatalf("writer attach: statement=%q error=%v", stmt, err)
 	}
-	if stmt, err := volumeAttachSQL(&Volume{LakeName: "lake"}, invalidDSN); err == nil || stmt != "" {
+	if stmt, err := volumeAttachSQL(CatalogPostgres, &Volume{LakeName: "lake"}, invalidDSN); err == nil || stmt != "" {
 		t.Fatalf("volume attach: statement=%q error=%v", stmt, err)
 	}
 	if _, err := buildLakeAttachSQL(Config{CatalogType: "unsupported"}); err == nil {
@@ -34,7 +34,7 @@ func TestCatalogErrorKeepsDiagnosticsWithoutCredentials(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		stmt, err := CatalogAttachSQL("", dsn, "lake", "/data/parquet", false)
+		stmt, err := CatalogAttachSQL(CatalogPostgres, dsn, "lake", "/data/parquet", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,7 +69,7 @@ func TestPostgresCatalogConfiguration(t *testing.T) {
 		"postgresql://user@localhost/ignored?dbname=base&sslmode=require",
 		"host=localhost dbname=base user=homer password='a b' sslmode=require",
 	} {
-		ct, err := ResolveCatalogType(CatalogSQLite, dsn)
+		ct, err := ResolveCatalogType(CatalogPostgres, dsn)
 		if err != nil || ct != CatalogPostgres {
 			t.Fatalf("resolve: %s %v", ct, err)
 		}
@@ -96,5 +96,16 @@ func TestPostgresCatalogConfiguration(t *testing.T) {
 	}
 	if _, err := ResolveCatalogType(CatalogPostgres, "catalog.sqlite"); err == nil {
 		t.Fatal("accepted a file as PostgreSQL DSN")
+	}
+}
+
+func TestPostgresCatalogTypeMismatch(t *testing.T) {
+	for _, typ := range []CatalogType{"", CatalogSQLite} {
+		if _, err := ResolveCatalogType(typ, "postgres://user:private@localhost/lake"); err == nil {
+			t.Fatalf("accepted PostgreSQL DSN with type %q", typ)
+		}
+	}
+	if typ, err := ResolveCatalogType("", "catalog.sqlite"); err != nil || typ != CatalogSQLite {
+		t.Fatalf("SQLite default: %q, %v", typ, err)
 	}
 }

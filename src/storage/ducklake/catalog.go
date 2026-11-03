@@ -27,14 +27,17 @@ func CatalogDisplayPath(path string) string {
 	return path
 }
 
-// ResolveCatalogType preserves SQLite defaults and recognizes PostgreSQL DSNs
-// in catalog_path, including configurations retaining the default catalog_type.
+// ResolveCatalogType validates catalog_path against the configured backend.
+// An empty catalog type defaults to SQLite.
 func ResolveCatalogType(ct CatalogType, path string) (CatalogType, error) {
 	typ := strings.ToLower(strings.TrimSpace(string(ct)))
 	if typ != "" && typ != "sqlite" && typ != "postgres" && typ != "postgresql" {
 		return "", fmt.Errorf("unsupported DuckLake catalog_type %q", ct)
 	}
 	if IsPostgresCatalogPath(path) {
+		if typ != "postgres" && typ != "postgresql" {
+			return "", fmt.Errorf("PostgreSQL catalog_path requires catalog_type=postgres")
+		}
 		if _, err := pgx.ParseConfig(config.NormalizePostgresDSN(path)); err != nil {
 			return "", fmt.Errorf("invalid PostgreSQL DuckLake catalog_path")
 		}

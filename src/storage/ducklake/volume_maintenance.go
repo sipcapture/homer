@@ -105,7 +105,7 @@ func (tsm *TieredStorageManager) fileCleanupDB(vol *Volume) (*sql.DB, error) {
 	if vol.CatalogPath == "" {
 		return nil, fmt.Errorf("volume %s has no resolved catalog path", vol.Name)
 	}
-	attachSQL, err := volumeAttachSQL(vol, vol.CatalogPath)
+	attachSQL, err := volumeAttachSQL(tsm.config.CatalogType, vol, vol.CatalogPath)
 	if err != nil {
 		return nil, err
 	}

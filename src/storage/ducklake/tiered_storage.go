@@ -441,7 +441,7 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 		catalogPath = strings.TrimSuffix(catalogPath, ".sqlite") + "_" + vol.Name + ".sqlite"
 	}
 
-	attachSQL, err := volumeAttachSQL(vol, catalogPath)
+	attachSQL, err := volumeAttachSQL(tsm.config.CatalogType, vol, catalogPath)
 	if err != nil {
 		return err
 	}
@@ -463,8 +463,8 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 }
 
 // volumeAttachSQL supports both SQLite paths and PostgreSQL DSNs.
-func volumeAttachSQL(vol *Volume, catalogPath string) (string, error) {
-	return CatalogAttachSQL("", catalogPath, vol.LakeName, vol.Path, vol.OverrideDataPath)
+func volumeAttachSQL(ct CatalogType, vol *Volume, catalogPath string) (string, error) {
+	return CatalogAttachSQL(ct, catalogPath, vol.LakeName, vol.Path, vol.OverrideDataPath)
 }
 
 // GetDB returns the shared database connection

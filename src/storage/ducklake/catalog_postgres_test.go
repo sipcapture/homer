@@ -81,7 +81,7 @@ func TestPostgresMissingCatalogError(t *testing.T) {
 	if err := loadLakeExtensions(db, CatalogPostgres); err != nil {
 		t.Fatal(err)
 	}
-	stmt, err := CatalogAttachSQL("", missing, "lake", dir, false)
+	stmt, err := CatalogAttachSQL(CatalogPostgres, missing, "lake", dir, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestPostgresMissingCatalogError(t *testing.T) {
 
 func TestPostgresDuckLakeShards(t *testing.T) {
 	dsn, dir := postgresLakeFixture(t)
-	cfg := Config{CatalogPath: dsn, DataPath: filepath.Join(dir, "data"), LakeName: "lake", ShardCount: 2,
+	cfg := Config{CatalogType: CatalogPostgres, CatalogPath: dsn, DataPath: filepath.Join(dir, "data"), LakeName: "lake", ShardCount: 2,
 		BatchSize: 100, FlushInterval: time.Hour, TuningThreads: 1, TuningMemoryLimit: "256MB", TuningTempDirectory: filepath.Join(dir, "spill")}
 	mgr, err := NewManager(cfg)
 	if err != nil {
@@ -159,7 +159,7 @@ func TestPostgresDuckLakeShards(t *testing.T) {
 
 func TestPostgresDuckLakeTieredVolumes(t *testing.T) {
 	dsn, dir := postgresLakeFixture(t)
-	tsm, err := NewTieredStorageManager(TieredStorageConfig{Enable: true, CatalogPath: strings.Replace(dsn, "postgresql://", "POSTGRES://", 1),
+	tsm, err := NewTieredStorageManager(TieredStorageConfig{Enable: true, CatalogType: CatalogPostgres, CatalogPath: strings.Replace(dsn, "postgresql://", "POSTGRES://", 1),
 		TuningThreads: 1, TuningMemoryLimit: "256MB", TuningTempDirectory: filepath.Join(dir, "spill"),
 		Volumes: []Volume{{Name: "hot", Type: VolumeTypeLocal, Priority: 0, Path: filepath.Join(dir, "hot"), LakeName: "hot"},
 			{Name: "cold", Type: VolumeTypeLocal, Priority: 1, Path: filepath.Join(dir, "cold"), LakeName: "cold"}}})
@@ -243,7 +243,7 @@ func TestPostgresTierStartupClosesOnAttachFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tsm, err := NewTieredStorageManager(TieredStorageConfig{Enable: true, CatalogPath: dsn, TuningThreads: 1, TuningMemoryLimit: "128MB", TuningTempDirectory: dir,
+	tsm, err := NewTieredStorageManager(TieredStorageConfig{Enable: true, CatalogType: CatalogPostgres, CatalogPath: dsn, TuningThreads: 1, TuningMemoryLimit: "128MB", TuningTempDirectory: dir,
 		Volumes: []Volume{{Name: "hot", Type: VolumeTypeLocal, Path: dir, LakeName: "hot"}}})
 	if err != nil {
 		t.Fatal(err)

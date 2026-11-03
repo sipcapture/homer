@@ -126,6 +126,11 @@ func duckLakeConfigFromModular(cfg *config.Config) ducklake.Config {
 // ---- DuckDB read-only access -----------------------------------------------
 
 func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
+	ct, err := ducklake.ResolveCatalogType(cfg.CatalogType, cfg.CatalogPath)
+	if err != nil {
+		return nil, err
+	}
+	cfg.CatalogType = ct
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open DuckDB: %w", err)
@@ -160,7 +165,7 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 	}
 
 	dataPath := cfg.DataPath
-	if ducklake.IsPostgresCatalogPath(cfg.CatalogPath) {
+	if cfg.CatalogType == ducklake.CatalogPostgres {
 		if _, err := db.Exec("LOAD ducklake; LOAD postgres;"); err != nil {
 			_ = db.Close()
 			return nil, err

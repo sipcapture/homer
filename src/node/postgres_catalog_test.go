@@ -47,7 +47,7 @@ func TestNodeReadsPostgresDuckLakeCatalog(t *testing.T) {
 		}
 	}
 	data := filepath.Join(t.TempDir(), "data")
-	vol := config.VolumeConfig{Name: "default", Type: "local", CatalogPath: u.String(), Path: data}
+	vol := config.VolumeConfig{Name: "default", Type: "local", CatalogType: "postgres", CatalogPath: u.String(), Path: data}
 	info, err := attachVolume(db, "lake", vol)
 	if err != nil {
 		t.Fatal(err)
