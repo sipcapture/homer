@@ -195,6 +195,7 @@ func baseConfig() config.Config {
 				Enable: true, Host: "0.0.0.0", Port: 8080,
 				ReadTimeout: 30, WriteTimeout: 30,
 			},
+			SettingsDBType: "sqlite",
 			SettingsDBPath: "/var/lib/homer/homer_settings.duckdb",
 			JWT: config.JWTConfig{
 				Secret:      randomHex(32),
@@ -266,6 +267,7 @@ const (
 	wfJWTSecret
 	wfAdminUser
 	wfAdminPass
+	wfSettingsDBType
 	wfSettingsDB
 
 	// System step
@@ -295,9 +297,9 @@ type wizardModel struct {
 var stepFields = [wizNumSteps][]int{
 	wizStepProfile:     {wfProfile},
 	wizStepIngest:      {wfIngestEnable, wfUDPPort, wfTCPEnable, wfHTTPPort, wfWorkerCount, wfQueueSize},
-	wizStepStorage:     {wfStorageEnable, wfCatalogPath, wfDataPath, wfRetentionDays, wfRetentionUnit, wfBatchSize},
+	wizStepStorage:     {wfStorageEnable, wfCatalogType, wfCatalogPath, wfDataPath, wfRetentionDays, wfRetentionUnit, wfBatchSize},
 	wizStepNode:        {wfNodeEnable, wfFlightPort, wfAuthToken},
-	wizStepCoordinator: {wfCoordEnable, wfCoordPort, wfNodeHost, wfNodePort, wfJWTSecret, wfAdminUser, wfAdminPass, wfSettingsDB},
+	wizStepCoordinator: {wfCoordEnable, wfCoordPort, wfNodeHost, wfNodePort, wfJWTSecret, wfAdminUser, wfAdminPass, wfSettingsDBType, wfSettingsDB},
 	wizStepSystem:      {wfLogLevel, wfPrometheusEnable, wfPrometheusPort},
 	wizStepReview:      {wfOutputPath},
 }
@@ -362,10 +364,12 @@ func newWizardModel(outputPath string) wizardModel {
 	inputs[wfStorageEnable].Placeholder = "yes/no"
 	inputs[wfStorageEnable].SetValue("yes")
 
-	// DuckLake catalog — sqlite; wfCatalogType slot kept for stable field indices.
+	inputs[wfCatalogType].Prompt = "Catalog Type:    "
+	inputs[wfCatalogType].Placeholder = "sqlite or postgres"
+	inputs[wfCatalogType].SetValue("sqlite")
 
 	inputs[wfCatalogPath].Prompt = "Catalog Path:    "
-	inputs[wfCatalogPath].Placeholder = "/data/homer/homer_catalog.sqlite"
+	inputs[wfCatalogPath].Placeholder = "local file path or PostgreSQL DSN"
 	inputs[wfCatalogPath].SetValue("/data/homer/homer_catalog.sqlite")
 
 	inputs[wfDataPath].Prompt = "Data Path:       "
@@ -427,8 +431,12 @@ func newWizardModel(outputPath string) wizardModel {
 	inputs[wfAdminPass].SetValue("")
 	inputs[wfAdminPass].EchoMode = textinput.EchoPassword
 
+	inputs[wfSettingsDBType].Prompt = "Settings Type:   "
+	inputs[wfSettingsDBType].Placeholder = "sqlite or postgres"
+	inputs[wfSettingsDBType].SetValue("sqlite")
+
 	inputs[wfSettingsDB].Prompt = "Settings DB:     "
-	inputs[wfSettingsDB].Placeholder = "/var/lib/homer/homer_settings.duckdb"
+	inputs[wfSettingsDB].Placeholder = "local file path or PostgreSQL DSN"
 	inputs[wfSettingsDB].SetValue("/var/lib/homer/homer_settings.duckdb")
 
 	// System
@@ -546,6 +554,19 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				applyProfileDefaults(m.inputs, m.inputs[wfProfile].Value())
 			}
 
+			if m.step == wizStepStorage || m.step == wizStepReview {
+				if _, err := config.ResolveCatalogType(m.inputs[wfCatalogType].Value(), m.inputs[wfCatalogPath].Value()); err != nil {
+					m.errMsg = fmt.Sprintf("Catalog: %v", err)
+					return m, nil
+				}
+			}
+			if m.step == wizStepCoordinator || m.step == wizStepReview {
+				if _, err := config.ResolveSettingsDBType(m.inputs[wfSettingsDBType].Value(), m.inputs[wfSettingsDB].Value()); err != nil {
+					m.errMsg = fmt.Sprintf("Settings: %v", err)
+					return m, nil
+				}
+			}
+
 			// On review step, generate and save
 			if m.step == wizStepReview {
 				m.generatedAdminPassword = ""
@@ -579,7 +600,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case wizStepIngest:
 					skip = !parseBool(m.inputs[wfIngestEnable].Value())
 				case wizStepStorage:
-					skip = !parseBool(m.inputs[wfStorageEnable].Value())
+					skip = !parseBool(m.inputs[wfStorageEnable].Value()) && !parseBool(m.inputs[wfNodeEnable].Value())
 				case wizStepNode:
 					skip = !parseBool(m.inputs[wfNodeEnable].Value())
 				case wizStepCoordinator:
@@ -715,7 +736,8 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 	nodePort := parseInt(m.inputs[wfNodePort].Value(), 50051)
 	promPort := parseInt(m.inputs[wfPrometheusPort].Value(), 9090)
 
-	catalogType := "sqlite"
+	catalogType, _ := config.ResolveCatalogType(m.inputs[wfCatalogType].Value(), m.inputs[wfCatalogPath].Value())
+	settingsDBType, _ := config.ResolveSettingsDBType(m.inputs[wfSettingsDBType].Value(), m.inputs[wfSettingsDB].Value())
 
 	catalogPath := m.inputs[wfCatalogPath].Value()
 	if catalogPath == "" {
@@ -825,6 +847,7 @@ func (m wizardModel) buildConfigFromInputs() config.Config {
 				Port:  nodePort,
 				Token: m.inputs[wfAuthToken].Value(),
 			}},
+			SettingsDBType: settingsDBType,
 			SettingsDBPath: settingsDB,
 			JWT: config.JWTConfig{
 				Secret:      jwtSecret,
