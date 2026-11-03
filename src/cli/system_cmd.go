@@ -502,7 +502,7 @@ func rebuildCatalog(f SystemFlags) error {
 	duckCfg := duckLakeConfigFromModular(cfg)
 	dataPath := duckCfg.DataPath
 	catalogPath := duckCfg.CatalogPath
-	if ducklake.IsPostgresCatalogPath(catalogPath) {
+	if duckCfg.CatalogType == ducklake.CatalogPostgres {
 		return fmt.Errorf("rebuild-catalog requires a SQLite file; PostgreSQL catalog recovery must use PostgreSQL tools")
 	}
 

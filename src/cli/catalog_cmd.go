@@ -100,8 +100,9 @@ func catalogPathFromConfig(configPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load config: %w", err)
 	}
-	path := strings.TrimSpace(duckLakeConfigFromModular(cfg).CatalogPath)
-	if config.IsPostgresSettingsPath(path) {
+	catalog := duckLakeConfigFromModular(cfg)
+	path := strings.TrimSpace(catalog.CatalogPath)
+	if catalog.CatalogType == ducklake.CatalogPostgres {
 		return "", fmt.Errorf("this catalog command requires a SQLite file; use PostgreSQL tools for PostgreSQL catalog backup and repair")
 	}
 	if path == "" {

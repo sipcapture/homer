@@ -65,7 +65,8 @@ func SettingsDBLocalPath(value, localSecretsDir string) string {
 func NodeCatalogPath(cfg *NodeConfig) string {
 	path := strings.TrimSpace(cfg.DuckLake.CatalogPath)
 	for _, volume := range cfg.DuckLake.Volumes {
-		if IsPostgresSettingsPath(volume.CatalogPath) {
+		typ := strings.ToLower(strings.TrimSpace(volume.CatalogType))
+		if typ == "postgres" || typ == "postgresql" {
 			return volume.CatalogPath
 		}
 	}

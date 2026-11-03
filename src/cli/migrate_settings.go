@@ -96,17 +96,23 @@ func RunMigrateSettings(f MigrateFlags) error {
 
 func resolveSettingsDBPath(f MigrateFlags) (string, error) {
 	path := f.DuckDBPath
+	typ := "sqlite" // --duckdb explicitly selects a local destination.
 	if path == "" {
 		cfg, err := config.Load(f.ConfigPath)
 		if err != nil {
 			return "", fmt.Errorf("--duckdb is unset and could not load config: %w", err)
 		}
 		path = cfg.Coordinator.SettingsDBPath
+		typ = cfg.Coordinator.SettingsDBType
 	}
 	if path == "" {
 		return "", fmt.Errorf("config has empty coordinator.settings_db_path; pass --duckdb explicitly")
 	}
-	if config.IsPostgresSettingsPath(path) {
+	typ, err := config.ResolveSettingsDBType(typ, path)
+	if err != nil {
+		return "", err
+	}
+	if typ == "postgres" {
 		return "", fmt.Errorf("settings migration requires a local DuckDB destination; pass --duckdb with a file path")
 	}
 	return path, nil

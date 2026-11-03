@@ -9,7 +9,7 @@ import (
 )
 
 func TestPostgresVolumeSecretsDirectory(t *testing.T) {
-	cfg := &NodeConfig{DuckLake: DuckLakeConfig{CatalogPath: "homer_catalog.sqlite", Volumes: []VolumeConfig{{CatalogPath: "POSTGRES://user:private@localhost/lake"}}}}
+	cfg := &NodeConfig{DuckLake: DuckLakeConfig{CatalogPath: "homer_catalog.sqlite", Volumes: []VolumeConfig{{CatalogType: "postgres", CatalogPath: "POSTGRES://user:private@localhost/lake"}}}}
 	path := NodeCatalogPath(cfg)
 	if NodeAuthTokenFilePath(path, "") != "/var/lib/homer/.homer_node_auth_token" {
 		t.Fatal("volume PostgreSQL catalog was not selected")

@@ -227,3 +227,36 @@ func TestFormatRunningConfig_defaultsEngineAndRedactsJWT(t *testing.T) {
 		t.Fatal("include-secrets should keep jwt secret")
 	}
 }
+
+func TestSettingsMigrationConfiguredType(t *testing.T) {
+	for _, typ := range []string{"sqlite", "postgres"} {
+		t.Run(typ, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "settings.duckdb")
+			if typ == "postgres" {
+				path = "postgres://user:private@localhost/settings"
+			}
+			cfg := map[string]any{"coordinator": map[string]any{"settings_db_type": typ, "settings_db_path": path, "local_secrets_dir": dir}, "node": map[string]any{"local_secrets_dir": dir}}
+			data, err := json.Marshal(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file := filepath.Join(dir, "homer.json")
+			if err := os.WriteFile(file, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := resolveSettingsDBPath(MigrateFlags{ConfigPath: file})
+			if typ == "postgres" {
+				if err == nil || !strings.Contains(err.Error(), "local DuckDB destination") {
+					t.Fatalf("expected unsupported backend: %v", err)
+				}
+			} else if err != nil || got != path {
+				t.Fatalf("local destination: %q %v", got, err)
+			}
+			override := filepath.Join(dir, "override.duckdb")
+			if got, err := resolveSettingsDBPath(MigrateFlags{ConfigPath: file, DuckDBPath: override}); err != nil || got != override {
+				t.Fatalf("explicit local destination: %q %v", got, err)
+			}
+		})
+	}
+}
