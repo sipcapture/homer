@@ -10,9 +10,11 @@ import (
 func statelessConfig() *Config {
 	cfg := &Config{Stateless: true}
 	cfg.Storage.Enable = true
+	cfg.Storage.DuckLake.CatalogType = "postgres"
 	cfg.Storage.DuckLake.CatalogPath = "postgres://homer:secret@localhost/lake"
 	cfg.Storage.DuckLake.DataPath = "s3://bucket/parquet"
 	cfg.Coordinator.Enable = true
+	cfg.Coordinator.SettingsDBType = "postgres"
 	cfg.Coordinator.SettingsDBPath = "postgres://homer:secret@localhost/settings"
 	cfg.Coordinator.JWT.Secret = "shared-jwt-secret"
 	cfg.Node.Enable = true
@@ -80,6 +82,7 @@ func TestStatelessEnvironmentAndTokenInheritance(t *testing.T) {
 	t.Setenv("HOMER_STORAGE_ENABLE", "false")
 	t.Setenv("HOMER_NODE_ENABLE", "false")
 	t.Setenv("HOMER_COORDINATOR_ENABLE", "true")
+	t.Setenv("HOMER_COORDINATOR_SETTINGS_DB_TYPE", "postgres")
 	t.Setenv("HOMER_COORDINATOR_SETTINGS_DB_PATH", "postgres://localhost/settings")
 	t.Setenv("HOMER_COORDINATOR_JWT_SECRET", "shared-jwt")
 	file := filepath.Join(t.TempDir(), "homer.json")
@@ -125,7 +128,7 @@ func TestPostgresWithoutStatelessKeepsLocalSecrets(t *testing.T) {
 			if cfg.Node.FlightServer.AuthToken == "" {
 				t.Fatal("stateful mode did not generate a node token")
 			}
-			if _, err := os.Stat(NodeAuthTokenFilePath(cfg.Node.DuckLake.CatalogPath, dir)); err != nil {
+			if _, err := os.Stat(NodeAuthTokenFilePath(cfg.Node.DuckLake.CatalogPath, dir, cfg.Node.DuckLake.CatalogType)); err != nil {
 				t.Fatalf("stateful token was not persisted: %v", err)
 			}
 		})
