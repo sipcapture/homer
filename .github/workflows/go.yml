@@ -99,7 +99,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race ./config ./cli ./storage/ducklake ./coordinator/services ./node ./server ./writer \
+          go test -race ./config ./cli ./storage/ducklake ./coordinator/services ./node ./server ./writer ./internal/maintenancelock \
             -run 'Test(Postgres|NodeReadsPostgres|DiscoverSchemaViews|LoadPostgresDuckLakeCatalog|NormalizePostgresDSN|IsPostgresSettingsPath|JWTSecretFilePathWithPostgresSettings|AttachSQLBuildersReturnErrors|CatalogErrorKeepsDiagnosticsWithoutCredentials|SQLiteShardSpillDirectoryUnchanged|LocalSecretDefaultsAndOverride)' \
             -count=1 -json -timeout=10m | tee postgres-results.jsonl
           if grep -q '"Action":"skip"' postgres-results.jsonl; then

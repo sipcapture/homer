@@ -29,6 +29,7 @@ import (
 	airport "github.com/hugr-lab/airport-go"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
+	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"github.com/sipcapture/homer-core/src/stream/hepstream"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
@@ -39,9 +40,11 @@ import (
 
 // VolumeInfo represents an attached storage volume
 type VolumeInfo struct {
-	Name     string // Volume name (e.g., "hot", "cold")
-	LakeName string // DuckLake name (e.g., "homer_lake_hot")
-	Path     string // Data path
+	CatalogPath string               `json:"-"` // Resolved database for maintenance coordination
+	CatalogType ducklake.CatalogType `json:"-"`
+	Name        string               // Volume name (e.g., "hot", "cold")
+	LakeName    string               // DuckLake name (e.g., "homer_lake_hot")
+	Path        string               // Data path
 }
 
 // Node is the FlightSQL node module
@@ -2044,6 +2047,8 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	n.mu.RLock()
+	defer n.mu.RUnlock()
 	if n.db == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
@@ -2052,69 +2057,67 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	paths := make([]string, 0, len(n.volumes))
+	for _, vol := range n.volumes {
+		if vol.CatalogType == ducklake.CatalogPostgres || ducklake.IsPostgresCatalogPath(vol.CatalogPath) {
+			paths = append(paths, vol.CatalogPath)
+		}
+	}
+	lease, acquired, lockErr := ducklake.AcquireMaintenance(r.Context(), ducklake.CatalogPostgres, paths...)
+	if lockErr != nil || !acquired {
+		status := http.StatusConflict
+		message := "catalog maintenance is already running"
+		if lockErr != nil {
+			status = http.StatusServiceUnavailable
+			message = lockErr.Error()
+		}
+		writeJSON(w, status, map[string]interface{}{"success": false, "error": message})
+		return
+	}
+	defer lease.Release()
+	db := maintenancelock.DB{Raw: n.db, Lease: lease}
 	var allResults []map[string]interface{}
 	start := time.Now()
-
-	// Run maintenance on all volumes
+	success := true
 	for _, vol := range n.volumes {
-		volResults := n.vacuumVolume(vol.LakeName, expireSeconds)
-		allResults = append(allResults, map[string]interface{}{
-			"volume":  vol.Name,
-			"lake":    vol.LakeName,
-			"results": volResults,
-		})
+		if err := lease.Check(); err != nil {
+			success = false
+			break
+		}
+		results := n.vacuumVolumeSQL(db, vol.LakeName, expireSeconds)
+		for _, step := range results {
+			if _, failed := step["error"]; failed {
+				success = false
+			}
+		}
+		allResults = append(allResults, map[string]interface{}{"volume": vol.Name, "lake": vol.LakeName, "results": results})
 	}
-
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success":           true,
-		"volumes_count":     len(n.volumes),
-		"expire_older_than": expireOlderThan,
-		"duration_ms":       time.Since(start).Milliseconds(),
-		"results":           allResults,
+		"success": success, "volumes_count": len(n.volumes), "expire_older_than": expireOlderThan, "duration_ms": time.Since(start).Milliseconds(), "results": allResults,
 	})
 }
 
-// vacuumVolume runs maintenance on a single volume
-func (n *Node) vacuumVolume(lakeName string, expireSeconds int64) []map[string]interface{} {
-	var results []map[string]interface{}
-
-	// 1. Expire old snapshots
-	expireSQL := expireSnapshotsSQL(lakeName, expireSeconds)
-	if _, err := n.db.Exec(expireSQL); err != nil {
-		slog.Warn("ducklake_expire_snapshots failed", "lake", lakeName, "error", err)
-		results = append(results, map[string]interface{}{"step": "expire_snapshots", "error": err.Error()})
-	} else {
-		results = append(results, map[string]interface{}{"step": "expire_snapshots", "status": "ok"})
+// vacuumVolumeSQL runs maintenance through a caller-owned guarded handle.
+func (n *Node) vacuumVolumeSQL(db maintenancelock.SQL, lakeName string, expireSeconds int64) []map[string]interface{} {
+	steps := []struct{ name, query string }{
+		{"expire_snapshots", expireSnapshotsSQL(lakeName, expireSeconds)},
+		{"merge_adjacent_files", fmt.Sprintf("CALL ducklake_merge_adjacent_files('%s')", lakeName)},
+		{"cleanup_old_files", fmt.Sprintf("CALL ducklake_cleanup_old_files('%s', cleanup_all => true)", lakeName)},
+		{"delete_orphaned_files", fmt.Sprintf("CALL ducklake_delete_orphaned_files('%s', cleanup_all => true)", lakeName)},
+	}
+	results := make([]map[string]interface{}, 0, len(steps)+1)
+	for _, step := range steps {
+		result := map[string]interface{}{"step": step.name}
+		if _, err := db.Exec(step.query); err != nil {
+			slog.Warn("ducklake_"+step.name+" failed", "lake", lakeName, "error", err)
+			result["error"] = err.Error()
+		} else {
+			result["status"] = "ok"
+		}
+		results = append(results, result)
 	}
 
-	// 2. Merge adjacent small files
-	mergeSQL := fmt.Sprintf("CALL ducklake_merge_adjacent_files('%s')", lakeName)
-	if _, err := n.db.Exec(mergeSQL); err != nil {
-		slog.Warn("ducklake_merge_adjacent_files failed", "lake", lakeName, "error", err)
-		results = append(results, map[string]interface{}{"step": "merge_adjacent_files", "error": err.Error()})
-	} else {
-		results = append(results, map[string]interface{}{"step": "merge_adjacent_files", "status": "ok"})
-	}
-
-	// 3. Cleanup old files
-	cleanupSQL := fmt.Sprintf("CALL ducklake_cleanup_old_files('%s', cleanup_all => true)", lakeName)
-	if _, err := n.db.Exec(cleanupSQL); err != nil {
-		slog.Warn("ducklake_cleanup_old_files failed", "lake", lakeName, "error", err)
-		results = append(results, map[string]interface{}{"step": "cleanup_old_files", "error": err.Error()})
-	} else {
-		results = append(results, map[string]interface{}{"step": "cleanup_old_files", "status": "ok"})
-	}
-
-	// 4. Delete orphaned files
-	orphanSQL := fmt.Sprintf("CALL ducklake_delete_orphaned_files('%s', cleanup_all => true)", lakeName)
-	if _, err := n.db.Exec(orphanSQL); err != nil {
-		slog.Warn("ducklake_delete_orphaned_files failed", "lake", lakeName, "error", err)
-		results = append(results, map[string]interface{}{"step": "delete_orphaned_files", "error": err.Error()})
-	} else {
-		results = append(results, map[string]interface{}{"step": "delete_orphaned_files", "status": "ok"})
-	}
-
-	// 5. Remove empty directories left after file deletion.
+	// Remove empty directories left after file deletion.
 	// Find the volume's data path from n.volumes.
 	for _, vol := range n.volumes {
 		if vol.LakeName == lakeName && vol.Path != "" {
@@ -2394,9 +2397,11 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 	_ = ducklake.MarkCatalogAttached(catalogPath, catalogType)
 
 	return VolumeInfo{
-		Name:     vol.Name,
-		LakeName: lakeName,
-		Path:     vol.Path,
+		Name:        vol.Name,
+		LakeName:    lakeName,
+		Path:        vol.Path,
+		CatalogPath: catalogPath,
+		CatalogType: catalogType,
 	}, nil
 }
 

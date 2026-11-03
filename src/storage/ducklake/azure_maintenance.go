@@ -103,7 +103,7 @@ type scheduledAzureFile struct {
 }
 
 func azureCleanupOldFiles(ctx context.Context, db *sql.DB, lakeName, dataPath string, store azureObjectStore) (int, error) {
-	files, err := queryScheduledAzureFiles(db, lakeName, dataPath)
+	files, err := queryScheduledAzureFiles(ctx, db, lakeName, dataPath)
 	if err != nil {
 		return 0, err
 	}
@@ -119,14 +119,14 @@ func azureCleanupOldFiles(ctx context.Context, db *sql.DB, lakeName, dataPath st
 		}
 		deletedIDs = append(deletedIDs, f.id)
 	}
-	if err := removeScheduledAzureFiles(db, lakeName, deletedIDs); err != nil {
+	if err := removeScheduledAzureFiles(ctx, db, lakeName, deletedIDs); err != nil {
 		return len(deletedIDs), err
 	}
 	return len(deletedIDs), nil
 }
 
 func azureDeleteOrphanedFiles(ctx context.Context, db *sql.DB, lakeName, dataPath string, store azureObjectStore) (int, error) {
-	known, err := queryKnownAzureFiles(db, lakeName, dataPath)
+	known, err := queryKnownAzureFiles(ctx, db, lakeName, dataPath)
 	if err != nil {
 		return 0, err
 	}
@@ -214,11 +214,11 @@ func azureObjectID(p string) (string, bool) {
 	return strings.ToLower(container) + "\x00" + key, true
 }
 
-func queryScheduledAzureFiles(db *sql.DB, lakeName, dataPath string) ([]scheduledAzureFile, error) {
+func queryScheduledAzureFiles(ctx context.Context, db *sql.DB, lakeName, dataPath string) ([]scheduledAzureFile, error) {
 	md := ducklakeMetadataIdent(lakeName)
 	q := fmt.Sprintf(`SELECT data_file_id, path, path_is_relative
 		FROM %s.ducklake_files_scheduled_for_deletion`, md)
-	rows, err := db.Query(q)
+	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list files scheduled for deletion: %w", err)
 	}
@@ -237,7 +237,7 @@ func queryScheduledAzureFiles(db *sql.DB, lakeName, dataPath string) ([]schedule
 	return out, rows.Err()
 }
 
-func removeScheduledAzureFiles(db *sql.DB, lakeName string, ids []int64) error {
+func removeScheduledAzureFiles(ctx context.Context, db *sql.DB, lakeName string, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -256,14 +256,14 @@ func removeScheduledAzureFiles(db *sql.DB, lakeName string, ids []int64) error {
 			fmt.Fprintf(&b, "%d", id)
 		}
 		q := fmt.Sprintf(`DELETE FROM %s.ducklake_files_scheduled_for_deletion WHERE data_file_id IN (%s)`, md, b.String())
-		if _, err := db.Exec(q); err != nil {
+		if _, err := db.ExecContext(ctx, q); err != nil {
 			return fmt.Errorf("remove scheduled cleanup files: %w", err)
 		}
 	}
 	return nil
 }
 
-func queryKnownAzureFiles(db *sql.DB, lakeName, dataPath string) ([]string, error) {
+func queryKnownAzureFiles(ctx context.Context, db *sql.DB, lakeName, dataPath string) ([]string, error) {
 	md := ducklakeMetadataIdent(lakeName)
 	dp := quoteSQLString(duckLakeDataPathLiteral(dataPath))
 	// Mirrors DuckLakeMetadataManager::GetKnownFilesForCleanupQuery:
@@ -304,7 +304,7 @@ SELECT REPLACE(
 FROM %s.ducklake_files_scheduled_for_deletion f
 `, dp, md, md, md, md, dp, md)
 
-	rows, err := db.Query(q)
+	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list known lake files: %w", err)
 	}
