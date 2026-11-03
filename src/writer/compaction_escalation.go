@@ -54,7 +54,7 @@ func (c *CompactionService) scheduledDeletionCount() (int64, error) {
 		return 0, fmt.Errorf("no database")
 	}
 	var n int64
-	err := c.database().QueryRow(fmt.Sprintf(
+	err := c.maintenanceSQL().QueryRow(fmt.Sprintf(
 		"SELECT count(*) FROM __ducklake_metadata_%s.ducklake_files_scheduled_for_deletion", c.lakeName)).Scan(&n)
 	return n, err
 }

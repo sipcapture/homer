@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
@@ -164,7 +166,7 @@ func RunSystemCmd(f SystemFlags) error {
 
 // ---- compaction ------------------------------------------------------------
 
-func runCompaction(f SystemFlags) error {
+func runCompaction(f SystemFlags) (retErr error) {
 	cfg, err := config.Load(f.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -173,13 +175,33 @@ func runCompaction(f SystemFlags) error {
 	logger.InitLoggerSimple("info", true, false)
 
 	duckCfg := duckLakeConfigFromModular(cfg)
+	catalogPath, err := ducklake.PrimaryCatalogPath(duckCfg)
+	if err != nil {
+		return err
+	}
+	lease, acquired, err := ducklake.AcquireMaintenance(context.Background(), duckCfg.CatalogType, catalogPath)
+	if err != nil {
+		return err
+	}
+	if !acquired {
+		return fmt.Errorf("catalog maintenance is already running")
+	}
+	defer func() {
+		if err := lease.Check(); err != nil {
+			retErr = err
+		}
+		lease.Release()
+	}()
 	manager, err := ducklake.NewManager(duckCfg)
 	if err != nil {
 		return fmt.Errorf("failed to init DuckLake: %w", err)
 	}
 	defer manager.Stop()
 
-	db := manager.GetDB()
+	if err := lease.Check(); err != nil {
+		return err
+	}
+	db := maintenancelock.DB{Raw: manager.GetDB(), Lease: lease}
 	lakeName := manager.GetLakeName()
 	dataPath := duckCfg.DataPath
 
@@ -357,7 +379,7 @@ func runCompaction(f SystemFlags) error {
 	return nil
 }
 
-func discoverDuckLakeTables(db *sql.DB, lakeName string) ([]string, error) {
+func discoverDuckLakeTables(db maintenancelock.SQL, lakeName string) ([]string, error) {
 	query := `
 		SELECT table_name 
 		FROM information_schema.tables 
@@ -387,7 +409,7 @@ func discoverDuckLakeTables(db *sql.DB, lakeName string) ([]string, error) {
 // are scanned — these are the ones that block merge operations.
 //
 // Returns the number of stale/corrupt entries removed.
-func repairCatalog(db *sql.DB, lakeName, dataPath string) (int, error) {
+func repairCatalog(db maintenancelock.SQL, lakeName, dataPath string) (int, error) {
 	if ducklake.IsRemoteLakeDataPath(dataPath) {
 		return 0, nil
 	}
@@ -424,7 +446,7 @@ func repairCatalog(db *sql.DB, lakeName, dataPath string) (int, error) {
 // Use this when ducklake_data_file entries are missing but the parquet files still exist.
 // It works by reading each parquet file on disk and inserting its rows into the live DuckLake table.
 // The original parquet files become orphans which can be cleaned with ducklake_delete_orphaned_files.
-func recoverCatalog(db *sql.DB, lakeName, dataPath string) (int, error) {
+func recoverCatalog(db maintenancelock.SQL, lakeName, dataPath string) (int, error) {
 	// Discover tables from the catalog (they should still exist in ducklake_table even if data files are gone).
 	tables, err := discoverDuckLakeTables(db, lakeName)
 	if err != nil {
@@ -648,7 +670,7 @@ func listOnDiskTables(dataPath string) ([]string, error) {
 
 // tableHasParquet reports whether the table has at least one hive-partitioned
 // data parquet file (date=…/), ignoring *-delete.parquet tombstones.
-func tableHasParquet(db *sql.DB, dataPath, table string) bool {
+func tableHasParquet(db maintenancelock.SQL, dataPath, table string) bool {
 	pattern := parquetDataGlobPattern(dataPath, table)
 	var n int
 	if err := db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM glob('%s')", pattern)).Scan(&n); err != nil {
@@ -659,7 +681,7 @@ func tableHasParquet(db *sql.DB, dataPath, table string) bool {
 
 // duckLakeTableExists reports whether a table already exists in the catalog
 // (the known HEP tables are auto-created by NewManager).
-func duckLakeTableExists(db *sql.DB, lakeName, table string) bool {
+func duckLakeTableExists(db maintenancelock.SQL, lakeName, table string) bool {
 	q := fmt.Sprintf(`SELECT COUNT(*) FROM information_schema.tables
 		WHERE table_catalog = '%s' AND table_schema = 'main' AND table_name = '%s'`,
 		lakeName, table)
@@ -695,7 +717,7 @@ const duckLakeUserColumnsProjection = `COLUMNS(c -> NOT regexp_matches(c, '^_duc
 //   - the ORIGINAL files are KEPT and become referenced by the catalog, instead
 //     of being replaced by fresh copies that left the originals orphaned and
 //     later deleted by delete_orphaned_files.
-func registerTableFiles(db *sql.DB, lakeName, dataPath, table string) (filesRegistered int, rows int64, err error) {
+func registerTableFiles(db maintenancelock.SQL, lakeName, dataPath, table string) (filesRegistered int, rows int64, err error) {
 	pattern := parquetDataGlobPattern(dataPath, table)
 	fqn := fmt.Sprintf("%s.main.%s", lakeName, table)
 
@@ -786,7 +808,7 @@ func registerTableFiles(db *sql.DB, lakeName, dataPath, table string) (filesRegi
 
 // listTableParquetFiles returns the on-disk data parquet files matching pattern,
 // sorted so partitions are ingested in a stable order.
-func listTableParquetFiles(db *sql.DB, pattern string) ([]string, error) {
+func listTableParquetFiles(db maintenancelock.SQL, pattern string) ([]string, error) {
 	rows, err := db.Query(fmt.Sprintf("SELECT file FROM glob('%s') ORDER BY file", pattern))
 	if err != nil {
 		return nil, err
@@ -809,7 +831,7 @@ func escapeSQLLiteral(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
 
-func logDuckLakeSmallFiles(db *sql.DB, lakeName string, stage string, limit int) {
+func logDuckLakeSmallFiles(db maintenancelock.SQL, lakeName string, stage string, limit int) {
 	if limit <= 0 {
 		limit = 50
 	}

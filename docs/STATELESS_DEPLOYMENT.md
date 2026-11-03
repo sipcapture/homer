@@ -89,10 +89,29 @@ settings, catalog, or Parquet volume is required. Size container memory for the
 whole process, including Go memory, DuckDB instances, ingest queues, and any
 maintenance instance; a DuckDB memory limit is not a container memory limit.
 
-Automatic maintenance is disabled in this example. Arrange one designated
-maintenance owner for the shared catalog; the test covers one SQL compactor
-alongside concurrent writers, not coordination between multiple automatic
-maintenance loops. See [compaction](COMPACTION_SETUP.md) for maintenance settings.
+Automatic maintenance is disabled in this example. When enabled for PostgreSQL
+catalogs, replicas acquire a database-scoped session advisory lock for the whole
+automatic maintenance cycle (retention, merge, snapshot expiration, and cleanup).
+A replica skips the cycle if another replica holds the lock or acquisition fails.
+The lock uses a dedicated connection to the actual primary catalog database;
+closing that session releases it. Use a direct PostgreSQL endpoint or session
+pooling, not transaction pooling. Local DuckDB lake aliases do not affect lock
+identity. Writer compaction and inline flushing, node vacuum requests, CLI
+maintenance, and tiering moves/deletion/cleanup use the same lock. Tiering locks
+both source and destination catalogs before reading counts or moving a partition;
+multiple catalogs are acquired in a stable order with partial acquisitions released
+on contention. Vacuum returns HTTP 409 on contention and 503 on acquisition errors;
+CLI maintenance returns an error. Automatic operations retry on later cycles.
+
+Maintenance checks owning sessions before SQL and monitors them every second.
+Detected connection loss cancels the operation context, including in-flight SQL
+and Azure cleanup, and prevents subsequent statements. Cancellation is cooperative:
+a statement or object-store request already in progress may finish before it is
+interrupted. The advisory lock is not storage-level fencing during a network
+partition. Normal ingestion still uses DuckLake's catalog transactions. Manually
+issued SQL does not participate in this application lock and must be coordinated
+by the operator. Existing missing objects still require repair.
+See [compaction](COMPACTION_SETUP.md) for maintenance settings.
 
 ## Add Kubernetes autoscaling
 

@@ -335,100 +335,8 @@ func (w *Writer) Start() error {
 		"catalog", ducklake.CatalogDisplayPath(w.storageConfig.DuckLake.CatalogPath),
 		"data", w.storageConfig.DuckLake.DataPath)
 
-	// Start compaction service if enabled (on primary shard only — each shard
-	// has its own catalog, but compaction on the primary covers the main workload;
-	// for multi-shard compaction, a per-shard loop can be added later).
-	//
-	// When multi-volume storage_policy is active with a local volume (hot parquet),
-	// compaction is always enabled on the writer DuckLake manager — hot data
-	// accumulates small files and cannot be safely turned off for that mode.
-	// The compaction service is started unconditionally: when compaction is
-	// enabled it runs the full merge/expire/cleanup cycle, otherwise it runs a
-	// lightweight inline-flush-only loop so inlined-data backlog still drains
-	// (disabling inlining alone does not flush rows inlined earlier).
-	compactionEnable := w.storageConfig.DuckLake.Compaction.Enable || w.shouldAutoEnableCompactionForTieredHot()
-	{
-		compactionCfg := compactionConfigFromStorage(w.storageConfig.DuckLake.Compaction, compactionEnable)
-		compactionCfg.CatalogType = ducklake.CatalogType(w.storageConfig.DuckLake.CatalogType)
-		if !w.storageConfig.DuckLake.Compaction.Enable && w.shouldAutoEnableCompactionForTieredHot() {
-			logger.Info("Writer: DuckLake compaction auto-enabled (tiered storage with local hot volume)",
-				"lake", w.ducklakeManager.GetLakeName())
-		}
-		if compactionCfg.CheckIntervalSec <= 0 {
-			compactionCfg.CheckIntervalSec = 3600 // default 1 hour
-		}
-		if compactionCfg.SnapshotExpireIntervalSec <= 0 {
-			compactionCfg.SnapshotExpireIntervalSec = 3600 // default 1 hour
-		}
-		if compactionCfg.MinAgeSec <= 0 {
-			// Short enough that a continuously busy writer still consolidates
-			// during the day: partitions are keyed by date, so an hour of quiet
-			// never arrives under steady ingest.
-			compactionCfg.MinAgeSec = defaultCompactionMinAgeSec
-		}
-		if compactionCfg.MaxCompactedFiles <= 0 {
-			// Unbounded merge rewrites every small parquet of a table in one
-			// CALL. 32 operations/cycle is a drain-vs-lock compromise
-			// (sipcapture/homer#945); peak memory is bounded by
-			// MaxFileSizeBytes and merge threads=1, not by this count.
-			compactionCfg.MaxCompactedFiles = defaultDuckDBMaxCompactedFiles
-		}
-		if compactionCfg.MaxFileSizeBytes <= 0 {
-			// Without max_file_size DuckLake defaults to target_file_size
-			// and will try to rewrite already-large files. Bound inputs so
-			// a merge group stays within memory_limit.
-			compactionCfg.MaxFileSizeBytes = defaultDuckDBMaxFileSizeBytes
-		}
-		var compactionS3 *CompactionS3Client
-		var compactionAzure *CompactionAzureClient
-		if ducklake.IsRemoteLakeDataPath(w.storageConfig.DuckLake.DataPath) {
-			s := w.storageConfig.DuckLake.S3
-			if ak := strings.TrimSpace(s.AccessKeyID); ak != "" {
-				compactionS3 = &CompactionS3Client{
-					Region:          s.Region,
-					AccessKeyID:     ak,
-					SecretAccessKey: s.SecretAccessKey,
-					Endpoint:        s.Endpoint,
-					UseSSL:          s.UseSSL,
-					URLStyle:        s.URLStyle,
-				}
-			}
-			az := w.storageConfig.DuckLake.Azure
-			if az.AccountName != "" || az.AccountKey != "" || az.ConnectionString != "" {
-				compactionAzure = &CompactionAzureClient{
-					AccountName:      az.AccountName,
-					AccountKey:       az.AccountKey,
-					ConnectionString: az.ConnectionString,
-					Endpoint:         az.Endpoint,
-				}
-			}
-		}
-		w.compactionService = NewCompactionService(
-			w.ducklakeManager.GetDB(),
-			w.ducklakeManager.GetLakeName(),
-			w.storageConfig.DuckLake.DataPath,
-			w.storageConfig.DuckLake.CatalogPath,
-			compactionCfg,
-			w.ducklakeManager,
-			compactionS3,
-			compactionAzure,
-		)
-		memLimit := w.storageConfig.DuckLake.Compaction.MemoryLimit
-		err := w.compactionService.UseMaintenanceDB(func() (*sql.DB, func() error, error) {
-			m, err := w.ducklakeManager.OpenMaintenanceDB(memLimit)
-			if err != nil {
-				return nil, nil, err
-			}
-			return m.DB, m.Close, nil
-		})
-		if err != nil {
-			logger.Warn("Writer: compaction runs on the shared writer DuckDB because its dedicated instance "+
-				"could not be opened; a fatal merge error will then affect ingest and search",
-				"error", err)
-		}
-		if err := w.compactionService.Start(); err != nil {
-			logger.Error(fmt.Sprintf("Writer: Failed to start compaction service: %v", err))
-		}
+	if err := w.startCompactionService(); err != nil {
+		logger.Error(fmt.Sprintf("Writer: Failed to start compaction service: %v", err))
 	}
 
 	// Start tiering service if storage policy is enabled
@@ -971,6 +879,90 @@ func (w *Writer) logStats() {
 			return
 		}
 	}
+}
+
+// startCompactionService maintains the primary shard. Tiered local storage
+// requires full compaction; other disabled configurations still drain inline data.
+func (w *Writer) startCompactionService() error {
+	storage := w.storageConfig.DuckLake
+	autoEnable := w.shouldAutoEnableCompactionForTieredHot()
+	cfg := compactionConfigFromStorage(storage.Compaction, storage.Compaction.Enable || autoEnable)
+	cfg.CatalogType = ducklake.CatalogType(storage.CatalogType)
+	if !storage.Compaction.Enable && autoEnable {
+		logger.Info("Writer: DuckLake compaction auto-enabled (tiered storage with local hot volume)",
+			"lake", w.ducklakeManager.GetLakeName())
+	}
+	if cfg.CheckIntervalSec <= 0 {
+		cfg.CheckIntervalSec = 3600 // default 1 hour
+	}
+	if cfg.SnapshotExpireIntervalSec <= 0 {
+		cfg.SnapshotExpireIntervalSec = 3600 // default 1 hour
+	}
+	if cfg.MinAgeSec <= 0 {
+		// Short enough that a continuously busy writer still consolidates
+		// during the day: partitions are keyed by date, so an hour of quiet
+		// never arrives under steady ingest.
+		cfg.MinAgeSec = defaultCompactionMinAgeSec
+	}
+	if cfg.MaxCompactedFiles <= 0 {
+		// Unbounded merge rewrites every small parquet of a table in one
+		// CALL. 32 operations/cycle is a drain-vs-lock compromise
+		// (sipcapture/homer#945); peak memory is bounded by
+		// MaxFileSizeBytes and merge threads=1, not by this count.
+		cfg.MaxCompactedFiles = defaultDuckDBMaxCompactedFiles
+	}
+	if cfg.MaxFileSizeBytes <= 0 {
+		// Without max_file_size DuckLake defaults to target_file_size
+		// and will try to rewrite already-large files. Bound inputs so
+		// a merge group stays within memory_limit.
+		cfg.MaxFileSizeBytes = defaultDuckDBMaxFileSizeBytes
+	}
+	var compactionS3 *CompactionS3Client
+	var compactionAzure *CompactionAzureClient
+	if ducklake.IsRemoteLakeDataPath(storage.DataPath) {
+		s := storage.S3
+		if ak := strings.TrimSpace(s.AccessKeyID); ak != "" {
+			compactionS3 = &CompactionS3Client{
+				Region:          s.Region,
+				AccessKeyID:     ak,
+				SecretAccessKey: s.SecretAccessKey,
+				Endpoint:        s.Endpoint,
+				UseSSL:          s.UseSSL,
+				URLStyle:        s.URLStyle,
+			}
+		}
+		az := storage.Azure
+		if az.AccountName != "" || az.AccountKey != "" || az.ConnectionString != "" {
+			compactionAzure = &CompactionAzureClient{
+				AccountName:      az.AccountName,
+				AccountKey:       az.AccountKey,
+				ConnectionString: az.ConnectionString,
+				Endpoint:         az.Endpoint,
+			}
+		}
+	}
+	w.compactionService = NewCompactionService(
+		w.ducklakeManager.GetDB(),
+		w.ducklakeManager.GetLakeName(),
+		storage.DataPath,
+		w.ducklakeManager.GetCatalogPath(),
+		cfg,
+		w.ducklakeManager,
+		compactionS3,
+		compactionAzure,
+	)
+	if err := w.compactionService.UseMaintenanceDB(func() (*sql.DB, func() error, error) {
+		m, err := w.ducklakeManager.OpenMaintenanceDB(storage.Compaction.MemoryLimit)
+		if err != nil {
+			return nil, nil, err
+		}
+		return m.DB, m.Close, nil
+	}); err != nil {
+		logger.Warn("Writer: compaction runs on the shared writer DuckDB because its dedicated instance "+
+			"could not be opened; a fatal merge error will then affect ingest and search",
+			"error", err)
+	}
+	return w.compactionService.Start()
 }
 
 // startTieringService initializes and starts the tiering service
