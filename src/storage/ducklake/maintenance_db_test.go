@@ -39,7 +39,11 @@ func openTestWriterDB(t *testing.T) (Config, *sql.DB) {
 	if err := loadLakeExtensions(db); err != nil {
 		t.Skipf("extensions unavailable: %v", err)
 	}
-	if _, err := db.Exec(buildLakeAttachSQL(cfg)); err != nil {
+	attachSQL, err := buildLakeAttachSQL(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(attachSQL); err != nil {
 		t.Skipf("ATTACH failed: %v", err)
 	}
 	t.Cleanup(MarkCatalogAttached(cfg.CatalogPath))

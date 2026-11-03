@@ -435,7 +435,11 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 		catalogPath = strings.TrimSuffix(catalogPath, ".sqlite") + "_" + vol.Name + ".sqlite"
 	}
 
-	if _, err := tsm.db.Exec(volumeAttachSQL(vol, catalogPath)); err != nil {
+	attachSQL, err := volumeAttachSQL(vol, catalogPath)
+	if err != nil {
+		return err
+	}
+	if _, err := tsm.db.Exec(attachSQL); err != nil {
 		return CatalogError(catalogPath, "attach volume "+vol.Name, err)
 	}
 	// Tiered DuckDB instances live until process exit; the mark is never released.
@@ -453,9 +457,8 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 }
 
 // volumeAttachSQL supports both SQLite paths and PostgreSQL DSNs.
-func volumeAttachSQL(vol *Volume, catalogPath string) string {
-	stmt, _ := CatalogAttachSQL("", catalogPath, vol.LakeName, vol.Path, vol.OverrideDataPath)
-	return stmt
+func volumeAttachSQL(vol *Volume, catalogPath string) (string, error) {
+	return CatalogAttachSQL("", catalogPath, vol.LakeName, vol.Path, vol.OverrideDataPath)
 }
 
 // GetDB returns the shared database connection

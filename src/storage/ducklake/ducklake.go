@@ -480,7 +480,11 @@ func (mtw *MultiTableWriter) connect() error {
 		return err
 	}
 
-	if _, err := db.Exec(buildLakeAttachSQL(mtw.config)); err != nil {
+	attachSQL, err := buildLakeAttachSQL(mtw.config)
+	if err != nil {
+		return err
+	}
+	if _, err := db.Exec(attachSQL); err != nil {
 		return CatalogError(mtw.config.CatalogPath, "attach", err)
 	}
 	mtw.releaseAttachMark = MarkCatalogAttached(mtw.config.CatalogPath)
@@ -506,13 +510,12 @@ func (mtw *MultiTableWriter) connect() error {
 }
 
 // buildAttachSQL returns the ATTACH statement for this writer's DuckLake catalog.
-func (mtw *MultiTableWriter) buildAttachSQL() string {
+func (mtw *MultiTableWriter) buildAttachSQL() (string, error) {
 	return buildLakeAttachSQL(mtw.config)
 }
 
-func buildLakeAttachSQL(cfg Config) string {
-	stmt, _ := CatalogAttachSQL(cfg.CatalogType, cfg.CatalogPath, cfg.LakeName, cfg.DataPath, false)
-	return stmt
+func buildLakeAttachSQL(cfg Config) (string, error) {
+	return CatalogAttachSQL(cfg.CatalogType, cfg.CatalogPath, cfg.LakeName, cfg.DataPath, false)
 }
 
 // newLakeDuckDB opens an in-memory DuckDB instance whose pooled connections
@@ -611,10 +614,14 @@ func (mtw *MultiTableWriter) refreshCatalogCache() error {
 	if mtw.db == nil {
 		return nil
 	}
+	attachSQL, err := mtw.buildAttachSQL()
+	if err != nil {
+		return err
+	}
 	if _, err := mtw.db.Exec(fmt.Sprintf("DETACH %s;", mtw.config.LakeName)); err != nil {
 		return fmt.Errorf("detach %s: %w", mtw.config.LakeName, err)
 	}
-	if _, err := mtw.db.Exec(mtw.buildAttachSQL()); err != nil {
+	if _, err := mtw.db.Exec(attachSQL); err != nil {
 		return CatalogError(mtw.config.CatalogPath, "re-attach "+mtw.config.LakeName, err)
 	}
 	if mtw.config.DataInliningRowLimit >= 0 {

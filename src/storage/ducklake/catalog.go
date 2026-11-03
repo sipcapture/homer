@@ -88,10 +88,36 @@ func suffixedPostgresCatalog(path, suffix string) (string, error) {
 	return path + " dbname='" + value + "'", nil
 }
 
-// CatalogError keeps connection strings out of DuckDB errors which echo ATTACH.
+// CatalogError retains attach diagnostics without credentials from echoed DSNs.
 func CatalogError(path, action string, err error) error {
 	if IsPostgresCatalogPath(path) {
-		return fmt.Errorf("%s PostgreSQL DuckLake catalog failed (connection details omitted)", action)
+		path = strings.TrimSpace(path)
+		cfg, parseErr := pgx.ParseConfig(path)
+		if parseErr != nil {
+			return fmt.Errorf("%s PostgreSQL DuckLake catalog failed (invalid connection string)", action)
+		}
+		message := err.Error()
+		// DuckDB may echo the original DSN inside a SQL-quoted ATTACH statement.
+		for _, dsn := range []string{strings.ReplaceAll(path, "'", "''"), path} {
+			message = strings.ReplaceAll(message, dsn, "[redacted DSN]")
+		}
+		message = strings.ReplaceAll(message, url.UserPassword(cfg.User, cfg.Password).String()+"@", "[redacted]@")
+		message = strings.ReplaceAll(message, url.User(cfg.User).String()+"@", "[redacted]@")
+		if cfg.Password != "" {
+			libpqPassword := strings.ReplaceAll(strings.ReplaceAll(cfg.Password, `\`, `\\`), "'", `\'`)
+			for _, password := range []string{
+				strings.ReplaceAll(libpqPassword, "'", "''"), libpqPassword,
+				strings.ReplaceAll(cfg.Password, "'", "''"),
+				url.QueryEscape(cfg.Password), url.PathEscape(cfg.Password), cfg.Password,
+			} {
+				message = strings.ReplaceAll(message, password, "[redacted]")
+			}
+		}
+		for _, user := range []string{`"` + cfg.User + `"`, "'" + cfg.User + "'", "user=" + cfg.User} {
+			message = strings.ReplaceAll(message, user, "[redacted user]")
+		}
+		return fmt.Errorf("%s PostgreSQL DuckLake catalog (host=%q port=%d database=%q): %s",
+			action, cfg.Host, cfg.Port, cfg.Database, message)
 	}
 	return fmt.Errorf("%s DuckLake catalog: %w", action, err)
 }

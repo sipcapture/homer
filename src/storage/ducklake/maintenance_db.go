@@ -88,7 +88,11 @@ func OpenMaintenanceDB(cfg Config, memoryLimit string, reference *sql.DB) (*Main
 	if err := configureLakeSecrets(db, cfg, "compaction"); err != nil {
 		return fail(err)
 	}
-	if _, err := db.Exec(buildLakeAttachSQL(cfg)); err != nil {
+	attachSQL, err := buildLakeAttachSQL(cfg)
+	if err != nil {
+		return fail(err)
+	}
+	if _, err := db.Exec(attachSQL); err != nil {
 		return fail(CatalogError(cfg.CatalogPath, "maintenance attach", err))
 	}
 	return &MaintenanceDB{DB: db, release: MarkCatalogAttached(cfg.CatalogPath)}, nil

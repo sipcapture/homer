@@ -66,6 +66,43 @@ func postgresLakeFixture(t *testing.T) (string, string) {
 	return u.String(), t.TempDir()
 }
 
+func TestPostgresMissingCatalogError(t *testing.T) {
+	dsn, dir := postgresLakeFixture(t)
+	missing, err := suffixedPostgresCatalog(dsn, "missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := pgx.ParseConfig(missing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := loadLakeExtensions(db, CatalogPostgres); err != nil {
+		t.Fatal(err)
+	}
+	stmt, err := CatalogAttachSQL("", missing, "lake", dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(stmt); err == nil {
+		t.Fatal("attached a database that does not exist")
+	} else {
+		message := CatalogError(missing, "attach", err).Error()
+		for _, want := range []string{cfg.Database, cfg.Host, "does not exist"} {
+			if !strings.Contains(message, want) {
+				t.Fatalf("missing diagnostic %q: %s", want, message)
+			}
+		}
+		if (cfg.Password != "" && strings.Contains(message, cfg.Password)) || strings.Contains(message, missing) {
+			t.Fatal("attach error exposed credentials")
+		}
+	}
+}
+
 func TestPostgresDuckLakeShards(t *testing.T) {
 	dsn, dir := postgresLakeFixture(t)
 	cfg := Config{CatalogPath: dsn, DataPath: filepath.Join(dir, "data"), LakeName: "lake", ShardCount: 2,
