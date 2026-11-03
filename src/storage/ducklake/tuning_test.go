@@ -25,7 +25,7 @@ import (
 func TestPostgresSpillWarning(t *testing.T) {
 	previous := logger.Logger
 	t.Cleanup(func() { logger.Logger = previous })
-	for _, who := range []string{"writer", "node", "compaction"} {
+	for _, who := range []string{"writer", "node", "compaction", "tiering", "tiering-maintenance"} {
 		for _, configured := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/configured=%t", who, configured), func(t *testing.T) {
 				var logs bytes.Buffer

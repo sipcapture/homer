@@ -51,13 +51,11 @@ func openPostgresSettingsForTest(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	_, installErr := installer.Exec("LOAD postgres")
-	if installErr != nil {
-		_, installErr = installer.Exec("INSTALL postgres FROM 'https://extensions.duckdb.org'; LOAD postgres")
-	}
 	_ = installer.Close()
 	if installErr != nil {
-		t.Fatal(installErr)
+		t.Fatalf("load checksum-verified postgres extension (run scripts/download_duckdb_extensions.sh): %v", installErr)
 	}
+
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		t.Fatal(err)

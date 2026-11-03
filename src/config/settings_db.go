@@ -47,14 +47,29 @@ func NormalizePostgresDSN(value string) string {
 }
 
 // SettingsDBLocalPath provides a local anchor for coordinator secret files.
-// PostgreSQL secrets use localSecretsDir when set, otherwise the
-// default settings directory. A DSN is never interpreted as a filesystem path.
+// A configured directory overrides backend defaults; PostgreSQL otherwise uses
+// the default settings directory. A DSN is never treated as a filesystem path.
 func SettingsDBLocalPath(value, localSecretsDir string) string {
+	if dir := strings.TrimSpace(localSecretsDir); dir != "" {
+		return filepath.Join(dir, filepath.Base(defaultSettingsDBPath))
+	}
 	if strings.TrimSpace(value) == "" || IsPostgresSettingsPath(value) {
-		if dir := strings.TrimSpace(localSecretsDir); dir != "" {
-			return filepath.Join(dir, filepath.Base(defaultSettingsDBPath))
-		}
 		return defaultSettingsDBPath
 	}
 	return value
+}
+
+// NodeCatalogPath selects an attached PostgreSQL volume even when the legacy
+// single-catalog field still contains its SQLite default.
+func NodeCatalogPath(cfg *NodeConfig) string {
+	path := strings.TrimSpace(cfg.DuckLake.CatalogPath)
+	for _, volume := range cfg.DuckLake.Volumes {
+		if IsPostgresSettingsPath(volume.CatalogPath) {
+			return volume.CatalogPath
+		}
+	}
+	if path == "" && len(cfg.DuckLake.Volumes) > 0 {
+		path = cfg.DuckLake.Volumes[0].CatalogPath
+	}
+	return path
 }

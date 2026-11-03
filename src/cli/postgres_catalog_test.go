@@ -44,11 +44,8 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 	}
 	defer writer.Close()
 	for _, ext := range []string{"ducklake", "postgres"} {
-		if _, err := writer.Exec("LOAD " + ext); err == nil {
-			continue
-		}
-		if _, err := writer.Exec("INSTALL " + ext + " FROM 'https://extensions.duckdb.org'; LOAD " + ext); err != nil {
-			t.Fatal(err)
+		if _, err := writer.Exec("LOAD " + ext); err != nil {
+			t.Fatalf("load checksum-verified %s extension (run scripts/download_duckdb_extensions.sh): %v", ext, err)
 		}
 	}
 	stmt, err := ducklake.CatalogAttachSQL("", cfg.CatalogPath, cfg.LakeName, cfg.DataPath, false)

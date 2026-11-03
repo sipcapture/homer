@@ -56,11 +56,8 @@ func postgresLakeFixture(t *testing.T) (string, string) {
 	}
 	defer installer.Close()
 	for _, ext := range []string{"ducklake", "postgres"} {
-		if _, err := installer.Exec("LOAD " + ext); err == nil {
-			continue
-		}
-		if _, err := installer.Exec("INSTALL " + ext + " FROM 'https://extensions.duckdb.org'"); err != nil {
-			t.Fatal(err)
+		if _, err := installer.Exec("LOAD " + ext); err != nil {
+			t.Fatalf("load checksum-verified %s extension (run scripts/download_duckdb_extensions.sh): %v", ext, err)
 		}
 	}
 	return u.String(), t.TempDir()
@@ -223,4 +220,40 @@ func TestPostgresDuckLakeTieredVolumes(t *testing.T) {
 	}
 	t.Logf("verified tier move with %d cold-volume parquet files", files)
 
+	maintenance, err := tsm.fileCleanupDB(cold)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tierSpill, maintenanceSpill string
+	if err := tsm.db.QueryRow("SELECT current_setting('temp_directory')").Scan(&tierSpill); err != nil {
+		t.Fatal(err)
+	}
+	if err := maintenance.QueryRow("SELECT current_setting('temp_directory')").Scan(&maintenanceSpill); err != nil {
+		t.Fatal(err)
+	}
+	if tierSpill == maintenanceSpill {
+		t.Fatal("tiering and maintenance share a spill directory")
+	}
+
+}
+
+func TestPostgresTierStartupClosesOnAttachFailure(t *testing.T) {
+	dsn, dir := postgresLakeFixture(t)
+	dsn, err := suffixedPostgresCatalog(dsn, "missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tsm, err := NewTieredStorageManager(TieredStorageConfig{Enable: true, CatalogPath: dsn, TuningThreads: 1, TuningMemoryLimit: "128MB", TuningTempDirectory: dir,
+		Volumes: []Volume{{Name: "hot", Type: VolumeTypeLocal, Path: dir, LakeName: "hot"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tsm.Start()
+	if err == nil || !strings.Contains(err.Error(), "missing") {
+		t.Fatalf("missing catalog diagnostic: %v", err)
+	}
+	if tsm.db != nil {
+		_ = tsm.db.Close()
+		t.Fatal("failed start retained DuckDB")
+	}
 }

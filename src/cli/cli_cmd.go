@@ -175,6 +175,12 @@ func openDuckLakeReadOnly(cfg ducklake.Config) (*sql.DB, error) {
 			_ = db.Close()
 			return nil, ducklake.CatalogError(cfg.CatalogPath, "CLI attach", err)
 		}
+		db.SetMaxOpenConns(1)
+		if _, err := db.Exec(`USE "` + strings.ReplaceAll(cfg.LakeName, `"`, `""`) + `".main`); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("select DuckLake catalog: %w", err)
+		}
+		return db, nil
 	} else {
 		fmt.Printf("Data path: %s\n", dataPath)
 

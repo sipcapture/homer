@@ -145,7 +145,7 @@ func NewHEPInput() *HEPInput {
 				logger.Error(fmt.Sprintf("Failed to start DuckLake manager: %v", err))
 				h.ducklakeManager = nil
 			} else {
-				logger.Info("DuckLake storage enabled", "catalog", homerconfig.MainConfig.Setting.DUCKLAKE_SETTINGS.CatalogPath, "data", homerconfig.MainConfig.Setting.DUCKLAKE_SETTINGS.DataPath)
+				logger.Info("DuckLake storage enabled", "catalog", ducklake.CatalogDisplayPath(homerconfig.MainConfig.Setting.DUCKLAKE_SETTINGS.CatalogPath), "data", homerconfig.MainConfig.Setting.DUCKLAKE_SETTINGS.DataPath)
 			}
 		}
 	}

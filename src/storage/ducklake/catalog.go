@@ -18,7 +18,11 @@ func IsPostgresCatalogPath(path string) bool { return config.IsPostgresSettingsP
 // CatalogDisplayPath is safe to include in logs without exposing a DSN.
 func CatalogDisplayPath(path string) string {
 	if IsPostgresCatalogPath(path) {
-		return "PostgreSQL"
+		cfg, err := pgx.ParseConfig(config.NormalizePostgresDSN(path))
+		if err != nil {
+			return "PostgreSQL (invalid connection string)"
+		}
+		return fmt.Sprintf("PostgreSQL host=%q port=%d database=%q", cfg.Host, cfg.Port, cfg.Database)
 	}
 	return path
 }

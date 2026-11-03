@@ -42,11 +42,8 @@ func TestNodeReadsPostgresDuckLakeCatalog(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	for _, ext := range []string{"ducklake", "postgres"} {
-		if _, err := db.Exec("LOAD " + ext); err == nil {
-			continue
-		}
-		if _, err := db.Exec("INSTALL " + ext + " FROM 'https://extensions.duckdb.org'; LOAD " + ext); err != nil {
-			t.Fatal(err)
+		if _, err := db.Exec("LOAD " + ext); err != nil {
+			t.Fatalf("load checksum-verified %s extension (run scripts/download_duckdb_extensions.sh): %v", ext, err)
 		}
 	}
 	data := filepath.Join(t.TempDir(), "data")

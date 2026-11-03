@@ -2225,7 +2225,7 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 		cfg.DuckLake.Tuning.Threads,
 		cfg.DuckLake.Tuning.MemoryLimit,
 		cfg.DuckLake.Tuning.TempDirectory,
-		cfg.DuckLake.CatalogPath,
+		config.NodeCatalogPath(cfg),
 		"node",
 	)
 

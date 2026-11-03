@@ -44,12 +44,20 @@ jobs:
           make release
 
   postgres-regressions:
-    name: PostgreSQL regression tests
+    name: PostgreSQL ${{ matrix.postgres }} regressions
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - postgres: '17.11'
+            image: postgres:17.11@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+          - postgres: '18.6'
+            image: postgres:18.6@sha256:3a4264520e121176619f54ff867d12774bc81e95e7b84db58d63bccdb6144b81
     services:
       postgres:
-        image: postgres:17
+        image: ${{ matrix.image }}
         env:
           POSTGRES_DB: homer_test
           POSTGRES_PASSWORD: homer_test
@@ -62,6 +70,8 @@ jobs:
           --health-retries 5
     env:
       CGO_ENABLED: 1
+      GOMAXPROCS: '2'
+      GOFLAGS: -p=2
       HOMER_TEST_POSTGRES_DSN: postgres://postgres:homer_test@127.0.0.1:5432/homer_test?sslmode=disable
     steps:
       - uses: actions/checkout@v5
@@ -69,7 +79,7 @@ jobs:
           submodules: true
 
       - name: Install test requirements
-        run: sudo apt-get update && sudo apt-get install -y build-essential ca-certificates libluajit-5.1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential ca-certificates libluajit-5.1-dev curl
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -78,9 +88,21 @@ jobs:
           go-version-file: src/go.mod
           cache-dependency-path: src/go.sum
 
+      - name: Install checksum-verified DuckDB extensions
+        run: |
+          ./scripts/download_duckdb_extensions.sh
+          mkdir -p "$HOME/.duckdb/extensions"
+          cp -R bundled_extensions/v1.5.6 "$HOME/.duckdb/extensions/"
+
       - name: Run PostgreSQL regressions
         working-directory: src
+        shell: bash
         run: |
-          go test ./config ./cli ./storage/ducklake ./coordinator/services \
-            -run 'Test(Postgres|DiscoverSchemaViews|LoadPostgresDuckLakeCatalog|NormalizePostgresDSN|IsPostgresSettingsPath|JWTSecretFilePathWithPostgresSettings|AttachSQLBuildersReturnErrors|CatalogErrorKeepsDiagnosticsWithoutCredentials)' \
-            -count=1 -v -timeout=10m
+          set -euo pipefail
+          go test -race ./config ./cli ./storage/ducklake ./coordinator/services ./node ./server ./writer \
+            -run 'Test(Postgres|NodeReadsPostgres|DiscoverSchemaViews|LoadPostgresDuckLakeCatalog|NormalizePostgresDSN|IsPostgresSettingsPath|JWTSecretFilePathWithPostgresSettings|AttachSQLBuildersReturnErrors|CatalogErrorKeepsDiagnosticsWithoutCredentials|SQLiteShardSpillDirectoryUnchanged|LocalSecretDefaultsAndOverride)' \
+            -count=1 -json -timeout=10m | tee postgres-results.jsonl
+          if grep -q '"Action":"skip"' postgres-results.jsonl; then
+            echo "PostgreSQL regressions must not skip" >&2
+            exit 1
+          fi

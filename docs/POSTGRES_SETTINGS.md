@@ -23,7 +23,7 @@ not open the previous settings file while PostgreSQL is configured.
 Run this command as the OS user that runs Homer:
 
 ```sh
-homer-core --install-extensions
+homer-core system --install-extensions
 ```
 
 The command includes the `postgres` extension.
@@ -89,7 +89,8 @@ The default is `/var/lib/homer`. Environment overrides use
 `HOMER_NODE_LOCAL_SECRETS_DIR` and `HOMER_COORDINATOR_LOCAL_SECRETS_DIR`.
 Mount the directory with write permissions for the Homer process. Move existing
 generated secrets into it to preserve tokens and JWT sessions.
-With file-backed settings, those secrets remain beside the settings file.
+With file-backed settings, secrets remain beside the settings file unless
+`local_secrets_dir` is explicitly configured.
 
 Config display redacts the connection string unless you supply
 `--include-secrets`, including when selecting it directly with `--section`.
@@ -125,6 +126,15 @@ and drops its own database, so use a disposable server and a test role with
 `CREATE DATABASE` privileges.
 
 Run local regression tests from `src`:
+
+Download the checksum-verified test extensions from the repository root first
+(run as the test user), then run Go tests from `src`:
+
+```sh
+./scripts/download_duckdb_extensions.sh
+mkdir -p "$HOME/.duckdb/extensions"
+cp -R bundled_extensions/v1.5.6 "$HOME/.duckdb/extensions/"
+```
 
 ```sh
 go test ./config ./coordinator/services ./coordinator/handlers ./coordinator ./cli

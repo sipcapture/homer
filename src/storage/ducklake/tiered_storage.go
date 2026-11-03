@@ -173,13 +173,19 @@ func (tsm *TieredStorageManager) volumePaths() []string {
 }
 
 // Start initializes all volumes and starts the tiering service
-func (tsm *TieredStorageManager) Start() error {
+func (tsm *TieredStorageManager) Start() (startErr error) {
 	// Open shared DuckDB connection
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
 		return fmt.Errorf("failed to open DuckDB: %w", err)
 	}
 	tsm.db = db
+	defer func() {
+		if startErr != nil {
+			_ = db.Close()
+			tsm.db = nil
+		}
+	}()
 	// One connection so S3 secrets/SET from attachVolume stay on every Exec
 	// (pool growth would otherwise yield connections without credentials).
 	db.SetMaxOpenConns(1)

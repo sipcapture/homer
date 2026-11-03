@@ -58,7 +58,7 @@ func NewShardedWriter(config Config) (*ShardedWriter, error) {
 			}
 			shardCfg.LakeName = fmt.Sprintf("%s_%d", config.LakeName, i)
 			shardCfg.DataPath = config.DataPath
-			if config.TuningTempDirectory != "" {
+			if IsPostgresCatalogPath(config.CatalogPath) && config.TuningTempDirectory != "" {
 				shardCfg.TuningTempDirectory = filepath.Join(config.TuningTempDirectory, fmt.Sprintf("shard_%d", i))
 			}
 		}

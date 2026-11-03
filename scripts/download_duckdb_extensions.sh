@@ -46,7 +46,7 @@ echo "Downloading DuckDB ${DUCKDB_VERSION} extensions for ${EXT_PLATFORM}..."
 # (IAM-role / instance-profile credentials); aws depends on httpfs. azure is
 # the equivalent for Azure Blob Storage secrets (including Managed Identity
 # via PROVIDER credential_chain).
-for ext in ducklake httpfs aws azure sqlite_scanner; do
+for ext in ducklake httpfs aws azure sqlite_scanner postgres_scanner; do
   rel="${DUCKDB_VERSION}/${EXT_PLATFORM}/${ext}.duckdb_extension.gz"
   url="https://extensions.duckdb.org/${rel}"
   dest="${ext_dir}/${ext}.duckdb_extension"

@@ -31,6 +31,21 @@ Azure Blob Storage (`type: "azure"`) follows the same mechanism — see [`STORAG
 - `node.ducklake.volumes[0].azure_connection_string` → `HOMER_NODE_DUCKLAKE_VOLUMES_0_AZURE_CONNECTION_STRING`
 - `storage.ducklake.azure.endpoint` → `HOMER_STORAGE_DUCKLAKE_AZURE_ENDPOINT` (Azurite, Gov/China cloud, or any other custom Blob endpoint)
 
+## Local authentication secrets
+
+| JSON field | Environment override | Default |
+| --- | --- | --- |
+| `node.local_secrets_dir` | `HOMER_NODE_LOCAL_SECRETS_DIR` | PostgreSQL: `/var/lib/homer`; local catalog: beside the catalog (unchanged). |
+| `coordinator.local_secrets_dir` | `HOMER_COORDINATOR_LOCAL_SECRETS_DIR` | PostgreSQL: `/var/lib/homer`; local settings: beside the settings file (unchanged). |
+
+Set both to one writable, persistent **local** directory for a combined node and
+coordinator. An explicit value overrides the backend default. Generated node and
+FlightSQL tokens use `.homer_node_auth_token`; JWT uses `.homer_jwt_secret`.
+Files are written with mode `0600`. A persistence error prevents that service
+from starting. Configured tokens/secrets retain precedence over generated files.
+See [PostgreSQL settings](POSTGRES_SETTINGS.md) and
+[PostgreSQL catalogs](POSTGRES_DUCKLAKE.md).
+
 ## References
 
 - Loader: `config.Load` — `SetEnvPrefix("HOMER")`, `SetEnvKeyReplacer(".", "_")`, `AutomaticEnv()` ([source](../src/config/config.go)).

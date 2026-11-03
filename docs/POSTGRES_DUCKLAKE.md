@@ -24,7 +24,7 @@ separate migration.
 Run this command using the DuckDB engine and OS user that run Homer:
 
 ```sh
-homer-core --install-extensions
+homer-core system --install-extensions
 ```
 
 ## 2. Configure a single catalog
@@ -163,7 +163,16 @@ authentication. DSNs are never treated as filesystem directories.
 ## Run regression tests
 
 With a disposable PostgreSQL server and an administrative test DSN (CREATE
-DATABASE required for the tests only), run from `src`:
+DATABASE required for the tests only):
+
+Download the checksum-verified test extensions from the repository root first
+(run as the test user), then run Go tests from `src`:
+
+```sh
+./scripts/download_duckdb_extensions.sh
+mkdir -p "$HOME/.duckdb/extensions"
+cp -R bundled_extensions/v1.5.6 "$HOME/.duckdb/extensions/"
+```
 
 ```sh
 HOMER_TEST_POSTGRES_DSN='postgres://postgres:password@127.0.0.1:5432/test?sslmode=disable' \

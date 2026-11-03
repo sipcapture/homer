@@ -10,6 +10,8 @@ package ducklake
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -128,8 +130,12 @@ func (tsm *TieredStorageManager) openMaintenanceDB() (*sql.DB, error) {
 	// ATTACH must be visible to every Exec.
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
+	tempDir := tsm.config.TuningTempDirectory
+	if IsPostgresCatalogPath(tsm.config.CatalogPath) && strings.TrimSpace(tempDir) != "" {
+		tempDir = filepath.Join(tempDir, "tiering-maintenance")
+	}
 	ApplyHomerDuckDBDefaults(db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,
-		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering-maintenance")
+		tempDir, tsm.config.CatalogPath, "tiering-maintenance")
 	ApplyWritePathExternalFileCache(db, tsm.config.TuningExternalFileCache, "tiering-maintenance")
 
 	if err := loadLakeExtensions(db, tsm.config.CatalogType); err != nil {

@@ -334,7 +334,7 @@ type StorageConfig struct {
 
 // NodeConfig configures the FlightSQL node module
 type NodeConfig struct {
-	// LocalSecretsDir stores generated secrets when the database uses PostgreSQL.
+	// LocalSecretsDir overrides the directory for generated authentication secrets.
 	LocalSecretsDir string `json:"local_secrets_dir" mapstructure:"local_secrets_dir"`
 
 	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
@@ -358,7 +358,7 @@ type SmartRoutingConfig struct {
 
 // CoordinatorConfig configures the API coordinator module
 type CoordinatorConfig struct {
-	// LocalSecretsDir stores generated secrets when the database uses PostgreSQL.
+	// LocalSecretsDir overrides the directory for generated authentication secrets.
 	LocalSecretsDir string `json:"local_secrets_dir" mapstructure:"local_secrets_dir"`
 
 	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
@@ -2054,10 +2054,7 @@ func applyDefaults(cfg *Config) {
 	// Exposed binds (default 0.0.0.0) with empty auth_token get an auto-generated
 	// persisted token (GHSA-rm5w-rqr7-2h54). Loopback-only binds may stay empty.
 	if cfg.Node.Enable {
-		catalogPath := strings.TrimSpace(cfg.Node.DuckLake.CatalogPath)
-		if catalogPath == "" && len(cfg.Node.DuckLake.Volumes) > 0 {
-			catalogPath = strings.TrimSpace(cfg.Node.DuckLake.Volumes[0].CatalogPath)
-		}
+		catalogPath := NodeCatalogPath(&cfg.Node)
 		tok, _, _, err := ResolveNodeFlightAuthToken(
 			cfg.Node.FlightServer.Host,
 			cfg.Node.FlightServer.AuthToken,
