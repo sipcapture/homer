@@ -377,7 +377,7 @@ type CoordinatorConfig struct {
 
 	// Inherited from the top-level stateless setting.
 	Stateless bool `json:"-" mapstructure:"-"`
-	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
+	Enable    bool `json:"enable" mapstructure:"enable" default:"false"`
 
 	// SmartRouting: skip nodes with no data in the query time range (UI path).
 	SmartRouting SmartRoutingConfig `json:"smart_routing" mapstructure:"smart_routing"`
