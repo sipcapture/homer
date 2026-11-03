@@ -30,6 +30,11 @@ type ShardedWriter struct {
 // catalog file or PostgreSQL database (suffixed _0, _1, ...) and lake name
 // (homer_lake_0, homer_lake_1) but shares the same data directory.
 func NewShardedWriter(config Config) (*ShardedWriter, error) {
+	ct, err := ResolveCatalogType(config.CatalogType, config.CatalogPath)
+	if err != nil {
+		return nil, err
+	}
+	config.CatalogType = ct
 	n := config.ShardCount
 	if n <= 0 {
 		n = 1
@@ -44,7 +49,7 @@ func NewShardedWriter(config Config) (*ShardedWriter, error) {
 	for i := 0; i < n; i++ {
 		shardCfg := config
 		if n > 1 {
-			if IsPostgresCatalogPath(config.CatalogPath) {
+			if config.CatalogType == CatalogPostgres {
 				var err error
 				shardCfg.CatalogPath, err = suffixedPostgresCatalog(config.CatalogPath, fmt.Sprint(i))
 				if err != nil {
@@ -58,7 +63,7 @@ func NewShardedWriter(config Config) (*ShardedWriter, error) {
 			}
 			shardCfg.LakeName = fmt.Sprintf("%s_%d", config.LakeName, i)
 			shardCfg.DataPath = config.DataPath
-			if IsPostgresCatalogPath(config.CatalogPath) && config.TuningTempDirectory != "" {
+			if config.CatalogType == CatalogPostgres && config.TuningTempDirectory != "" {
 				shardCfg.TuningTempDirectory = filepath.Join(config.TuningTempDirectory, fmt.Sprintf("shard_%d", i))
 			}
 		}

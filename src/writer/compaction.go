@@ -49,9 +49,10 @@ func extractBrokenParquetPath(err error) string {
 
 // CompactionConfig holds compaction settings
 type CompactionConfig struct {
-	Enable           bool `json:"enable"`
-	CheckIntervalSec int  `json:"check_interval_sec"` // How often to run compaction (default: 3600 = 1 hour)
-	RetentionDays    int  `json:"retention_days"`     // Delete data older than N days (0 = disabled)
+	CatalogType      ducklake.CatalogType `json:"-"` // Supplied by storage.ducklake.catalog_type.
+	Enable           bool                 `json:"enable"`
+	CheckIntervalSec int                  `json:"check_interval_sec"` // How often to run compaction (default: 3600 = 1 hour)
+	RetentionDays    int                  `json:"retention_days"`     // Delete data older than N days (0 = disabled)
 	// RetentionDaysByTable overrides RetentionDays per bare table name
 	// (e.g. "hep_proto_1_registration"). Override 0 disables TTL for that table.
 	RetentionDaysByTable map[string]int `json:"retention_days_by_table"`
@@ -893,7 +894,7 @@ func (c *CompactionService) runMaintenanceCalls() {
 func (c *CompactionService) useNativeEngine() bool {
 	// Native compaction's safety backup is SQLite-specific. PostgreSQL uses
 	// DuckLake's own merge engine and PostgreSQL-managed catalog backups.
-	if ducklake.IsPostgresCatalogPath(c.catalogPath) {
+	if c.config.CatalogType == ducklake.CatalogPostgres {
 		return false
 	}
 	if c.config.Engine != EngineNativeGo {

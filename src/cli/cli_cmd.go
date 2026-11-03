@@ -66,7 +66,7 @@ func RunCLICmd(f CLIFlags) error {
 	}
 	defer db.Close()
 
-	return runCLI(db, duckCfg.LakeName, duckCfg.DataPath, duckCfg.CatalogPath, f.Query, f.NoLimit)
+	return runCLI(db, duckCfg.LakeName, duckCfg.DataPath, duckCfg.CatalogType, f.Query, f.NoLimit)
 }
 
 // ---- config helper ---------------------------------------------------------
@@ -298,7 +298,7 @@ func createCommonViews(db *sql.DB, lakeName, dataPath string) (int, error) {
 
 // ---- interactive SQL CLI ---------------------------------------------------
 
-func runCLI(db *sql.DB, lakeName, dataPath, catalogPath, singleQuery string, noLimit bool) error {
+func runCLI(db *sql.DB, lakeName, dataPath string, catalogType ducklake.CatalogType, singleQuery string, noLimit bool) error {
 	fmt.Println("Homer DuckLake SQL CLI (read-only)")
 	fmt.Println("===================================")
 	fmt.Printf("Schema: %s\n", lakeName)
@@ -309,7 +309,7 @@ func runCLI(db *sql.DB, lakeName, dataPath, catalogPath, singleQuery string, noL
 	fmt.Println("TAB completes SQL keywords, tables, columns, and parquet paths")
 	fmt.Println()
 
-	tables := discoverSchemaViews(db, lakeName, catalogPath)
+	tables := discoverSchemaViews(db, lakeName, catalogType)
 
 	if singleQuery != "" {
 		return executeSQLQuery(db, singleQuery, noLimit)
@@ -353,7 +353,7 @@ func runCLI(db *sql.DB, lakeName, dataPath, catalogPath, singleQuery string, noL
 			printCLIHelp(lakeName, tables, noLimit)
 			continue
 		case "tables", "\\dt":
-			tables = discoverSchemaViews(db, lakeName, catalogPath)
+			tables = discoverSchemaViews(db, lakeName, catalogType)
 			printTables(tables)
 			fmt.Println("Table list refreshed for TAB completion.")
 			continue
@@ -556,10 +556,10 @@ func printTables(tables []string) {
 	fmt.Println()
 }
 
-func discoverSchemaViews(db *sql.DB, schemaName, catalogPath string) []string {
+func discoverSchemaViews(db *sql.DB, schemaName string, catalogType ducklake.CatalogType) []string {
 	var tables []string
 	var query string
-	if ducklake.IsPostgresCatalogPath(catalogPath) {
+	if catalogType == ducklake.CatalogPostgres {
 		query = "SELECT table_name FROM information_schema.tables WHERE table_catalog = ? AND table_schema = 'main'"
 	} else {
 		query = "SELECT table_name FROM information_schema.tables WHERE table_schema = ?"

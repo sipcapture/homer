@@ -109,3 +109,15 @@ func TestPostgresCatalogTypeMismatch(t *testing.T) {
 		t.Fatalf("SQLite default: %q, %v", typ, err)
 	}
 }
+
+func TestPostgresShardedWriterRejectsTypeMismatch(t *testing.T) {
+	for _, typ := range []CatalogType{"", CatalogSQLite} {
+		writer, err := NewShardedWriter(Config{CatalogType: typ, CatalogPath: "postgres://user:private@localhost/lake", ShardCount: 2})
+		if err == nil || writer != nil {
+			t.Fatalf("type %q: mismatched sharded catalog accepted", typ)
+		}
+		if strings.Contains(err.Error(), "private") {
+			t.Fatal("error exposed credentials")
+		}
+	}
+}

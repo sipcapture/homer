@@ -12,11 +12,11 @@ import (
 func TestDiscoverSchemaViews(t *testing.T) {
 	for _, attached := range []bool{false, true} {
 		name := "parquet views"
-		catalogPath := "catalog.sqlite"
+		catalogType := ducklake.CatalogSQLite
 		setup := "CREATE SCHEMA lake; CREATE VIEW lake.events AS SELECT 42 AS id"
 		if attached {
 			name = "attached catalog"
-			catalogPath = "postgresql://localhost/lake"
+			catalogType = ducklake.CatalogPostgres
 			setup = "ATTACH ':memory:' AS lake; CREATE TABLE lake.main.events (id INTEGER)"
 		}
 		t.Run(name, func(t *testing.T) {
@@ -28,7 +28,7 @@ func TestDiscoverSchemaViews(t *testing.T) {
 			if _, err := db.Exec(setup + "; CREATE TABLE main.unrelated (id INTEGER)"); err != nil {
 				t.Fatal(err)
 			}
-			got := discoverSchemaViews(db, "lake", catalogPath)
+			got := discoverSchemaViews(db, "lake", catalogType)
 			if len(got) != 1 || got[0] != "lake.events" {
 				t.Fatalf("discovered tables = %v, want [lake.events]", got)
 			}

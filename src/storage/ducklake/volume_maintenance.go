@@ -131,7 +131,7 @@ func (tsm *TieredStorageManager) openMaintenanceDB() (*sql.DB, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	tempDir := tsm.config.TuningTempDirectory
-	if IsPostgresCatalogPath(tsm.config.CatalogPath) && strings.TrimSpace(tempDir) != "" {
+	if tsm.config.CatalogType == CatalogPostgres && strings.TrimSpace(tempDir) != "" {
 		tempDir = filepath.Join(tempDir, "tiering-maintenance")
 	}
 	ApplyHomerDuckDBDefaults(db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,

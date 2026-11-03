@@ -346,6 +346,7 @@ func (w *Writer) Start() error {
 	compactionEnable := w.storageConfig.DuckLake.Compaction.Enable || w.shouldAutoEnableCompactionForTieredHot()
 	{
 		compactionCfg := compactionConfigFromStorage(w.storageConfig.DuckLake.Compaction, compactionEnable)
+		compactionCfg.CatalogType = ducklake.CatalogType(w.storageConfig.DuckLake.CatalogType)
 		if !w.storageConfig.DuckLake.Compaction.Enable && w.shouldAutoEnableCompactionForTieredHot() {
 			logger.Info("Writer: DuckLake compaction auto-enabled (tiered storage with local hot volume)",
 				"lake", w.ducklakeManager.GetLakeName())

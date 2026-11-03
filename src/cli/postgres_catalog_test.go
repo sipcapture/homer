@@ -81,7 +81,7 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 		if err := reader.QueryRow("SELECT id FROM test").Scan(&id); err != nil || id != 42 {
 			t.Fatalf("unqualified read: %d %v", id, err)
 		}
-		tables := discoverSchemaViews(reader, cfg.LakeName, cfg.CatalogPath)
+		tables := discoverSchemaViews(reader, cfg.LakeName, cfg.CatalogType)
 		if len(tables) != 1 || tables[0] != "lake.test" {
 			t.Fatalf("discovered tables = %v, want [lake.test]", tables)
 		}
