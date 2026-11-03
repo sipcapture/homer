@@ -16,6 +16,7 @@ Provide the same configuration and secrets to every replica. For example, inject
 these values through Kubernetes Secrets or your deployment's secret manager:
 
 ```sh
+HOMER_COORDINATOR_SETTINGS_DB_TYPE=postgres
 HOMER_COORDINATOR_SETTINGS_DB_PATH=postgres://homer:password@postgres/homer_settings?sslmode=require
 HOMER_STORAGE_DUCKLAKE_CATALOG_PATH=postgres://homer:password@postgres/homer_catalog?sslmode=require
 HOMER_NODE_DUCKLAKE_CATALOG_PATH=postgres://homer:password@postgres/homer_catalog?sslmode=require
