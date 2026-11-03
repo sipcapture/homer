@@ -124,7 +124,7 @@ func NewTieredStorageManager(config TieredStorageConfig) (*TieredStorageManager,
 		return nil, fmt.Errorf("at least one volume is required")
 	}
 
-	ct, err := NormalizeSQLiteCatalog(config.CatalogType)
+	ct, err := ResolveCatalogType(config.CatalogType, config.CatalogPath)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (tsm *TieredStorageManager) applyDuckDBTuning() {
 		return
 	}
 	ApplyHomerDuckDBDefaults(tsm.db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,
-		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering")
+		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering", tsm.config.CatalogType)
 	ApplyWritePathExternalFileCache(tsm.db, tsm.config.TuningExternalFileCache, "tiering")
 }
 
@@ -173,13 +173,19 @@ func (tsm *TieredStorageManager) volumePaths() []string {
 }
 
 // Start initializes all volumes and starts the tiering service
-func (tsm *TieredStorageManager) Start() error {
+func (tsm *TieredStorageManager) Start() (startErr error) {
 	// Open shared DuckDB connection
 	db, err := sql.Open("duckdb", "")
 	if err != nil {
 		return fmt.Errorf("failed to open DuckDB: %w", err)
 	}
 	tsm.db = db
+	defer func() {
+		if startErr != nil {
+			_ = db.Close()
+			tsm.db = nil
+		}
+	}()
 	// One connection so S3 secrets/SET from attachVolume stay on every Exec
 	// (pool growth would otherwise yield connections without credentials).
 	db.SetMaxOpenConns(1)
@@ -187,14 +193,8 @@ func (tsm *TieredStorageManager) Start() error {
 
 	tsm.applyDuckDBTuning()
 
-	// Load DuckLake extension
-	if _, err := db.Exec("LOAD ducklake;"); err != nil {
-		return fmt.Errorf("failed to load ducklake extension: %w", err)
-	}
-
-	// Load SQLite extension for the DuckLake catalog file
-	if _, err := db.Exec("LOAD sqlite;"); err != nil {
-		return fmt.Errorf("failed to load sqlite extension: %w", err)
+	if err := loadLakeExtensions(db, tsm.config.CatalogType); err != nil {
+		return err
 	}
 
 	// Load the AWS extension so S3 secrets can use PROVIDER credential_chain
@@ -221,7 +221,7 @@ func (tsm *TieredStorageManager) Start() error {
 	}
 
 	// Enable WAL on the hot catalog to reduce SQLite lock contention with the writer.
-	if tsm.primaryVolume != nil && tsm.primaryVolume.CatalogPath != "" {
+	if tsm.config.CatalogType == CatalogSQLite && tsm.primaryVolume != nil && tsm.primaryVolume.CatalogPath != "" {
 		if err := EnableSQLiteWALMode(tsm.primaryVolume.CatalogPath); err != nil {
 			logger.Warn("TieredStorageManager: failed to enable WAL on hot catalog",
 				"path", tsm.primaryVolume.CatalogPath,
@@ -417,7 +417,15 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 	catalogPath := tsm.config.CatalogPath
 
 	// For hot volume (priority 0), check if legacy catalog exists for migration
-	if vol.Priority == 0 && len(tsm.volumes) > 1 {
+	if tsm.config.CatalogType == CatalogPostgres {
+		if vol.Priority != 0 && len(tsm.volumes) > 1 {
+			var err error
+			catalogPath, err = suffixedPostgresCatalog(catalogPath, vol.Name)
+			if err != nil {
+				return err
+			}
+		}
+	} else if vol.Priority == 0 && len(tsm.volumes) > 1 {
 		legacyPath := catalogPath // e.g., /data/homer/homer_catalog.sqlite
 		if fileExists(legacyPath) {
 			// Use legacy catalog for hot volume (migration mode)
@@ -433,11 +441,15 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 		catalogPath = strings.TrimSuffix(catalogPath, ".sqlite") + "_" + vol.Name + ".sqlite"
 	}
 
-	if _, err := tsm.db.Exec(volumeAttachSQL(vol, catalogPath)); err != nil {
-		return fmt.Errorf("failed to attach DuckLake for volume %s: %w", vol.Name, err)
+	attachSQL, err := volumeAttachSQL(tsm.config.CatalogType, vol, catalogPath)
+	if err != nil {
+		return err
+	}
+	if _, err := tsm.db.Exec(attachSQL); err != nil {
+		return CatalogError(catalogPath, "attach volume "+vol.Name, err)
 	}
 	// Tiered DuckDB instances live until process exit; the mark is never released.
-	_ = MarkCatalogAttached(catalogPath)
+	_ = MarkCatalogAttached(catalogPath, tsm.config.CatalogType)
 
 	vol.CatalogPath = catalogPath
 
@@ -450,16 +462,9 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 	return nil
 }
 
-// volumeAttachSQL builds the DuckLake ATTACH for a volume (SQLite catalog only).
-func volumeAttachSQL(vol *Volume, catalogPath string) string {
-	overrideOpt := ""
-	if vol.OverrideDataPath {
-		overrideOpt = ", OVERRIDE_DATA_PATH TRUE"
-	}
-	return fmt.Sprintf(
-		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE%s);",
-		catalogPath, vol.LakeName, vol.Path, overrideOpt,
-	)
+// volumeAttachSQL supports both SQLite paths and PostgreSQL DSNs.
+func volumeAttachSQL(ct CatalogType, vol *Volume, catalogPath string) (string, error) {
+	return CatalogAttachSQL(ct, catalogPath, vol.LakeName, vol.Path, vol.OverrideDataPath)
 }
 
 // GetDB returns the shared database connection
@@ -689,6 +694,9 @@ func (tsm *TieredStorageManager) moveEngine() string {
 }
 
 func (tsm *TieredStorageManager) useNativeMove(srcVol, dstVol *Volume) bool {
+	if tsm.config.CatalogType == CatalogPostgres {
+		return false
+	}
 	if tsm.moveEngine() != "native" {
 		return false
 	}

@@ -71,6 +71,7 @@ The Coordinator module provides REST API for frontend applications and orchestra
         "priority": 1
       }
     ],
+    "settings_db_type": "sqlite",
     "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
     "transaction_view_max_opens": 3,
     "ip_alias_cache_ttl_sec": 30,
@@ -123,6 +124,7 @@ The Coordinator module provides REST API for frontend applications and orchestra
         "priority": 3
       }
     ],
+    "settings_db_type": "sqlite",
     "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
     "jwt": {
       "secret": "your-jwt-secret-minimum-32-characters",
@@ -200,6 +202,7 @@ Authorization **code** flow (server exchanges `code`, loads userinfo, provisions
         "port": 50051
       }
     ],
+    "settings_db_type": "sqlite",
     "settings_db_path": "/var/lib/homer/homer_settings.duckdb",
     "jwt": {
       "secret": "your-jwt-secret",

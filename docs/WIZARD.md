@@ -75,10 +75,10 @@ Choose a profile to pre-fill module settings. Selecting `all-in-one` enables all
 - HTTP port (default: 9080)
 - Worker count and queue size
 
-**Step 3 -- Storage Module** (skipped if disabled)
+**Step 3 -- Storage Module** (shown when storage or node is enabled)
 
-- DuckLake catalog — sqlite
-- Catalog path (default: `/data/homer/homer_catalog.sqlite`)
+- Catalog type: `sqlite` (default) or `postgres`
+- Catalog file path or PostgreSQL DSN (default: `/data/homer/homer_catalog.sqlite`)
 - Data path for parquet files (default: `/data/homer/parquet`)
 - Retention days (default: 30, 0 = unlimited) → `storage.ducklake.compaction.retention_days`
   - Optional per-table TTL overrides (`retention_days_by_table`) are not collected here; edit the generated JSON — see [RETENTION.md](RETENTION.md)
@@ -95,7 +95,8 @@ Choose a profile to pre-fill module settings. Selecting `all-in-one` enables all
 - Node host and port to query (default: 127.0.0.1:50051)
 - JWT secret (auto-generated in TUI if empty; always stored in config when using wizard)
 - Admin username and password (empty password → auto-generated; stored as bcrypt in config)
-- Settings DB path
+- Settings DB type: `sqlite` (default, local DuckDB file) or `postgres`
+- Settings DB file path or PostgreSQL DSN
 
 **Step 6 -- System Settings**
 
@@ -105,6 +106,11 @@ Choose a profile to pre-fill module settings. Selecting `all-in-one` enables all
 **Step 7 -- Review & Save**
 
 Preview the generated JSON config and choose the output file path. Press Enter to save.
+
+Select `postgres` and enter a matching connection string to configure PostgreSQL.
+Type/path mismatches are rejected before saving. PostgreSQL setup and extension
+requirements are covered in [PostgreSQL catalogs](POSTGRES_DUCKLAKE.md) and
+[PostgreSQL settings](POSTGRES_SETTINGS.md). Non-interactive presets retain local defaults.
 
 ### TUI Controls
 

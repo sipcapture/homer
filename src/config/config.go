@@ -334,6 +334,9 @@ type StorageConfig struct {
 
 // NodeConfig configures the FlightSQL node module
 type NodeConfig struct {
+	// LocalSecretsDir overrides the directory for generated authentication secrets.
+	LocalSecretsDir string `json:"local_secrets_dir" mapstructure:"local_secrets_dir"`
+
 	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
 
 	// FlightSQL server settings
@@ -355,6 +358,9 @@ type SmartRoutingConfig struct {
 
 // CoordinatorConfig configures the API coordinator module
 type CoordinatorConfig struct {
+	// LocalSecretsDir overrides the directory for generated authentication secrets.
+	LocalSecretsDir string `json:"local_secrets_dir" mapstructure:"local_secrets_dir"`
+
 	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
 
 	// SmartRouting: skip nodes with no data in the query time range (UI path).
@@ -366,7 +372,8 @@ type CoordinatorConfig struct {
 	// Nodes to query via FlightSQL
 	Nodes []NodeEndpoint `json:"nodes" mapstructure:"nodes"`
 
-	// DuckDB file path for users/settings storage
+	// DuckDB file path or PostgreSQL connection string for users/settings storage.
+	SettingsDBType string `json:"settings_db_type" mapstructure:"settings_db_type" default:"sqlite"`
 	SettingsDBPath string `json:"settings_db_path" mapstructure:"settings_db_path" default:"/var/lib/homer/homer_settings.duckdb"`
 
 	// LakeName is the DuckLake catalog name used in all SQL queries.
@@ -678,7 +685,7 @@ type DuckDBTuning struct {
 
 // DuckLakeConfig configures DuckLake storage
 type DuckLakeConfig struct {
-	CatalogType   string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"` // DuckLake catalog — sqlite
+	CatalogType   string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"` // DuckLake catalog — sqlite or postgres
 	CatalogPath   string `json:"catalog_path" mapstructure:"catalog_path" default:"homer_catalog.sqlite"`
 	DataPath      string `json:"data_path" mapstructure:"data_path" default:"/var/lib/homer/parquet"`
 	LakeName      string `json:"lake_name" mapstructure:"lake_name" default:"homer_lake"`
@@ -768,7 +775,7 @@ type VolumeConfig struct {
 	Name                  string `json:"name" mapstructure:"name"`                                       // Volume name (e.g., "hot", "cold")
 	Type                  string `json:"type" mapstructure:"type" default:"local"`                       // "local", "s3", or "azure"
 	Path                  string `json:"path" mapstructure:"path"`                                       // Data path: local path, S3 URL (s3://bucket/path/), or Azure URL (az://container/path/)
-	CatalogType           string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"`      // DuckLake catalog — sqlite
+	CatalogType           string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"`      // DuckLake catalog — sqlite or postgres
 	CatalogPath           string `json:"catalog_path" mapstructure:"catalog_path"`                       // Catalog path for this volume
 	Priority              int    `json:"priority" mapstructure:"priority" default:"0"`                   // Lower = higher priority (writes go to lowest)
 	MaxDataAgeDays        int    `json:"max_data_age_days" mapstructure:"max_data_age_days" default:"0"` // Move data older than N days to next volume (0 = no limit)
@@ -1355,14 +1362,21 @@ func Load(configPath string) (*Config, error) {
 
 	migrateCoordinatorOAuth2(&cfg, v)
 
+	// Validate backend/path pairs before defaults can persist local secrets.
+	settingsType, err := ResolveSettingsDBType(cfg.Coordinator.SettingsDBType, cfg.Coordinator.SettingsDBPath)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Coordinator.SettingsDBType = settingsType
+
+	if err := validateDuckLakeCatalogTypes(&cfg); err != nil {
+		return nil, err
+	}
+
 	// Legacy safety net for fields that don't carry struct tags yet.
 	applyDefaults(&cfg)
 
 	if err := normalizeCoordinatorAuth(&cfg.Coordinator); err != nil {
-		return nil, err
-	}
-
-	if err := validateDuckLakeCatalogTypes(&cfg); err != nil {
 		return nil, err
 	}
 
@@ -1434,37 +1448,39 @@ func EnsureNodeDuckLakeVolumes(dl *DuckLakeConfig) {
 	dl.Volumes = []VolumeConfig{vol}
 }
 
-// validateDuckLakeCatalogTypes ensures catalog_type is sqlite (or empty).
+// validateDuckLakeCatalogTypes accepts SQLite paths or PostgreSQL catalog DSNs.
 func validateDuckLakeCatalogTypes(cfg *Config) error {
-	check := func(field, v string) error {
-		s := strings.TrimSpace(v)
-		if s == "" {
-			return nil
+	check := func(field string, typ *string, path string) error {
+		value, err := ResolveCatalogType(*typ, path)
+		if err != nil {
+			return fmt.Errorf("%s: %w", field, err)
 		}
-		if strings.EqualFold(s, "sqlite") {
-			return nil
-		}
-		return fmt.Errorf("%s: DuckLake catalog — sqlite (got %q)", field, v)
+		*typ = value
+		return nil
 	}
-	if err := check("storage.ducklake.catalog_type", cfg.Storage.DuckLake.CatalogType); err != nil {
+	if err := check("storage.ducklake.catalog_type", &cfg.Storage.DuckLake.CatalogType, cfg.Storage.DuckLake.CatalogPath); err != nil {
 		return err
 	}
-	for i, v := range cfg.Storage.DuckLake.Volumes {
-		if err := check(fmt.Sprintf("storage.ducklake.volumes[%d].catalog_type", i), v.CatalogType); err != nil {
-			return err
-		}
-	}
-	for i, v := range cfg.Storage.DuckLake.StoragePolicy.Volumes {
-		if err := check(fmt.Sprintf("storage.ducklake.storage_policy.volumes[%d].catalog_type", i), v.CatalogType); err != nil {
-			return err
-		}
-	}
-	if err := check("node.ducklake.catalog_type", cfg.Node.DuckLake.CatalogType); err != nil {
+	if err := check("node.ducklake.catalog_type", &cfg.Node.DuckLake.CatalogType, cfg.Node.DuckLake.CatalogPath); err != nil {
 		return err
 	}
-	for i, v := range cfg.Node.DuckLake.Volumes {
-		if err := check(fmt.Sprintf("node.ducklake.volumes[%d].catalog_type", i), v.CatalogType); err != nil {
-			return err
+	if cfg.Storage.DuckLake.CatalogType == "postgres" && cfg.Storage.DuckLake.ShardCount > 1 && cfg.Storage.DuckLake.StoragePolicy.Enable {
+		return fmt.Errorf("PostgreSQL DuckLake sharding cannot be combined with storage_policy: tiering currently manages a single hot catalog")
+	}
+	lists := []struct {
+		name    string
+		volumes []VolumeConfig
+	}{
+		{"storage.ducklake.volumes", cfg.Storage.DuckLake.Volumes},
+		{"storage.ducklake.storage_policy.volumes", cfg.Storage.DuckLake.StoragePolicy.Volumes},
+		{"node.ducklake.volumes", cfg.Node.DuckLake.Volumes},
+	}
+	for _, list := range lists {
+		for i := range list.volumes {
+			v := &list.volumes[i]
+			if err := check(fmt.Sprintf("%s[%d].catalog_type", list.name, i), &v.CatalogType, v.CatalogPath); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -1832,6 +1848,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Coordinator.QueryTimeoutSec <= 0 {
 		cfg.Coordinator.QueryTimeoutSec = 30
 	}
+	if cfg.Coordinator.SettingsDBType == "" {
+		cfg.Coordinator.SettingsDBType = "sqlite"
+	}
 	if cfg.Coordinator.SettingsDBPath == "" {
 		cfg.Coordinator.SettingsDBPath = "/var/lib/homer/homer_settings.duckdb"
 	}
@@ -2040,14 +2059,13 @@ func applyDefaults(cfg *Config) {
 	// Exposed binds (default 0.0.0.0) with empty auth_token get an auto-generated
 	// persisted token (GHSA-rm5w-rqr7-2h54). Loopback-only binds may stay empty.
 	if cfg.Node.Enable {
-		catalogPath := strings.TrimSpace(cfg.Node.DuckLake.CatalogPath)
-		if catalogPath == "" && len(cfg.Node.DuckLake.Volumes) > 0 {
-			catalogPath = strings.TrimSpace(cfg.Node.DuckLake.Volumes[0].CatalogPath)
-		}
+		catalogPath := NodeCatalogPath(&cfg.Node)
 		tok, _, _, err := ResolveNodeFlightAuthToken(
 			cfg.Node.FlightServer.Host,
 			cfg.Node.FlightServer.AuthToken,
 			catalogPath,
+			cfg.Node.LocalSecretsDir,
+			NodeCatalogType(&cfg.Node),
 		)
 		if err == nil {
 			cfg.Node.FlightServer.AuthToken = tok
@@ -2057,7 +2075,7 @@ func applyDefaults(cfg *Config) {
 			if fsqlTok == "" {
 				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
 			}
-			tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, catalogPath)
+			tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, catalogPath, cfg.Node.LocalSecretsDir, NodeCatalogType(&cfg.Node))
 			if err == nil {
 				cfg.Node.FlightSQLServer.AuthToken = tok
 			}
@@ -2073,7 +2091,7 @@ func applyDefaults(cfg *Config) {
 			}
 		}
 		settingsPath := strings.TrimSpace(cfg.Coordinator.SettingsDBPath)
-		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath)
+		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath, cfg.Coordinator.LocalSecretsDir, cfg.Coordinator.SettingsDBType)
 		if err == nil {
 			cfg.Coordinator.FlightSQLServer.AuthToken = tok
 		}

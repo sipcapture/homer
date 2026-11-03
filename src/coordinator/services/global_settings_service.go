@@ -134,7 +134,11 @@ func (s *GlobalSettingsService) Create(ctx context.Context, item GlobalSetting) 
 		escapeSQL(dataStr),
 	)
 	var guid string
-	if err := s.db.QueryRowContext(ctx, insertSQL).Scan(&guid); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, insertSQL).Scan(&guid); err != nil {
 		return item.GUID, err
 	}
 	return guid, nil
@@ -163,7 +167,11 @@ func (s *GlobalSettingsService) Update(ctx context.Context, guid string, item Gl
 		escapeSQL(guid),
 	)
 	var updated string
-	if err := s.db.QueryRowContext(ctx, updateSQL).Scan(&updated); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, updateSQL).Scan(&updated); err != nil {
 		if err == sql.ErrNoRows {
 			return "", nil
 		}
@@ -181,7 +189,11 @@ func (s *GlobalSettingsService) Delete(ctx context.Context, guid string) (bool, 
 		escapeSQL(guid),
 	)
 	var id int64
-	if err := s.db.QueryRowContext(ctx, deleteSQL).Scan(&id); err != nil {
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	if err := queryRow(ctx, deleteSQL).Scan(&id); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}

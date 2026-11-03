@@ -16,7 +16,7 @@ func TestInProcessSQLiteRefusedWhileCatalogAttached(t *testing.T) {
 	catalog := filepath.Join(dir, "catalog.sqlite")
 	newTestCatalog(t, catalog, 3)
 
-	release := MarkCatalogAttached(catalog)
+	release := MarkCatalogAttached(catalog, CatalogSQLite)
 
 	if _, err := BackupCatalog(catalog, 2); !errors.Is(err, ErrCatalogAttachedInProcess) {
 		t.Fatalf("BackupCatalog on attached catalog: err = %v, want ErrCatalogAttachedInProcess", err)
@@ -27,13 +27,13 @@ func TestInProcessSQLiteRefusedWhileCatalogAttached(t *testing.T) {
 	// A relative spelling of the same file must be recognised too.
 	wd, _ := os.Getwd()
 	if rel, err := filepath.Rel(wd, catalog); err == nil {
-		if !IsCatalogAttachedInProcess(rel) {
+		if !IsCatalogAttachedInProcess(rel, CatalogSQLite) {
 			t.Fatalf("relative path %q not recognised as attached", rel)
 		}
 	}
 
 	release()
-	if IsCatalogAttachedInProcess(catalog) {
+	if IsCatalogAttachedInProcess(catalog, CatalogSQLite) {
 		t.Fatal("catalog still reported attached after release")
 	}
 	if _, err := BackupCatalog(catalog, 2); err != nil {
@@ -43,15 +43,32 @@ func TestInProcessSQLiteRefusedWhileCatalogAttached(t *testing.T) {
 
 func TestMarkCatalogAttachedIsRefCounted(t *testing.T) {
 	catalog := filepath.Join(t.TempDir(), "c.sqlite")
-	r1 := MarkCatalogAttached(catalog)
-	r2 := MarkCatalogAttached(catalog)
+	r1 := MarkCatalogAttached(catalog, CatalogSQLite)
+	r2 := MarkCatalogAttached(catalog, CatalogSQLite)
 	r1()
 	r1() // double release must not drop the second holder
-	if !IsCatalogAttachedInProcess(catalog) {
+	if !IsCatalogAttachedInProcess(catalog, CatalogSQLite) {
 		t.Fatal("second holder lost after first release")
 	}
 	r2()
-	if IsCatalogAttachedInProcess(catalog) {
+	if IsCatalogAttachedInProcess(catalog, CatalogSQLite) {
 		t.Fatal("catalog still attached after all releases")
+	}
+}
+
+func TestPostgresCatalogRegistryUsesType(t *testing.T) {
+	catalog := filepath.Join(t.TempDir(), "catalog.sqlite")
+	release := MarkCatalogAttached(catalog, CatalogPostgres)
+	defer release()
+	if IsCatalogAttachedInProcess(catalog, CatalogSQLite) {
+		t.Fatal("PostgreSQL catalog was registered as a SQLite file")
+	}
+	releaseLocal := MarkCatalogAttached(catalog, CatalogSQLite)
+	defer releaseLocal()
+	if IsCatalogAttachedInProcess(catalog, CatalogPostgres) {
+		t.Fatal("PostgreSQL lookup used SQLite tracking")
+	}
+	if !IsCatalogAttachedInProcess(catalog, CatalogSQLite) {
+		t.Fatal("SQLite tracking stopped working")
 	}
 }

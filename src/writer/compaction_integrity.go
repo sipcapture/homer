@@ -37,7 +37,7 @@ func (c *CompactionService) verifyCatalogIntegrity() bool {
 		return false
 	}
 	path := strings.TrimSpace(c.catalogPath)
-	if path == "" {
+	if path == "" || c.config.CatalogType == ducklake.CatalogPostgres {
 		return true
 	}
 
@@ -68,7 +68,7 @@ func (c *CompactionService) verifyCatalogIntegrity() bool {
 // catalog lock.
 func (c *CompactionService) quarantineScheduledDeletions() {
 	path := strings.TrimSpace(c.catalogPath)
-	if path == "" {
+	if path == "" || c.config.CatalogType == ducklake.CatalogPostgres {
 		return
 	}
 	res, err := ducklake.QuarantineMalformedScheduledDeletions(path, c.database())

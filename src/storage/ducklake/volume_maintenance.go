@@ -10,6 +10,8 @@ package ducklake
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,12 +105,16 @@ func (tsm *TieredStorageManager) fileCleanupDB(vol *Volume) (*sql.DB, error) {
 	if vol.CatalogPath == "" {
 		return nil, fmt.Errorf("volume %s has no resolved catalog path", vol.Name)
 	}
-	if _, err := m.db.Exec(volumeAttachSQL(vol, vol.CatalogPath)); err != nil {
-		return nil, fmt.Errorf("attach volume %s on maintenance DuckDB: %w", vol.Name, err)
+	attachSQL, err := volumeAttachSQL(tsm.config.CatalogType, vol, vol.CatalogPath)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := m.db.Exec(attachSQL); err != nil {
+		return nil, CatalogError(vol.CatalogPath, "maintenance attach volume "+vol.Name, err)
 	}
 	m.attached[vol.LakeName] = true
 	// Tiered DuckDB instances live until process exit; the mark is never released.
-	_ = MarkCatalogAttached(vol.CatalogPath)
+	_ = MarkCatalogAttached(vol.CatalogPath, tsm.config.CatalogType)
 	logger.Info("TieredStorageManager: Volume attached for file cleanup",
 		"volume", vol.Name,
 		"lake", vol.LakeName)
@@ -124,15 +130,17 @@ func (tsm *TieredStorageManager) openMaintenanceDB() (*sql.DB, error) {
 	// ATTACH must be visible to every Exec.
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
+	tempDir := tsm.config.TuningTempDirectory
+	if tsm.config.CatalogType == CatalogPostgres && strings.TrimSpace(tempDir) != "" {
+		tempDir = filepath.Join(tempDir, "tiering-maintenance")
+	}
 	ApplyHomerDuckDBDefaults(db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,
-		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering-maintenance")
+		tempDir, tsm.config.CatalogPath, "tiering-maintenance", tsm.config.CatalogType)
 	ApplyWritePathExternalFileCache(db, tsm.config.TuningExternalFileCache, "tiering-maintenance")
 
-	for _, ext := range []string{"ducklake", "sqlite"} {
-		if _, err := db.Exec("LOAD " + ext + ";"); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("maintenance DuckDB: load %s extension: %w", ext, err)
-		}
+	if err := loadLakeExtensions(db, tsm.config.CatalogType); err != nil {
+		_ = db.Close()
+		return nil, err
 	}
 	if _, err := db.Exec("LOAD aws;"); err != nil {
 		logger.Warn("TieredStorageManager: maintenance DuckDB failed to load aws extension (credential_chain unavailable)", "error", err)

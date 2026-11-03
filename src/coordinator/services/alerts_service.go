@@ -92,8 +92,12 @@ func (s *AlertsService) Insert(ctx context.Context, severity, title, message str
 	if len(payload) > 0 {
 		payloadArg = string(payload)
 	}
-	row := s.db.QueryRowContext(ctx,
-		`INSERT INTO dashboard_alerts (severity, title, message, payload) VALUES (?, ?, ?, ?) RETURNING id`,
+	queryRow := s.db.QueryRowContext
+	if isPostgresSettings(s.db) {
+		queryRow = postgresQueryRow(s.db)
+	}
+	row := queryRow(ctx,
+		`INSERT INTO dashboard_alerts (severity, title, message, payload) VALUES ($1, $2, $3, $4) RETURNING id`,
 		nullIfEmpty(severity), nullIfEmpty(title), nullIfEmpty(message), payloadArg,
 	)
 	var id int64

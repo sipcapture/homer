@@ -20,14 +20,13 @@ func ensureFlightAuthToken(cfg *config.NodeConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	catalogPath := strings.TrimSpace(cfg.DuckLake.CatalogPath)
-	if catalogPath == "" && len(cfg.DuckLake.Volumes) > 0 {
-		catalogPath = strings.TrimSpace(cfg.DuckLake.Volumes[0].CatalogPath)
-	}
+	catalogPath := config.NodeCatalogPath(cfg)
 	tok, autoGen, tokenFile, err := config.ResolveNodeFlightAuthToken(
 		cfg.FlightServer.Host,
 		cfg.FlightServer.AuthToken,
 		catalogPath,
+		cfg.LocalSecretsDir,
+		config.NodeCatalogType(cfg),
 	)
 	if err != nil {
 		return err
@@ -54,15 +53,12 @@ func ensureFlightSQLAuthToken(cfg *config.NodeConfig) error {
 	if cfg == nil || !cfg.FlightSQLServer.Enable {
 		return nil
 	}
-	catalogPath := strings.TrimSpace(cfg.DuckLake.CatalogPath)
-	if catalogPath == "" && len(cfg.DuckLake.Volumes) > 0 {
-		catalogPath = strings.TrimSpace(cfg.DuckLake.Volumes[0].CatalogPath)
-	}
+	catalogPath := config.NodeCatalogPath(cfg)
 	configured := strings.TrimSpace(cfg.FlightSQLServer.AuthToken)
 	if configured == "" {
 		configured = strings.TrimSpace(cfg.FlightServer.AuthToken)
 	}
-	tok, autoGen, tokenFile, err := config.ResolveRequiredAuthToken(configured, catalogPath)
+	tok, autoGen, tokenFile, err := config.ResolveRequiredAuthToken(configured, catalogPath, cfg.LocalSecretsDir, config.NodeCatalogType(cfg))
 	if err != nil {
 		return err
 	}

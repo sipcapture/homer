@@ -329,7 +329,7 @@ func (w *Writer) Start() error {
 		return fmt.Errorf("failed to start DuckLake manager: %w", err)
 	}
 	logger.Info("Writer: DuckLake storage started",
-		"catalog", w.storageConfig.DuckLake.CatalogPath,
+		"catalog", ducklake.CatalogDisplayPath(w.storageConfig.DuckLake.CatalogPath),
 		"data", w.storageConfig.DuckLake.DataPath)
 
 	// Start compaction service if enabled (on primary shard only — each shard
@@ -346,6 +346,7 @@ func (w *Writer) Start() error {
 	compactionEnable := w.storageConfig.DuckLake.Compaction.Enable || w.shouldAutoEnableCompactionForTieredHot()
 	{
 		compactionCfg := compactionConfigFromStorage(w.storageConfig.DuckLake.Compaction, compactionEnable)
+		compactionCfg.CatalogType = ducklake.CatalogType(w.storageConfig.DuckLake.CatalogType)
 		if !w.storageConfig.DuckLake.Compaction.Enable && w.shouldAutoEnableCompactionForTieredHot() {
 			logger.Info("Writer: DuckLake compaction auto-enabled (tiered storage with local hot volume)",
 				"lake", w.ducklakeManager.GetLakeName())

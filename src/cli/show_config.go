@@ -107,14 +107,14 @@ func formatRunningConfig(cfg *config.Config, f ShowConfigFlags) ([]byte, error) 
 	if err := json.Unmarshal(raw, &root); err != nil {
 		return nil, fmt.Errorf("decode config json: %w", err)
 	}
+	if !f.IncludeSecrets {
+		redactJSONSecrets(root)
+	}
 	if section := strings.TrimSpace(f.Section); section != "" {
 		root, err = lookupJSONSection(root, section)
 		if err != nil {
 			return nil, err
 		}
-	}
-	if !f.IncludeSecrets {
-		redactJSONSecrets(root)
 	}
 	if f.Compact {
 		return json.Marshal(root)
@@ -145,6 +145,10 @@ func redactJSONSecrets(v any) {
 	switch n := v.(type) {
 	case map[string]any:
 		for k, child := range n {
+			if s, ok := child.(string); ok && (strings.EqualFold(k, "settings_db_path") || strings.EqualFold(k, "catalog_path")) && config.IsPostgresSettingsPath(s) {
+				n[k] = redactedSecret
+				continue
+			}
 			if isSecretJSONKey(k) {
 				if s, ok := child.(string); ok && s != "" {
 					n[k] = redactedSecret

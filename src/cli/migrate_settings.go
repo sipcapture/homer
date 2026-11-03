@@ -95,17 +95,27 @@ func RunMigrateSettings(f MigrateFlags) error {
 // ---------------------------------------------------------------------------
 
 func resolveSettingsDBPath(f MigrateFlags) (string, error) {
-	if f.DuckDBPath != "" {
-		return f.DuckDBPath, nil
+	path := f.DuckDBPath
+	typ := "sqlite" // --duckdb explicitly selects a local destination.
+	if path == "" {
+		cfg, err := config.Load(f.ConfigPath)
+		if err != nil {
+			return "", fmt.Errorf("--duckdb is unset and could not load config: %w", err)
+		}
+		path = cfg.Coordinator.SettingsDBPath
+		typ = cfg.Coordinator.SettingsDBType
 	}
-	cfg, err := config.Load(f.ConfigPath)
-	if err != nil {
-		return "", fmt.Errorf("--duckdb is unset and could not load config: %w", err)
-	}
-	if cfg.Coordinator.SettingsDBPath == "" {
+	if path == "" {
 		return "", fmt.Errorf("config has empty coordinator.settings_db_path; pass --duckdb explicitly")
 	}
-	return cfg.Coordinator.SettingsDBPath, nil
+	typ, err := config.ResolveSettingsDBType(typ, path)
+	if err != nil {
+		return "", err
+	}
+	if typ == "postgres" {
+		return "", fmt.Errorf("settings migration requires a local DuckDB destination; pass --duckdb with a file path")
+	}
+	return path, nil
 }
 
 type migrateStats struct {
@@ -478,14 +488,14 @@ func dashboardStub(rawData string) string {
 	var src map[string]any
 	_ = json.Unmarshal([]byte(jsonOrNull(rawData)), &src)
 	out := map[string]any{
-		"name":              firstString(src, "name", "title"),
-		"weight":            src["weight"],
-		"shared":            src["shared"],
-		"type":              firstString(src, "type"),
-		"widgets":           []any{},
-		"layouts":           map[string]any{},
-		"_homer7_migrated":  true,
-		"_homer7_legacy":    src,
+		"name":             firstString(src, "name", "title"),
+		"weight":           src["weight"],
+		"shared":           src["shared"],
+		"type":             firstString(src, "type"),
+		"widgets":          []any{},
+		"layouts":          map[string]any{},
+		"_homer7_migrated": true,
+		"_homer7_legacy":   src,
 	}
 	b, _ := json.Marshal(out)
 	return string(b)
@@ -542,10 +552,10 @@ func migrateMappingSchema(ctx context.Context, pg, duck *sql.DB, f MigrateFlags,
 	defer rows.Close()
 	for rows.Next() {
 		var (
-			guid, profile, hepAlias, createTable                                                    string
+			guid, profile, hepAlias, createTable                                                           string
 			createIndex, correlationMapping, fieldsMapping, mappingSettings, schemaMapping, schemaSettings string
-			hepid, partid, version, retention, partitionStep                                        int
-			createDate                                                                              time.Time
+			hepid, partid, version, retention, partitionStep                                               int
+			createDate                                                                                     time.Time
 		)
 		if err := rows.Scan(&guid, &profile, &hepid, &hepAlias, &partid, &version, &retention,
 			&partitionStep, &createIndex, &createTable, &correlationMapping, &fieldsMapping,
@@ -748,8 +758,8 @@ func migrateAuthToken(ctx context.Context, pg, duck *sql.DB, f MigrateFlags, s *
 	for rows.Next() {
 		var (
 			guid, creatorGUID, name, token, userObject, ipAddress, lastUsage, expire string
-			usageCalls, limitCalls, active                                            int
-			createDate                                                                time.Time
+			usageCalls, limitCalls, active                                           int
+			createDate                                                               time.Time
 		)
 		if err := rows.Scan(&guid, &creatorGUID, &name, &token, &userObject, &ipAddress,
 			&createDate, &lastUsage, &expire, &usageCalls, &limitCalls, &active); err != nil {

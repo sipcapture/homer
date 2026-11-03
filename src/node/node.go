@@ -2225,8 +2225,9 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 		cfg.DuckLake.Tuning.Threads,
 		cfg.DuckLake.Tuning.MemoryLimit,
 		cfg.DuckLake.Tuning.TempDirectory,
-		cfg.DuckLake.CatalogPath,
+		config.NodeCatalogPath(cfg),
 		"node",
+		ducklake.CatalogType(config.NodeCatalogType(cfg)),
 	)
 
 	// Install and load DuckLake extension
@@ -2361,35 +2362,27 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 		return VolumeInfo{}, fmt.Errorf("catalog_path is required for volume %s", vol.Name)
 	}
 
-	// Determine catalog type (from volume config or default to sqlite)
-	catalogType := vol.CatalogType
-	if catalogType == "" {
-		catalogType = "sqlite"
-	}
-	if _, err := ducklake.NormalizeSQLiteCatalog(ducklake.CatalogType(catalogType)); err != nil {
+	catalogType, err := ducklake.ResolveCatalogType(ducklake.CatalogType(vol.CatalogType), catalogPath)
+	if err != nil {
 		return VolumeInfo{}, fmt.Errorf("volume %s: %w", vol.Name, err)
 	}
-
-	// Enable WAL mode for SQLite catalog
-	if err := ducklake.EnableSQLiteWALMode(catalogPath); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to enable WAL mode for catalog %s: %v", catalogPath, err))
+	if catalogType == ducklake.CatalogSQLite {
+		if err := ducklake.EnableSQLiteWALMode(catalogPath); err != nil {
+			logger.Warn("Failed to enable catalog WAL", "error", err)
+		}
+	} else if _, err := db.Exec("LOAD postgres;"); err != nil {
+		return VolumeInfo{}, fmt.Errorf("load postgres extension (run --install-extensions): %w", err)
 	}
-
-	// Build attach statement (SQLite catalog only)
-	overrideOpt := ""
-	if vol.OverrideDataPath {
-		overrideOpt = ", OVERRIDE_DATA_PATH TRUE"
+	attachSQL, err := ducklake.CatalogAttachSQL(catalogType, catalogPath, lakeName, vol.Path, vol.OverrideDataPath)
+	if err != nil {
+		return VolumeInfo{}, err
 	}
-	attachSQL := fmt.Sprintf(
-		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE%s);",
-		catalogPath, lakeName, vol.Path, overrideOpt,
-	)
 	if _, err := db.Exec(attachSQL); err != nil {
-		return VolumeInfo{}, fmt.Errorf("failed to attach: %w", err)
+		return VolumeInfo{}, ducklake.CatalogError(catalogPath, "node attach", err)
 	}
 	// Node DuckDB instances are replaced on refresh but live until process
 	// exit, so the mark is never released.
-	_ = ducklake.MarkCatalogAttached(catalogPath)
+	_ = ducklake.MarkCatalogAttached(catalogPath, catalogType)
 
 	return VolumeInfo{
 		Name:     vol.Name,

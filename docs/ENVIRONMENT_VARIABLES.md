@@ -31,6 +31,21 @@ Azure Blob Storage (`type: "azure"`) follows the same mechanism — see [`STORAG
 - `node.ducklake.volumes[0].azure_connection_string` → `HOMER_NODE_DUCKLAKE_VOLUMES_0_AZURE_CONNECTION_STRING`
 - `storage.ducklake.azure.endpoint` → `HOMER_STORAGE_DUCKLAKE_AZURE_ENDPOINT` (Azurite, Gov/China cloud, or any other custom Blob endpoint)
 
+## Local authentication secrets
+
+| JSON field | Environment override | Default |
+| --- | --- | --- |
+| `node.local_secrets_dir` | `HOMER_NODE_LOCAL_SECRETS_DIR` | PostgreSQL: `/var/lib/homer`; local catalog: beside the catalog (unchanged). |
+| `coordinator.local_secrets_dir` | `HOMER_COORDINATOR_LOCAL_SECRETS_DIR` | PostgreSQL: `/var/lib/homer`; local settings: beside the settings file (unchanged). |
+
+Set both to one writable, persistent **local** directory for a combined node and
+coordinator. An explicit value overrides the backend default. Generated node and
+FlightSQL tokens use `.homer_node_auth_token`; JWT uses `.homer_jwt_secret`.
+Files are written with mode `0600`. A persistence error prevents that service
+from starting. Configured tokens/secrets retain precedence over generated files.
+See [PostgreSQL settings](POSTGRES_SETTINGS.md) and
+[PostgreSQL catalogs](POSTGRES_DUCKLAKE.md).
+
 ## References
 
 - Loader: `config.Load` — `SetEnvPrefix("HOMER")`, `SetEnvKeyReplacer(".", "_")`, `AutomaticEnv()` ([source](../src/config/config.go)).
@@ -42,3 +57,7 @@ Azure Blob Storage (`type: "azure"`) follows the same mechanism — see [`STORAG
 - DuckDB engine caps: `HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT`, `HOMER_STORAGE_DUCKLAKE_TUNING_THREADS`, `HOMER_STORAGE_DUCKLAKE_TUNING_TEMP_DIRECTORY` (writer) and the `HOMER_NODE_DUCKLAKE_TUNING_*` equivalents (reader). See [DUCKDB_TUNING.md](DUCKDB_TUNING.md) and [OOM.md](OOM.md).
 - **Data retention (TTL):** [`RETENTION.md`](RETENTION.md) — `HOMER_STORAGE_DUCKLAKE_COMPACTION_RETENTION_DAYS` and related compaction env vars. Per-table overrides (`retention_days_by_table`) are configured in JSON (map), not as a single env scalar.
 - **Search timeouts:** [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) — `HOMER_COORDINATOR_QUERY_TIMEOUT_SEC`, `HOMER_COORDINATOR_HTTP_SERVER_READ_TIMEOUT`, `HOMER_COORDINATOR_HTTP_SERVER_WRITE_TIMEOUT`.
+
+Settings backend selection: `HOMER_COORDINATOR_SETTINGS_DB_TYPE` maps to
+`coordinator.settings_db_type` and defaults to `sqlite`. Set it to `postgres`
+when `HOMER_COORDINATOR_SETTINGS_DB_PATH` contains a PostgreSQL connection string.

@@ -39,10 +39,14 @@ func openTestWriterDB(t *testing.T) (Config, *sql.DB) {
 	if err := loadLakeExtensions(db); err != nil {
 		t.Skipf("extensions unavailable: %v", err)
 	}
-	if _, err := db.Exec(buildLakeAttachSQL(cfg)); err != nil {
+	attachSQL, err := buildLakeAttachSQL(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(attachSQL); err != nil {
 		t.Skipf("ATTACH failed: %v", err)
 	}
-	t.Cleanup(MarkCatalogAttached(cfg.CatalogPath))
+	t.Cleanup(MarkCatalogAttached(cfg.CatalogPath, CatalogSQLite))
 	return cfg, db
 }
 
@@ -73,7 +77,7 @@ func TestOpenMaintenanceDBSeesWriterLake(t *testing.T) {
 	if err := m.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if !IsCatalogAttachedInProcess(cfg.CatalogPath) {
+	if !IsCatalogAttachedInProcess(cfg.CatalogPath, CatalogSQLite) {
 		t.Error("closing the maintenance instance dropped the writer's attach mark")
 	}
 }

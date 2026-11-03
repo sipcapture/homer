@@ -37,7 +37,7 @@ func RunResetAdminPassword(configPath string) error {
 		user = "admin"
 	}
 
-	db, err := services.OpenSettingsDB(cfg.Coordinator.SettingsDBPath)
+	db, err := services.OpenSettingsDB(cfg.Coordinator.SettingsDBPath, cfg.Coordinator.SettingsDBType)
 	if err != nil {
 		return fmt.Errorf("open settings db: %w", err)
 	}

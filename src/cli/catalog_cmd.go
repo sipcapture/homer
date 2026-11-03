@@ -87,6 +87,9 @@ func RunCatalogCmd(f CatalogFlags) error {
 
 func catalogPathFromFlags(f CatalogFlags) (string, error) {
 	if p := strings.TrimSpace(f.CatalogPath); p != "" {
+		if config.IsPostgresSettingsPath(p) {
+			return "", fmt.Errorf("this catalog command requires a SQLite file; use PostgreSQL tools for PostgreSQL catalog backup and repair")
+		}
 		return p, nil
 	}
 	return catalogPathFromConfig(f.ConfigPath)
@@ -97,7 +100,11 @@ func catalogPathFromConfig(configPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load config: %w", err)
 	}
-	path := strings.TrimSpace(duckLakeConfigFromModular(cfg).CatalogPath)
+	catalog := duckLakeConfigFromModular(cfg)
+	path := strings.TrimSpace(catalog.CatalogPath)
+	if catalog.CatalogType == ducklake.CatalogPostgres {
+		return "", fmt.Errorf("this catalog command requires a SQLite file; use PostgreSQL tools for PostgreSQL catalog backup and repair")
+	}
 	if path == "" {
 		return "", fmt.Errorf("no sqlite catalog_path in config")
 	}

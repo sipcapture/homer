@@ -9,7 +9,8 @@
 // DuckLake is a lakehouse format that combines Parquet files with a SQL catalog
 // for features like time travel, snapshots, and ACID transactions.
 //
-// DuckLake catalog — sqlite. Parquet data may live on local disk or S3 via data_path.
+// DuckLake catalogs use SQLite or PostgreSQL. Parquet data may live on local
+// disk or object storage via data_path.
 package ducklake
 
 import (
@@ -28,20 +29,21 @@ import (
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
-// CatalogType — DuckLake catalog (sqlite).
+// CatalogType identifies the DuckLake metadata backend.
 type CatalogType string
 
 const (
 	// CatalogSQLite — DuckLake catalog backed by a local .sqlite file.
-	CatalogSQLite CatalogType = "sqlite"
+	CatalogSQLite   CatalogType = "sqlite"
+	CatalogPostgres CatalogType = "postgres"
 )
 
 // Config holds DuckLake configuration
 type Config struct {
-	// CatalogType — sqlite (empty = sqlite).
+	// CatalogType — sqlite or postgres (empty defaults to sqlite).
 	CatalogType CatalogType
 
-	// CatalogPath — .sqlite file for the DuckLake catalog
+	// CatalogPath — SQLite filename or PostgreSQL connection string.
 	CatalogPath string
 
 	// DataPath: path for Parquet data files
@@ -283,7 +285,7 @@ type Snapshot struct {
 
 // NewMultiTableWriter creates a new multi-table DuckLake writer
 func NewMultiTableWriter(config Config) (*MultiTableWriter, error) {
-	ct, err := NormalizeSQLiteCatalog(config.CatalogType)
+	ct, err := ResolveCatalogType(config.CatalogType, config.CatalogPath)
 	if err != nil {
 		return nil, err
 	}
@@ -338,6 +340,7 @@ func NewMultiTableWriter(config Config) (*MultiTableWriter, error) {
 	}
 
 	if err := mtw.connect(); err != nil {
+		_ = mtw.Stop()
 		return nil, err
 	}
 
@@ -388,23 +391,25 @@ func (mtw *MultiTableWriter) connect() error {
 	// unless temp_directory is set (search + flush share the same
 	// memory_limit; compaction runs on its own instance).
 	ApplyHomerDuckDBDefaults(db, mtw.config.TuningThreads, mtw.config.TuningMemoryLimit,
-		mtw.config.TuningTempDirectory, mtw.config.CatalogPath, "writer")
+		mtw.config.TuningTempDirectory, mtw.config.CatalogPath, "writer", mtw.config.CatalogType)
 	ApplyWritePathExternalFileCache(db, mtw.config.TuningExternalFileCache, "writer")
 
-	if err := loadLakeExtensions(db); err != nil {
+	if err := loadLakeExtensions(db, mtw.config.CatalogType); err != nil {
 		return err
 	}
 	// Enable WAL mode for SQLite catalog to allow concurrent reads/writes
-	if err := EnableSQLiteWALMode(mtw.config.CatalogPath); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to enable WAL mode for SQLite catalog (may cause lock errors): %v", err))
-	}
-	// Drain the leaked inline-table backlog before DuckLake opens the catalog
-	// (upstream duckdb/ducklake#1065). Must run before ATTACH so we have
-	// exclusive access to the sqlite file. Non-fatal.
-	if n, err := GCOrphanInlineTables(mtw.config.CatalogPath); err != nil {
-		logger.Warn("DuckLake inline GC failed (non-fatal)", "err", err)
-	} else if n > 0 {
-		logger.Info("DuckLake inline GC: dropped empty ducklake_inlined_data_* tables (upstream #1065)", "dropped", n)
+	if mtw.config.CatalogType == CatalogSQLite {
+		if err := EnableSQLiteWALMode(mtw.config.CatalogPath); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to enable WAL mode for SQLite catalog (may cause lock errors): %v", err))
+		}
+		// Drain the leaked inline-table backlog before DuckLake opens the catalog
+		// (upstream duckdb/ducklake#1065). Must run before ATTACH so we have
+		// exclusive access to the sqlite file. Non-fatal.
+		if n, err := GCOrphanInlineTables(mtw.config.CatalogPath); err != nil {
+			logger.Warn("DuckLake inline GC failed (non-fatal)", "err", err)
+		} else if n > 0 {
+			logger.Info("DuckLake inline GC: dropped empty ducklake_inlined_data_* tables (upstream #1065)", "dropped", n)
+		}
 	}
 
 	// Autofix the "Corrupt DuckLake - multiple snapshots returned" corruption
@@ -475,10 +480,14 @@ func (mtw *MultiTableWriter) connect() error {
 		return err
 	}
 
-	if _, err := db.Exec(buildLakeAttachSQL(mtw.config)); err != nil {
-		return fmt.Errorf("failed to attach ducklake: %w", err)
+	attachSQL, err := buildLakeAttachSQL(mtw.config)
+	if err != nil {
+		return err
 	}
-	mtw.releaseAttachMark = MarkCatalogAttached(mtw.config.CatalogPath)
+	if _, err := db.Exec(attachSQL); err != nil {
+		return CatalogError(mtw.config.CatalogPath, "attach", err)
+	}
+	mtw.releaseAttachMark = MarkCatalogAttached(mtw.config.CatalogPath, mtw.config.CatalogType)
 
 	logger.Info("DuckLake (multi-table) attached", "catalog", string(mtw.config.CatalogType), "data_path", mtw.config.DataPath)
 
@@ -501,15 +510,12 @@ func (mtw *MultiTableWriter) connect() error {
 }
 
 // buildAttachSQL returns the ATTACH statement for this writer's DuckLake catalog.
-func (mtw *MultiTableWriter) buildAttachSQL() string {
+func (mtw *MultiTableWriter) buildAttachSQL() (string, error) {
 	return buildLakeAttachSQL(mtw.config)
 }
 
-func buildLakeAttachSQL(cfg Config) string {
-	return fmt.Sprintf(
-		"ATTACH 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', AUTOMATIC_MIGRATION TRUE);",
-		cfg.CatalogPath, cfg.LakeName, cfg.DataPath,
-	)
+func buildLakeAttachSQL(cfg Config) (string, error) {
+	return CatalogAttachSQL(cfg.CatalogType, cfg.CatalogPath, cfg.LakeName, cfg.DataPath, false)
 }
 
 // newLakeDuckDB opens an in-memory DuckDB instance whose pooled connections
@@ -543,12 +549,16 @@ func newLakeDuckDB(cfg Config, poolConns int) (*sql.DB, error) {
 
 // loadLakeExtensions loads DuckLake and the SQLite extension that backs the
 // catalog (both must be pre-installed via --install-extensions).
-func loadLakeExtensions(db *sql.DB) error {
+func loadLakeExtensions(db *sql.DB, types ...CatalogType) error {
 	if _, err := db.Exec("LOAD ducklake;"); err != nil {
 		return fmt.Errorf("failed to load ducklake extension (run homer-core --install-extensions first): %w", err)
 	}
-	if _, err := db.Exec("LOAD sqlite;"); err != nil {
-		return fmt.Errorf("failed to load sqlite extension (run homer-core --install-extensions first): %w", err)
+	ext := "sqlite"
+	if len(types) > 0 && types[0] == CatalogPostgres {
+		ext = "postgres"
+	}
+	if _, err := db.Exec("LOAD " + ext + ";"); err != nil {
+		return fmt.Errorf("failed to load %s extension (run homer-core --install-extensions first): %w", ext, err)
 	}
 	return nil
 }
@@ -604,11 +614,15 @@ func (mtw *MultiTableWriter) refreshCatalogCache() error {
 	if mtw.db == nil {
 		return nil
 	}
+	attachSQL, err := mtw.buildAttachSQL()
+	if err != nil {
+		return err
+	}
 	if _, err := mtw.db.Exec(fmt.Sprintf("DETACH %s;", mtw.config.LakeName)); err != nil {
 		return fmt.Errorf("detach %s: %w", mtw.config.LakeName, err)
 	}
-	if _, err := mtw.db.Exec(mtw.buildAttachSQL()); err != nil {
-		return fmt.Errorf("re-attach %s: %w", mtw.config.LakeName, err)
+	if _, err := mtw.db.Exec(attachSQL); err != nil {
+		return CatalogError(mtw.config.CatalogPath, "re-attach "+mtw.config.LakeName, err)
 	}
 	if mtw.config.DataInliningRowLimit >= 0 {
 		_, _ = mtw.db.Exec(fmt.Sprintf(

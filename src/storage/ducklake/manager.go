@@ -79,7 +79,7 @@ func NewManagerFromConfig() (*Manager, error) {
 	if config.CatalogType == "" {
 		config.CatalogType = CatalogSQLite
 	}
-	ct, err := NormalizeSQLiteCatalog(config.CatalogType)
+	ct, err := ResolveCatalogType(config.CatalogType, config.CatalogPath)
 	if err != nil {
 		return nil, err
 	}

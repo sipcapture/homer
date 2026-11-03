@@ -12,16 +12,31 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/sipcapture/homer-core/src/config"
 )
 
-// OpenSettingsDB opens the DuckDB file for users/settings.
+// OpenSettingsDB opens a DuckDB file or attaches PostgreSQL settings to an
+// in-memory DuckDB client when backend is postgres. The default type, sqlite, uses the existing local DuckDB file.
 //
 // On a fresh installation the parent directory (e.g. /var/lib/homer)
 // usually does not exist yet — DuckDB itself will not create it and
 // fails with "IO Error: Cannot open file ... No such file or directory".
 // Mirror what storage/ducklake does for its catalog/data paths and
 // ensure the parent directory exists before opening the database.
-func OpenSettingsDB(path string) (*sql.DB, error) {
+func OpenSettingsDB(path string, backend ...string) (*sql.DB, error) {
+	typ := "sqlite"
+	if len(backend) > 0 {
+		typ = backend[0]
+	}
+	typ, err := config.ResolveSettingsDBType(typ, path)
+	if err != nil {
+		return nil, err
+	}
+	if typ == "postgres" {
+		return openPostgresSettingsDB(strings.TrimSpace(path))
+	}
 	if path == "" {
 		return nil, fmt.Errorf("settings_db_path is empty")
 	}
@@ -46,6 +61,24 @@ func OpenSettingsDB(path string) (*sql.DB, error) {
 func EnsureSettingsSchema(db *sql.DB) error {
 	if db == nil {
 		return fmt.Errorf("settings db not available")
+	}
+	exec := db.Exec
+	_, postgres := db.Driver().(*settingsPostgresDriver)
+	if postgres {
+		// The DuckDB PostgreSQL extension cannot create sequences or resolve
+		// their defaults. Schema statements contain no bound parameters; send
+		// each DDL statement to PostgreSQL through the extension connection.
+		// Qualify objects rather than relying on the connection's search_path.
+		qualify := strings.NewReplacer(
+			"CREATE SEQUENCE IF NOT EXISTS ", "CREATE SEQUENCE IF NOT EXISTS public.",
+			"CREATE TABLE IF NOT EXISTS ", "CREATE TABLE IF NOT EXISTS public.",
+			"ALTER TABLE ", "ALTER TABLE public.",
+			"nextval('", "nextval('public.",
+		)
+		exec = func(query string, _ ...any) (sql.Result, error) {
+			return db.Exec("CALL postgres_execute('"+settingsPostgresCatalog+"', ?)",
+				qualify.Replace(query))
+		}
 	}
 	statements := []string{
 		`CREATE SEQUENCE IF NOT EXISTS users_id_seq`,
@@ -199,7 +232,7 @@ func EnsureSettingsSchema(db *sql.DB) error {
 		)`,
 	}
 	for _, sqlStmt := range statements {
-		if _, err := db.Exec(sqlStmt); err != nil {
+		if _, err := exec(sqlStmt); err != nil {
 			return err
 		}
 	}
@@ -219,23 +252,28 @@ func EnsureSettingsSchema(db *sql.DB) error {
 		)`, CorrelationScriptsTable, correlationScriptsSeq),
 	}
 	for _, sqlStmt := range scriptsDDL {
-		if _, err := db.Exec(sqlStmt); err != nil {
+		if _, err := exec(sqlStmt); err != nil {
 			return err
 		}
 	}
 
 	// Existing installs: add optional display columns (custom image + free-form tags).
 	for _, sqlStmt := range settingsAliasOptionalColumns() {
-		if _, err := db.Exec(sqlStmt); err != nil {
+		if _, err := exec(sqlStmt); err != nil {
 			return err
 		}
 	}
 
 	// Existing installs: users.full_name (display name).
 	for _, sqlStmt := range settingsUsersOptionalColumns() {
-		if _, err := db.Exec(sqlStmt); err != nil {
+		if _, err := exec(sqlStmt); err != nil {
 			return err
 		}
+	}
+	if postgres {
+		// Native DDL does not update the extension's cached catalog metadata.
+		_, err := db.Exec("CALL pg_clear_cache()")
+		return err
 	}
 
 	return nil

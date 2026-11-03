@@ -13,6 +13,22 @@ import (
 	"testing"
 )
 
+func TestLoadSettingsDBConnectionStringFromEnv(t *testing.T) {
+	dsn := "postgres://homer:test@127.0.0.1/homer_settings?sslmode=disable"
+	t.Setenv("HOMER_COORDINATOR_SETTINGS_DB_PATH", dsn)
+	t.Setenv("HOMER_COORDINATOR_SETTINGS_DB_TYPE", "postgres")
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Coordinator.SettingsDBType != "postgres" {
+		t.Fatal("settings database type environment override was not loaded")
+	}
+	if cfg.Coordinator.SettingsDBPath != dsn {
+		t.Fatal("PostgreSQL settings DSN environment override was not loaded")
+	}
+}
+
 // TestLoad_EnvScalars_AllSections pins down that every scalar HOMER_*
 // env var from a typical production docker-compose set must land in
 // Config. Before bindAllEnvs() was wired in, only keys explicitly

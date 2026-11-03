@@ -502,6 +502,9 @@ func rebuildCatalog(f SystemFlags) error {
 	duckCfg := duckLakeConfigFromModular(cfg)
 	dataPath := duckCfg.DataPath
 	catalogPath := duckCfg.CatalogPath
+	if duckCfg.CatalogType == ducklake.CatalogPostgres {
+		return fmt.Errorf("rebuild-catalog requires a SQLite file; PostgreSQL catalog recovery must use PostgreSQL tools")
+	}
 
 	if ducklake.IsRemoteLakeDataPath(dataPath) {
 		return fmt.Errorf("rebuild-catalog requires a local data_path; got %q", dataPath)
@@ -855,7 +858,7 @@ func installDuckDBExtensions() error {
 	}
 	defer db.Close()
 
-	extensions := []string{"ducklake", "sqlite", "httpfs", "aws", "azure"}
+	extensions := []string{"ducklake", "sqlite", "httpfs", "aws", "azure", "postgres"}
 
 	for _, ext := range extensions {
 		fmt.Printf("Installing %s extension...\n", ext)

@@ -322,7 +322,7 @@ func ApplyDuckDBTuning(db *sql.DB, threads int, memoryLimit, tempDirectory, who 
 // separate TieredStorageManager instance, which does not share the writer DB
 // (sipcapture/homer#1020: DuckDB then creates cwd/.tmp, which is "/" in the
 // official image and not writable by uid 1000).
-func ApplyHomerDuckDBDefaults(db *sql.DB, threads int, memoryLimit, tempDirectory, catalogPath, who string) {
+func ApplyHomerDuckDBDefaults(db *sql.DB, threads int, memoryLimit, tempDirectory, catalogPath, who string, catalogType CatalogType) {
 	if threads == 0 {
 		threads = AutoThreads()
 		logger.Info("DuckDB: auto-limiting threads (operator did not set tuning.threads)",
@@ -335,10 +335,13 @@ func ApplyHomerDuckDBDefaults(db *sql.DB, threads int, memoryLimit, tempDirector
 	}
 	tempDir := strings.TrimSpace(tempDirectory)
 	if tempDir == "" {
-		tempDir = DefaultSpillDirectory(catalogPath)
+		tempDir = DefaultSpillDirectory(catalogPath, catalogType)
 		if tempDir != "" {
 			logger.Info("DuckDB: defaulting spill directory (operator did not set tuning.temp_directory)",
 				"where", who, "temp_directory", tempDir)
+		} else if catalogType == CatalogPostgres {
+			logger.Warn("DuckDB: PostgreSQL catalog has no local spill directory; disk spilling is disabled and queries exceeding memory_limit may fail with Out of Memory; set tuning.temp_directory to a local disk path",
+				"where", who)
 		}
 	}
 	ApplyDuckDBTuning(db, threads, memoryLimit, tempDir, who)
@@ -358,7 +361,10 @@ func ApplyHomerDuckDBDefaults(db *sql.DB, threads int, memoryLimit, tempDirector
 //
 // The directory is created eagerly; on failure an empty string is returned
 // and the caller should leave temp_directory untouched.
-func DefaultSpillDirectory(catalogPath string) string {
+func DefaultSpillDirectory(catalogPath string, catalogType CatalogType) string {
+	if catalogType == CatalogPostgres {
+		return ""
+	}
 	dir := strings.TrimSpace(filepath.Dir(strings.TrimSpace(catalogPath)))
 	if dir == "" || dir == "." {
 		return ""

@@ -57,6 +57,11 @@ func OpenMaintenanceDB(cfg Config, memoryLimit string, reference *sql.DB) (*Main
 	if strings.TrimSpace(cfg.CatalogPath) == "" {
 		return nil, errors.New("maintenance DuckDB: no catalog path")
 	}
+	ct, err := ResolveCatalogType(cfg.CatalogType, cfg.CatalogPath)
+	if err != nil {
+		return nil, err
+	}
+	cfg.CatalogType = ct
 	if strings.TrimSpace(memoryLimit) == "" {
 		memoryLimit = DefaultMaintenanceMemoryLimit
 	}
@@ -70,13 +75,13 @@ func OpenMaintenanceDB(cfg Config, memoryLimit string, reference *sql.DB) (*Main
 	}
 
 	ApplyHomerDuckDBDefaults(db, cfg.TuningThreads, memoryLimit,
-		maintenanceSpillDirectory(cfg), cfg.CatalogPath, "compaction")
+		maintenanceSpillDirectory(cfg), cfg.CatalogPath, "compaction", cfg.CatalogType)
 	ApplyWritePathExternalFileCache(db, cfg.TuningExternalFileCache, "compaction")
 
-	if err := loadLakeExtensions(db); err != nil {
+	if err := loadLakeExtensions(db, ct); err != nil {
 		return fail(err)
 	}
-	if reference != nil {
+	if reference != nil && ct == CatalogSQLite {
 		if err := sameSQLiteExtension(reference, db); err != nil {
 			return fail(err)
 		}
@@ -84,10 +89,14 @@ func OpenMaintenanceDB(cfg Config, memoryLimit string, reference *sql.DB) (*Main
 	if err := configureLakeSecrets(db, cfg, "compaction"); err != nil {
 		return fail(err)
 	}
-	if _, err := db.Exec(buildLakeAttachSQL(cfg)); err != nil {
-		return fail(fmt.Errorf("maintenance DuckDB: attach ducklake: %w", err))
+	attachSQL, err := buildLakeAttachSQL(cfg)
+	if err != nil {
+		return fail(err)
 	}
-	return &MaintenanceDB{DB: db, release: MarkCatalogAttached(cfg.CatalogPath)}, nil
+	if _, err := db.Exec(attachSQL); err != nil {
+		return fail(CatalogError(cfg.CatalogPath, "maintenance attach", err))
+	}
+	return &MaintenanceDB{DB: db, release: MarkCatalogAttached(cfg.CatalogPath, cfg.CatalogType)}, nil
 }
 
 // maintenanceSpillDirectory keeps the compaction instance's temp files apart
@@ -95,7 +104,7 @@ func OpenMaintenanceDB(cfg Config, memoryLimit string, reference *sql.DB) (*Main
 func maintenanceSpillDirectory(cfg Config) string {
 	base := strings.TrimSpace(cfg.TuningTempDirectory)
 	if base == "" {
-		base = DefaultSpillDirectory(cfg.CatalogPath)
+		base = DefaultSpillDirectory(cfg.CatalogPath, cfg.CatalogType)
 	}
 	if base == "" {
 		return ""
