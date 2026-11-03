@@ -57,3 +57,7 @@ See [PostgreSQL settings](POSTGRES_SETTINGS.md) and
 - DuckDB engine caps: `HOMER_STORAGE_DUCKLAKE_TUNING_MEMORY_LIMIT`, `HOMER_STORAGE_DUCKLAKE_TUNING_THREADS`, `HOMER_STORAGE_DUCKLAKE_TUNING_TEMP_DIRECTORY` (writer) and the `HOMER_NODE_DUCKLAKE_TUNING_*` equivalents (reader). See [DUCKDB_TUNING.md](DUCKDB_TUNING.md) and [OOM.md](OOM.md).
 - **Data retention (TTL):** [`RETENTION.md`](RETENTION.md) — `HOMER_STORAGE_DUCKLAKE_COMPACTION_RETENTION_DAYS` and related compaction env vars. Per-table overrides (`retention_days_by_table`) are configured in JSON (map), not as a single env scalar.
 - **Search timeouts:** [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) — `HOMER_COORDINATOR_QUERY_TIMEOUT_SEC`, `HOMER_COORDINATOR_HTTP_SERVER_READ_TIMEOUT`, `HOMER_COORDINATOR_HTTP_SERVER_WRITE_TIMEOUT`.
+
+Settings backend selection: `HOMER_COORDINATOR_SETTINGS_DB_TYPE` maps to
+`coordinator.settings_db_type` and defaults to `sqlite`. Set it to `postgres`
+when `HOMER_COORDINATOR_SETTINGS_DB_PATH` contains a PostgreSQL connection string.

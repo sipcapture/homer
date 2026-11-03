@@ -12,7 +12,7 @@ import (
 func TestLoadPostgresDuckLakeCatalog(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "homer.json")
-	if err := os.WriteFile(file, []byte(`{"coordinator":{"local_secrets_dir":"`+dir+`"},"storage":{"ducklake":{"catalog_type":"postgres","catalog_path":"postgres://homer:private@localhost/lake"}},"node":{"local_secrets_dir":"`+dir+`","ducklake":{"catalog_type":"postgres","catalog_path":"host=localhost dbname=lake"}}}`), 0600); err != nil {
+	if err := os.WriteFile(file, []byte(`{"coordinator":{"settings_db_type":"postgres","settings_db_path":"postgres://homer:private@localhost/settings","local_secrets_dir":"`+dir+`"},"storage":{"ducklake":{"catalog_type":"postgres","catalog_path":"postgres://homer:private@localhost/lake"}},"node":{"local_secrets_dir":"`+dir+`","ducklake":{"catalog_type":"postgres","catalog_path":"host=localhost dbname=lake"}}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := Load(file)
@@ -21,6 +21,9 @@ func TestLoadPostgresDuckLakeCatalog(t *testing.T) {
 	}
 	if cfg.Storage.DuckLake.CatalogType != "postgres" || cfg.Node.DuckLake.CatalogType != "postgres" {
 		t.Fatal("PostgreSQL catalog types were not normalized")
+	}
+	if cfg.Coordinator.SettingsDBType != "postgres" {
+		t.Fatal("settings_db_type was not loaded from JSON")
 	}
 	if cfg.Coordinator.LocalSecretsDir != dir || cfg.Node.LocalSecretsDir != dir {
 		t.Fatal("local_secrets_dir was not loaded from JSON")

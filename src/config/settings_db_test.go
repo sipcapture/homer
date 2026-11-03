@@ -4,7 +4,10 @@
 
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestIsPostgresSettingsPath(t *testing.T) {
 	for _, value := range []string{
@@ -42,6 +45,30 @@ func TestNormalizePostgresDSN(t *testing.T) {
 	} {
 		if got := NormalizePostgresDSN(input); got != want {
 			t.Fatalf("normalized DSN changed connection values")
+		}
+	}
+}
+
+func TestPostgresSettingsDBType(t *testing.T) {
+	for _, tc := range []struct {
+		typ, path, want string
+		fail            bool
+	}{
+		{"", "settings.duckdb", "sqlite", false},
+		{"sqlite", "settings.duckdb", "sqlite", false},
+		{"postgres", "POSTGRES://user:private@localhost/settings", "postgres", false},
+		{"postgresql", "host=localhost dbname=settings", "postgres", false},
+		{"", "postgres://user:private@localhost/settings", "", true},
+		{"sqlite", "postgresql://user:private@localhost/settings", "", true},
+		{"postgres", "settings.duckdb", "", true},
+		{"duckdb", "settings.duckdb", "", true},
+	} {
+		got, err := ResolveSettingsDBType(tc.typ, tc.path)
+		if (err != nil) != tc.fail || got != tc.want {
+			t.Fatalf("type %q: got %q, %v", tc.typ, got, err)
+		}
+		if err != nil && strings.Contains(err.Error(), "private") {
+			t.Fatal("credentials exposed")
 		}
 	}
 }

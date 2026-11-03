@@ -18,6 +18,12 @@ You need:
 Switching the configuration does not migrate existing local settings. Homer does
 not open the previous settings file while PostgreSQL is configured.
 
+`settings_db_type` defaults to `sqlite`, which selects the existing local DuckDB
+settings file (it does not create a SQLite database); `postgresql` is an alias for `postgres`.
+The configured type must match the path. PostgreSQL DSNs with type `sqlite`,
+and local paths with type `postgres`, are rejected. The environment override is
+`HOMER_COORDINATOR_SETTINGS_DB_TYPE`.
+
 ## 1. Install the extension
 
 Run this command as the OS user that runs Homer:
@@ -30,12 +36,14 @@ The command includes the `postgres` extension.
 
 ## 2. Configure the coordinator
 
-Set `coordinator.settings_db_path` in your Homer configuration. Replace the host,
+Set `coordinator.settings_db_type` to `postgres` and configure
+`coordinator.settings_db_path` in your Homer configuration. Replace the host,
 credentials, and database name with your PostgreSQL connection details:
 
 ```json
 {
   "coordinator": {
+    "settings_db_type": "postgres",
     "settings_db_path": "postgres://homer:password@localhost:5432/homer_settings?sslmode=require"
   }
 }
@@ -44,6 +52,7 @@ credentials, and database name with your PostgreSQL connection details:
 Alternatively, set the environment variable:
 
 ```sh
+export HOMER_COORDINATOR_SETTINGS_DB_TYPE=postgres
 export HOMER_COORDINATOR_SETTINGS_DB_PATH='postgres://homer:password@localhost:5432/homer_settings?sslmode=require'
 ```
 

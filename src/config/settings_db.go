@@ -5,6 +5,7 @@
 package config
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -72,4 +73,27 @@ func NodeCatalogPath(cfg *NodeConfig) string {
 		path = cfg.DuckLake.Volumes[0].CatalogPath
 	}
 	return path
+}
+
+// ResolveSettingsDBType validates the settings path against the configured backend.
+// An empty type preserves the local DuckDB default.
+func ResolveSettingsDBType(typ, path string) (string, error) {
+	typ = strings.ToLower(strings.TrimSpace(typ))
+	if typ == "" {
+		typ = "sqlite"
+	}
+	switch typ {
+	case "sqlite":
+		if IsPostgresSettingsPath(path) {
+			return "", fmt.Errorf("coordinator.settings_db_type: PostgreSQL settings_db_path requires settings_db_type=postgres")
+		}
+	case "postgres", "postgresql":
+		if !IsPostgresSettingsPath(path) {
+			return "", fmt.Errorf("coordinator.settings_db_type: postgres requires a PostgreSQL connection string in settings_db_path")
+		}
+		typ = "postgres"
+	default:
+		return "", fmt.Errorf("coordinator.settings_db_type: expected sqlite or postgres")
+	}
+	return typ, nil
 }

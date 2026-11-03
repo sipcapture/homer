@@ -64,7 +64,7 @@ func openPostgresSettingsForTest(t *testing.T) *sql.DB {
 	// table, sequence and sequence default rather than relying on session state.
 	testDSN := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable options='-c search_path=pg_catalog'",
 		libpqTestValue(cfg.Host), cfg.Port, libpqTestValue(cfg.User), libpqTestValue(cfg.Password), name)
-	db, err := OpenSettingsDB(testDSN)
+	db, err := OpenSettingsDB(testDSN, "postgres")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func openPostgresSettingsForTest(t *testing.T) *sql.DB {
 	// Exercise URL detection as well as the keyword DSN above.
 	uri := url.URL{Scheme: "postgresql", Host: net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))),
 		User: url.UserPassword(cfg.User, cfg.Password), Path: "/" + name, RawQuery: "sslmode=disable"}
-	uriDB, err := OpenSettingsDB(uri.String())
+	uriDB, err := OpenSettingsDB(uri.String(), "postgres")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func openPostgresSettingsForTest(t *testing.T) *sql.DB {
 }
 
 func TestOpenSettingsDBRejectsMalformedPostgresString(t *testing.T) {
-	_, err := OpenSettingsDB("postgres://user:private-password@host:%zz/settings")
+	_, err := OpenSettingsDB("postgres://user:private-password@host:%zz/settings", "postgres")
 	if err == nil || !strings.Contains(err.Error(), "settings_db_path") || strings.Contains(err.Error(), "private-password") {
 		t.Fatalf("expected a credential-free connection string error, got: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestPostgresSettingsDSNVariants(t *testing.T) {
 		u.String(), strings.Replace(u.String(), "postgresql://", "postgres://", 1),
 		strings.Replace(u.String(), "postgresql://", "POSTGRES://", 1), cfg.ConnString(),
 	} {
-		client, err := OpenSettingsDB(dsn)
+		client, err := OpenSettingsDB(dsn, "postgres")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -362,4 +362,17 @@ func TestPostgresSettingsServices(t *testing.T) {
 			t.Fatalf("write after close: %v", err)
 		}
 	})
+}
+
+func TestPostgresSettingsDBTypeMismatch(t *testing.T) {
+	if db, err := OpenSettingsDB("postgres://user:private@localhost/settings"); err == nil {
+		db.Close()
+		t.Fatal("accepted PostgreSQL path with default DuckDB type")
+	} else if strings.Contains(err.Error(), "private") {
+		t.Fatal("credentials exposed")
+	}
+	if db, err := OpenSettingsDB("settings.duckdb", "postgres"); err == nil {
+		db.Close()
+		t.Fatal("accepted local path with PostgreSQL type")
+	}
 }

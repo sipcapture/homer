@@ -18,15 +18,23 @@ import (
 )
 
 // OpenSettingsDB opens a DuckDB file or attaches PostgreSQL settings to an
-// in-memory DuckDB client when path is a PostgreSQL connection string.
+// in-memory DuckDB client when backend is postgres. The default type, sqlite, uses the existing local DuckDB file.
 //
 // On a fresh installation the parent directory (e.g. /var/lib/homer)
 // usually does not exist yet — DuckDB itself will not create it and
 // fails with "IO Error: Cannot open file ... No such file or directory".
 // Mirror what storage/ducklake does for its catalog/data paths and
 // ensure the parent directory exists before opening the database.
-func OpenSettingsDB(path string) (*sql.DB, error) {
-	if config.IsPostgresSettingsPath(path) {
+func OpenSettingsDB(path string, backend ...string) (*sql.DB, error) {
+	typ := "sqlite"
+	if len(backend) > 0 {
+		typ = backend[0]
+	}
+	typ, err := config.ResolveSettingsDBType(typ, path)
+	if err != nil {
+		return nil, err
+	}
+	if typ == "postgres" {
 		return openPostgresSettingsDB(strings.TrimSpace(path))
 	}
 	if path == "" {

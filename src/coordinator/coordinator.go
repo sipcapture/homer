@@ -97,7 +97,7 @@ func New(cfg *config.CoordinatorConfig) (*Coordinator, error) {
 	}
 
 	// Open settings DuckDB
-	settingsDB, err := services.OpenSettingsDB(cfg.SettingsDBPath)
+	settingsDB, err := services.OpenSettingsDB(cfg.SettingsDBPath, cfg.SettingsDBType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open settings db: %w", err)
 	}

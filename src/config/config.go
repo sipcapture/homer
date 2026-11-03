@@ -373,6 +373,7 @@ type CoordinatorConfig struct {
 	Nodes []NodeEndpoint `json:"nodes" mapstructure:"nodes"`
 
 	// DuckDB file path or PostgreSQL connection string for users/settings storage.
+	SettingsDBType string `json:"settings_db_type" mapstructure:"settings_db_type" default:"sqlite"`
 	SettingsDBPath string `json:"settings_db_path" mapstructure:"settings_db_path" default:"/var/lib/homer/homer_settings.duckdb"`
 
 	// LakeName is the DuckLake catalog name used in all SQL queries.
@@ -1368,6 +1369,12 @@ func Load(configPath string) (*Config, error) {
 		return nil, err
 	}
 
+	settingsType, err := ResolveSettingsDBType(cfg.Coordinator.SettingsDBType, cfg.Coordinator.SettingsDBPath)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Coordinator.SettingsDBType = settingsType
+
 	if err := validateDuckLakeCatalogTypes(&cfg); err != nil {
 		return nil, err
 	}
@@ -1848,6 +1855,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Coordinator.QueryTimeoutSec <= 0 {
 		cfg.Coordinator.QueryTimeoutSec = 30
+	}
+	if cfg.Coordinator.SettingsDBType == "" {
+		cfg.Coordinator.SettingsDBType = "sqlite"
 	}
 	if cfg.Coordinator.SettingsDBPath == "" {
 		cfg.Coordinator.SettingsDBPath = "/var/lib/homer/homer_settings.duckdb"
