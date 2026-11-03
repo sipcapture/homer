@@ -306,6 +306,14 @@ homer wizard --profile node --output homer-node.json
 
 ## Configuration Examples
 
+Stateless deployment is opt-in: set top-level `"stateless": true` or
+`HOMER_STATELESS=true`. It requires PostgreSQL settings/catalogs, S3 or Azure
+capture storage, and explicit shared authentication secrets. Shared sessions,
+OAuth state, avatars, and exports are enabled only in this mode. Omitting the
+setting or setting it to `false` preserves local runtime state and persisted
+secret generation, including with PostgreSQL. See the
+[stateless deployment guide](docs/STATELESS_DEPLOYMENT.md) for configuration.
+
 See the `examples/` directory:
 
 | File | Description |

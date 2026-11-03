@@ -104,3 +104,30 @@ func TestStatelessEnvironmentAndTokenInheritance(t *testing.T) {
 		t.Fatal("configured token was not inherited")
 	}
 }
+
+// PostgreSQL alone must not opt a deployment into stateless requirements.
+func TestPostgresWithoutStatelessKeepsLocalSecrets(t *testing.T) {
+	for _, setting := range []string{"", `"stateless":false,`} {
+		t.Run(setting, func(t *testing.T) {
+			dir := t.TempDir()
+			file := filepath.Join(dir, "homer.json")
+			body := `{` + setting + `"storage":{"enable":false},"node":{"enable":true,"local_secrets_dir":"` + dir + `","ducklake":{"catalog_type":"postgres","catalog_path":"postgres://localhost/catalog","data_path":"/data/parquet"}},"coordinator":{"enable":false}}`
+			if err := os.WriteFile(file, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := Load(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Stateless || cfg.Coordinator.Stateless {
+				t.Fatal("PostgreSQL implicitly enabled stateless mode")
+			}
+			if cfg.Node.FlightServer.AuthToken == "" {
+				t.Fatal("stateful mode did not generate a node token")
+			}
+			if _, err := os.Stat(NodeAuthTokenFilePath(cfg.Node.DuckLake.CatalogPath, dir)); err != nil {
+				t.Fatalf("stateful token was not persisted: %v", err)
+			}
+		})
+	}
+}
