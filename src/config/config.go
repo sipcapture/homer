@@ -1451,20 +1451,11 @@ func EnsureNodeDuckLakeVolumes(dl *DuckLakeConfig) {
 // validateDuckLakeCatalogTypes accepts SQLite paths or PostgreSQL catalog DSNs.
 func validateDuckLakeCatalogTypes(cfg *Config) error {
 	check := func(field string, typ *string, path string) error {
-		value := strings.ToLower(strings.TrimSpace(*typ))
-		if value != "" && value != "sqlite" && value != "postgres" && value != "postgresql" {
-			return fmt.Errorf("%s: expected sqlite or postgres (got %q)", field, *typ)
+		value, err := ResolveCatalogType(*typ, path)
+		if err != nil {
+			return fmt.Errorf("%s: %w", field, err)
 		}
-		if IsPostgresSettingsPath(path) {
-			if value != "postgres" && value != "postgresql" {
-				return fmt.Errorf("%s: PostgreSQL catalog_path requires catalog_type=postgres", field)
-			}
-			*typ = "postgres"
-			return nil
-		}
-		if value == "postgres" || value == "postgresql" {
-			return fmt.Errorf("%s: postgres requires a PostgreSQL connection string in catalog_path", field)
-		}
+		*typ = value
 		return nil
 	}
 	if err := check("storage.ducklake.catalog_type", &cfg.Storage.DuckLake.CatalogType, cfg.Storage.DuckLake.CatalogPath); err != nil {

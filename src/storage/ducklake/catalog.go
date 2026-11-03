@@ -27,26 +27,10 @@ func CatalogDisplayPath(path string) string {
 	return path
 }
 
-// ResolveCatalogType validates catalog_path against the configured backend.
-// An empty catalog type defaults to SQLite.
+// ResolveCatalogType delegates catalog validation to the shared configuration rules.
 func ResolveCatalogType(ct CatalogType, path string) (CatalogType, error) {
-	typ := strings.ToLower(strings.TrimSpace(string(ct)))
-	if typ != "" && typ != "sqlite" && typ != "postgres" && typ != "postgresql" {
-		return "", fmt.Errorf("unsupported DuckLake catalog_type %q", ct)
-	}
-	if IsPostgresCatalogPath(path) {
-		if typ != "postgres" && typ != "postgresql" {
-			return "", fmt.Errorf("PostgreSQL catalog_path requires catalog_type=postgres")
-		}
-		if _, err := pgx.ParseConfig(config.NormalizePostgresDSN(path)); err != nil {
-			return "", fmt.Errorf("invalid PostgreSQL DuckLake catalog_path")
-		}
-		return CatalogPostgres, nil
-	}
-	if typ == "postgres" || typ == "postgresql" {
-		return "", fmt.Errorf("PostgreSQL DuckLake catalog requires a connection string in catalog_path")
-	}
-	return CatalogSQLite, nil
+	typ, err := config.ResolveCatalogType(string(ct), path)
+	return CatalogType(typ), err
 }
 
 // CatalogAttachSQL is shared by writers, nodes, volumes and maintenance handles.
