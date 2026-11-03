@@ -162,7 +162,7 @@ func TestPostgresDuckLakeShards(t *testing.T) {
 
 func TestPostgresDuckLakeTieredVolumes(t *testing.T) {
 	dsn, dir := postgresLakeFixture(t)
-	tsm, err := NewTieredStorageManager(TieredStorageConfig{Enable: true, CatalogPath: dsn,
+	tsm, err := NewTieredStorageManager(TieredStorageConfig{Enable: true, CatalogPath: strings.Replace(dsn, "postgresql://", "POSTGRES://", 1),
 		TuningThreads: 1, TuningMemoryLimit: "256MB", TuningTempDirectory: filepath.Join(dir, "spill"),
 		Volumes: []Volume{{Name: "hot", Type: VolumeTypeLocal, Priority: 0, Path: filepath.Join(dir, "hot"), LakeName: "hot"},
 			{Name: "cold", Type: VolumeTypeLocal, Priority: 1, Path: filepath.Join(dir, "cold"), LakeName: "cold"}}})
@@ -173,17 +173,54 @@ func TestPostgresDuckLakeTieredVolumes(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = tsm.Stop() })
-	if _, err := tsm.db.Exec("CREATE TABLE hot.test (id BIGINT); INSERT INTO hot.test VALUES (1); CREATE TABLE cold.test (id BIGINT); INSERT INTO cold.test VALUES (2)"); err != nil {
+	if _, err := tsm.db.Exec("CALL hot.set_option('DATA_INLINING_ROW_LIMIT', 0); CALL cold.set_option('DATA_INLINING_ROW_LIMIT', 0); CREATE TABLE hot.test (id BIGINT, date DATE, payload VARCHAR); CREATE TABLE cold.test (id BIGINT, date DATE, payload VARCHAR)"); err != nil {
 		t.Fatal(err)
 	}
-	var hot, cold int
-	if err := tsm.db.QueryRow("SELECT id FROM hot.test").Scan(&hot); err != nil {
+	hep, err := decoder.DecodeHEP(decoder.BenchHEP3SIPPacket())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := tsm.db.QueryRow("SELECT id FROM cold.test").Scan(&cold); err != nil {
+	defer decoder.ReleaseHEP(hep)
+	if _, err := tsm.db.Exec("INSERT INTO hot.test VALUES (1, DATE '2026-01-01', ?), (2, DATE '2026-01-01', ?), (3, DATE '2026-01-02', ?)", hep.Payload, hep.Payload, hep.Payload); err != nil {
 		t.Fatal(err)
 	}
-	if hot != 1 || cold != 2 {
-		t.Fatal("volumes are not isolated")
+	hot, cold := tsm.volumes[0], tsm.volumes[1]
+	if hot.CatalogPath == cold.CatalogPath {
+		t.Fatal("volumes share a PostgreSQL catalog")
 	}
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := tsm.MovePartition("test", "2026-01-01", hot, cold); err != nil {
+			t.Fatal(err)
+		}
+		var hotOld, hotRecent, coldOld int
+		if err := tsm.db.QueryRow("SELECT count(*) FROM hot.test WHERE date = DATE '2026-01-01'").Scan(&hotOld); err != nil {
+			t.Fatal(err)
+		}
+		if err := tsm.db.QueryRow("SELECT count(*) FROM hot.test WHERE date = DATE '2026-01-02' AND id = 3 AND payload = ?", hep.Payload).Scan(&hotRecent); err != nil {
+			t.Fatal(err)
+		}
+		if err := tsm.db.QueryRow("SELECT count(*) FROM cold.test WHERE date = DATE '2026-01-01' AND id IN (1, 2) AND payload = ?", hep.Payload).Scan(&coldOld); err != nil {
+			t.Fatal(err)
+		}
+		if hotOld != 0 || hotRecent != 1 || coldOld != 2 {
+			t.Fatalf("move attempt %d: hot old=%d hot recent=%d cold old=%d", attempt, hotOld, hotRecent, coldOld)
+		}
+	}
+	files := 0
+	if err := filepath.Walk(cold.Path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".parquet") {
+			files++
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if files == 0 {
+		t.Fatal("tier move did not write parquet data to the cold volume")
+	}
+	t.Logf("verified tier move with %d cold-volume parquet files", files)
+
 }

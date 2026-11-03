@@ -35,6 +35,17 @@ func IsPostgresSettingsPath(value string) bool {
 	return false
 }
 
+// NormalizePostgresDSN normalizes URL schemes for PostgreSQL clients while
+// preserving connection values and libpq keyword DSNs.
+func NormalizePostgresDSN(value string) string {
+	value = strings.TrimSpace(value)
+	if scheme, rest, ok := strings.Cut(value, "://"); ok &&
+		(strings.EqualFold(scheme, "postgres") || strings.EqualFold(scheme, "postgresql")) {
+		return strings.ToLower(scheme) + "://" + rest
+	}
+	return value
+}
+
 // SettingsDBLocalPath provides a local anchor for coordinator secret files.
 // PostgreSQL secrets use localSecretsDir when set, otherwise the
 // default settings directory. A DSN is never interpreted as a filesystem path.

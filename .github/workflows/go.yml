@@ -42,3 +42,45 @@ jobs:
       - name: Compile project
         run: |
           make release
+
+  postgres-regressions:
+    name: PostgreSQL regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: homer_test
+          POSTGRES_PASSWORD: homer_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d homer_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CGO_ENABLED: 1
+      HOMER_TEST_POSTGRES_DSN: postgres://postgres:homer_test@127.0.0.1:5432/homer_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Install test requirements
+        run: sudo apt-get update && sudo apt-get install -y build-essential ca-certificates libluajit-5.1-dev
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ github.event_name == 'workflow_dispatch' && inputs.go_version || '' }}
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+
+      - name: Run PostgreSQL regressions
+        working-directory: src
+        run: |
+          go test ./config ./cli ./storage/ducklake ./coordinator/services \
+            -run 'Test(Postgres|DiscoverSchemaViews|LoadPostgresDuckLakeCatalog|NormalizePostgresDSN|IsPostgresSettingsPath|JWTSecretFilePathWithPostgresSettings|AttachSQLBuildersReturnErrors|CatalogErrorKeepsDiagnosticsWithoutCredentials)' \
+            -count=1 -v -timeout=10m

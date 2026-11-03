@@ -50,7 +50,10 @@ func openPostgresSettingsForTest(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, installErr := installer.Exec("INSTALL postgres FROM 'https://extensions.duckdb.org'")
+	_, installErr := installer.Exec("LOAD postgres")
+	if installErr != nil {
+		_, installErr = installer.Exec("INSTALL postgres FROM 'https://extensions.duckdb.org'; LOAD postgres")
+	}
 	_ = installer.Close()
 	if installErr != nil {
 		t.Fatal(installErr)
@@ -126,6 +129,30 @@ func TestSettingsReturningLocalDuckDB(t *testing.T) {
 	}
 	if _, err := NewAlertsService(db).Insert(context.Background(), "info", "local", "", nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPostgresSettingsDSNVariants(t *testing.T) {
+	db := openPostgresSettingsForTest(t)
+	cfg := db.Driver().(*settingsPostgresDriver).config
+	u := url.URL{Scheme: "postgresql", Host: net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))),
+		User: url.UserPassword(cfg.User, cfg.Password), Path: "/" + cfg.Database, RawQuery: "sslmode=disable"}
+	for _, dsn := range []string{
+		u.String(), strings.Replace(u.String(), "postgresql://", "postgres://", 1),
+		strings.Replace(u.String(), "postgresql://", "POSTGRES://", 1), cfg.ConnString(),
+	} {
+		client, err := OpenSettingsDB(dsn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
+		var catalog, schema string
+		if err := client.QueryRow("SELECT current_database(), current_schema()").Scan(&catalog, &schema); err != nil || catalog != settingsPostgresCatalog || schema != "public" {
+			t.Fatalf("DuckDB settings path: catalog=%q schema=%q error=%v", catalog, schema, err)
+		}
+		if err := postgresQueryRow(client)(context.Background(), "SELECT current_database(), current_schema()").Scan(&catalog, &schema); err != nil || catalog != cfg.Database || schema != "public" {
+			t.Fatalf("native settings path: catalog=%q schema=%q error=%v", catalog, schema, err)
+		}
 	}
 }
 

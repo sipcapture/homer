@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/sipcapture/homer-core/src/config"
 	"strings"
 	"testing"
 )
@@ -26,9 +27,10 @@ func TestAttachSQLBuildersReturnErrors(t *testing.T) {
 func TestCatalogErrorKeepsDiagnosticsWithoutCredentials(t *testing.T) {
 	for _, dsn := range []string{
 		"postgres://catalog_user:p%40ss%27word@db.example:5433/homer_1?sslmode=require",
+		"POSTGRES://catalog_user:p%40ss%27word@db.example:5433/homer_1?sslmode=require",
 		"host=db.example port=5433 dbname=homer_1 user=catalog_user password='p@ss\\'word' sslmode=require",
 	} {
-		cfg, err := pgx.ParseConfig(dsn)
+		cfg, err := pgx.ParseConfig(config.NormalizePostgresDSN(dsn))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -62,6 +64,8 @@ func TestCatalogErrorKeepsDiagnosticsWithoutCredentials(t *testing.T) {
 func TestPostgresCatalogConfiguration(t *testing.T) {
 	for _, dsn := range []string{
 		"postgres://user:p%40ss@localhost/base?sslmode=require&application_name=homer",
+		"POSTGRES://user:p%40ss@localhost/base?sslmode=require",
+		"postgresql://user:p%40ss@localhost/base?sslmode=require",
 		"postgresql://user@localhost/ignored?dbname=base&sslmode=require",
 		"host=localhost dbname=base user=homer password='a b' sslmode=require",
 	} {
@@ -73,7 +77,7 @@ func TestPostgresCatalogConfiguration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		baseCfg, _ := pgx.ParseConfig(dsn)
+		baseCfg, _ := pgx.ParseConfig(config.NormalizePostgresDSN(dsn))
 		shardCfg, err := pgx.ParseConfig(shard)
 		if err != nil || shardCfg.Database != "base_1" || shardCfg.Password != baseCfg.Password || shardCfg.Host != baseCfg.Host {
 			t.Fatalf("shard changed connection options or database: %v", err)

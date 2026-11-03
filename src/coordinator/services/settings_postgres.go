@@ -17,6 +17,7 @@ import (
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/sipcapture/homer-core/src/config"
 )
 
 const settingsPostgresCatalog = "homer_settings"
@@ -43,6 +44,7 @@ func (c *settingsPostgresConnector) Close() error {
 }
 
 func openPostgresSettingsDB(dsn string) (*sql.DB, error) {
+	dsn = config.NormalizePostgresDSN(dsn)
 	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		// Parse errors can contain the DSN and its password.

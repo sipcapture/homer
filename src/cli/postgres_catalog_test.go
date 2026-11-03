@@ -5,6 +5,7 @@ package cli
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -60,19 +61,45 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 	if _, err := writer.Exec("CREATE TABLE lake.test (id BIGINT); INSERT INTO lake.test VALUES (42)"); err != nil {
 		t.Fatal(err)
 	}
-	reader, err := openDuckLakeReadOnly(cfg)
-	if err != nil {
-		t.Fatal(err)
+	quote := func(value string) string {
+		return "'" + strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), "'", `\'`) + "'"
 	}
-	defer reader.Close()
-	var id int
-	if err := reader.QueryRow("SELECT id FROM test").Scan(&id); err != nil || id != 42 {
-		t.Fatalf("metadata read: %d %v", id, err)
-	}
-	if got := discoverSchemaViews(reader, cfg.LakeName, cfg.CatalogPath); len(got) != 1 || got[0] != "lake.test" {
-		t.Fatalf("discovered tables = %v, want [lake.test]", got)
-	}
-	if _, err := reader.Exec("INSERT INTO lake.test VALUES (43)"); err == nil {
-		t.Fatal("CLI opened a writable PostgreSQL DuckLake catalog")
+	for _, catalogPath := range []string{
+		u.String(),
+		strings.Replace(u.String(), "postgresql://", "postgres://", 1),
+		strings.Replace(u.String(), "postgresql://", "POSTGRES://", 1),
+		fmt.Sprintf("host=%s port=%d dbname=%s user=%s password=%s sslmode=disable", quote(pg.Host), pg.Port, quote(name), quote(pg.User), quote(pg.Password)),
+	} {
+		cfg.CatalogPath = catalogPath
+		reader, err := openDuckLakeReadOnly(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer reader.Close()
+		var catalog, schema string
+		if err := reader.QueryRow("SELECT current_database(), current_schema()").Scan(&catalog, &schema); err != nil || catalog != "lake" || schema != "main" {
+			t.Fatalf("search path: catalog=%q schema=%q error=%v", catalog, schema, err)
+		}
+		var id int
+		if err := reader.QueryRow("SELECT id FROM test").Scan(&id); err != nil || id != 42 {
+			t.Fatalf("unqualified read: %d %v", id, err)
+		}
+		tables := discoverSchemaViews(reader, cfg.LakeName, cfg.CatalogPath)
+		if len(tables) != 1 || tables[0] != "lake.test" {
+			t.Fatalf("discovered tables = %v, want [lake.test]", tables)
+		}
+		completer := newSQLCLICompleter(cfg.LakeName, cfg.DataPath, func() []string { return tables })
+		line := []rune("SELECT * FROM te")
+		matches, _ := completer.Do(line, len(line))
+		found := false
+		for _, match := range matches {
+			found = found || string(match) == "st"
+		}
+		if !found {
+			t.Fatal("discovered table missing from completion")
+		}
+		if _, err := reader.Exec("INSERT INTO lake.test VALUES (43)"); err == nil {
+			t.Fatal("CLI opened a writable PostgreSQL DuckLake catalog")
+		}
 	}
 }

@@ -31,7 +31,7 @@ func ResolveCatalogType(ct CatalogType, path string) (CatalogType, error) {
 		return "", fmt.Errorf("unsupported DuckLake catalog_type %q", ct)
 	}
 	if IsPostgresCatalogPath(path) {
-		if _, err := pgx.ParseConfig(strings.TrimSpace(path)); err != nil {
+		if _, err := pgx.ParseConfig(config.NormalizePostgresDSN(path)); err != nil {
 			return "", fmt.Errorf("invalid PostgreSQL DuckLake catalog_path")
 		}
 		return CatalogPostgres, nil
@@ -49,7 +49,7 @@ func CatalogAttachSQL(ct CatalogType, path, lake, data string, override bool) (s
 		return "", err
 	}
 	if ct == CatalogPostgres {
-		path = strings.TrimSpace(path)
+		path = config.NormalizePostgresDSN(path)
 	}
 	quote := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
 	extra := ""
@@ -64,8 +64,8 @@ func CatalogAttachSQL(ct CatalogType, path, lake, data string, override bool) (s
 // databases provisioned by the operator. It never applies filepath operations
 // to DSNs, and preserves credentials, TLS settings and other connection options.
 func suffixedPostgresCatalog(path, suffix string) (string, error) {
-	path = strings.TrimSpace(path)
-	cfg, err := pgx.ParseConfig(strings.TrimSpace(path))
+	path = config.NormalizePostgresDSN(path)
+	cfg, err := pgx.ParseConfig(config.NormalizePostgresDSN(path))
 	if err != nil {
 		return "", fmt.Errorf("invalid PostgreSQL DuckLake catalog_path")
 	}
@@ -92,13 +92,13 @@ func suffixedPostgresCatalog(path, suffix string) (string, error) {
 func CatalogError(path, action string, err error) error {
 	if IsPostgresCatalogPath(path) {
 		path = strings.TrimSpace(path)
-		cfg, parseErr := pgx.ParseConfig(path)
+		cfg, parseErr := pgx.ParseConfig(config.NormalizePostgresDSN(path))
 		if parseErr != nil {
 			return fmt.Errorf("%s PostgreSQL DuckLake catalog failed (invalid connection string)", action)
 		}
 		message := err.Error()
 		// DuckDB may echo the original DSN inside a SQL-quoted ATTACH statement.
-		for _, dsn := range []string{strings.ReplaceAll(path, "'", "''"), path} {
+		for _, dsn := range []string{strings.ReplaceAll(path, "'", "''"), path, strings.ReplaceAll(config.NormalizePostgresDSN(path), "'", "''"), config.NormalizePostgresDSN(path)} {
 			message = strings.ReplaceAll(message, dsn, "[redacted DSN]")
 		}
 		message = strings.ReplaceAll(message, url.UserPassword(cfg.User, cfg.Password).String()+"@", "[redacted]@")

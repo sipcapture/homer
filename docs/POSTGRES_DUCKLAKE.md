@@ -167,13 +167,16 @@ DATABASE required for the tests only), run from `src`:
 
 ```sh
 HOMER_TEST_POSTGRES_DSN='postgres://postgres:password@127.0.0.1:5432/test?sslmode=disable' \
-  go test ./storage/ducklake ./node ./writer ./config ./cli
+  go test ./storage/ducklake ./node ./writer ./config ./cli ./coordinator/services -count=1 -v
 ```
 
 Tests create and drop private databases. They cover shard persistence after
 shutdown, independent shard databases and spill paths, maintenance attachment and
-merge calls, tiered catalog isolation, node reads, inline-row CLI reads, DSN
-handling, and the SQLite-specific maintenance guards.
+merge calls, a Parquet-backed partition move between PostgreSQL volumes and its
+retry, node reads, CLI search path and completion, spill warnings, local secret
+placement and persistence, URL scheme variants and keyword DSNs, and the
+SQLite-specific maintenance guards. PostgreSQL integration cases skip when
+`HOMER_TEST_POSTGRES_DSN` is unset; compiling alone does not execute them.
 
 ## Further reading
 
