@@ -26,6 +26,7 @@ func ensureFlightAuthToken(cfg *config.NodeConfig) error {
 		cfg.FlightServer.AuthToken,
 		catalogPath,
 		cfg.LocalSecretsDir,
+		config.NodeCatalogType(cfg),
 	)
 	if err != nil {
 		return err
@@ -57,7 +58,7 @@ func ensureFlightSQLAuthToken(cfg *config.NodeConfig) error {
 	if configured == "" {
 		configured = strings.TrimSpace(cfg.FlightServer.AuthToken)
 	}
-	tok, autoGen, tokenFile, err := config.ResolveRequiredAuthToken(configured, catalogPath, cfg.LocalSecretsDir)
+	tok, autoGen, tokenFile, err := config.ResolveRequiredAuthToken(configured, catalogPath, cfg.LocalSecretsDir, config.NodeCatalogType(cfg))
 	if err != nil {
 		return err
 	}

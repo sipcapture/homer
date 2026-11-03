@@ -39,7 +39,7 @@ func TestPostgresSpillWarning(t *testing.T) {
 				if configured {
 					spill = t.TempDir()
 				}
-				ApplyHomerDuckDBDefaults(db, 1, "256MB", spill, "POSTGRES://user:private@localhost/lake", who)
+				ApplyHomerDuckDBDefaults(db, 1, "256MB", spill, "POSTGRES://user:private@localhost/lake", who, CatalogPostgres)
 				warned := strings.Contains(logs.String(), "PostgreSQL catalog has no local spill directory")
 				if warned == configured {
 					t.Fatalf("warning present=%t with configured=%t: %s", warned, configured, logs.String())
@@ -157,7 +157,7 @@ func TestApplyHomerDuckDBDefaults_EmptyKnobsUsesCatalogSpill(t *testing.T) {
 
 	tmp := t.TempDir()
 	catalog := tmp + "/homer_catalog.sqlite"
-	ApplyHomerDuckDBDefaults(db, 0, "", "", catalog, "tiering")
+	ApplyHomerDuckDBDefaults(db, 0, "", "", catalog, "tiering", CatalogSQLite)
 	wantSpill := tmp + "/.duckdb_spill"
 	if got := getSetting(t, db, "temp_directory"); !strings.Contains(got, wantSpill) {
 		t.Fatalf("temp_directory = %q, want path containing %q", got, wantSpill)
@@ -178,7 +178,7 @@ func TestApplyHomerDuckDBDefaults_ExplicitTempDirectoryWins(t *testing.T) {
 
 	tmp := t.TempDir()
 	spill := tmp + "/explicit-spill"
-	ApplyHomerDuckDBDefaults(db, 1, "256MB", spill, tmp+"/catalog.sqlite", "tiering")
+	ApplyHomerDuckDBDefaults(db, 1, "256MB", spill, tmp+"/catalog.sqlite", "tiering", CatalogSQLite)
 	if got := getSetting(t, db, "temp_directory"); !strings.Contains(got, spill) {
 		t.Fatalf("temp_directory = %q, want path containing %q", got, spill)
 	}
@@ -189,7 +189,7 @@ func TestApplyHomerDuckDBDefaults_ExplicitTempDirectoryWins(t *testing.T) {
 // yield "" (leave temp_directory untouched).
 func TestDefaultSpillDirectory(t *testing.T) {
 	tmp := t.TempDir()
-	got := DefaultSpillDirectory(tmp + "/homer_catalog.sqlite")
+	got := DefaultSpillDirectory(tmp+"/homer_catalog.sqlite", CatalogSQLite)
 	want := tmp + "/.duckdb_spill"
 	if got != want {
 		t.Fatalf("DefaultSpillDirectory = %q, want %q", got, want)
@@ -198,10 +198,10 @@ func TestDefaultSpillDirectory(t *testing.T) {
 		t.Fatalf("spill directory not created: %v", err)
 	}
 
-	if got := DefaultSpillDirectory("homer_catalog.sqlite"); got != "" {
+	if got := DefaultSpillDirectory("homer_catalog.sqlite", CatalogSQLite); got != "" {
 		t.Fatalf("bare filename: got %q, want empty", got)
 	}
-	if got := DefaultSpillDirectory(""); got != "" {
+	if got := DefaultSpillDirectory("", CatalogSQLite); got != "" {
 		t.Fatalf("empty path: got %q, want empty", got)
 	}
 }
@@ -426,4 +426,26 @@ func getSetting(t *testing.T, db *sql.DB, name string) string {
 		t.Fatalf("current_setting(%q): %v", name, err)
 	}
 	return strings.TrimSpace(v)
+}
+
+func TestSpillWarningUsesCatalogType(t *testing.T) {
+	previous := logger.Logger
+	t.Cleanup(func() { logger.Logger = previous })
+	for _, typ := range []CatalogType{CatalogSQLite, CatalogPostgres} {
+		t.Run(string(typ), func(t *testing.T) {
+			var logs bytes.Buffer
+			logger.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+			db, err := sql.Open("duckdb", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			// A relative path gives neither backend a default local spill directory.
+			ApplyHomerDuckDBDefaults(db, 1, "256MB", "", "catalog.sqlite", "writer", typ)
+			warned := strings.Contains(logs.String(), "PostgreSQL catalog has no local spill directory")
+			if warned != (typ == CatalogPostgres) {
+				t.Fatalf("type %q: warning present=%t", typ, warned)
+			}
+		})
+	}
 }

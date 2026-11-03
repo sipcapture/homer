@@ -28,7 +28,7 @@ func TestLoadPostgresDuckLakeCatalog(t *testing.T) {
 	if cfg.Coordinator.LocalSecretsDir != dir || cfg.Node.LocalSecretsDir != dir {
 		t.Fatal("local_secrets_dir was not loaded from JSON")
 	}
-	if NodeAuthTokenFilePath(cfg.Node.DuckLake.CatalogPath, cfg.Node.LocalSecretsDir) != filepath.Join(dir, homerNodeAuthTokenFileName) {
+	if NodeAuthTokenFilePath(cfg.Node.DuckLake.CatalogPath, cfg.Node.LocalSecretsDir, cfg.Node.DuckLake.CatalogType) != filepath.Join(dir, homerNodeAuthTokenFileName) {
 		t.Fatal("connection string interpreted as token directory")
 	}
 	envDir := filepath.Join(dir, "env-secrets")

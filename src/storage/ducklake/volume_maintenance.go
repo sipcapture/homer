@@ -114,7 +114,7 @@ func (tsm *TieredStorageManager) fileCleanupDB(vol *Volume) (*sql.DB, error) {
 	}
 	m.attached[vol.LakeName] = true
 	// Tiered DuckDB instances live until process exit; the mark is never released.
-	_ = MarkCatalogAttached(vol.CatalogPath)
+	_ = MarkCatalogAttached(vol.CatalogPath, tsm.config.CatalogType)
 	logger.Info("TieredStorageManager: Volume attached for file cleanup",
 		"volume", vol.Name,
 		"lake", vol.LakeName)
@@ -135,7 +135,7 @@ func (tsm *TieredStorageManager) openMaintenanceDB() (*sql.DB, error) {
 		tempDir = filepath.Join(tempDir, "tiering-maintenance")
 	}
 	ApplyHomerDuckDBDefaults(db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,
-		tempDir, tsm.config.CatalogPath, "tiering-maintenance")
+		tempDir, tsm.config.CatalogPath, "tiering-maintenance", tsm.config.CatalogType)
 	ApplyWritePathExternalFileCache(db, tsm.config.TuningExternalFileCache, "tiering-maintenance")
 
 	if err := loadLakeExtensions(db, tsm.config.CatalogType); err != nil {

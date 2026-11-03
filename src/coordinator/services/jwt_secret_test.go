@@ -16,7 +16,7 @@ import (
 func TestJWTSecretFilePathWithPostgresSettings(t *testing.T) {
 	dir := t.TempDir()
 	for _, dsn := range []string{"postgres://user:private@localhost/settings", "POSTGRES://user:private@localhost/settings", "postgresql://user:private@localhost/settings", "host=localhost dbname=settings password=private"} {
-		if got := JWTSecretFilePath(dsn, dir); got != filepath.Join(dir, homerJWTSecretFileName) {
+		if got := JWTSecretFilePath(dsn, dir, "postgres"); got != filepath.Join(dir, homerJWTSecretFileName) {
 			t.Fatalf("DSN interpreted as a secret directory: %q", got)
 		}
 	}
@@ -33,11 +33,11 @@ func TestPostgresSecretsPersistInSharedDirectory(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			token, _, tokenFile, err := config.ResolveRequiredAuthToken("", dsn, dir)
+			token, _, tokenFile, err := config.ResolveRequiredAuthToken("", dsn, dir, "postgres")
 			if err != nil {
 				t.Fatal(err)
 			}
-			secret, _, secretFile, err := ResolveCoordinatorJWTSecret("", dsn, dir)
+			secret, _, secretFile, err := ResolveCoordinatorJWTSecret("", dsn, dir, "postgres")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -50,11 +50,11 @@ func TestPostgresSecretsPersistInSharedDirectory(t *testing.T) {
 					t.Fatalf("secret file %q must be in %q with mode 0600", file, dir)
 				}
 			}
-			loadedToken, generated, _, err := config.ResolveRequiredAuthToken("", dsn, dir)
+			loadedToken, generated, _, err := config.ResolveRequiredAuthToken("", dsn, dir, "postgres")
 			if err != nil || generated || loadedToken != token {
 				t.Fatal("node token was not preserved on reload")
 			}
-			loadedSecret, generated, _, err := ResolveCoordinatorJWTSecret("", dsn, dir)
+			loadedSecret, generated, _, err := ResolveCoordinatorJWTSecret("", dsn, dir, "postgres")
 			if err != nil || generated || loadedSecret != secret {
 				t.Fatal("JWT secret was not preserved on reload")
 			}
@@ -64,7 +64,7 @@ func TestPostgresSecretsPersistInSharedDirectory(t *testing.T) {
 }
 
 func TestResolveCoordinatorJWTSecret_ConfiguredWins(t *testing.T) {
-	secret, auto, path, err := ResolveCoordinatorJWTSecret("configured-secret", t.TempDir(), "")
+	secret, auto, path, err := ResolveCoordinatorJWTSecret("configured-secret", t.TempDir(), "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestResolveCoordinatorJWTSecret_PersistAndReload(t *testing.T) {
 	dir := t.TempDir()
 	settings := filepath.Join(dir, "settings.duckdb")
 
-	secret1, auto1, file1, err := ResolveCoordinatorJWTSecret("", settings, "")
+	secret1, auto1, file1, err := ResolveCoordinatorJWTSecret("", settings, "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestResolveCoordinatorJWTSecret_PersistAndReload(t *testing.T) {
 		t.Fatalf("first: secret=%q auto=%v file=%q", secret1, auto1, file1)
 	}
 
-	secret2, auto2, file2, err := ResolveCoordinatorJWTSecret("", settings, "")
+	secret2, auto2, file2, err := ResolveCoordinatorJWTSecret("", settings, "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestResolveCoordinatorJWTSecret_PlaceholderIsGenerated(t *testing.T) {
 	settings := filepath.Join(dir, "settings.duckdb")
 	const placeholder = "change-this-to-a-secure-random-string-in-production"
 
-	secret1, auto1, file1, err := ResolveCoordinatorJWTSecret(placeholder, settings, "")
+	secret1, auto1, file1, err := ResolveCoordinatorJWTSecret(placeholder, settings, "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestResolveCoordinatorJWTSecret_PlaceholderIsGenerated(t *testing.T) {
 		t.Fatalf("placeholder must be replaced, got secret=%q auto=%v", secret1, auto1)
 	}
 
-	secret2, auto2, _, err := ResolveCoordinatorJWTSecret(placeholder, settings, "")
+	secret2, auto2, _, err := ResolveCoordinatorJWTSecret(placeholder, settings, "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestResolveCoordinatorJWTSecret_LoadExistingFile(t *testing.T) {
 	if err := os.WriteFile(secretFile, []byte("from-file\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	secret, auto, _, err := ResolveCoordinatorJWTSecret("", settings, "")
+	secret, auto, _, err := ResolveCoordinatorJWTSecret("", settings, "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}

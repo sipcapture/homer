@@ -42,8 +42,8 @@ func catalogKey(path string) string {
 // MarkCatalogAttached records that a DuckDB instance in this process attached
 // catalogPath. The returned release function is idempotent; call it after that
 // DuckDB instance is closed.
-func MarkCatalogAttached(catalogPath string) (release func()) {
-	if catalogPath == "" || IsPostgresCatalogPath(catalogPath) {
+func MarkCatalogAttached(catalogPath string, catalogType CatalogType) (release func()) {
+	if catalogPath == "" || catalogType == CatalogPostgres {
 		return func() {}
 	}
 	key := catalogKey(catalogPath)
@@ -67,8 +67,8 @@ func MarkCatalogAttached(catalogPath string) (release func()) {
 
 // IsCatalogAttachedInProcess reports whether a DuckDB instance in this process
 // currently has catalogPath attached.
-func IsCatalogAttachedInProcess(catalogPath string) bool {
-	if catalogPath == "" || IsPostgresCatalogPath(catalogPath) {
+func IsCatalogAttachedInProcess(catalogPath string, catalogType CatalogType) bool {
+	if catalogPath == "" || catalogType == CatalogPostgres {
 		return false
 	}
 	key := catalogKey(catalogPath)
@@ -78,7 +78,7 @@ func IsCatalogAttachedInProcess(catalogPath string) bool {
 }
 
 func ensureCatalogNotAttached(catalogPath string) error {
-	if IsCatalogAttachedInProcess(catalogPath) {
+	if IsCatalogAttachedInProcess(catalogPath, CatalogSQLite) {
 		return fmt.Errorf("%s: %w", catalogPath, ErrCatalogAttachedInProcess)
 	}
 	return nil

@@ -50,11 +50,11 @@ func NormalizePostgresDSN(value string) string {
 // SettingsDBLocalPath provides a local anchor for coordinator secret files.
 // A configured directory overrides backend defaults; PostgreSQL otherwise uses
 // the default settings directory. A DSN is never treated as a filesystem path.
-func SettingsDBLocalPath(value, localSecretsDir string) string {
+func SettingsDBLocalPath(value, localSecretsDir, settingsDBType string) string {
 	if dir := strings.TrimSpace(localSecretsDir); dir != "" {
 		return filepath.Join(dir, filepath.Base(defaultSettingsDBPath))
 	}
-	if strings.TrimSpace(value) == "" || IsPostgresSettingsPath(value) {
+	if strings.TrimSpace(value) == "" || isPostgresType(settingsDBType) {
 		return defaultSettingsDBPath
 	}
 	return value
@@ -63,17 +63,37 @@ func SettingsDBLocalPath(value, localSecretsDir string) string {
 // NodeCatalogPath selects an attached PostgreSQL volume even when the legacy
 // single-catalog field still contains its SQLite default.
 func NodeCatalogPath(cfg *NodeConfig) string {
+	_, path := nodeCatalog(cfg)
+	return path
+}
+
+// NodeCatalogType returns the configured type for the catalog selected by NodeCatalogPath.
+func NodeCatalogType(cfg *NodeConfig) string {
+	typ, _ := nodeCatalog(cfg)
+	typ = strings.ToLower(strings.TrimSpace(typ))
+	if typ == "postgresql" {
+		return "postgres"
+	}
+	if typ == "" {
+		return "sqlite"
+	}
+	return typ
+}
+
+func nodeCatalog(cfg *NodeConfig) (string, string) {
+	typ := cfg.DuckLake.CatalogType
 	path := strings.TrimSpace(cfg.DuckLake.CatalogPath)
 	for _, volume := range cfg.DuckLake.Volumes {
 		typ := strings.ToLower(strings.TrimSpace(volume.CatalogType))
 		if typ == "postgres" || typ == "postgresql" {
-			return volume.CatalogPath
+			return typ, volume.CatalogPath
 		}
 	}
 	if path == "" && len(cfg.DuckLake.Volumes) > 0 {
 		path = cfg.DuckLake.Volumes[0].CatalogPath
+		typ = cfg.DuckLake.Volumes[0].CatalogType
 	}
-	return path
+	return typ, path
 }
 
 // ResolveSettingsDBType validates the settings path against the configured backend.
@@ -97,4 +117,9 @@ func ResolveSettingsDBType(typ, path string) (string, error) {
 		return "", fmt.Errorf("coordinator.settings_db_type: expected sqlite or postgres")
 	}
 	return typ, nil
+}
+
+func isPostgresType(typ string) bool {
+	typ = strings.ToLower(strings.TrimSpace(typ))
+	return typ == "postgres" || typ == "postgresql"
 }

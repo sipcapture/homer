@@ -1362,13 +1362,7 @@ func Load(configPath string) (*Config, error) {
 
 	migrateCoordinatorOAuth2(&cfg, v)
 
-	// Legacy safety net for fields that don't carry struct tags yet.
-	applyDefaults(&cfg)
-
-	if err := normalizeCoordinatorAuth(&cfg.Coordinator); err != nil {
-		return nil, err
-	}
-
+	// Validate backend/path pairs before defaults can persist local secrets.
 	settingsType, err := ResolveSettingsDBType(cfg.Coordinator.SettingsDBType, cfg.Coordinator.SettingsDBPath)
 	if err != nil {
 		return nil, err
@@ -1376,6 +1370,13 @@ func Load(configPath string) (*Config, error) {
 	cfg.Coordinator.SettingsDBType = settingsType
 
 	if err := validateDuckLakeCatalogTypes(&cfg); err != nil {
+		return nil, err
+	}
+
+	// Legacy safety net for fields that don't carry struct tags yet.
+	applyDefaults(&cfg)
+
+	if err := normalizeCoordinatorAuth(&cfg.Coordinator); err != nil {
 		return nil, err
 	}
 
@@ -2073,6 +2074,7 @@ func applyDefaults(cfg *Config) {
 			cfg.Node.FlightServer.AuthToken,
 			catalogPath,
 			cfg.Node.LocalSecretsDir,
+			NodeCatalogType(&cfg.Node),
 		)
 		if err == nil {
 			cfg.Node.FlightServer.AuthToken = tok
@@ -2082,7 +2084,7 @@ func applyDefaults(cfg *Config) {
 			if fsqlTok == "" {
 				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
 			}
-			tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, catalogPath, cfg.Node.LocalSecretsDir)
+			tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, catalogPath, cfg.Node.LocalSecretsDir, NodeCatalogType(&cfg.Node))
 			if err == nil {
 				cfg.Node.FlightSQLServer.AuthToken = tok
 			}
@@ -2097,8 +2099,8 @@ func applyDefaults(cfg *Config) {
 				fsqlTok = strings.TrimSpace(cfg.Node.FlightServer.AuthToken)
 			}
 		}
-		settingsPath := SettingsDBLocalPath(strings.TrimSpace(cfg.Coordinator.SettingsDBPath), cfg.Coordinator.LocalSecretsDir)
-		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath, cfg.Coordinator.LocalSecretsDir)
+		settingsPath := strings.TrimSpace(cfg.Coordinator.SettingsDBPath)
+		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath, cfg.Coordinator.LocalSecretsDir, cfg.Coordinator.SettingsDBType)
 		if err == nil {
 			cfg.Coordinator.FlightSQLServer.AuthToken = tok
 		}

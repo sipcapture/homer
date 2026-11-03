@@ -160,7 +160,7 @@ func (tsm *TieredStorageManager) applyDuckDBTuning() {
 		return
 	}
 	ApplyHomerDuckDBDefaults(tsm.db, tsm.config.TuningThreads, tsm.config.TuningMemoryLimit,
-		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering")
+		tsm.config.TuningTempDirectory, tsm.config.CatalogPath, "tiering", tsm.config.CatalogType)
 	ApplyWritePathExternalFileCache(tsm.db, tsm.config.TuningExternalFileCache, "tiering")
 }
 
@@ -449,7 +449,7 @@ func (tsm *TieredStorageManager) attachVolume(vol *Volume) error {
 		return CatalogError(catalogPath, "attach volume "+vol.Name, err)
 	}
 	// Tiered DuckDB instances live until process exit; the mark is never released.
-	_ = MarkCatalogAttached(catalogPath)
+	_ = MarkCatalogAttached(catalogPath, tsm.config.CatalogType)
 
 	vol.CatalogPath = catalogPath
 

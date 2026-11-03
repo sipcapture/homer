@@ -29,7 +29,7 @@ func TestIsLoopbackBindHost(t *testing.T) {
 }
 
 func TestResolveNodeFlightAuthTokenConfiguredWins(t *testing.T) {
-	tok, auto, file, err := ResolveNodeFlightAuthToken("0.0.0.0", "explicit-token", t.TempDir()+"/cat.sqlite", "")
+	tok, auto, file, err := ResolveNodeFlightAuthToken("0.0.0.0", "explicit-token", t.TempDir()+"/cat.sqlite", "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestResolveNodeFlightAuthTokenConfiguredWins(t *testing.T) {
 func TestResolveNodeFlightAuthTokenPlaceholderIsGenerated(t *testing.T) {
 	dir := t.TempDir()
 	catalog := filepath.Join(dir, "homer_catalog.sqlite")
-	tok, auto, file, err := ResolveNodeFlightAuthToken("0.0.0.0", "your-secret-token-here", catalog, "")
+	tok, auto, file, err := ResolveNodeFlightAuthToken("0.0.0.0", "your-secret-token-here", catalog, "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestApplyDefaultsDiscardsShippedPlaceholders(t *testing.T) {
 }
 
 func TestResolveNodeFlightAuthTokenLoopbackStaysEmpty(t *testing.T) {
-	tok, auto, file, err := ResolveNodeFlightAuthToken("127.0.0.1", "", t.TempDir()+"/cat.sqlite", "")
+	tok, auto, file, err := ResolveNodeFlightAuthToken("127.0.0.1", "", t.TempDir()+"/cat.sqlite", "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestResolveNodeFlightAuthTokenAutoGenerateAndReuse(t *testing.T) {
 	dir := t.TempDir()
 	catalog := filepath.Join(dir, "homer_catalog.sqlite")
 
-	tok1, auto1, file1, err := ResolveNodeFlightAuthToken("0.0.0.0", "", catalog, "")
+	tok1, auto1, file1, err := ResolveNodeFlightAuthToken("0.0.0.0", "", catalog, "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestResolveNodeFlightAuthTokenAutoGenerateAndReuse(t *testing.T) {
 		t.Fatalf("token file missing: %v", err)
 	}
 
-	tok2, auto2, file2, err := ResolveNodeFlightAuthToken("0.0.0.0", "", catalog, "")
+	tok2, auto2, file2, err := ResolveNodeFlightAuthToken("0.0.0.0", "", catalog, "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestResolveNodeFlightAuthTokenAutoGenerateAndReuse(t *testing.T) {
 func TestResolveRequiredAuthTokenIgnoresLoopback(t *testing.T) {
 	dir := t.TempDir()
 	catalog := filepath.Join(dir, "homer_catalog.sqlite")
-	tok, auto, file, err := ResolveRequiredAuthToken("", catalog, "")
+	tok, auto, file, err := ResolveRequiredAuthToken("", catalog, "", "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}

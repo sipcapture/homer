@@ -391,7 +391,7 @@ func (mtw *MultiTableWriter) connect() error {
 	// unless temp_directory is set (search + flush share the same
 	// memory_limit; compaction runs on its own instance).
 	ApplyHomerDuckDBDefaults(db, mtw.config.TuningThreads, mtw.config.TuningMemoryLimit,
-		mtw.config.TuningTempDirectory, mtw.config.CatalogPath, "writer")
+		mtw.config.TuningTempDirectory, mtw.config.CatalogPath, "writer", mtw.config.CatalogType)
 	ApplyWritePathExternalFileCache(db, mtw.config.TuningExternalFileCache, "writer")
 
 	if err := loadLakeExtensions(db, mtw.config.CatalogType); err != nil {
@@ -487,7 +487,7 @@ func (mtw *MultiTableWriter) connect() error {
 	if _, err := db.Exec(attachSQL); err != nil {
 		return CatalogError(mtw.config.CatalogPath, "attach", err)
 	}
-	mtw.releaseAttachMark = MarkCatalogAttached(mtw.config.CatalogPath)
+	mtw.releaseAttachMark = MarkCatalogAttached(mtw.config.CatalogPath, mtw.config.CatalogType)
 
 	logger.Info("DuckLake (multi-table) attached", "catalog", string(mtw.config.CatalogType), "data_path", mtw.config.DataPath)
 

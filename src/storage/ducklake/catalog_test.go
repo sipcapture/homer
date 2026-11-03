@@ -86,11 +86,11 @@ func TestPostgresCatalogConfiguration(t *testing.T) {
 		if err != nil || !strings.Contains(stmt, "ducklake:postgres:") || !strings.Contains(stmt, "data''s") || !strings.Contains(stmt, "OVERRIDE_DATA_PATH TRUE") {
 			t.Fatalf("attach: %q %v", stmt, err)
 		}
-		if DefaultSpillDirectory(dsn) != "" {
+		if DefaultSpillDirectory(dsn, CatalogPostgres) != "" {
 			t.Fatal("DSN was interpreted as a spill path")
 		}
-		MarkCatalogAttached(dsn)()
-		if IsCatalogAttachedInProcess(dsn) {
+		MarkCatalogAttached(dsn, CatalogPostgres)()
+		if IsCatalogAttachedInProcess(dsn, CatalogPostgres) {
 			t.Fatal("DSN registered as a SQLite file")
 		}
 	}

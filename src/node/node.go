@@ -2227,6 +2227,7 @@ func configureDuckLake(db *sql.DB, cfg *config.NodeConfig) ([]VolumeInfo, error)
 		cfg.DuckLake.Tuning.TempDirectory,
 		config.NodeCatalogPath(cfg),
 		"node",
+		ducklake.CatalogType(config.NodeCatalogType(cfg)),
 	)
 
 	// Install and load DuckLake extension
@@ -2381,7 +2382,7 @@ func attachVolume(db *sql.DB, baseLakeName string, vol config.VolumeConfig) (Vol
 	}
 	// Node DuckDB instances are replaced on refresh but live until process
 	// exit, so the mark is never released.
-	_ = ducklake.MarkCatalogAttached(catalogPath)
+	_ = ducklake.MarkCatalogAttached(catalogPath, catalogType)
 
 	return VolumeInfo{
 		Name:     vol.Name,
