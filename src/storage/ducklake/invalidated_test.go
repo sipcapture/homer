@@ -12,6 +12,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 // invalidateInstance makes DuckDB invalidate the in-memory instance behind db
@@ -80,6 +81,28 @@ func TestFlushAfterInvalidationReportsWriter(t *testing.T) {
 	case err := <-mtw.Invalidated():
 		t.Fatalf("the invalidation was reported twice: %v", err)
 	default:
+	}
+}
+
+// Without the flush queue (a PostgreSQL catalog, or flush_queue: false),
+// flushAll hands the slot to the table's own flush worker. A flush that fails
+// there on an invalidated instance is reported too.
+func TestPerTableFlushWorkerReportsInvalidation(t *testing.T) {
+	mtw, tw := newInvalidationWriter(t)
+	mtw.tables = map[TableKey]*TableWriter{{ProtoType: 1, SubType: "call"}: tw}
+	tw.flushWg.Add(1)
+	go tw.flushWorker()
+	defer func() { _ = tw.Close() }()
+
+	invalidateInstance(t, tw.db, tw.memTables[0])
+	mtw.flushAll()
+	select {
+	case err := <-mtw.Invalidated():
+		if !strings.Contains(err.Error(), "invalidated") {
+			t.Fatalf("reported error %q does not say the instance was invalidated", err)
+		}
+	case <-time.After(time.Minute):
+		t.Fatal("a flush by the per-table worker on an invalidated instance was not reported")
 	}
 }
 
