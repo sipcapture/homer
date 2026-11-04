@@ -743,3 +743,18 @@ func TestRunHybridForcedStructuredIgnoresSQLRequest(t *testing.T) {
 		t.Fatalf("expected forced structured route, got %s", visited)
 	}
 }
+
+func TestBuildSQL_IPv6FilterMatchesBothForms(t *testing.T) {
+	payload := searchPayload{}
+	payload.Timestamp.From = 1
+	payload.Timestamp.To = 2
+	payload.Filter.SrcIP = "2001:db8::10"
+	payload.Filter.DstIP = "10.0.0.2"
+	sql := buildSQL(payload)
+	if err := validateSQL(sql); err != nil {
+		t.Fatalf("generated SQL rejected: %v\n%s", err, sql)
+	}
+	if !containsAll(sql, "src_ip IN ('2001:db8::10', '2001:0db8:0000:0000:0000:0000:0000:0010')", "dst_ip = '10.0.0.2'") {
+		t.Fatalf("expected IPv6 IN clause and IPv4 equality, got:\n%s", sql)
+	}
+}

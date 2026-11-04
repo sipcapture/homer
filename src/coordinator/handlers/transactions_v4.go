@@ -15,6 +15,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/netip"
 	"regexp"
 	"sort"
 	"strconv"
@@ -1961,8 +1962,7 @@ func buildExportExcludeIPClause(whitelist []string) string {
 		if ip == "" {
 			continue
 		}
-		safe := sqlvalidator.SafeString(ip)
-		b.WriteString(fmt.Sprintf(" AND src_ip != '%s' AND dst_ip != '%s'", safe, safe))
+		b.WriteString(" AND " + sqlvalidator.IPNotEqualsClause("src_ip", ip) + " AND " + sqlvalidator.IPNotEqualsClause("dst_ip", ip))
 	}
 	return b.String()
 }
@@ -2323,8 +2323,8 @@ func (h *SearchHandler) runMCPAsStructured(c echo.Context, req *MCPQueryRequest)
 		} else if len(methods) > 1 {
 			searchReq.Filter.Methods = methods
 		}
-		searchReq.Filter.SrcIP = extractByRegex(req.QueryText, `(?:src|source)\s+ip[:=]?\s*([0-9.]+)`)
-		searchReq.Filter.DstIP = extractByRegex(req.QueryText, `(?:dst|destination)\s+ip[:=]?\s*([0-9.]+)`)
+		searchReq.Filter.SrcIP = extractIPAfter(req.QueryText, `(?:src|source)`)
+		searchReq.Filter.DstIP = extractIPAfter(req.QueryText, `(?:dst|destination)`)
 		searchReq.Filter.CallID = extractCallID(req.QueryText)
 		searchReq.Filter.CID = extractCID(req.QueryText)
 		searchReq.Filter.FromUser = extractFromUser(req.QueryText)
@@ -2371,8 +2371,8 @@ func (h *SearchHandler) runMCPAsSQL(c echo.Context, req *MCPQueryRequest) error 
 	} else if len(methods) > 1 {
 		sqlReq.Filter.Methods = methods
 	}
-	sqlReq.Filter.SrcIP = extractByRegex(req.QueryText, `(?:src|source)\s+ip[:=]?\s*([0-9.]+)`)
-	sqlReq.Filter.DstIP = extractByRegex(req.QueryText, `(?:dst|destination)\s+ip[:=]?\s*([0-9.]+)`)
+	sqlReq.Filter.SrcIP = extractIPAfter(req.QueryText, `(?:src|source)`)
+	sqlReq.Filter.DstIP = extractIPAfter(req.QueryText, `(?:dst|destination)`)
 	sqlReq.Filter.CallID = extractByRegex(req.QueryText, `(?:call[_\s-]?id|session[_\s-]?id)[:=]?\s*([^\s,]+)`)
 	sqlReq.Filter.CID = extractCID(req.QueryText)
 	sqlReq.Filter.FromUser = extractByRegex(req.QueryText, `(?:from[_\s-]?user|caller)[:=]?\s*([^\s,]+)`)
@@ -2653,6 +2653,22 @@ func extractByRegex(text, pattern string) string {
 	return strings.TrimSpace(strings.Trim(m[1], `"'`))
 }
 
+// extractIPAfter extracts the address after "<keyword> ip" (keyword is a
+// regexp alternation such as `(?:src|source)`). An IPv6 address is taken when
+// it parses; otherwise the IPv4 pattern applies as before.
+func extractIPAfter(text, keyword string) string {
+	// Try a blank separator first so the ':' of "ip ::1" is not taken as one.
+	for _, sep := range []string{`\s+`, `\s*[:=]\s*`} {
+		re := regexp.MustCompile(`(?i)` + keyword + `\s+ip` + sep + `((?:[0-9a-f]{0,4}:){2,7}[0-9a-f.]*)`)
+		if m := re.FindStringSubmatch(text); m != nil {
+			if addr, err := netip.ParseAddr(m[1]); err == nil && addr.Is6() {
+				return m[1]
+			}
+		}
+	}
+	return extractByRegex(text, keyword+`\s+ip[:=]?\s*([0-9.]+)`)
+}
+
 // extractCallID recognises: call_id, call-id, callid, session_id
 // followed by optional =/:space and an optionally-quoted value.
 // cid is a genuinely distinct field (see extractCID below), not a call_id
@@ -2782,10 +2798,10 @@ func buildMCPRawSQL(lakeName string, req *SearchObjectV4) string {
 		conditions = append(conditions, sqlFormMatchClause("callee", req.Filter.ToUser))
 	}
 	if req.Filter.SrcIP != "" {
-		conditions = append(conditions, fmt.Sprintf("src_ip = '%s'", sqlvalidator.SafeString(req.Filter.SrcIP)))
+		conditions = append(conditions, sqlvalidator.IPEqualsClause("src_ip", req.Filter.SrcIP))
 	}
 	if req.Filter.DstIP != "" {
-		conditions = append(conditions, fmt.Sprintf("dst_ip = '%s'", sqlvalidator.SafeString(req.Filter.DstIP)))
+		conditions = append(conditions, sqlvalidator.IPEqualsClause("dst_ip", req.Filter.DstIP))
 	}
 	if req.Filter.CaptureID > 0 {
 		capStr := sqlvalidator.SafeString(strconv.Itoa(req.Filter.CaptureID))
@@ -3089,10 +3105,10 @@ func buildSearchSQLV4WithOpts(lakeName string, req *SearchObjectV4, virtualRules
 		conditions = append(conditions, fmt.Sprintf("cseq_method = '%s'", sqlvalidator.SafeString(strings.TrimSpace(req.Filter.CseqMethod))))
 	}
 	if req.Filter.SrcIP != "" {
-		conditions = append(conditions, fmt.Sprintf("src_ip = '%s'", sqlvalidator.SafeString(req.Filter.SrcIP)))
+		conditions = append(conditions, sqlvalidator.IPEqualsClause("src_ip", req.Filter.SrcIP))
 	}
 	if req.Filter.DstIP != "" {
-		conditions = append(conditions, fmt.Sprintf("dst_ip = '%s'", sqlvalidator.SafeString(req.Filter.DstIP)))
+		conditions = append(conditions, sqlvalidator.IPEqualsClause("dst_ip", req.Filter.DstIP))
 	}
 	if req.Filter.SrcPort > 0 && protoType != 100 {
 		conditions = append(conditions, fmt.Sprintf("src_port = %d", req.Filter.SrcPort))
