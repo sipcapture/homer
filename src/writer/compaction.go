@@ -19,13 +19,17 @@ import (
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
-// reBrokenParquet matches DuckDB errors about unreadable parquet files.
+// reBrokenParquet matches DuckDB errors about missing or corrupt parquet files.
 // Two forms are handled:
 //
 //	IO Error:    Cannot open file "/path/to/file.parquet": No such file or directory
 //	Input Error: Invalid footer length provided for file '/path/to/file.parquet'
+//
+// "Cannot open file" matches only with "No such file or directory". Any other
+// reason (Permission denied, Too many open files, an I/O error) does not mean
+// the file is gone, so the merge error is kept and the file is left alone.
 var reBrokenParquet = regexp.MustCompile(
-	`Cannot open file "([^"]+\.parquet)"|Invalid footer.*for file '([^']+\.parquet)'`)
+	`Cannot open file "([^"]+\.parquet)": No such file or directory|Invalid footer.*for file '([^']+\.parquet)'`)
 
 // extractBrokenParquetPath parses the absolute parquet path from a DuckDB error
 // about a file that is missing or has an invalid format (corrupt footer).
