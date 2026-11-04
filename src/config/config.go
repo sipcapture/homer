@@ -2329,13 +2329,6 @@ func SaveExample(path string) error {
 	return nil
 }
 
-// FindConfigFile returns the config file that Load picks from the
-// well-known locations when it is called without a path (homer or
-// homer-core, .json, .yaml or .yml), or "" if there is none.
-func FindConfigFile() string {
-	return findConfigFile(nil)
-}
-
 // findConfigFile searches well-known directories for a Homer config file.
 // It checks multiple candidate names so that both deb/rpm installs (homer.json)
 // and source/dev installs (homer-core.json) are discovered automatically.

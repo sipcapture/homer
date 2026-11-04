@@ -30,7 +30,6 @@ import (
 	"time"
 
 	_ "github.com/duckdb/duckdb-go/v2"
-	"github.com/mcuadros/go-defaults"
 	"github.com/sipcapture/homer-core/src/cli"
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/coordinator"
@@ -41,7 +40,6 @@ import (
 	"github.com/sipcapture/homer-core/src/node"
 	"github.com/sipcapture/homer-core/src/otlpreceiver"
 	otlpsink "github.com/sipcapture/homer-core/src/otlpreceiver/sink"
-	input "github.com/sipcapture/homer-core/src/server"
 	"github.com/sipcapture/homer-core/src/siprecreceiver"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"github.com/sipcapture/homer-core/src/stream/hepstream"
@@ -326,21 +324,8 @@ func (mm *ModuleManager) Reload() error {
 
 // ---- Config helpers --------------------------------------------------------
 
-// tryLoadModularConfig loads the modular config. If that fails and a config
-// path was given or a config file was found, the error is returned: the
-// caller must not fall back to legacy mode, which has no HEP listener. With
-// no config file at all, Load reads only defaults and HOMER_* environment
-// variables; a load error is then printed and legacy mode is used.
-func tryLoadModularConfig(configPath string) (*config.Config, bool, error) {
-	cfg, err := config.Load(configPath)
-	if err == nil {
-		return cfg, true, nil
-	}
-	if configPath != "" || config.FindConfigFile() != "" {
-		return nil, false, err
-	}
-	fmt.Fprintf(os.Stderr, "Failed to load config, starting in legacy mode: %v\n", err)
-	return nil, false, nil
+func tryLoadModularConfig(configPath string) (*config.Config, error) {
+	return config.Load(configPath)
 }
 
 func ducklakeConfigFromModular(cfg *config.Config) ducklake.Config {
@@ -553,17 +538,13 @@ func runServer() {
 		configPath = *sf.ConfigPath
 	}
 
-	cfg, isModular, err := tryLoadModularConfig(configPath)
+	cfg, err := tryLoadModularConfig(configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 
 	if sf.ResetAdminPassword != nil && *sf.ResetAdminPassword {
-		if !isModular {
-			fmt.Fprintf(os.Stderr, "--reset-admin-password requires modular config (--config-path)\n")
-			os.Exit(1)
-		}
 		if err := cli.RunResetAdminPassword(configPath); err != nil {
 			fmt.Fprintf(os.Stderr, "reset-admin-password: %v\n", err)
 			os.Exit(1)
@@ -574,335 +555,262 @@ func runServer() {
 	var writerModule *writer.Writer
 	var nodeModule *node.Node
 
-	if isModular {
-		logger.InitLoggerModular(&cfg.Log)
-		logger.Info("homer-core starting in modular mode...")
-		logger.Info("version", "version", VERSION_APPLICATION)
-		homerconfig.SystemSettingsGlobal.VersionApp = VERSION_APPLICATION
-		logger.Info("duckdb version", "version", cli.GetDuckDBVersion())
-		logger.Info("enabled modules", "modules", fmt.Sprintf("%v", cfg.GetEnabledModules()))
+	logger.InitLoggerModular(&cfg.Log)
+	logger.Info("homer-core starting in modular mode...")
+	logger.Info("version", "version", VERSION_APPLICATION)
+	homerconfig.SystemSettingsGlobal.VersionApp = VERSION_APPLICATION
+	logger.Info("duckdb version", "version", cli.GetDuckDBVersion())
+	logger.Info("enabled modules", "modules", fmt.Sprintf("%v", cfg.GetEnabledModules()))
 
-		// Live HEP stream broker (circular buffer + fan-out).
-		// Created once per process and shared between writer (publisher),
-		// node (subscriber endpoint) and coordinator (local fan-in).
-		// Nil when ingest.hep_stream.enable is false, which turns every
-		// downstream Publish/Subscribe into a no-op.
-		var liveBroker *hepstream.Broker
-		if cfg.Ingest.Enable && cfg.Ingest.HepStream.Enable {
-			liveBroker = hepstream.NewBroker(hepstream.Config{
-				Enable:         true,
-				BufferSize:     cfg.Ingest.HepStream.BufferSize,
-				MaxSubscribers: cfg.Ingest.HepStream.MaxSubscribers,
-				PerSubQueueLen: cfg.Ingest.HepStream.PerSubQueueLen,
-				RatePerSubPPS:  cfg.Ingest.HepStream.RatePerSubPPS,
-			})
-			logger.Info("Live HEP stream broker enabled",
-				"buffer_size", cfg.Ingest.HepStream.BufferSize,
-				"max_subscribers", cfg.Ingest.HepStream.MaxSubscribers)
+	// Live HEP stream broker (circular buffer + fan-out).
+	// Created once per process and shared between writer (publisher),
+	// node (subscriber endpoint) and coordinator (local fan-in).
+	// Nil when ingest.hep_stream.enable is false, which turns every
+	// downstream Publish/Subscribe into a no-op.
+	var liveBroker *hepstream.Broker
+	if cfg.Ingest.Enable && cfg.Ingest.HepStream.Enable {
+		liveBroker = hepstream.NewBroker(hepstream.Config{
+			Enable:         true,
+			BufferSize:     cfg.Ingest.HepStream.BufferSize,
+			MaxSubscribers: cfg.Ingest.HepStream.MaxSubscribers,
+			PerSubQueueLen: cfg.Ingest.HepStream.PerSubQueueLen,
+			RatePerSubPPS:  cfg.Ingest.HepStream.RatePerSubPPS,
+		})
+		logger.Info("Live HEP stream broker enabled",
+			"buffer_size", cfg.Ingest.HepStream.BufferSize,
+			"max_subscribers", cfg.Ingest.HepStream.MaxSubscribers)
+	}
+
+	// Start Writer module if ingest + storage are enabled
+	if cfg.Ingest.Enable && cfg.Storage.Enable {
+		w, err := writer.New(&cfg.Ingest, &cfg.Storage, &cfg.Prometheus, &cfg.RemoteLogging)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create writer module: %v\n", err)
+			os.Exit(1)
 		}
-
-		// Start Writer module if ingest + storage are enabled
-		if cfg.Ingest.Enable && cfg.Storage.Enable {
-			w, err := writer.New(&cfg.Ingest, &cfg.Storage, &cfg.Prometheus, &cfg.RemoteLogging)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to create writer module: %v\n", err)
-				os.Exit(1)
-			}
-			if liveBroker != nil {
-				w.SetBroker(liveBroker)
-			}
-			mm.AddModule(w)
-			writerModule = w
-			logger.Info("Writer module configured (ingest + storage)")
+		if liveBroker != nil {
+			w.SetBroker(liveBroker)
 		}
+		mm.AddModule(w)
+		writerModule = w
+		logger.Info("Writer module configured (ingest + storage)")
+	}
 
-		// Start Node module if enabled
+	// Start Node module if enabled
+	if cfg.Node.Enable {
+		// Buffers live in the writer. The node uses the same flag only to
+		// decide whether those rows are visible, not which query plan to pick.
+		if cfg.Storage.Enable {
+			cfg.Node.DuckLake.SearchBuffer = cfg.Storage.DuckLake.SearchBuffer
+		}
+		n, err := node.New(&cfg.Node)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create node module: %v\n", err)
+			os.Exit(1)
+		}
+		// Share writer's DuckDB connection with node for real-time query visibility.
+		// Without this, the node's separate DuckDB can't see data flushed by the writer.
+		if writerModule != nil {
+			if db := writerModule.GetDB(); db != nil {
+				n.SetSharedDB(db)
+			}
+		}
+		if liveBroker != nil {
+			n.SetBroker(liveBroker)
+		}
+		mm.AddModule(n)
+		nodeModule = n
+		logger.Info("Node module configured")
+	}
+
+	// Start Coordinator module if enabled
+	if cfg.Coordinator.Enable {
+		// Propagate lake name from storage/node config so coordinator SQL
+		// uses the correct catalog name (user may override via coordinator.lake_name).
+		if cfg.Coordinator.LakeName == "" || cfg.Coordinator.LakeName == "homer_lake" {
+			if cfg.Storage.Enable && cfg.Storage.DuckLake.LakeName != "" {
+				cfg.Coordinator.LakeName = cfg.Storage.DuckLake.LakeName
+			} else if cfg.Node.Enable && cfg.Node.DuckLake.LakeName != "" {
+				cfg.Coordinator.LakeName = cfg.Node.DuckLake.LakeName
+			}
+		}
+		// Propagate the lake top-N search strategy so the coordinator's
+		// transaction search honours the same knob as the node split path.
+		if s := strings.TrimSpace(cfg.Node.DuckLake.Search.LakeTopNStrategy); s != "" {
+			cfg.Coordinator.LakeTopNStrategy = s
+		} else if s := strings.TrimSpace(cfg.Storage.DuckLake.Search.LakeTopNStrategy); s != "" {
+			cfg.Coordinator.LakeTopNStrategy = s
+		}
+		// NB: coordinator.lake_chunk_sec is the OUTER window (default 24h) and
+		// is intentionally NOT taken from the node's search.lake_chunk_sec
+		// (the node's 1h INNER sub-split); they are different layers.
+		// Propagate the lazy-payload (narrow search + by-uuid hydration)
+		// toggle so the coordinator search path honours the same knob.
+		cfg.Coordinator.LazyPayload = cfg.Storage.DuckLake.Search.LazyPayload
 		if cfg.Node.Enable {
-			// Buffers live in the writer. The node uses the same flag only to
-			// decide whether those rows are visible, not which query plan to pick.
-			if cfg.Storage.Enable {
-				cfg.Node.DuckLake.SearchBuffer = cfg.Storage.DuckLake.SearchBuffer
-			}
-			n, err := node.New(&cfg.Node)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to create node module: %v\n", err)
-				os.Exit(1)
-			}
-			// Share writer's DuckDB connection with node for real-time query visibility.
-			// Without this, the node's separate DuckDB can't see data flushed by the writer.
-			if writerModule != nil {
-				if db := writerModule.GetDB(); db != nil {
-					n.SetSharedDB(db)
-				}
-			}
-			if liveBroker != nil {
-				n.SetBroker(liveBroker)
-			}
-			mm.AddModule(n)
-			nodeModule = n
-			logger.Info("Node module configured")
+			cfg.Coordinator.LazyPayload = cfg.Node.DuckLake.Search.LazyPayload
 		}
-
-		// Start Coordinator module if enabled
-		if cfg.Coordinator.Enable {
-			// Propagate lake name from storage/node config so coordinator SQL
-			// uses the correct catalog name (user may override via coordinator.lake_name).
-			if cfg.Coordinator.LakeName == "" || cfg.Coordinator.LakeName == "homer_lake" {
-				if cfg.Storage.Enable && cfg.Storage.DuckLake.LakeName != "" {
-					cfg.Coordinator.LakeName = cfg.Storage.DuckLake.LakeName
-				} else if cfg.Node.Enable && cfg.Node.DuckLake.LakeName != "" {
-					cfg.Coordinator.LakeName = cfg.Node.DuckLake.LakeName
-				}
-			}
-			// Propagate the lake top-N search strategy so the coordinator's
-			// transaction search honours the same knob as the node split path.
-			if s := strings.TrimSpace(cfg.Node.DuckLake.Search.LakeTopNStrategy); s != "" {
-				cfg.Coordinator.LakeTopNStrategy = s
-			} else if s := strings.TrimSpace(cfg.Storage.DuckLake.Search.LakeTopNStrategy); s != "" {
-				cfg.Coordinator.LakeTopNStrategy = s
-			}
-			// NB: coordinator.lake_chunk_sec is the OUTER window (default 24h) and
-			// is intentionally NOT taken from the node's search.lake_chunk_sec
-			// (the node's 1h INNER sub-split); they are different layers.
-			// Propagate the lazy-payload (narrow search + by-uuid hydration)
-			// toggle so the coordinator search path honours the same knob.
-			cfg.Coordinator.LazyPayload = cfg.Storage.DuckLake.Search.LazyPayload
-			if cfg.Node.Enable {
-				cfg.Coordinator.LazyPayload = cfg.Node.DuckLake.Search.LazyPayload
-			}
-			cfg.Coordinator.MCP = cfg.MCP
-			if HasEmbeddedUI() {
-				coordinator.WebAssets = &WebAssets
-			}
-			c, err := coordinator.New(&cfg.Coordinator)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to create coordinator module: %v\n", err)
-				os.Exit(1)
-			}
-			// When writer+coordinator run in the same process, hand the
-			// local broker to the coordinator so the stream service can
-			// subscribe in-process instead of opening a WS back to
-			// ourselves. In distributed deployments this stays nil and
-			// StreamService fans out to remote nodes.
-			if liveBroker != nil {
-				c.SetLocalBroker(liveBroker)
-			}
-			mm.AddModule(c)
-			logger.Info("Coordinator module configured")
+		cfg.Coordinator.MCP = cfg.MCP
+		if HasEmbeddedUI() {
+			coordinator.WebAssets = &WebAssets
 		}
+		c, err := coordinator.New(&cfg.Coordinator)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create coordinator module: %v\n", err)
+			os.Exit(1)
+		}
+		// When writer+coordinator run in the same process, hand the
+		// local broker to the coordinator so the stream service can
+		// subscribe in-process instead of opening a WS back to
+		// ourselves. In distributed deployments this stays nil and
+		// StreamService fans out to remote nodes.
+		if liveBroker != nil {
+			c.SetLocalBroker(liveBroker)
+		}
+		mm.AddModule(c)
+		logger.Info("Coordinator module configured")
+	}
 
-		// Start OTLP receiver if enabled. The receiver writes to
-		// dedicated DuckLake tables (otlp_traces / otlp_metrics /
-		// otlp_logs) on the writer's primary shard, so it is only
-		// started when the writer module is also up — otherwise we
-		// have no DuckDB to write to and no shared storage handle.
-		if cfg.Ingest.OTLP.Enable {
-			if writerModule == nil {
-				logger.Warn("OTLP receiver enabled but writer module is disabled — OTLP requires storage; skipping receiver startup")
+	// Start OTLP receiver if enabled. The receiver writes to
+	// dedicated DuckLake tables (otlp_traces / otlp_metrics /
+	// otlp_logs) on the writer's primary shard, so it is only
+	// started when the writer module is also up — otherwise we
+	// have no DuckDB to write to and no shared storage handle.
+	if cfg.Ingest.OTLP.Enable {
+		if writerModule == nil {
+			logger.Warn("OTLP receiver enabled but writer module is disabled — OTLP requires storage; skipping receiver startup")
+		} else {
+			duckMgr := writerModule.GetDuckLakeManager()
+			if duckMgr == nil {
+				logger.Warn("OTLP receiver enabled but DuckLake manager is unavailable; skipping receiver startup")
 			} else {
-				duckMgr := writerModule.GetDuckLakeManager()
-				if duckMgr == nil {
-					logger.Warn("OTLP receiver enabled but DuckLake manager is unavailable; skipping receiver startup")
-				} else {
-					storage := duckMgr.OTLPStorage()
-					duckSink, err := otlpsink.NewDuckLake(storage, cfg.Ingest.OTLP.Sinks)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Failed to create OTLP DuckLake sink: %v\n", err)
-						os.Exit(1)
-					}
-					var otlpSink otlpsink.Sink = duckSink
-					var asyncDrain func(context.Context) error
-					if cfg.Ingest.OTLP.AsyncEnable {
-						depth := cfg.Ingest.OTLP.AsyncQueueDepth
-						if depth < 1 {
-							depth = 512
-						}
-						aq := otlpsink.NewAsyncQueue(duckSink, depth, cfg.Ingest.OTLP.AsyncEnqueueTimeoutMs)
-						otlpSink = aq
-						asyncDrain = aq.Drain
-						logger.Info("OTLP async queue enabled",
-							"queue_depth", depth,
-							"enqueue_timeout_ms", cfg.Ingest.OTLP.AsyncEnqueueTimeoutMs)
-					}
-					otlpMod, err := otlpreceiver.New(&cfg.Ingest.OTLP, otlpSink, duckSink.EnsureSchema, asyncDrain)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Failed to create OTLP receiver: %v\n", err)
-						os.Exit(1)
-					}
-					if otlpMod != nil {
-						mm.AddModule(otlpMod)
-						logger.Info("OTLP receiver configured (gRPC + HTTP)",
-							"grpc_listen", cfg.Ingest.OTLP.GRPC.Listen,
-							"http_listen", cfg.Ingest.OTLP.HTTP.Listen)
-					}
-				}
-			}
-		}
-
-		// Start InfluxDB Line Protocol receiver if enabled. Each
-		// measurement materialises into its own DuckLake table on the
-		// writer's primary shard, so the receiver shares the writer's
-		// DuckDB connection and is only started when the writer module
-		// is up.
-		if cfg.Ingest.LineProto.Enable {
-			if writerModule == nil {
-				logger.Warn("Line Protocol receiver enabled but writer module is disabled — LP requires storage; skipping receiver startup")
-			} else {
-				duckMgr := writerModule.GetDuckLakeManager()
-				if duckMgr == nil {
-					logger.Warn("Line Protocol receiver enabled but DuckLake manager is unavailable; skipping receiver startup")
-				} else {
-					lpMod, err := lineprotoreceiver.New(&cfg.Ingest.LineProto, duckMgr.GetDB(), duckMgr.GetLakeName())
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Failed to create Line Protocol receiver: %v\n", err)
-						os.Exit(1)
-					}
-					if lpMod != nil {
-						mm.AddModule(lpMod)
-						logger.Info("Line Protocol receiver configured",
-							"listen", cfg.Ingest.LineProto.Listen,
-							"default_db", cfg.Ingest.LineProto.DefaultDB,
-							"table_prefix", cfg.Ingest.LineProto.TablePrefix)
-					}
-				}
-			}
-		}
-
-		if cfg.Ingest.Vqrtcp.Enable {
-			if writerModule == nil {
-				logger.Warn("VQRTCP receiver enabled but writer module is disabled — skipping")
-			} else if duckMgr := writerModule.GetDuckLakeManager(); duckMgr == nil {
-				logger.Warn("VQRTCP receiver enabled but DuckLake manager is unavailable; skipping")
-			} else if vqStorage := duckMgr.VqrtcpStorage(); vqStorage == nil {
-				logger.Warn("VQRTCP receiver enabled but storage handle is unavailable; skipping")
-			} else {
-				vqMod, err := vqrtcpreceiver.New(&cfg.Ingest.Vqrtcp, vqStorage)
+				storage := duckMgr.OTLPStorage()
+				duckSink, err := otlpsink.NewDuckLake(storage, cfg.Ingest.OTLP.Sinks)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to create VQRTCP receiver: %v\n", err)
+					fmt.Fprintf(os.Stderr, "Failed to create OTLP DuckLake sink: %v\n", err)
 					os.Exit(1)
 				}
-				if vqMod != nil {
-					mm.AddModule(vqMod)
-					logger.Info("VQRTCP receiver configured",
-						"bind", cfg.Ingest.Vqrtcp.BindIP,
-						"port", cfg.Ingest.Vqrtcp.SIPPort)
+				var otlpSink otlpsink.Sink = duckSink
+				var asyncDrain func(context.Context) error
+				if cfg.Ingest.OTLP.AsyncEnable {
+					depth := cfg.Ingest.OTLP.AsyncQueueDepth
+					if depth < 1 {
+						depth = 512
+					}
+					aq := otlpsink.NewAsyncQueue(duckSink, depth, cfg.Ingest.OTLP.AsyncEnqueueTimeoutMs)
+					otlpSink = aq
+					asyncDrain = aq.Drain
+					logger.Info("OTLP async queue enabled",
+						"queue_depth", depth,
+						"enqueue_timeout_ms", cfg.Ingest.OTLP.AsyncEnqueueTimeoutMs)
 				}
-			}
-		}
-
-		if cfg.Ingest.Siprec.Enable {
-			if writerModule == nil {
-				logger.Warn("SIPREC receiver enabled but writer module is disabled — skipping")
-			} else if duckMgr := writerModule.GetDuckLakeManager(); duckMgr == nil {
-				logger.Warn("SIPREC receiver enabled but DuckLake manager is unavailable; skipping")
-			} else {
-				srMod, err := siprecreceiver.New(&cfg.Ingest.Siprec, duckMgr)
+				otlpMod, err := otlpreceiver.New(&cfg.Ingest.OTLP, otlpSink, duckSink.EnsureSchema, asyncDrain)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to create SIPREC receiver: %v\n", err)
+					fmt.Fprintf(os.Stderr, "Failed to create OTLP receiver: %v\n", err)
 					os.Exit(1)
 				}
-				if srMod != nil {
-					mm.AddModule(srMod)
-					logger.Info("SIPREC receiver configured",
-						"bind", cfg.Ingest.Siprec.BindIP,
-						"port", cfg.Ingest.Siprec.SIPPort)
+				if otlpMod != nil {
+					mm.AddModule(otlpMod)
+					logger.Info("OTLP receiver configured (gRPC + HTTP)",
+						"grpc_listen", cfg.Ingest.OTLP.GRPC.Listen,
+						"http_listen", cfg.Ingest.OTLP.HTTP.Listen)
 				}
 			}
 		}
+	}
 
-		// Start MCP module if enabled
-		if cfg.MCP.Enable {
-			mcpModule, err := homermcp.New(&cfg.MCP)
+	// Start InfluxDB Line Protocol receiver if enabled. Each
+	// measurement materialises into its own DuckLake table on the
+	// writer's primary shard, so the receiver shares the writer's
+	// DuckDB connection and is only started when the writer module
+	// is up.
+	if cfg.Ingest.LineProto.Enable {
+		if writerModule == nil {
+			logger.Warn("Line Protocol receiver enabled but writer module is disabled — LP requires storage; skipping receiver startup")
+		} else {
+			duckMgr := writerModule.GetDuckLakeManager()
+			if duckMgr == nil {
+				logger.Warn("Line Protocol receiver enabled but DuckLake manager is unavailable; skipping receiver startup")
+			} else {
+				lpMod, err := lineprotoreceiver.New(&cfg.Ingest.LineProto, duckMgr.GetDB(), duckMgr.GetLakeName())
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Failed to create Line Protocol receiver: %v\n", err)
+					os.Exit(1)
+				}
+				if lpMod != nil {
+					mm.AddModule(lpMod)
+					logger.Info("Line Protocol receiver configured",
+						"listen", cfg.Ingest.LineProto.Listen,
+						"default_db", cfg.Ingest.LineProto.DefaultDB,
+						"table_prefix", cfg.Ingest.LineProto.TablePrefix)
+				}
+			}
+		}
+	}
+
+	if cfg.Ingest.Vqrtcp.Enable {
+		if writerModule == nil {
+			logger.Warn("VQRTCP receiver enabled but writer module is disabled — skipping")
+		} else if duckMgr := writerModule.GetDuckLakeManager(); duckMgr == nil {
+			logger.Warn("VQRTCP receiver enabled but DuckLake manager is unavailable; skipping")
+		} else if vqStorage := duckMgr.VqrtcpStorage(); vqStorage == nil {
+			logger.Warn("VQRTCP receiver enabled but storage handle is unavailable; skipping")
+		} else {
+			vqMod, err := vqrtcpreceiver.New(&cfg.Ingest.Vqrtcp, vqStorage)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to create MCP module: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Failed to create VQRTCP receiver: %v\n", err)
 				os.Exit(1)
 			}
-			mm.AddModule(mcpModule)
-			logger.Info("MCP module configured")
-		}
-
-		// Prometheus metrics if enabled
-		if cfg.Prometheus.Enable {
-			metricsCfg := &metrics.MetricsServerConfig{
-				Enable: cfg.Prometheus.Enable,
-				Host:   cfg.Prometheus.Host,
-				Port:   cfg.Prometheus.Port,
-				Path:   cfg.Prometheus.Path,
-			}
-			metricsSrv := metrics.NewMetricsServerWithConfig(metricsCfg)
-			mm.AddLegacyServer(&metricsServerWrapper{MetricsServer: metricsSrv})
-		}
-
-	} else {
-		// Legacy mode
-		logger.Info("Loading legacy configuration...")
-
-		var configPaths []string
-		if sf.ConfigPath != nil && *sf.ConfigPath != "" {
-			path := *sf.ConfigPath
-			if info, err := os.Stat(path); err == nil {
-				if info.IsDir() {
-					configPaths = append(configPaths, path+"/homer_server_config.json")
-					configPaths = append(configPaths, path+"/homer_server_custom.json")
-				} else {
-					configPaths = append(configPaths, path)
-				}
+			if vqMod != nil {
+				mm.AddModule(vqMod)
+				logger.Info("VQRTCP receiver configured",
+					"bind", cfg.Ingest.Vqrtcp.BindIP,
+					"port", cfg.Ingest.Vqrtcp.SIPPort)
 			}
 		}
+	}
 
-		var logName, logPath string
-		if sf.LogName != nil {
-			logName = *sf.LogName
-		}
-		if sf.LogPathHomerServer != nil {
-			logPath = *sf.LogPathHomerServer
-		}
-
-		homerconfig.MainConfig = homerconfig.New(configPaths, logName, logPath)
-		homerconfig.MainConfig.ReadConfig()
-
-		if sf.SyslogDisable != nil && *sf.SyslogDisable {
-			homerconfig.MainConfig.Setting.LOG_SETTINGS.SysLog = false
-			homerconfig.MainConfig.Setting.LOG_SETTINGS.Stdout = true
-		}
-
-		if sf.LogLevel != nil && *sf.LogLevel != "" {
-			validLevels := map[string]bool{
-				"debug": true, "info": true, "warn": true,
-				"warning": true, "error": true, "trace": true,
+	if cfg.Ingest.Siprec.Enable {
+		if writerModule == nil {
+			logger.Warn("SIPREC receiver enabled but writer module is disabled — skipping")
+		} else if duckMgr := writerModule.GetDuckLakeManager(); duckMgr == nil {
+			logger.Warn("SIPREC receiver enabled but DuckLake manager is unavailable; skipping")
+		} else {
+			srMod, err := siprecreceiver.New(&cfg.Ingest.Siprec, duckMgr)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to create SIPREC receiver: %v\n", err)
+				os.Exit(1)
 			}
-			if validLevels[strings.ToLower(*sf.LogLevel)] {
-				homerconfig.MainConfig.Setting.LOG_SETTINGS.Level = strings.ToLower(*sf.LogLevel)
+			if srMod != nil {
+				mm.AddModule(srMod)
+				logger.Info("SIPREC receiver configured",
+					"bind", cfg.Ingest.Siprec.BindIP,
+					"port", cfg.Ingest.Siprec.SIPPort)
 			}
 		}
+	}
 
-		systemSettings := new(homerconfig.SystemSettingsSchema)
-		defaults.SetDefaults(systemSettings)
-		homerconfig.SystemSettingsGlobal = *systemSettings
-		homerconfig.SystemSettingsGlobal.VersionApp = VERSION_APPLICATION
-
-		if homerconfig.MainConfig.Setting.SYSTEM_SETTINGS.CPUMaxProcs > 0 {
-			runtime.GOMAXPROCS(homerconfig.MainConfig.Setting.SYSTEM_SETTINGS.CPUMaxProcs)
+	// Start MCP module if enabled
+	if cfg.MCP.Enable {
+		mcpModule, err := homermcp.New(&cfg.MCP)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to create MCP module: %v\n", err)
+			os.Exit(1)
 		}
+		mm.AddModule(mcpModule)
+		logger.Info("MCP module configured")
+	}
 
-		logger.InitLogger()
-		logger.Info("homer-core starting in legacy mode...")
-		logger.Info("version", "version", VERSION_APPLICATION)
-		logger.Info("duckdb version", "version", cli.GetDuckDBVersion())
-
-		// Prometheus metrics if enabled
-		if homerconfig.MainConfig.Setting.PROMETHEUS_SETTINGS.Enable {
-			metricsSrv := metrics.NewMetricsServer()
-			mm.AddLegacyServer(&metricsServerWrapper{MetricsServer: metricsSrv})
+	// Prometheus metrics if enabled
+	if cfg.Prometheus.Enable {
+		metricsCfg := &metrics.MetricsServerConfig{
+			Enable: cfg.Prometheus.Enable,
+			Host:   cfg.Prometheus.Host,
+			Port:   cfg.Prometheus.Port,
+			Path:   cfg.Prometheus.Path,
 		}
-
-		// Legacy HEP input server.
-		// Legacy mode never spins up the modular coordinator/node stack,
-		// so the broker here would have no subscribers. We still create
-		// it when legacy config opts in (via SYSTEM_SETTINGS.HepStream
-		// if ever added) -- for now the feature is modular-only.
-		hep := input.NewHEPInput()
-		mm.AddLegacyServer(hep)
+		metricsSrv := metrics.NewMetricsServerWithConfig(metricsCfg)
+		mm.AddLegacyServer(&metricsServerWrapper{MetricsServer: metricsSrv})
 	}
 
 	logger.Info("go runtime info", "go_version", runtime.Version(), "cpu_cores", runtime.NumCPU(), "GOMAXPROCS", runtime.GOMAXPROCS(0))
