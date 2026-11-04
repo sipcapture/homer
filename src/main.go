@@ -326,12 +326,21 @@ func (mm *ModuleManager) Reload() error {
 
 // ---- Config helpers --------------------------------------------------------
 
-func tryLoadModularConfig(configPath string) (*config.Config, bool) {
+// tryLoadModularConfig loads the modular config. If that fails and a config
+// path was given or a config file was found, the error is returned: the
+// caller must not fall back to legacy mode, which has no HEP listener. With
+// no config file at all, Load reads only defaults and HOMER_* environment
+// variables; a load error is then printed and legacy mode is used.
+func tryLoadModularConfig(configPath string) (*config.Config, bool, error) {
 	cfg, err := config.Load(configPath)
-	if err != nil {
-		return nil, false
+	if err == nil {
+		return cfg, true, nil
 	}
-	return cfg, true
+	if configPath != "" || config.FindConfigFile() != "" {
+		return nil, false, err
+	}
+	fmt.Fprintf(os.Stderr, "Failed to load config, starting in legacy mode: %v\n", err)
+	return nil, false, nil
 }
 
 func ducklakeConfigFromModular(cfg *config.Config) ducklake.Config {
@@ -544,7 +553,11 @@ func runServer() {
 		configPath = *sf.ConfigPath
 	}
 
-	cfg, isModular := tryLoadModularConfig(configPath)
+	cfg, isModular, err := tryLoadModularConfig(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
 
 	if sf.ResetAdminPassword != nil && *sf.ResetAdminPassword {
 		if !isModular {
