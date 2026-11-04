@@ -15,7 +15,7 @@ func TestPostgresRuntimeStateAcrossReplicas(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A separate DuckDB client models an independent coordinator process.
-	otherDB, err := OpenSettingsDB(db.Driver().(*settingsPostgresDriver).config.ConnString())
+	otherDB, err := OpenSettingsDB(db.Driver().(*settingsPostgresDriver).config.ConnString(), "postgres")
 	if err != nil {
 		t.Fatal(err)
 	}

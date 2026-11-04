@@ -55,7 +55,7 @@ func sharedStateReplicas(t *testing.T) (*sql.DB, *services.RuntimeState, *sql.DB
 	}
 	u := url.URL{Scheme: "postgresql", Host: net.JoinHostPort(cfg.Host, strconv.Itoa(int(cfg.Port))), User: url.UserPassword(cfg.User, cfg.Password), Path: "/" + name, RawQuery: "sslmode=disable"}
 	open := func() (*sql.DB, *services.RuntimeState) {
-		db, err := services.OpenSettingsDB(u.String())
+		db, err := services.OpenSettingsDB(u.String(), "postgres")
 		if err != nil {
 			t.Fatal(err)
 		}
