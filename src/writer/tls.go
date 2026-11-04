@@ -39,6 +39,7 @@ type TLSServer struct {
 	stopOnce    sync.Once
 	connSem     chan struct{}
 	readTimeout time.Duration
+	conns       connSet // open connections, closed by Stop
 }
 
 // NewTLSServer creates a new TLS server
@@ -123,6 +124,10 @@ func (s *TLSServer) Start() error {
 			continue
 		}
 
+		if !s.conns.add(conn) {
+			<-s.connSem
+			continue
+		}
 		atomic.AddInt64(&s.writer.connCount, 1)
 		s.wg.Add(1)
 		go s.handleConnection(conn)
@@ -136,6 +141,9 @@ func (s *TLSServer) Stop() {
 		if s.listener != nil {
 			s.listener.Close()
 		}
+		// Close open connections too: a handler waiting for the next frame
+		// of an idle client would otherwise hold Stop until read_timeout_sec.
+		s.conns.closeAll()
 		s.wg.Wait()
 	})
 }
@@ -145,6 +153,7 @@ func (s *TLSServer) Stop() {
 // to avoid per-packet heap allocations (same pattern as TCP).
 func (s *TLSServer) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
+	defer s.conns.remove(conn)
 	defer conn.Close()
 	defer atomic.AddInt64(&s.writer.connCount, -1)
 	defer func() { <-s.connSem }()
