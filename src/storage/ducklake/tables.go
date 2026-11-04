@@ -455,8 +455,11 @@ func putRowSlice(row []interface{}) {
 //     DuckDB Appender API (bypasses SQL parsing entirely).
 //   - Periodically the active and standby memory tables are swapped atomically.
 //     The now-standby table (full of data) is sent to the flush goroutine which
-//     copies rows to DuckLake and truncates the standby table — all without
-//     blocking new writes that continue into the new active table.
+//     copies rows to DuckLake and truncates the standby table under that
+//     table's write lock. New writes continue into the new active table. If a
+//     queued flush runs after a later swap has made its table active again,
+//     appends to that table wait for the whole INSERT and TRUNCATE; appends to
+//     the other table are not blocked.
 //   - Catalog contention is handled with exponential-backoff retry.
 type TableWriter struct {
 	db       *sql.DB
@@ -489,7 +492,8 @@ type TableWriter struct {
 
 // NewTableWriter creates a new table writer with a DuckLake table and
 // two in-memory buffer tables (double-buffer). It also starts a dedicated
-// flush goroutine that processes swap+flush jobs without blocking writers.
+// flush goroutine that processes swap+flush jobs; appends wait for a flush
+// only when it holds the table they write to (see copyAndClearSlot).
 // catalogMu is the shared lock from MultiTableWriter that serializes
 // catalog-modifying operations (flush to DuckLake, compaction).
 func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize int, catalogMu *sync.Mutex) (*TableWriter, error) {
@@ -725,8 +729,10 @@ func (tw *TableWriter) Close() error {
 
 // SwapAndFlush drains Go-side batches into the active memory table, then
 // atomically swaps active↔standby and enqueues the now-standby slot for
-// asynchronous flush to DuckLake. Writers are blocked only for the brief
-// swap (a single atomic store), not for the DuckLake INSERT.
+// asynchronous flush to DuckLake. Writers to the new active slot do not wait
+// for that flush. If the job runs after a later swap has made the slot active
+// again, appends to it wait on the slot's write lock for the whole INSERT and
+// TRUNCATE; appends to the other slot are not blocked.
 func (tw *TableWriter) SwapAndFlush() {
 	if err := tw.flushBatch(); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to drain batch before swap for %s: %v", tw.tableFQN, err))

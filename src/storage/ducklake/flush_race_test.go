@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/sipcapture/homer-core/src/utils/metrics"
 )
 
 // newFlushRaceTableWriter returns a TableWriter whose memory tables and lake
@@ -116,7 +118,10 @@ func TestFlushSlotDirectKeepsRowsAppendedDuringFlush(t *testing.T) {
 
 // A flush that waits for the catalog lock, held by compaction, must not hold
 // the lock of its memory table. Otherwise, once the next swap makes that
-// table active again, every append waits until compaction is done.
+// table active again, every append waits until compaction is done. The check
+// is timing-based: if the flush has not reached the catalog lock within the
+// sleep, the test passes without exercising the wait, so it does not prove the
+// lock order. The loss tests above cover the race.
 func TestFlushWaitingForCatalogLockDoesNotBlockAppends(t *testing.T) {
 	tw := newFlushRaceTableWriter(t)
 	if err := tw.Write([]interface{}{int64(1)}); err != nil {
@@ -219,4 +224,29 @@ func TestMultiTableWriterFlushKeepsConcurrentAppends(t *testing.T) {
 			assertLakeRows(t, tw.db, writers*perWriter)
 		})
 	}
+}
+
+// A flush of an empty memory table records its duration but no rows: idle
+// tables flush on every flush_interval_sec and must not create a flushed-rows
+// series or log a flush. DeleteLabelValues reports whether a series existed
+// without creating one.
+func TestEmptyFlushRecordsNoRows(t *testing.T) {
+	tw := newFlushRaceTableWriter(t)
+	tw.tableFQN = "empty_flush_" + time.Now().Format("150405.000000000")
+	tw.flushSlotDirect(0, tw.catalogMu)
+	tw.flushSlotDirect(1, nil)
+	if metrics.DucklakeTableFlushedRows.DeleteLabelValues(tw.tableFQN) {
+		t.Fatal("empty flush recorded flushed rows")
+	}
+	if !metrics.DucklakeTableFlushDuration.DeleteLabelValues(tw.tableFQN) {
+		t.Fatal("empty flush did not record its duration")
+	}
+	if err := tw.Write([]interface{}{int64(1)}); err != nil {
+		t.Fatal(err)
+	}
+	tw.flushSlotDirect(int(tw.activeIdx.Load()), tw.catalogMu)
+	if !metrics.DucklakeTableFlushedRows.DeleteLabelValues(tw.tableFQN) {
+		t.Fatal("flush of one row recorded no flushed rows")
+	}
+	assertLakeRows(t, tw.db, 1)
 }
