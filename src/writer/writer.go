@@ -1095,6 +1095,17 @@ func (w *Writer) GetDB() *sql.DB {
 	return nil
 }
 
+// StorageInvalidated returns a channel that receives one error when a fatal
+// DuckDB error has invalidated the writer's instance, or nil without DuckLake
+// storage. Ingest and search on the instance cannot recover without a
+// restart.
+func (w *Writer) StorageInvalidated() <-chan error {
+	if w.ducklakeManager == nil {
+		return nil
+	}
+	return w.ducklakeManager.Invalidated()
+}
+
 // GetTieredQueryDB returns the TieredStorageManager DuckDB when multi-volume
 // tiering is active, or nil. Used by the Node for merged search across hot+cold.
 func (w *Writer) GetTieredQueryDB() *sql.DB {

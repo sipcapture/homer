@@ -860,8 +860,26 @@ func runServer() {
 		}
 	}
 
+	// A fatal DuckDB error invalidates the writer's instance for good: every
+	// later append, flush and search on it fails. Exit non-zero so that a
+	// supervisor (Docker restart policy, systemd, Kubernetes) restarts homer.
+	var storageInvalidated <-chan error
+	if writerModule != nil {
+		storageInvalidated = writerModule.StorageInvalidated()
+	}
+
 	for {
-		sig := <-sigCh
+		var sig os.Signal
+		select {
+		case sig = <-sigCh:
+		case err := <-storageInvalidated:
+			logger.Error("Writer DuckDB instance was invalidated by a fatal error; exiting so that the supervisor restarts homer (raise storage.ducklake.tuning.memory_limit, docs/OOM.md)",
+				"error", err)
+			if stopErr := mm.Stop(defaultShutdownTimeout); stopErr != nil {
+				logger.Error(fmt.Sprintf("Error during shutdown: %v", stopErr))
+			}
+			os.Exit(1)
+		}
 		logger.Info("Received signal", "signal", sig)
 
 		if sig == syscall.SIGHUP {

@@ -488,6 +488,10 @@ type TableWriter struct {
 	flushCh   chan flushJob
 	flushWg   sync.WaitGroup
 	catalogMu *sync.Mutex // shared catalog lock from MultiTableWriter
+
+	// onFatalFlush, when set, is called after a flush fails with an error
+	// that isDuckDBFatalError matches.
+	onFatalFlush func(error)
 }
 
 // NewTableWriter creates a new table writer with a DuckLake table and
@@ -840,6 +844,9 @@ func (tw *TableWriter) flushSlotDirect(slot int, catalogMu *sync.Mutex) {
 		if !isFlushRetriableError(errStr) || attempt == flushMaxRetries {
 			metrics.RecordPipelineStageError("ducklake", "flush", "insert_error")
 			logFlushFailure(memName, tw.tableFQN, attempt+1, err)
+			if tw.onFatalFlush != nil && isDuckDBFatalError(errStr) {
+				tw.onFatalFlush(err)
+			}
 			return
 		}
 		logger.Warn(fmt.Sprintf("flush %s: retriable error (attempt %d/%d), retrying in %v: %v",
