@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,36 +20,145 @@ import (
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
-// reBrokenParquet matches DuckDB errors about missing or corrupt parquet files.
-// Two forms are handled:
+// DuckDB errors that name a data file as missing or corrupt. They only select
+// the candidate; resolveBrokenParquet checks the file before anything is
+// removed. The forms, as DuckDB reports them during a merge:
 //
-//	IO Error:    Cannot open file "/path/to/file.parquet": No such file or directory
-//	Input Error: Invalid footer length provided for file '/path/to/file.parquet'
+//	local missing:  IO Error: Cannot open file "/data/…/x.parquet": No such file or directory
+//	S3 missing:     HTTP Error: HTTP GET error reading 'http://bucket.host/…/x.parquet' in region 'r' (HTTP 404 Not Found)
+//	                (path-style endpoints put the bucket first in the path instead)
+//	corrupt:        Invalid Input Error: Invalid footer length provided for file '/data/…/x.parquet'
+//	                Invalid Input Error: No magic bytes found at end of file 's3://bucket/…/x.parquet'
 //
-// "Cannot open file" matches only with "No such file or directory". Any other
-// reason (Permission denied, Too many open files, an I/O error) does not mean
-// the file is gone, so the merge error is kept and the file is left alone.
-var reBrokenParquet = regexp.MustCompile(
-	`Cannot open file "([^"]+\.parquet)": No such file or directory|Invalid footer.*for file '([^']+\.parquet)'`)
+// "Cannot open file" counts only with "No such file or directory": Permission
+// denied, Too many open files or an I/O error say nothing about the file. Other
+// HTTP failures on an object (416 on a short object, a Content-Length mismatch)
+// are not matched either.
+var (
+	reMissingParquet = regexp.MustCompile(`Cannot open file "([^"]+\.parquet)": No such file or directory`)
+	reMissingObject  = regexp.MustCompile(`HTTP GET error reading '([^']+\.parquet)' in region '[^']*' \(HTTP 404 Not Found\)`)
+	reCorruptParquet = regexp.MustCompile(`(?:Invalid footer.*for|No magic bytes found at end of) file '([^']+\.parquet)'`)
+)
 
-// extractBrokenParquetPath parses the absolute parquet path from a DuckDB error
-// about a file that is missing or has an invalid format (corrupt footer).
-func extractBrokenParquetPath(err error) string {
+// brokenParquet is a data file named by a merge error.
+type brokenParquet struct {
+	path    string // an absolute local path or an s3:// / az:// URL, as the catalog resolves it
+	missing bool   // the error says the file is gone; otherwise it says the file is not parquet
+}
+
+// extractBrokenParquet returns the data file a DuckDB merge error names as
+// missing or corrupt. dataPath is the lake's data path; a missing S3 object is
+// reported by its HTTP URL and is mapped back to an s3:// URL under it.
+func extractBrokenParquet(err error, dataPath string) (brokenParquet, bool) {
 	if err == nil {
-		return ""
+		return brokenParquet{}, false
 	}
-	m := reBrokenParquet.FindStringSubmatch(err.Error())
-	if len(m) < 2 {
-		return ""
+	msg := err.Error()
+	if m := reMissingParquet.FindStringSubmatch(msg); m != nil {
+		return brokenParquet{path: m[1], missing: true}, true
 	}
-	// Group 1 = "Cannot open file" match, Group 2 = "Invalid footer" match.
-	if m[1] != "" {
-		return m[1]
+	if m := reMissingObject.FindStringSubmatch(msg); m != nil {
+		if p, ok := s3ObjectURL(m[1], dataPath); ok {
+			return brokenParquet{path: p, missing: true}, true
+		}
+		return brokenParquet{}, false
 	}
-	if len(m) >= 3 {
-		return m[2]
+	if m := reCorruptParquet.FindStringSubmatch(msg); m != nil {
+		return brokenParquet{path: m[1]}, true
 	}
-	return ""
+	return brokenParquet{}, false
+}
+
+// s3ObjectURL maps the HTTP URL DuckDB requested back to the s3:// URL of the
+// object, using the bucket of dataPath: the bucket is either the first label of
+// the host (virtual-hosted style) or the first path segment (path style). The
+// key must lie under dataPath.
+func s3ObjectURL(httpURL, dataPath string) (string, bool) {
+	if !ducklake.IsS3Path(dataPath) {
+		return "", false
+	}
+	lake, err := url.Parse(dataPath)
+	if err != nil || lake.Host == "" {
+		return "", false
+	}
+	u, err := url.Parse(httpURL)
+	if err != nil {
+		return "", false
+	}
+	prefix := strings.TrimPrefix(lake.Path, "/")
+	var keys []string
+	if strings.HasPrefix(u.Hostname(), lake.Host+".") {
+		keys = append(keys, strings.TrimPrefix(u.Path, "/"))
+	}
+	if after, ok := strings.CutPrefix(u.Path, "/"+lake.Host+"/"); ok {
+		keys = append(keys, after)
+	}
+	for _, key := range keys {
+		if key != "" && strings.HasPrefix(key, prefix) {
+			return lake.Scheme + "://" + lake.Host + "/" + key, true
+		}
+	}
+	return "", false
+}
+
+// resolveBrokenParquet removes the catalog row of a data file a merge error
+// named, and the file, only as far as the file itself confirms the error:
+//
+//   - a local file the error calls missing loses its catalog row only when
+//     os.Stat says it does not exist; the file is gone, so nothing is unlinked;
+//   - a local file the error calls corrupt is probed: missing drops the row,
+//     corrupt drops the row and unlinks the file, anything else keeps both;
+//   - a remote object cannot be checked from here (a local stat or open of a URL
+//     says nothing about it), so the error text drops the catalog row, and the
+//     object is never unlinked.
+//
+// It reports whether the catalog row was removed; otherwise the row, the file
+// and the merge error stay.
+func (c *CompactionService) resolveBrokenParquet(tableName string, b brokenParquet) bool {
+	if ducklake.IsRemoteLakeDataPath(b.path) {
+		logger.Warn("CompactionService: merge error names a missing or corrupt object, removing its catalog entry",
+			"table", tableName, "path", b.path, "missing", b.missing)
+		return c.removeBrokenCatalogEntry(tableName, b.path)
+	}
+	if b.missing {
+		if _, err := os.Stat(b.path); !os.IsNotExist(err) {
+			logger.Warn("CompactionService: merge error says a parquet file is missing but it is present, keeping it",
+				"table", tableName, "path", b.path, "stat_error", err)
+			return false
+		}
+		logger.Warn("CompactionService: merge hit a missing parquet file, removing its catalog entry",
+			"table", tableName, "path", b.path)
+		return c.removeBrokenCatalogEntry(tableName, b.path)
+	}
+	switch missing, corrupt := ducklake.ProbeLocalParquet(b.path); {
+	case missing:
+		logger.Warn("CompactionService: merge hit a missing parquet file, removing its catalog entry",
+			"table", tableName, "path", b.path)
+		return c.removeBrokenCatalogEntry(tableName, b.path)
+	case corrupt:
+		logger.Warn("CompactionService: merge hit a corrupt parquet file, removing it and its catalog entry",
+			"table", tableName, "path", b.path)
+		if !c.removeBrokenCatalogEntry(tableName, b.path) {
+			return false
+		}
+		_ = os.Remove(b.path)
+		return true
+	default:
+		logger.Warn("CompactionService: merge error says a parquet file is corrupt but it reads as parquet or cannot be opened, keeping it",
+			"table", tableName, "path", b.path)
+		return false
+	}
+}
+
+// clearBrokenParquet handles a merge error that names a missing or corrupt data
+// file. When resolveBrokenParquet removes the file's catalog row it returns nil,
+// so the next cycle can merge the table again; otherwise it returns err.
+func (c *CompactionService) clearBrokenParquet(tableName string, err error) error {
+	b, ok := extractBrokenParquet(err, c.dataPath)
+	if !ok || !c.resolveBrokenParquet(tableName, b) {
+		return err
+	}
+	return nil
 }
 
 // CompactionConfig holds compaction settings
@@ -762,16 +872,7 @@ func (c *CompactionService) mergeTablesDuckDB(tables []string) error {
 				"max_file_size_bytes", maxSize,
 				"threads", 1)
 			processed, created, err := c.mergeAdjacentFiles(tableName)
-			if err != nil {
-				if brokenPath := extractBrokenParquetPath(err); brokenPath != "" {
-					logger.Warn("CompactionService: merge hit broken/missing parquet, removing catalog entry",
-						"table", tableName, "path", brokenPath)
-					if c.removeBrokenCatalogEntry(tableName, brokenPath) {
-						_ = os.Remove(brokenPath)
-						err = nil
-					}
-				}
-			}
+			err = c.clearBrokenParquet(tableName, err)
 			if c.noteDBError(err) {
 				fatal = true
 				c.recordMergeFatal(tableName)
