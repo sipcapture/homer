@@ -11,7 +11,7 @@ When Homer starts **without** a usable JSON/YAML config file, `config.Load` stil
 | Arrays / slices | Use a **numeric index** in the name (Viper convention), e.g. `HOMER_COORDINATOR_NODES_0_HOST`, `HOMER_STORAGE_DUCKLAKE_STORAGE_POLICY_VOLUMES_1_S3_ENDPOINT`. |
 | Precedence | Defaults → optional config file → **environment overrides** (via Viper `AutomaticEnv`). |
 
-Legacy **Homer Server** config (`homerconfig`) uses a different prefix (`HOMERCORE`) and only applies in legacy mode — not the modular stack described here.
+If the config file or a `HOMER_*` variable fails to load or validate, Homer prints `Failed to load config: …` and exits with status 1.
 
 ## Discovering names
 
