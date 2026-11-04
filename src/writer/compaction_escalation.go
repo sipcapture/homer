@@ -19,6 +19,9 @@ const maintenanceFailureEscalation = 3
 // recordMaintenanceResult tracks consecutive failures of op and reports
 // whether this failure was escalated to an error.
 func (c *CompactionService) recordMaintenanceResult(op string, err error) bool {
+	if err != nil {
+		c.cycleIncomplete.Store(true)
+	}
 	c.mu.Lock()
 	if c.maintenanceFailures == nil {
 		c.maintenanceFailures = make(map[string]int)

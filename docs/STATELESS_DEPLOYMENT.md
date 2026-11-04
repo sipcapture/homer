@@ -103,6 +103,25 @@ multiple catalogs are acquired in a stable order with partial acquisitions relea
 on contention. Vacuum returns HTTP 409 on contention and 503 on acquisition errors;
 CLI maintenance returns an error. Automatic operations retry on later cycles.
 
+Automatic compaction stores its shared completion timestamp as the global
+`homer.maintenance.compaction.completed_at` key in the existing
+`public.ducklake_metadata` table. It creates no scheduling tables and leaves
+DuckLake's own metadata keys unchanged. The check and update both run under the
+catalog advisory lock, using PostgreSQL time. Keep `compaction.check_interval_sec`
+consistent across replicas: after a fully successful cycle, all replicas skip
+until that interval has elapsed. The schedule survives pod restarts and is
+independent for each catalog/shard.
+
+PostgreSQL replicas check eligibility every minute (or the configured interval
+when shorter), so interrupted or partially failed cycles can be retried without
+waiting a full compaction interval. Failed retention, inline flush, merge, or
+cleanup steps prevent the completion timestamp from advancing. Other steps may
+still finish, and the next attempt works against the current catalog rather than
+resuming a checkpoint. The catalog user needs read/write access to the existing
+metadata table. Missing metadata, invalid markers, and schedule errors skip the
+cycle without creating tables. Inline flushing when compaction is disabled and
+manually requested maintenance keep their existing schedules.
+
 Maintenance checks owning sessions before SQL and monitors them every second.
 Detected connection loss cancels the operation context, including in-flight SQL
 and Azure cleanup, and prevents subsequent statements. Cancellation is cooperative:

@@ -1,10 +1,59 @@
 package writer
 
 import (
+	"time"
+
 	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
+
+// PostgreSQL polls eligibility separately from the full compaction interval so
+// another replica can retry interrupted/partial work promptly.
+func (c *CompactionService) compactionPollInterval() time.Duration {
+	interval := time.Duration(c.config.CheckIntervalSec) * time.Second
+	if interval <= 0 {
+		interval = time.Hour
+	}
+	if (c.config.CatalogType == ducklake.CatalogPostgres || ducklake.IsPostgresCatalogPath(c.catalogPath)) && interval > time.Minute {
+		return time.Minute
+	}
+	return interval
+}
+
+func (c *CompactionService) compactionDue() bool {
+	lease := c.maintenanceLease.Load()
+	if lease == nil {
+		return true
+	}
+	interval := time.Duration(c.config.CheckIntervalSec) * time.Second
+	if interval <= 0 {
+		interval = time.Hour
+	}
+	due, err := lease.Due("compaction", interval)
+	if err != nil {
+		logger.Warn("CompactionService: shared schedule unavailable; skipping cycle", "error", err)
+		return false
+	}
+	if !due {
+		logger.Info("CompactionService: catalog already compacted within interval; skipping cycle", "interval", interval.String())
+	}
+	return due
+}
+
+func (c *CompactionService) recordCompactionCompletion() bool {
+	if c.cycleIncomplete.Load() {
+		logger.Warn("CompactionService: cycle partially failed; shared completion not advanced")
+		return false
+	}
+	if lease := c.maintenanceLease.Load(); lease != nil {
+		if err := lease.Complete("compaction"); err != nil {
+			logger.Warn("CompactionService: failed to record shared compaction schedule", "error", err)
+			return false
+		}
+	}
+	return true
+}
 
 func (c *CompactionService) tryMaintenanceLock() (func(), bool) {
 	if c.config.CatalogType != ducklake.CatalogPostgres && !ducklake.IsPostgresCatalogPath(c.catalogPath) {
