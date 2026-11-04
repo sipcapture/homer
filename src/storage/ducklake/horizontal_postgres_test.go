@@ -139,7 +139,7 @@ func runPostgresHorizontalWritersAndReaders(t *testing.T, interval time.Duration
 		}
 	}
 	_ = installer.Close()
-	cfg := Config{CatalogPath: dsn, DataPath: "s3://" + bucket + "/parquet", LakeName: "lake", ShardCount: 1,
+	cfg := Config{CatalogType: CatalogPostgres, CatalogPath: dsn, DataPath: "s3://" + bucket + "/parquet", LakeName: "lake", ShardCount: 1,
 		BatchSize: 32, FlushInterval: interval, FlushQueue: &queue, DataInliningRowLimit: 0,
 		S3Region: "us-east-1", S3AccessKeyID: os.Getenv("HOMER_TEST_S3_ACCESS_KEY"), S3SecretAccessKey: os.Getenv("HOMER_TEST_S3_SECRET_KEY"),
 		S3Endpoint: strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://"), S3UseSSL: strings.HasPrefix(endpoint, "https://"), S3URLStyle: "path",
