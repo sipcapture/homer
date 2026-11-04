@@ -4,6 +4,7 @@
 
 package decoder
 
+import "net/netip"
 
 // ipv4BytesToString formats four octets as a dotted-quad without net.IP
 // intermediate allocations (To4/String allocate on the parse hot path).
@@ -39,29 +40,12 @@ func writeDecimalUint8(buf []byte, v byte) int {
 	return 1
 }
 
-// ipv6BytesToString formats 16 bytes as IPv6 text (one heap string).
-// IPv6 is uncommon on the SIP capture hot path; keep a small helper.
+// ipv6BytesToString formats 16 bytes as RFC 5952 text ("2001:db8::10"), the
+// same text net.IP.String gives: an IPv4-mapped address prints as a
+// dotted-quad. Search filters compare this text, so it must stay canonical.
 func ipv6BytesToString(b []byte) string {
 	if len(b) != 16 {
 		return ""
 	}
-	var buf [39]byte
-	off := 0
-	for i := 0; i < 16; i += 2 {
-		if i > 0 {
-			buf[off] = ':'
-			off++
-		}
-		off += writeHexUint16(buf[off:], uint16(b[i])<<8|uint16(b[i+1]))
-	}
-	return string(buf[:off])
-}
-
-func writeHexUint16(buf []byte, v uint16) int {
-	const hexdigits = "0123456789abcdef"
-	buf[0] = hexdigits[v>>12&0xf]
-	buf[1] = hexdigits[v>>8&0xf]
-	buf[2] = hexdigits[v>>4&0xf]
-	buf[3] = hexdigits[v&0xf]
-	return 4
+	return netip.AddrFrom16([16]byte(b)).Unmap().String()
 }

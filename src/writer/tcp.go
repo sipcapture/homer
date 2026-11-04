@@ -36,6 +36,7 @@ type TCPServer struct {
 	stopOnce    sync.Once
 	connSem     chan struct{} // semaphore for max connections
 	readTimeout time.Duration
+	conns       connSet // open connections, closed by Stop
 }
 
 // NewTCPServer creates a new TCP server
@@ -93,6 +94,10 @@ func (s *TCPServer) Start() error {
 			continue
 		}
 
+		if !s.conns.add(conn) {
+			<-s.connSem
+			continue
+		}
 		atomic.AddInt64(&s.writer.connCount, 1)
 		s.wg.Add(1)
 		go s.handleConnection(conn)
@@ -106,6 +111,9 @@ func (s *TCPServer) Stop() {
 		if s.listener != nil {
 			s.listener.Close()
 		}
+		// Close open connections too: a handler waiting for the next frame
+		// of an idle client would otherwise hold Stop until read_timeout_sec.
+		s.conns.closeAll()
 		s.wg.Wait()
 	})
 }
@@ -115,6 +123,7 @@ func (s *TCPServer) Stop() {
 // to avoid per-packet heap allocations.
 func (s *TCPServer) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
+	defer s.conns.remove(conn)
 	defer conn.Close()
 	defer atomic.AddInt64(&s.writer.connCount, -1)
 	defer func() { <-s.connSem }()
