@@ -68,11 +68,33 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      rustfs:
+        image: rustfs/rustfs:latest
+        env:
+          RUSTFS_VOLUMES: /data
+          RUSTFS_ADDRESS: 0.0.0.0:9000
+          RUSTFS_CONSOLE_ENABLE: 'false'
+          RUSTFS_ACCESS_KEY: homer_test
+          RUSTFS_SECRET_KEY: homer_test_secret
+        ports:
+          - 9000:9000
+        volumes:
+          - /data
+        options: >-
+          --user 0:0
+          --health-cmd "curl -fsS http://127.0.0.1:9000/health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-start-period 30s
+          --health-retries 12
     env:
       CGO_ENABLED: 1
       GOMAXPROCS: '2'
       GOFLAGS: -p=2
       HOMER_TEST_POSTGRES_DSN: postgres://postgres:homer_test@127.0.0.1:5432/homer_test?sslmode=disable
+      HOMER_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+      HOMER_TEST_S3_ACCESS_KEY: homer_test
+      HOMER_TEST_S3_SECRET_KEY: homer_test_secret
     steps:
       - uses: actions/checkout@v5
         with:
@@ -101,8 +123,10 @@ jobs:
           set -euo pipefail
           # TestStatelessCoordinatorProcess is a subprocess helper invoked by the
           # replica integration test; selecting it directly would report a skip.
+          # The horizontal writer helper is also launched by its parent suite.
           go test -race ./config ./cli ./storage/ducklake ./coordinator ./coordinator/handlers ./coordinator/services ./node ./server ./writer ./internal/maintenancelock \
             -run 'Test(Postgres|Stateless(Validation|LoadDoesNotGenerateLocalSecrets|EnvironmentAndTokenInheritance)$|NodeReadsPostgres|DiscoverSchemaViews|LoadPostgresDuckLakeCatalog|NormalizePostgresDSN|IsPostgresSettingsPath|JWTSecretFilePathWithPostgresSettings|AttachSQLBuildersReturnErrors|CatalogErrorKeepsDiagnosticsWithoutCredentials|SQLiteShardSpillDirectoryUnchanged|LocalSecretDefaultsAndOverride)' \
+            -skip '^TestPostgresHorizontalWriterProcess$' \
             -count=1 -json -timeout=10m | tee postgres-results.jsonl
           if grep -q '"Action":"skip"' postgres-results.jsonl; then
             echo "PostgreSQL regressions must not skip" >&2
