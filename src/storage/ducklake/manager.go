@@ -251,6 +251,13 @@ func (m *Manager) RefreshCatalogCache() error {
 	return m.sharded.RefreshCatalogCache()
 }
 
+// Invalidated returns a channel that receives one error when a fatal DuckDB
+// error has invalidated a writer instance. Ingest and search on it cannot
+// recover without a restart.
+func (m *Manager) Invalidated() <-chan error {
+	return m.sharded.Invalidated()
+}
+
 // GetDB returns the primary shard's DuckDB connection (for compaction/maintenance)
 func (m *Manager) GetDB() *sql.DB {
 	return m.sharded.Primary().GetDB()
