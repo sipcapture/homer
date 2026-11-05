@@ -139,3 +139,20 @@ func TestCompactionEligibilityPollInterval(t *testing.T) {
 		})
 	}
 }
+
+func TestCompactionFirstDelay(t *testing.T) {
+	for _, tc := range []struct {
+		typ     ducklake.CatalogType
+		seconds int
+		want    time.Duration
+	}{
+		{ducklake.CatalogPostgres, 1800, time.Minute},
+		{ducklake.CatalogPostgres, 10, 10 * time.Second},
+		{ducklake.CatalogSQLite, 1800, 5 * time.Minute},
+	} {
+		c := &CompactionService{config: CompactionConfig{CatalogType: tc.typ, CheckIntervalSec: tc.seconds}}
+		if got := c.compactionFirstDelay(); got != tc.want {
+			t.Fatalf("delay=%v want=%v", got, tc.want)
+		}
+	}
+}
