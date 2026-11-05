@@ -5,6 +5,7 @@ package cli
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -61,6 +62,26 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 	quote := func(value string) string {
 		return "'" + strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), "'", `\'`) + "'"
 	}
+	owner, acquired, err := ducklake.AcquireMaintenance(ctx, ducklake.CatalogPostgres, u.String())
+	if err != nil || !acquired {
+		t.Fatalf("CLI test lock owner: %v %v", acquired, err)
+	}
+	defer owner.Release()
+	configFile := filepath.Join(t.TempDir(), "homer.json")
+	raw, err := json.Marshal(map[string]any{
+		"storage": map[string]any{"enable": true, "ducklake": map[string]any{"catalog_type": "postgres", "catalog_path": u.String(), "lake_name": "lake", "data_path": cfg.DataPath}},
+		"node":    map[string]any{"enable": false}, "coordinator": map[string]any{"enable": false, "local_secrets_dir": t.TempDir()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configFile, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCompaction(SystemFlags{ConfigPath: configFile, CompactionMerge: true}); err == nil || !strings.Contains(err.Error(), "already running") {
+		t.Fatalf("CLI bypassed shared maintenance lock: %v", err)
+	}
+	owner.Release()
 	for _, catalogPath := range []string{
 		u.String(),
 		strings.Replace(u.String(), "postgresql://", "postgres://", 1),

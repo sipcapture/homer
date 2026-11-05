@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sipcapture/homer-core/src/config"
+	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"github.com/sipcapture/homer-core/src/storage/ducklake/compactor"
 	"github.com/sipcapture/homer-core/src/storage/ducklake/mover"
@@ -277,7 +278,10 @@ type CompactionService struct {
 	// wide table can exceed that gap, and native holds CatalogLock only for the
 	// short per-partition swap. A second cycle would then DELETE (retention)
 	// while the first is still rewriting the same parquet (sipcapture/homer#945).
-	cycleRunning atomic.Bool
+	cycleRunning      atomic.Bool
+	cycleIncomplete   atomic.Bool // Failed steps must not advance the shared schedule.
+	ghostRecoveryOnce sync.Once
+	maintenanceLease  atomic.Pointer[maintenancelock.Lease]
 
 	// backupCatalog snapshots the SQLite catalog before a native merge; nil
 	// means defaultCatalogBackup.
@@ -443,7 +447,6 @@ func (c *CompactionService) Start() error {
 		case <-time.After(5 * time.Second):
 		}
 		logger.Info("CompactionService: Running initial compaction on startup")
-		c.withCatalogLock(c.recoverGhostFiles)
 		c.runCompaction()
 	}()
 
@@ -462,9 +465,9 @@ func (c *CompactionService) Stop() {
 	logger.Info("CompactionService stopped")
 }
 
-// compactionLoop runs periodic compaction every CheckIntervalSec.
-// First scheduled run is after 5 min (or interval if shorter) so compaction runs
-// sooner when there are many files.
+// compactionLoop checks PostgreSQL eligibility at least once a minute; the
+// shared marker enforces CheckIntervalSec between successful cycles. SQLite
+// retains its local interval and initial delay of up to five minutes.
 func (c *CompactionService) compactionLoop() {
 	defer c.wg.Done()
 	defer func() {
@@ -473,14 +476,12 @@ func (c *CompactionService) compactionLoop() {
 		}
 	}()
 
-	interval := time.Duration(c.config.CheckIntervalSec) * time.Second
-	firstDelay := 5 * time.Minute
-	if interval < firstDelay {
-		firstDelay = interval
-	}
+	interval := c.compactionPollInterval()
+	firstDelay := c.compactionFirstDelay()
 
 	logger.Info("CompactionService: Periodic loop started",
 		"interval_sec", c.config.CheckIntervalSec,
+		"eligibility_check_interval", interval.String(),
 		"first_run_in", firstDelay.String())
 
 	// First scheduled run after firstDelay (sooner than full interval)
@@ -503,7 +504,7 @@ func (c *CompactionService) compactionLoop() {
 		case <-c.ctx.Done():
 			return
 		case <-ticker.C:
-			logger.Info("CompactionService: Interval elapsed, running scheduled compaction")
+			logger.Debug("CompactionService: Checking scheduled compaction eligibility")
 			c.runCompaction()
 		}
 	}
@@ -526,6 +527,7 @@ func (c *CompactionService) withCatalogLock(fn func()) {
 // loop used when compaction is disabled.
 func (c *CompactionService) flushInlinedData() {
 	if !c.catalogIntegrityOK() || !c.ensureDB() {
+		c.cycleIncomplete.Store(true)
 		return
 	}
 	c.withCatalogLock(func() {
@@ -534,6 +536,7 @@ func (c *CompactionService) flushInlinedData() {
 		logger.Info("CompactionService: Flush inlined data", "lake", c.lakeName)
 		flushSQL := fmt.Sprintf("CALL ducklake_flush_inlined_data('%s')", c.lakeName)
 		if _, err := c.execWithRetry(flushSQL); err != nil {
+			c.cycleIncomplete.Store(true)
 			logger.Warn("CompactionService: flush_inlined_data failed", "error", err)
 		}
 	})
@@ -568,7 +571,7 @@ func (c *CompactionService) inlineFlushOnlyLoop() {
 		timer.Stop()
 		return
 	case <-timer.C:
-		c.flushInlinedData()
+		c.runInlineFlushCycle()
 	}
 
 	ticker := time.NewTicker(interval)
@@ -578,7 +581,7 @@ func (c *CompactionService) inlineFlushOnlyLoop() {
 		case <-c.ctx.Done():
 			return
 		case <-ticker.C:
-			c.flushInlinedData()
+			c.runInlineFlushCycle()
 		}
 	}
 }
@@ -601,6 +604,16 @@ func (c *CompactionService) runCompaction() {
 		return
 	}
 	defer c.endCycle()
+	c.cycleIncomplete.Store(false)
+	release, acquired := c.tryMaintenanceLock()
+	if !acquired {
+		return
+	}
+	defer release()
+
+	if !c.compactionDue() {
+		return
+	}
 
 	if !c.catalogIntegrityOK() {
 		logger.Error("CompactionService: compaction stopped after catalog damage was detected; restart homer after repairing the catalog",
@@ -613,12 +626,14 @@ func (c *CompactionService) runCompaction() {
 	}
 
 	start := time.Now()
+	c.ghostRecoveryOnce.Do(func() { c.withCatalogLock(c.recoverGhostFiles) })
 	logger.Info("CompactionService: Starting compaction cycle",
 		"engine", c.resolvedEngine())
 
 	// Refresh table list (read-only, no lock needed)
 	if err := c.discoverTables(); err != nil {
 		logger.Error("CompactionService: Failed to discover tables", "error", err)
+		return
 	}
 
 	var totalRowsDeleted int64
@@ -634,6 +649,7 @@ func (c *CompactionService) runCompaction() {
 			c.withCatalogLock(func() {
 				deleted, err := c.runRetention(table, value)
 				if err != nil {
+					c.cycleIncomplete.Store(true)
 					logger.Error("CompactionService: Retention failed", "table", table, "retention_value", value, "retention_unit", c.config.RetentionUnit, "error", err)
 				} else if deleted > 0 {
 					logger.Info("CompactionService: Retention completed", "table", table, "retention_value", value, "retention_unit", c.config.RetentionUnit, "rows_deleted", deleted)
@@ -646,8 +662,16 @@ func (c *CompactionService) runCompaction() {
 	// Run merge per table — lock per table
 	if err := c.runMerge(c.tables); err != nil {
 		logger.Error("CompactionService: Merge failed", "error", err)
+		return
 	}
 
+	if err := c.maintenanceSQL().Check(); err != nil {
+		logger.Warn("CompactionService: maintenance ownership lost; cycle aborted", "error", err)
+		return
+	}
+	if !c.recordCompactionCompletion() {
+		return
+	}
 	c.mu.Lock()
 	c.lastCompactionTime = time.Now()
 	c.totalCompactions++
@@ -697,6 +721,7 @@ func (c *CompactionService) discoverTables() error {
 	timeColumns := map[string]string{}
 	partitioned, err := ducklake.DatePartitionedTables(c.context(), c.database(), c.lakeName)
 	if err != nil {
+		c.cycleIncomplete.Store(true)
 		logger.Warn("CompactionService: Failed to list date-partitioned tables", "error", err)
 	}
 	for _, p := range partitioned {
@@ -845,6 +870,7 @@ func (c *CompactionService) mergeTablesDuckDB(tables []string) error {
 			continue
 		}
 		if reason, skip := c.mergeQuarantined.Load(tableName); skip {
+			c.cycleIncomplete.Store(true)
 			logger.Debug("CompactionService: table left out of merge", "table", tableName, "reason", reason)
 			continue
 		}
@@ -853,6 +879,7 @@ func (c *CompactionService) mergeTablesDuckDB(tables []string) error {
 		c.withCatalogLock(func() {
 			defer func() {
 				if r := recover(); r != nil {
+					c.cycleIncomplete.Store(true)
 					logger.Error("CompactionService: merge panic", "table", tableName, "panic", r)
 				}
 			}()
@@ -879,6 +906,7 @@ func (c *CompactionService) mergeTablesDuckDB(tables []string) error {
 				return
 			}
 			if err != nil {
+				c.cycleIncomplete.Store(true)
 				logger.Warn("CompactionService: merge_adjacent_files failed", "table", tableName, "error", err)
 				if strings.Contains(err.Error(), "Out of Memory") {
 					c.logMemoryBreakdown()
@@ -909,6 +937,7 @@ func (c *CompactionService) mergeTablesDuckDB(tables []string) error {
 // whole sequence, so flush and queries are not blocked for the entire cycle.
 func (c *CompactionService) runMaintenanceCalls() {
 	if !c.verifyCatalogIntegrity() {
+		c.cycleIncomplete.Store(true)
 		return
 	}
 
@@ -942,7 +971,7 @@ func (c *CompactionService) runMaintenanceCalls() {
 			logger.Info("CompactionService: Azure credential_chain file cleanup using native SDK",
 				"lake", c.lakeName,
 				"workaround", "sipcapture/homer#1023")
-			err := ducklake.RunAzureNativeFileCleanup(c.ctx, c.database(), c.lakeName, c.dataPath, ducklakeAzureConfig(c.azureClient))
+			err := ducklake.RunAzureNativeFileCleanup(c.context(), c.database(), c.lakeName, c.dataPath, ducklakeAzureConfig(c.azureClient))
 			if !c.recordMaintenanceResult("azure native file cleanup", err) && err != nil {
 				c.warnMaintenanceS3Failure("azure native file cleanup", err)
 			}
@@ -1012,7 +1041,7 @@ func (c *CompactionService) useNativeEngine() bool {
 	if ducklake.IsRemoteLakeDataPath(c.dataPath) {
 		return false
 	}
-	ctx := c.ctx
+	ctx := c.context()
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1078,6 +1107,9 @@ func (c *CompactionService) backupBeforeNativeMerge() bool {
 // context returns the service context, or Background for services built
 // without NewCompactionService (tests).
 func (c *CompactionService) context() context.Context {
+	if lease := c.maintenanceLease.Load(); lease != nil {
+		return lease.Context()
+	}
 	if c.ctx != nil {
 		return c.ctx
 	}
@@ -1102,6 +1134,7 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 	}
 
 	if !c.backupBeforeNativeMerge() {
+		c.cycleIncomplete.Store(true)
 		logger.Warn("CompactionService: skipping native merge this cycle because the catalog backup failed",
 			"lake", c.lakeName)
 		c.runMaintenanceCalls()
@@ -1130,7 +1163,7 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			continue
 		}
 		logger.Info("CompactionService: native merge starting", "table", tableName)
-		res, err := compactor.CompactTable(c.ctx, compactor.Options{
+		res, err := compactor.CompactTable(c.context(), compactor.Options{
 			DB:                  c.database(),
 			LakeName:            c.lakeName,
 			DataPath:            c.dataPath,
@@ -1144,6 +1177,7 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 			return fmt.Errorf("native merge of %s invalidated the compaction DuckDB instance; cycle aborted", tableName)
 		}
 		if err != nil {
+			c.cycleIncomplete.Store(true)
 			logger.Warn("CompactionService: native merge failed", "table", tableName, "error", err)
 			continue
 		}
@@ -1188,6 +1222,7 @@ func (c *CompactionService) runNativeMerge(tables []string) error {
 	// "multiple snapshots returned from database". If it did, stop using the
 	// native engine until the process restarts and an operator has looked.
 	if err := c.checkCatalogInvariants(); err != nil {
+		c.cycleIncomplete.Store(true)
 		c.nativeDisabled.Store(true)
 		logger.Error("CompactionService: catalog invariants violated after native merge; "+
 			"native engine disabled until restart, falling back to the DuckDB merge",
@@ -1384,7 +1419,7 @@ func (c *CompactionService) mergeAdjacentFiles(tableName string) (filesProcessed
 	if c.database() == nil {
 		return 0, 0, fmt.Errorf("no database")
 	}
-	ctx := c.ctx
+	ctx := c.context()
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -1415,6 +1450,9 @@ func (c *CompactionService) mergeAdjacentFiles(tableName string) (filesProcessed
 }
 
 func (c *CompactionService) mergeAdjacentFilesOnce(ctx context.Context, mergeSQL string) (filesProcessed, filesCreated int64, err error) {
+	if err := c.maintenanceSQL().Check(); err != nil {
+		return 0, 0, err
+	}
 	conn, err := c.database().Conn(ctx)
 	if err != nil {
 		return 0, 0, err
@@ -1459,7 +1497,7 @@ func (c *CompactionService) mergeAdjacentFilesOnce(ctx context.Context, mergeSQL
 // proves temp_directory is set and used; all-zero means spilling is off,
 // i.e. the instance runs without a temp_directory).
 func (c *CompactionService) logMemoryBreakdown() {
-	rows, err := c.database().Query(`
+	rows, err := c.maintenanceSQL().Query(`
 		SELECT tag,
 		       memory_usage_bytes,
 		       temporary_storage_bytes
@@ -1496,7 +1534,7 @@ func (c *CompactionService) execWithRetry(query string, args ...any) (sql.Result
 
 	for attempt := 1; attempt <= attempts; attempt++ {
 		var result sql.Result
-		result, lastErr = c.database().Exec(query, args...)
+		result, lastErr = c.maintenanceSQL().Exec(query, args...)
 		if lastErr == nil {
 			return result, nil
 		}
@@ -1523,7 +1561,7 @@ func (c *CompactionService) queryWithRetry(query string, args ...any) (*sql.Rows
 
 	for attempt := 1; attempt <= attempts; attempt++ {
 		var rows *sql.Rows
-		rows, lastErr = c.database().Query(query, args...)
+		rows, lastErr = c.maintenanceSQL().Query(query, args...)
 		if lastErr == nil {
 			return rows, nil
 		}

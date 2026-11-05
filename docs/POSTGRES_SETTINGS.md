@@ -101,6 +101,11 @@ generated secrets into it to preserve tokens and JWT sessions.
 With file-backed settings, secrets remain beside the settings file unless
 `local_secrets_dir` is explicitly configured.
 
+For replicas without persistent local disks, use
+[stateless deployment](STATELESS_DEPLOYMENT.md). That mode requires explicitly
+configured shared secrets and stores coordinator runtime state in PostgreSQL.
+
+
 Config display redacts the connection string unless you supply
 `--include-secrets`, including when selecting it directly with `--section`.
 Connection strings are not logged as file paths.
@@ -121,6 +126,10 @@ Most settings queries run through DuckDB's PostgreSQL attachment. Operations tha
 need `RETURNING` use a native PostgreSQL connection for that query. Each native
 query has its own connection and transaction, adding authentication and network
 overhead.
+
+This workaround addresses a limitation of the DuckDB PostgreSQL extension;
+PostgreSQL itself supports `RETURNING`. Schema initialization similarly uses
+`postgres_execute` for remote sequence and default DDL.
 
 These queries cannot join a DuckDB transaction. Existing settings services do not
 use explicit multi-statement transactions. Writes commit before subsequent
@@ -173,5 +182,6 @@ cancellation, connection cleanup, and concurrent token consumption.
 ## Further reading
 
 - [Configure PostgreSQL DuckLake catalogs](POSTGRES_DUCKLAKE.md)
+- [Stateless deployment and horizontal scaling](STATELESS_DEPLOYMENT.md)
 - [DuckDB PostgreSQL extension](https://duckdb.org/docs/stable/extensions/postgres)
 - [Upstream RETURNING limitation](https://github.com/duckdb/duckdb-postgres/issues/175)

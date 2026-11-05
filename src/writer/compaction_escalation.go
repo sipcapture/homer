@@ -19,6 +19,9 @@ const maintenanceFailureEscalation = 3
 // recordMaintenanceResult tracks consecutive failures of op and reports
 // whether this failure was escalated to an error.
 func (c *CompactionService) recordMaintenanceResult(op string, err error) bool {
+	if err != nil {
+		c.cycleIncomplete.Store(true)
+	}
 	c.mu.Lock()
 	if c.maintenanceFailures == nil {
 		c.maintenanceFailures = make(map[string]int)
@@ -54,7 +57,7 @@ func (c *CompactionService) scheduledDeletionCount() (int64, error) {
 		return 0, fmt.Errorf("no database")
 	}
 	var n int64
-	err := c.database().QueryRow(fmt.Sprintf(
+	err := c.maintenanceSQL().QueryRow(fmt.Sprintf(
 		"SELECT count(*) FROM __ducklake_metadata_%s.ducklake_files_scheduled_for_deletion", c.lakeName)).Scan(&n)
 	return n, err
 }
