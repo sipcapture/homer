@@ -8,8 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Model the table that DuckLake already provisions. Schedule code must never
-// create tables itself or modify DuckLake's own metadata keys.
+// Existing DuckLake metadata must remain separate from Homer scheduling.
 func scheduleCatalog(t *testing.T) string {
 	t.Helper()
 	dsn := testCatalogDSN(t)
@@ -55,19 +54,11 @@ func TestPostgresMaintenanceScheduleAcrossReplicas(t *testing.T) {
 	second.Release()
 	third := acquire(dsn) // A new physical session models a replica restart.
 	check(third, "compaction", false)
-	third.mu.Lock()
-	_, err := third.conns[0].Exec(context.Background(), `INSERT INTO public.ducklake_metadata
-		VALUES ($1, 'unrelated scoped value', 'table', 42)`, scheduleKey("compaction"))
-	third.mu.Unlock()
-	if err != nil {
-		t.Fatal(err)
-	}
-	check(third, "compaction", false)
 	check(third, "other-task", true)
 	// Make the interval expire using database time, without timing-sensitive sleeps.
 	third.mu.Lock()
-	_, err = third.conns[0].Exec(context.Background(), `UPDATE public.ducklake_metadata
-		SET value = (clock_timestamp() - interval '2 hours')::text WHERE key = $1 AND scope IS NULL`, scheduleKey("compaction"))
+	_, err := third.conns[0].Exec(context.Background(), `UPDATE public.homer_maintenance_schedule
+		SET completed_at = clock_timestamp() - interval '2 hours' WHERE task = $1`, scheduleKey("compaction"))
 	third.mu.Unlock()
 	if err != nil {
 		t.Fatal(err)
@@ -80,27 +71,6 @@ func TestPostgresMaintenanceScheduleAcrossReplicas(t *testing.T) {
 	// Independent catalog databases must not suppress each other's cycles.
 	independent := acquire(scheduleCatalog(t))
 	check(independent, "compaction", true)
-	third.mu.Lock()
-	var tables, markers, versions, scoped int
-	err = third.conns[0].QueryRow(context.Background(), `SELECT
-		(SELECT count(*) FROM pg_tables WHERE schemaname = 'public'),
-		(SELECT count(*) FROM public.ducklake_metadata WHERE key = $1 AND scope IS NULL),
-		(SELECT count(*) FROM public.ducklake_metadata WHERE key = 'version' AND value = '1.1'),
-		(SELECT count(*) FROM public.ducklake_metadata WHERE key = $1 AND scope = 'table' AND scope_id = 42 AND value = 'unrelated scoped value')`, scheduleKey("compaction")).Scan(&tables, &markers, &versions, &scoped)
-	third.mu.Unlock()
-	if err != nil || tables != 1 || markers != 1 || versions != 1 || scoped != 1 {
-		t.Fatalf("schedule changed catalog structure or metadata: tables=%d markers=%d versions=%d scoped=%d err=%v", tables, markers, versions, scoped, err)
-	}
-	third.mu.Lock()
-	_, err = third.conns[0].Exec(context.Background(), `UPDATE public.ducklake_metadata
-		SET value = 'invalid timestamp' WHERE key = $1 AND scope IS NULL`, scheduleKey("compaction"))
-	third.mu.Unlock()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if due, err := third.Due("compaction", time.Hour); err == nil || due {
-		t.Fatalf("invalid marker should fail closed: due=%v err=%v", due, err)
-	}
 	third.Release()
 	if err := third.Complete("compaction"); err == nil {
 		t.Fatal("released lease updated the schedule")
@@ -110,20 +80,20 @@ func TestPostgresMaintenanceScheduleAcrossReplicas(t *testing.T) {
 	}
 }
 
-func TestPostgresMaintenanceScheduleMissingMetadata(t *testing.T) {
-	dsn := testCatalogDSN(t) // Deliberately has no DuckLake metadata table.
+func TestPostgresMaintenanceScheduleWithoutDuckLakeMetadata(t *testing.T) {
+	dsn := testCatalogDSN(t)
 	lease, acquired, err := Acquire(context.Background(), dsn)
 	if err != nil || !acquired {
 		t.Fatalf("acquire: %v %v", acquired, err)
 	}
 	defer lease.Release()
-	if due, err := lease.Due("compaction", time.Hour); err == nil || due {
-		t.Fatalf("missing metadata should fail closed: due=%v err=%v", due, err)
+	if due, err := lease.Due("compaction", time.Hour); err != nil || !due {
+		t.Fatalf("new schedule: due=%v err=%v", due, err)
 	}
-	lease.mu.Lock()
-	defer lease.mu.Unlock()
-	var tables int
-	if err := lease.conns[0].QueryRow(context.Background(), `SELECT count(*) FROM pg_tables WHERE schemaname='public'`).Scan(&tables); err != nil || tables != 0 {
-		t.Fatalf("schedule created a table: tables=%d err=%v", tables, err)
+	if err := lease.Complete("compaction"); err != nil {
+		t.Fatal(err)
+	}
+	if due, err := lease.Due("compaction", time.Hour); err != nil || due {
+		t.Fatalf("completed schedule: due=%v err=%v", due, err)
 	}
 }
