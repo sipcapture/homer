@@ -32,8 +32,8 @@ func (c *CompactionService) compactionDue() bool {
 	}
 	due, err := lease.Due("compaction", interval)
 	if err != nil {
-		logger.Warn("CompactionService: shared schedule unavailable; skipping cycle", "error", err)
-		return false
+		logger.Warn("CompactionService: shared schedule unavailable; running cycle under advisory lock", "error", err)
+		return true
 	}
 	if !due {
 		logger.Info("CompactionService: catalog already compacted within interval; skipping cycle", "interval", interval.String())

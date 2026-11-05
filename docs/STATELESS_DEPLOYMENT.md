@@ -117,9 +117,9 @@ when shorter), so interrupted or partially failed cycles can be retried without
 waiting a full compaction interval. Failed retention, inline flush, merge, or
 cleanup steps prevent the completion timestamp from advancing. Other steps may
 still finish, and the next attempt works against the current catalog rather than
-resuming a checkpoint. The catalog user needs read/write access to the existing
-metadata table. Missing metadata, invalid markers, and schedule errors skip the
-cycle without creating tables. Inline flushing when compaction is disabled and
+resuming a checkpoint. The catalog user needs permission to create and read/write the Homer schedule
+table. Schedule read failures run the cycle under the advisory lock; only a valid
+recent marker suppresses compaction. Inline flushing when compaction is disabled and
 manually requested maintenance keep their existing schedules.
 
 Maintenance checks owning sessions before SQL and monitors them every second.
