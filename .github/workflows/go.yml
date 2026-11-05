@@ -125,7 +125,7 @@ jobs:
           # replica integration test; selecting it directly would report a skip.
           # The horizontal writer helper is also launched by its parent suite.
           go test -race ./config ./cli ./storage/ducklake ./coordinator ./coordinator/handlers ./coordinator/services ./node ./server ./writer ./internal/maintenancelock \
-            -run 'Test(Postgres|Stateless(Validation|LoadDoesNotGenerateLocalSecrets|EnvironmentAndTokenInheritance)$|NodeReadsPostgres|DiscoverSchemaViews|LoadPostgresDuckLakeCatalog|NormalizePostgresDSN|IsPostgresSettingsPath|JWTSecretFilePathWithPostgresSettings|AttachSQLBuildersReturnErrors|CatalogErrorKeepsDiagnosticsWithoutCredentials|SQLiteShardSpillDirectoryUnchanged|LocalSecretDefaultsAndOverride)' \
+            -run 'Test(Postgres|SessionRevocationTimeoutFallback$|Stateless(Validation|LoadDoesNotGenerateLocalSecrets|EnvironmentAndTokenInheritance)$|NodeReadsPostgres|DiscoverSchemaViews|LoadPostgresDuckLakeCatalog|NormalizePostgresDSN|IsPostgresSettingsPath|JWTSecretFilePathWithPostgresSettings|AttachSQLBuildersReturnErrors|CatalogErrorKeepsDiagnosticsWithoutCredentials|SQLiteShardSpillDirectoryUnchanged|LocalSecretDefaultsAndOverride)' \
             -skip '^TestPostgresHorizontalWriterProcess$' \
             -count=1 -json -timeout=10m | tee postgres-results.jsonl
           if grep -q '"Action":"skip"' postgres-results.jsonl; then

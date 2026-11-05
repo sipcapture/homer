@@ -4,6 +4,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"sync"
@@ -12,6 +13,16 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
 )
+
+// runtimeStateStore is the shared state used by authentication.
+type runtimeStateStore interface {
+	Get(context.Context, string, string, bool) ([]byte, bool, error)
+	Put(context.Context, string, string, []byte, time.Time) error
+}
+
+// Bound revocation lookups below the five-second fallback lifetime, so a full
+// database timeout leaves a recent answer available to the current request.
+const revocationLookupTimeout = time.Second
 
 // SetRuntimeState replaces instance-local HTTP state for stateless deployments.
 func (h *AuthHandler) SetRuntimeState(state *services.RuntimeState) {
@@ -53,7 +64,9 @@ func (h *AuthHandler) sessionIsRevoked(c echo.Context, id string) (bool, error) 
 	if h.runtimeState == nil {
 		return h.sessionStore.IsRevoked(id), nil
 	}
-	_, found, err := h.runtimeState.Get(c.Request().Context(), "revoked-session", id, false)
+	ctx, cancel := context.WithTimeout(c.Request().Context(), revocationLookupTimeout)
+	defer cancel()
+	_, found, err := h.runtimeState.Get(ctx, "revoked-session", id, false)
 	if err == nil {
 		h.revocations.remember(id, found)
 		return found, nil
