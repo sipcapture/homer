@@ -104,9 +104,9 @@ on contention. Vacuum returns HTTP 409 on contention and 503 on acquisition erro
 CLI maintenance returns an error. Automatic operations retry on later cycles.
 
 Automatic compaction stores its shared completion timestamp as the global
-`homer.maintenance.compaction.completed_at` key in the existing
-`public.ducklake_metadata` table. It creates no scheduling tables and leaves
-DuckLake's own metadata keys unchanged. The check and update both run under the
+`homer.maintenance.compaction.completed_at` key in the Homer-owned
+`public.homer_maintenance_schedule` table, created on first use. DuckLake metadata
+is untouched. The check and update both run under the
 catalog advisory lock, using PostgreSQL time. Keep `compaction.check_interval_sec`
 consistent across replicas: after a fully successful cycle, all replicas skip
 until that interval has elapsed. The schedule survives pod restarts and is
