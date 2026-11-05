@@ -78,7 +78,7 @@ The request carries the stored `uuid`, `proto_type`, and `event_type` (defaults 
 When `active` is true and the key matches:
 
 1. The stored row becomes one Ethernet / IPv4 or IPv6 / UDP packet. `src_ip`, `dst_ip`, `src_port`, and `dst_port` come from the row. A missing port becomes `5060`.
-2. A SIP-I body that HOMER stored as hex (`X-Homer-Binary-Body: hex`) is restored to the original bytes before the PCAP is written, so tshark sees the same payload Wireshark would.
+2. A SIP-I body stored in `isup_body` is put back into the message before the PCAP is written. Rows from 11.0.376 that still carry `X-Homer-Binary-Body: hex` inside the payload are restored the same way, so tshark sees the original bytes.
 3. The coordinator runs `tshark -Q -T json -r -` and writes the PCAP to tshark's stdin. `param` is appended as separate arguments.
 
 tshark JSON is returned as `shark`. A failure is returned as `shark_error`. The rest of the response is still returned, including the built-in `isup` object.

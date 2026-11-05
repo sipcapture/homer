@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sipcapture/homer-core/src/isup"
 )
 
 // SiprecRow is one SIPREC signaling event for hep_proto_1_siprec.
@@ -52,6 +53,11 @@ func (m *Manager) WriteSiprecRow(row SiprecRow) error {
 		}
 		extraJSON = string(b)
 	}
+	payload, isupBody := isup.DetachISUPBody(row.Payload)
+	var isupCell interface{}
+	if len(isupBody) > 0 {
+		isupCell = isupBody
+	}
 	values := []interface{}{
 		uuid.New().String(),
 		ts.Format("2006-01-02"),
@@ -69,8 +75,9 @@ func (m *Manager) WriteSiprecRow(row SiprecRow) error {
 		uint32(17),
 		row.NodeID,
 		row.CID,
-		row.Payload,
+		payload,
 		extraJSON,
+		isupCell,
 	}
 	key := TableKey{ProtoType: ProtoTypeSIP, SubType: SIPTypeSiprec}
 	return writer.WriteRecord(key, values)
