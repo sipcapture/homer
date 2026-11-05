@@ -105,19 +105,35 @@ func TestPostgresSharedAuthentication(t *testing.T) {
 	if payload, typ, ok := b.avatarStore.Get("alice"); !ok || string(payload) != "photo" || typ != "image/png" {
 		t.Fatal("avatar not shared")
 	}
-	if b.sessionIsRevoked(c, "session") {
+	if revoked, err := b.sessionIsRevoked(c, "session"); err != nil || revoked {
 		t.Fatal("fresh session considered revoked")
 	}
 	if err := a.revokeSession(c, "session", time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	_ = firstDB.Close()
-	if !b.sessionIsRevoked(c, "session") {
+	if revoked, err := b.sessionIsRevoked(c, "session"); err != nil || !revoked {
 		t.Fatal("revocation lost after replica shutdown")
 	}
+	if revoked, err := b.sessionIsRevoked(c, "active-session"); err != nil || revoked {
+		t.Fatal("fresh active session failed")
+	}
 	_ = secondDB.Close()
-	if !b.sessionIsRevoked(c, "unknown-session") {
-		t.Fatal("session lookup failed open during database outage")
+	if revoked, err := b.sessionIsRevoked(c, "active-session"); err != nil || revoked {
+		t.Fatal("recent answer lost during outage")
+	}
+	if revoked, err := b.sessionIsRevoked(c, "session"); err != nil || !revoked {
+		t.Fatal("recent revocation lost during outage")
+	}
+	b.revocations.mu.Lock()
+	b.revocations.entries["active-session"] = revocationAnswer{expires: time.Now().Add(-time.Second)}
+	b.revocations.mu.Unlock()
+	if _, err := b.sessionIsRevoked(c, "active-session"); err == nil {
+		t.Fatal("expired answer masked outage")
+	}
+
+	if _, err := b.sessionIsRevoked(c, "unknown-session"); err == nil {
+		t.Fatal("session lookup outage did not return an error")
 	}
 	if err := b.revokeSession(c, "another-session", time.Now().Add(time.Hour)); err == nil {
 		t.Fatal("revocation reported success during database outage")
