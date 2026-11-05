@@ -71,6 +71,11 @@ func validateStateless(cfg *Config) error {
 		}
 		if dl.StoragePolicy.Enable {
 			for i, v := range dl.StoragePolicy.Volumes {
+				if v.CatalogPath != "" {
+					if err := check(fmt.Sprintf("storage.ducklake.storage_policy.volumes[%d]", i), v.CatalogPath, v.Path); err != nil {
+						return err
+					}
+				}
 				if err := require(remote(v.Path), fmt.Sprintf("storage.ducklake.storage_policy.volumes[%d].path", i), "must use S3 or Azure object storage"); err != nil {
 					return err
 				}
