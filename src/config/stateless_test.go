@@ -29,6 +29,9 @@ func TestStatelessValidation(t *testing.T) {
 		name, field string
 		change      func(*Config)
 	}{
+		{"search-buffer", "search_buffer", func(c *Config) { c.Storage.DuckLake.SearchBuffer = true }},
+		{"ingest-stream", "hep_stream", func(c *Config) { c.Ingest.HepStream.Enable = true }},
+		{"coordinator-stream", "hep_stream", func(c *Config) { c.Coordinator.HepStream.Enable = true }},
 		{"settings", "settings_db_path", func(c *Config) { c.Coordinator.SettingsDBPath = "settings.duckdb" }},
 		{"jwt", "jwt.secret", func(c *Config) { c.Coordinator.JWT.Secret = "" }},
 		{"placeholder", "jwt.secret", func(c *Config) { c.Coordinator.JWT.Secret = shippedJWTSecretPlaceholder }},
@@ -65,7 +68,7 @@ func TestStatelessLoadDoesNotGenerateLocalSecrets(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "homer.json")
 	// Missing node token must fail before a resolver writes beside this local catalog.
-	body := `{"stateless":true,"storage":{"enable":false},"node":{"enable":true,"ducklake":{"catalog_path":"` + filepath.Join(dir, "catalog.sqlite") + `"}},"coordinator":{"enable":false}}`
+	body := `{"ingest":{"hep_stream":{"enable":false}}, "stateless":true,"storage":{"enable":false},"node":{"enable":true,"ducklake":{"catalog_path":"` + filepath.Join(dir, "catalog.sqlite") + `"}},"coordinator":{"enable":false,"hep_stream":{"enable":false}}}`
 	if err := os.WriteFile(file, []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +86,8 @@ func TestStatelessLoadDoesNotGenerateLocalSecrets(t *testing.T) {
 
 func TestStatelessEnvironmentAndTokenInheritance(t *testing.T) {
 	t.Setenv("HOMER_STATELESS", "true")
+	t.Setenv("HOMER_INGEST_HEP_STREAM_ENABLE", "false")
+	t.Setenv("HOMER_COORDINATOR_HEP_STREAM_ENABLE", "false")
 	t.Setenv("HOMER_STORAGE_ENABLE", "false")
 	t.Setenv("HOMER_NODE_ENABLE", "false")
 	t.Setenv("HOMER_COORDINATOR_ENABLE", "true")
