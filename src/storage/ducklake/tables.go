@@ -590,12 +590,12 @@ var batchSlicePool sync.Pool // elements: *[][]interface{}
 // flushBatch drains the Go-side batch into the currently active in-memory
 // DuckDB table using the Appender API. This bypasses SQL parsing entirely —
 // rows are written directly via DuckDB's columnar DataChunk interface.
-// batchMu serializes appends with swaps; slotMu prevents reuse of a queued or
-// flushing slot. Holding batchMu while waiting also bounds the Go-side batch.
+// batchMu protects the batch handoff and active slot selection. slotMu pins
+// the slot until the appender finishes, allowing new writes during the append.
 func (tw *TableWriter) flushBatch() error {
 	tw.batchMu.Lock()
-	defer tw.batchMu.Unlock()
 	if len(tw.batch) == 0 {
+		tw.batchMu.Unlock()
 		return nil
 	}
 	slot := int(tw.activeIdx.Load())
@@ -603,6 +603,7 @@ func (tw *TableWriter) flushBatch() error {
 	defer tw.slotMu[slot].Unlock()
 	if tw.slotCommitted[slot] {
 		if err := tw.clearSlot(slot); err != nil {
+			tw.batchMu.Unlock()
 			return err
 		}
 	}
@@ -618,6 +619,8 @@ func (tw *TableWriter) flushBatch() error {
 			tw.batch = (*recycled)[:0]
 		}
 	}
+
+	tw.batchMu.Unlock()
 
 	start := time.Now()
 	nRows := len(rows)
