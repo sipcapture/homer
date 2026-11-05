@@ -2,19 +2,23 @@ package writer
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
+	"github.com/sipcapture/homer-core/src/utils/logging"
 )
 
 func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
+	logging.InitLoggerSimple("info", true, false)
 	dsn := os.Getenv("HOMER_TEST_POSTGRES_DSN")
 	if dsn == "" {
 		t.Skip("set HOMER_TEST_POSTGRES_DSN for PostgreSQL integration")
@@ -44,25 +48,46 @@ func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
 	} else {
 		dsn += " dbname=" + name
 	}
-	// DuckLake normally provisions this table; emulate its existing metadata.
-	catalog, err := pgx.Connect(ctx, dsn)
+	// Let DuckLake create its PostgreSQL catalog and real Parquet files.
+	dataPath := filepath.Join(t.TempDir(), "parquet")
+	db, err := sql.Open("duckdb", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = catalog.Exec(ctx, `CREATE TABLE public.ducklake_metadata (
-		key VARCHAR NOT NULL, value VARCHAR NOT NULL, scope VARCHAR, scope_id BIGINT)`)
-	_ = catalog.Close(context.Background())
+	defer db.Close()
+	db.SetMaxOpenConns(2)
+	if _, err := db.Exec("LOAD ducklake; LOAD postgres"); err != nil {
+		t.Fatal(err)
+	}
+	attach, err := ducklake.CatalogAttachSQL(ducklake.CatalogPostgres, dsn, "lake", dataPath, false)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := db.Exec(attach); err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		"CALL lake.set_option('data_inlining_row_limit', 0)",
+		"CREATE TABLE lake.measurement (date DATE, timestamp TIMESTAMP, id BIGINT)",
+		"ALTER TABLE lake.measurement SET PARTITIONED BY (date)",
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 6; i++ {
+		if _, err := db.Exec(fmt.Sprintf("INSERT INTO lake.measurement VALUES (CURRENT_DATE, CURRENT_TIMESTAMP, %d)", i)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	newReplica := func(alias string) *CompactionService {
-		c := NewCompactionService(nil, alias, "", dsn, CompactionConfig{
-			CatalogType: ducklake.CatalogPostgres, CheckIntervalSec: 1800,
+		c := NewCompactionService(db, alias, dataPath, dsn, CompactionConfig{
+			CatalogType: ducklake.CatalogPostgres, CheckIntervalSec: 1800, Engine: EngineDuckDB,
 		}, nil, nil, nil)
 		t.Cleanup(c.cancel)
 		return c
 	}
-	first := newReplica("first")
+	first := newReplica("lake")
 	release, acquired := first.tryMaintenanceLock()
 	if !acquired {
 		t.Fatal("first replica cannot acquire lock")
@@ -78,11 +103,19 @@ func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
 	if !first.compactionDue() {
 		t.Fatal("partial cycle must remain due")
 	}
-	first.cycleIncomplete.Store(false) // A subsequent cycle completes all steps.
-	if !first.recordCompactionCompletion() {
-		t.Fatal("successful cycle did not record completion")
-	}
 	release()
+	first.runCompaction()
+	if first.totalCompactions != 1 {
+		t.Fatal("real compaction cycle did not complete")
+	}
+	files, err := first.getTableFileCount("measurement")
+	if err != nil || files >= 6 {
+		t.Fatalf("compaction did not merge files: files=%d err=%v", files, err)
+	}
+	var count, distinct int
+	if err := db.QueryRow("SELECT count(*), count(DISTINCT id) FROM lake.measurement").Scan(&count, &distinct); err != nil || count != 6 || distinct != 6 {
+		t.Fatalf("compaction lost or duplicated rows: %d/%d %v", count, distinct, err)
+	}
 	second := newReplica("different_alias")
 	releaseOther, acquired := second.tryMaintenanceLock()
 	if !acquired {
@@ -104,13 +137,29 @@ func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
 	if !second.compactionDue() {
 		t.Fatal("schedule read failure disabled compaction")
 	}
+	// Exercise a complete cycle with the schedule still unreadable. Fresh files
+	// must merge even though recording completion cannot succeed.
+	for i := 6; i < 12; i++ {
+		if _, err := db.Exec(fmt.Sprintf("INSERT INTO lake.measurement VALUES (CURRENT_DATE, CURRENT_TIMESTAMP, %d)", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	releaseOther()
+	fallback := newReplica("lake")
+	fallback.runCompaction()
+	if files, err := fallback.getTableFileCount("measurement"); err != nil || files != 1 {
+		t.Fatalf("schedule error stopped real compaction: files=%d err=%v", files, err)
+	}
+	if err := db.QueryRow("SELECT count(*), count(DISTINCT id) FROM lake.measurement").Scan(&count, &distinct); err != nil || count != 12 || distinct != 12 {
+		t.Fatalf("fallback lost or duplicated rows: %d/%d %v", count, distinct, err)
+	}
 	_, err = probe.Exec(ctx, "ALTER TABLE public.homer_maintenance_schedule RENAME COLUMN broken TO completed_at")
 	_ = probe.Close(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	releaseOther()
-	// No DuckDB is available: the schedule must skip before catalog operations.
+	// A valid shared marker must skip the second full compaction cycle.
 	second.runCompaction()
 	if second.totalCompactions != 0 || second.cycleRunning.Load() || second.maintenanceLease.Load() != nil {
 		t.Fatal("skipped cycle ran or leaked cycle/lease state")

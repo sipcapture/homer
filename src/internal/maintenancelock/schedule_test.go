@@ -2,6 +2,9 @@ package maintenancelock
 
 import (
 	"context"
+	"database/sql"
+	_ "github.com/duckdb/duckdb-go/v2"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,12 +20,22 @@ func scheduleCatalog(t *testing.T) string {
 		t.Fatal(err)
 	}
 	defer conn.Close(context.Background())
-	_, err = conn.Exec(context.Background(), `CREATE TABLE public.ducklake_metadata (
-		key VARCHAR NOT NULL, value VARCHAR NOT NULL, scope VARCHAR, scope_id BIGINT);
-		INSERT INTO public.ducklake_metadata VALUES ('version', '1.1', NULL, NULL)`)
+	db, err := sql.Open("duckdb", "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer db.Close()
+	if _, err := db.Exec("LOAD ducklake; LOAD postgres"); err != nil {
+		t.Fatal(err)
+	}
+	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+	if _, err := db.Exec("ATTACH " + quote("ducklake:postgres:"+dsn) + " AS lake (DATA_PATH " + quote(t.TempDir()) + ")"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TABLE lake.schedule_probe (id BIGINT); INSERT INTO lake.schedule_probe VALUES (42)"); err != nil {
+		t.Fatal(err)
+	}
+
 	return dsn
 }
 
