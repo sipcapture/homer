@@ -42,6 +42,10 @@ func TestStatelessValidation(t *testing.T) {
 			c.Storage.DuckLake.StoragePolicy.Enable = true
 			c.Storage.DuckLake.StoragePolicy.Volumes = []VolumeConfig{{Path: "/data/hot"}}
 		}},
+		{"tier-catalog", "volumes[0].catalog_path", func(c *Config) {
+			c.Storage.DuckLake.StoragePolicy.Enable = true
+			c.Storage.DuckLake.StoragePolicy.Volumes = []VolumeConfig{{Path: "s3://bucket/tier", CatalogPath: "local.sqlite"}}
+		}},
 		{"logging", "log.output", func(c *Config) { c.Log.Output = []string{"file"} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
