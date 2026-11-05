@@ -2985,6 +2985,11 @@ components:
         isup:
           type: object
           description: ITU-T Q.763 decode of an application/isup SIP body, when the message is SIP-I.
+        shark:
+          description: tshark -T json dissection when coordinator.decoder_shark.active is true.
+        shark_error:
+          type: string
+          description: tshark failure. The rest of the decode is still returned.
     MessageDecodedResponse:
       type: object
       properties:

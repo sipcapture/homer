@@ -28,6 +28,7 @@ import (
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
 	"github.com/sipcapture/homer-core/src/isup"
 	"github.com/sipcapture/homer-core/src/pcapwriter"
+	"github.com/sipcapture/homer-core/src/shark"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"github.com/sipcapture/homer-core/src/utils/metrics"
 )
@@ -229,8 +230,10 @@ type MessageResponseV4 struct {
 
 type MessageDecodedResponseV4 struct {
 	Data struct {
-		Data []map[string]interface{} `json:"data"`
-		ISUP *isup.Result             `json:"isup,omitempty"`
+		Data       []map[string]interface{} `json:"data"`
+		ISUP       *isup.Result             `json:"isup,omitempty"`
+		Shark      json.RawMessage          `json:"shark,omitempty"`
+		SharkError string                   `json:"shark_error,omitempty"`
 	} `json:"data"`
 	Meta Meta `json:"meta"`
 }
@@ -1533,9 +1536,27 @@ func (h *SearchHandler) V4MessageDecoded(c echo.Context) error {
 		if payload := rowString(decoded[0]["payload"]); payload != "" {
 			resp.Data.ISUP = isup.DecodeSIP(payload)
 		}
+		if raw, err := h.decodeWithShark(c.Request().Context(), protoType, eventType, decoded[0]); err != nil {
+			resp.Data.SharkError = err.Error()
+		} else if len(raw) > 0 {
+			resp.Data.Shark = raw
+		}
 	}
 	resp.Meta = buildMeta(c, "")
 	return c.JSON(http.StatusOK, resp)
+}
+
+// decodeWithShark pipes one stored message through tshark when decoder_shark
+// is active for this proto/event. A nil result means the decoder is off.
+func (h *SearchHandler) decodeWithShark(ctx context.Context, protoType int, eventType string, row map[string]interface{}) (json.RawMessage, error) {
+	if !shark.Enabled(h.decoderShark, protoType, eventType) {
+		return nil, nil
+	}
+	pcap, err := pcapwriter.SIPSearchRowsToPCAP([]map[string]interface{}{row})
+	if err != nil {
+		return nil, err
+	}
+	return shark.DecodePCAP(ctx, h.decoderShark, pcap)
 }
 
 func rowString(v interface{}) string {

@@ -12,7 +12,7 @@ import {
   isJsonDisplayable,
   payloadAsString,
 } from '@/lib/jsonDisplay'
-import { formatISUP } from '@/lib/isupDisplay'
+import { formatDecoded } from '@/lib/isupDisplay'
 import { highlightSIP } from '@/lib/sipDisplay'
 import { useLocale } from '@/components/locale/locale-provider'
 import { captureIdOf } from './flow/flow-data'
@@ -193,7 +193,7 @@ export default function MessageModal({ modal, onClose, timeZone }) {
   const payload = payloadAsString(data?.payload)
   const payloadIsJson = isJsonDisplayable(data?.payload ?? payload)
   const payloadHtml = payloadIsJson ? highlightJSON(data?.payload ?? payload) : highlightSIP(payload)
-  const isupText = formatISUP(decoded?.isup)
+  const decodedText = formatDecoded(decoded)
 
   const handleDecode = async () => {
     if (!uuid || decoding) return
@@ -308,7 +308,7 @@ export default function MessageModal({ modal, onClose, timeZone }) {
                 </span>
                 <ScrollArea className="h-[200px] border border-border bg-muted/30">
                   <pre className="whitespace-pre-wrap break-words p-2 font-mono text-[11px] leading-relaxed text-foreground">
-                    {isupText || (typeof decoded === 'object' ? JSON.stringify(decoded, null, 2) : String(decoded))}
+                    {decodedText || (typeof decoded === 'object' ? JSON.stringify(decoded, null, 2) : String(decoded))}
                   </pre>
                 </ScrollArea>
               </>
