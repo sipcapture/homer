@@ -132,3 +132,7 @@ jobs:
             echo "PostgreSQL regressions must not skip" >&2
             exit 1
           fi
+
+      - name: Run config load error test
+        working-directory: src
+        run: go test -race -count=1 -timeout 2m -run '^TestServerExitsOnConfigLoadError$' .

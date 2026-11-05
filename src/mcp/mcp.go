@@ -752,10 +752,10 @@ func buildSQL(payload searchPayload) string {
 		parts = append(parts, mcpLikeAny([]string{"callee"}, payload.Filter.ToUser))
 	}
 	if payload.Filter.SrcIP != "" {
-		parts = append(parts, fmt.Sprintf("src_ip = '%s'", escapeSQL(payload.Filter.SrcIP)))
+		parts = append(parts, sqlvalidator.IPEqualsClause("src_ip", payload.Filter.SrcIP))
 	}
 	if payload.Filter.DstIP != "" {
-		parts = append(parts, fmt.Sprintf("dst_ip = '%s'", escapeSQL(payload.Filter.DstIP)))
+		parts = append(parts, sqlvalidator.IPEqualsClause("dst_ip", payload.Filter.DstIP))
 	}
 	if payload.Filter.ResponseCode != "" {
 		parts = append(parts, mcpEqualsAny("response_code", payload.Filter.ResponseCode))

@@ -443,12 +443,21 @@ func (w *Writer) Stop() error {
 			w.tieredStorage.Stop()
 		}
 
-		// Stop script engine
+		if atomic.LoadUint32(&w.workersStarted) == 1 {
+			// The receivers are stopped and EnqueuePacket drops packets once
+			// stopped is set, so the queue only shrinks now. Each worker
+			// processes what is still queued, then exits.
+			logger.Info("Writer: stopping workers...", "queued", len(w.inputCh))
+			close(w.exitWorker)
+			w.wg.Wait()
+			logger.Info("Writer: workers stopped")
+		}
+
+		// The workers use the script engine and the remote logging clients
+		// up to their last packet, so close them only now.
 		if w.scriptEngine != nil {
 			w.scriptEngine.Close()
 		}
-
-		// Stop remote logging clients
 		if w.lokiClient != nil {
 			w.lokiClient.Close()
 		}
@@ -459,35 +468,18 @@ func (w *Writer) Stop() error {
 			w.lineprotoClient.Close()
 		}
 
-		if atomic.LoadUint32(&w.workersStarted) == 1 {
-			// Drain remaining packets from the queue before stopping workers.
-			// All receivers are stopped above, so no new packets will arrive.
-		drainLoop:
-			for {
-				select {
-				case <-w.inputCh:
-					// discard
-				default:
-					break drainLoop
-				}
-			}
-
-			logger.Info("Writer: stopping workers...")
-			close(w.exitWorker)
-			w.wg.Wait()
-			logger.Info("Writer: workers stopped")
-		}
-
 		if atomic.LoadUint32(&w.statsStarted) == 1 {
 			close(w.quit)
 		}
 
 		// Stop DuckLake storage
-		logger.Info("Writer: stopping DuckLake storage...")
-		if err := w.ducklakeManager.Stop(); err != nil {
-			logger.Error(fmt.Sprintf("Writer: Failed to stop DuckLake manager: %v", err))
+		if w.ducklakeManager != nil {
+			logger.Info("Writer: stopping DuckLake storage...")
+			if err := w.ducklakeManager.Stop(); err != nil {
+				logger.Error(fmt.Sprintf("Writer: Failed to stop DuckLake manager: %v", err))
+			}
+			logger.Info("Writer: DuckLake storage stopped")
 		}
-		logger.Info("Writer: DuckLake storage stopped")
 		logger.Info("Writer module stopped")
 	})
 	return nil
@@ -588,7 +580,9 @@ type pipelineProfile struct {
 	sampleCnt  uint64
 }
 
-// worker processes packets from the queue
+// worker processes packets from the queue. Stop closes exitWorker once the
+// receivers are stopped; the worker then processes what is still queued and
+// exits.
 func (w *Writer) worker() {
 	defer w.wg.Done()
 
@@ -598,10 +592,17 @@ func (w *Writer) worker() {
 	for {
 		select {
 		case <-w.exitWorker:
-			if lastProto != "" {
-				wm.flush(lastProto)
+			for {
+				select {
+				case msg := <-w.inputCh:
+					lastProto = w.handlePacket(msg, &wm, lastProto)
+				default:
+					if lastProto != "" {
+						wm.flush(lastProto)
+					}
+					return
+				}
 			}
-			return
 		case msg, ok := <-w.inputCh:
 			if !ok {
 				if lastProto != "" {
@@ -609,125 +610,131 @@ func (w *Writer) worker() {
 				}
 				return
 			}
+			lastProto = w.handlePacket(msg, &wm, lastProto)
+		}
+	}
+}
 
-			protocol := msg.protocol
-			if protocol == "" {
-				protocol = "unknown"
-			}
+// handlePacket decodes, scripts and stores one queued packet and returns its
+// protocol, which the worker passes back as lastProto for the next one.
+func (w *Writer) handlePacket(msg incomingPacket, wm *workerMetrics, lastProto string) string {
+	protocol := msg.protocol
+	if protocol == "" {
+		protocol = "unknown"
+	}
 
-			// Flush batched metrics on protocol change or interval.
-			if protocol != lastProto && lastProto != "" {
-				wm.flush(lastProto)
-			}
-			lastProto = protocol
+	// Flush batched metrics on protocol change or interval.
+	if protocol != lastProto && lastProto != "" {
+		wm.flush(lastProto)
+	}
 
-			wm.received++
-			wm.bytes += int64(len(msg.data))
-			wm.count++
+	wm.received++
+	wm.bytes += int64(len(msg.data))
+	wm.count++
 
-			sample := wm.count&63 == 0
+	sample := wm.count&63 == 0
 
-			hepPkt, err := w.decoder.Decode(msg.data)
-			if err != nil {
-				atomic.AddUint64(&w.stats.ErrCount, 1)
-				metrics.RecordHEPPacketFailed(protocol, "decode_error")
-				w.buffer.Put(msg.data[:cap(msg.data)])
-				if wm.count >= w.metricsFlushPackets {
-					wm.flush(protocol)
-				}
-				continue
-			}
+	hepPkt, err := w.decoder.Decode(msg.data)
+	if err != nil {
+		atomic.AddUint64(&w.stats.ErrCount, 1)
+		metrics.RecordHEPPacketFailed(protocol, "decode_error")
+		w.buffer.Put(msg.data[:cap(msg.data)])
+		if wm.count >= w.metricsFlushPackets {
+			wm.flush(protocol)
+		}
+		return protocol
+	}
 
-			if hepPkt.ProtoType == 0 {
-				atomic.AddUint64(&w.stats.DupCount, 1)
-				metrics.RecordHEPPacketFailed(protocol, "invalid_proto")
-				decoder.ReleaseHEP(hepPkt)
-				w.buffer.Put(msg.data[:cap(msg.data)])
-				if wm.count >= w.metricsFlushPackets {
-					wm.flush(protocol)
-				}
-				continue
-			}
+	if hepPkt.ProtoType == 0 {
+		atomic.AddUint64(&w.stats.DupCount, 1)
+		metrics.RecordHEPPacketFailed(protocol, "invalid_proto")
+		decoder.ReleaseHEP(hepPkt)
+		w.buffer.Put(msg.data[:cap(msg.data)])
+		if wm.count >= w.metricsFlushPackets {
+			wm.flush(protocol)
+		}
+		return protocol
+	}
 
-			// Run script engine if enabled
-			if w.scriptEngine != nil {
-				if err := w.scriptEngine.Run(hepPkt); err != nil {
-					logger.Debug(fmt.Sprintf("Writer: Script error: %v", err))
-				}
-				if hepPkt.ProtoType == 0 {
-					atomic.AddUint64(&w.stats.DupCount, 1)
-					metrics.RecordHEPPacketFailed(protocol, "script_discard")
-					decoder.ReleaseHEP(hepPkt)
-					w.buffer.Put(msg.data[:cap(msg.data)])
-					if wm.count >= w.metricsFlushPackets {
-						wm.flush(protocol)
-					}
-					continue
-				}
-			}
-
-			atomic.AddUint64(&w.stats.HEPCount, 1)
-			wm.processed++
-
-			// Live stream tap. Runs before the Loki/ES/DuckLake writes
-			// so subscribers see events at the same point the storage
-			// pipeline does, and so a slow WS client cannot back-
-			// pressure any of those writers (Publish is select+default
-			// on each subscriber's queue). No-op when broker is nil.
-			if w.broker != nil {
-				w.broker.Publish(hepstream.FromHEP(hepPkt))
-			}
-
-			// Process SIP metrics
-			if w.sipMetrics != nil {
-				w.processSIPMetrics(hepPkt)
-			}
-
-			// Send to remote logging backends
-			if w.lokiClient != nil {
-				if err := w.lokiClient.Send(hepPkt); err != nil {
-					logger.Debug(fmt.Sprintf("Writer: Loki send error: %v", err))
-				}
-			}
-			if w.elasticsearchClient != nil {
-				if err := w.elasticsearchClient.Send(hepPkt); err != nil {
-					logger.Debug(fmt.Sprintf("Writer: Elasticsearch send error: %v", err))
-				}
-			}
-			if w.lineprotoClient != nil {
-				if err := w.lineprotoClient.Send(hepPkt); err != nil {
-					logger.Debug(fmt.Sprintf("Writer: LineProto send error: %v", err))
-				}
-			}
-
-			var adapterStart int64
-			if sample {
-				adapterStart = time.Now().UnixNano()
-			}
-
-			// Write to DuckLake storage
-			if err := w.ducklakeManager.WriteHEP(hepPkt); err != nil {
-				logger.Debug(fmt.Sprintf("Writer: Failed to write HEP to DuckLake: %v", err))
-				metrics.RecordPipelineStageError(protocol, "ducklake_write", "write_error")
-			}
-
-			if sample {
-				adapterEnd := time.Now().UnixNano()
-				atomic.AddUint64(&w.profile.hepParseNs, uint64(hepPkt.HEPParseNs))
-				atomic.AddUint64(&w.profile.sipParseNs, uint64(hepPkt.SIPParseNs))
-				atomic.AddUint64(&w.profile.adapterNs, uint64(adapterEnd-adapterStart))
-				atomic.AddUint64(&w.profile.totalNs, uint64(hepPkt.HEPParseNs)+uint64(hepPkt.SIPParseNs)+uint64(adapterEnd-adapterStart))
-				atomic.AddUint64(&w.profile.sampleCnt, 1)
-			}
-
+	// Run script engine if enabled
+	if w.scriptEngine != nil {
+		if err := w.scriptEngine.Run(hepPkt); err != nil {
+			logger.Debug(fmt.Sprintf("Writer: Script error: %v", err))
+		}
+		if hepPkt.ProtoType == 0 {
+			atomic.AddUint64(&w.stats.DupCount, 1)
+			metrics.RecordHEPPacketFailed(protocol, "script_discard")
 			decoder.ReleaseHEP(hepPkt)
 			w.buffer.Put(msg.data[:cap(msg.data)])
-
 			if wm.count >= w.metricsFlushPackets {
 				wm.flush(protocol)
 			}
+			return protocol
 		}
 	}
+
+	atomic.AddUint64(&w.stats.HEPCount, 1)
+	wm.processed++
+
+	// Live stream tap. Runs before the Loki/ES/DuckLake writes
+	// so subscribers see events at the same point the storage
+	// pipeline does, and so a slow WS client cannot back-
+	// pressure any of those writers (Publish is select+default
+	// on each subscriber's queue). No-op when broker is nil.
+	if w.broker != nil {
+		w.broker.Publish(hepstream.FromHEP(hepPkt))
+	}
+
+	// Process SIP metrics
+	if w.sipMetrics != nil {
+		w.processSIPMetrics(hepPkt)
+	}
+
+	// Send to remote logging backends
+	if w.lokiClient != nil {
+		if err := w.lokiClient.Send(hepPkt); err != nil {
+			logger.Debug(fmt.Sprintf("Writer: Loki send error: %v", err))
+		}
+	}
+	if w.elasticsearchClient != nil {
+		if err := w.elasticsearchClient.Send(hepPkt); err != nil {
+			logger.Debug(fmt.Sprintf("Writer: Elasticsearch send error: %v", err))
+		}
+	}
+	if w.lineprotoClient != nil {
+		if err := w.lineprotoClient.Send(hepPkt); err != nil {
+			logger.Debug(fmt.Sprintf("Writer: LineProto send error: %v", err))
+		}
+	}
+
+	var adapterStart int64
+	if sample {
+		adapterStart = time.Now().UnixNano()
+	}
+
+	// Write to DuckLake storage
+	if err := w.ducklakeManager.WriteHEP(hepPkt); err != nil {
+		logger.Debug(fmt.Sprintf("Writer: Failed to write HEP to DuckLake: %v", err))
+		metrics.RecordPipelineStageError(protocol, "ducklake_write", "write_error")
+	}
+
+	if sample {
+		adapterEnd := time.Now().UnixNano()
+		atomic.AddUint64(&w.profile.hepParseNs, uint64(hepPkt.HEPParseNs))
+		atomic.AddUint64(&w.profile.sipParseNs, uint64(hepPkt.SIPParseNs))
+		atomic.AddUint64(&w.profile.adapterNs, uint64(adapterEnd-adapterStart))
+		atomic.AddUint64(&w.profile.totalNs, uint64(hepPkt.HEPParseNs)+uint64(hepPkt.SIPParseNs)+uint64(adapterEnd-adapterStart))
+		atomic.AddUint64(&w.profile.sampleCnt, 1)
+	}
+
+	decoder.ReleaseHEP(hepPkt)
+	w.buffer.Put(msg.data[:cap(msg.data)])
+
+	if wm.count >= w.metricsFlushPackets {
+		wm.flush(protocol)
+	}
+
+	return protocol
 }
 
 // processSIPMetrics processes SIP-specific metrics for the HEP packet

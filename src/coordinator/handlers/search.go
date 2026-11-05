@@ -224,10 +224,10 @@ func (h *SearchHandler) buildSimpleSearchSQL(req *SimpleSearchRequest) (string, 
 		conditions = append(conditions, fmt.Sprintf("method = '%s'", sqlvalidator.SafeString(req.Method)))
 	}
 	if req.SrcIP != "" {
-		conditions = append(conditions, fmt.Sprintf("src_ip = '%s'", sqlvalidator.SafeString(req.SrcIP)))
+		conditions = append(conditions, sqlvalidator.IPEqualsClause("src_ip", req.SrcIP))
 	}
 	if req.DstIP != "" {
-		conditions = append(conditions, fmt.Sprintf("dst_ip = '%s'", sqlvalidator.SafeString(req.DstIP)))
+		conditions = append(conditions, sqlvalidator.IPEqualsClause("dst_ip", req.DstIP))
 	}
 	if req.NodeID != "" {
 		conditions = append(conditions, fmt.Sprintf("node_id = '%s'", sqlvalidator.SafeString(req.NodeID)))

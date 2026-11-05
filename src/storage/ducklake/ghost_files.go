@@ -110,6 +110,20 @@ func IsUnreadableParquet(path string) bool {
 	return probeParquet(path) != fileOK
 }
 
+// ProbeLocalParquet reports whether a local data file is missing, or present
+// without the PAR1 header and footer. A file that cannot be opened for any
+// other reason (permissions, too many open files, an I/O error) is neither:
+// the failed open says nothing about its contents. path must be local.
+func ProbeLocalParquet(path string) (missing, corrupt bool) {
+	switch probeParquet(path) {
+	case fileMissing:
+		return true, false
+	case fileCorrupt:
+		return false, true
+	}
+	return false, false
+}
+
 // ScanGhostFiles lists active data files of every table in the lake whose
 // local parquet file is missing or corrupt. A table whose files are all
 // missing, or a total above GhostMaxAbsolute and GhostMaxFraction, sets
