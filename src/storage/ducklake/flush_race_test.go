@@ -105,19 +105,23 @@ func TestFlushSlotDirectKeepsRowsAppendedDuringFlush(t *testing.T) {
 				return
 			default:
 			}
-			old := tw.swapBuffer()
+			old := int(tw.activeIdx.Load())
+			tw.activeIdx.Store(int32(1 - old))
 			tw.flushSlotDirect(old, tw.catalogMu)
 		}
 	}()
 	waitForWriters(t, &wg)
-	flushReservedSlot(tw, 0, tw.catalogMu)
-	flushReservedSlot(tw, 1, tw.catalogMu)
+	tw.flushSlotDirect(0, tw.catalogMu)
+	tw.flushSlotDirect(1, tw.catalogMu)
 	assertLakeRows(t, tw.db, n)
 }
 
-// A queued flush waiting for compaction must allow appends into the other slot.
-// This branch reserves queued slots before enqueueing, so they cannot become
-// active again until the flush completes.
+// A flush that waits for the catalog lock, held by compaction, must not hold
+// the lock of its memory table. Otherwise, once the next swap makes that
+// table active again, every append waits until compaction is done. The check
+// is timing-based: if the flush has not reached the catalog lock within the
+// sleep, the test passes without exercising the wait, so it does not prove the
+// lock order. The loss tests above cover the race.
 func TestFlushWaitingForCatalogLockDoesNotBlockAppends(t *testing.T) {
 	tw := newFlushRaceTableWriter(t)
 	if err := tw.Write([]interface{}{int64(1)}); err != nil {
@@ -131,14 +135,16 @@ func TestFlushWaitingForCatalogLockDoesNotBlockAppends(t *testing.T) {
 			tw.catalogMu.Unlock()
 		}
 	}()
-	old := tw.swapBuffer()
+	tw.activeIdx.Store(1)
 	flushed := make(chan struct{})
 	go func() {
 		defer close(flushed)
-		tw.flushSlotDirect(old, tw.catalogMu)
+		tw.flushSlotDirect(0, tw.catalogMu)
 	}()
-	// The queued slot remains reserved; ingestion continues into the other slot.
+	// Give the flush time to reach the catalog lock, then swap back so the
+	// table it waits to flush is active again.
 	time.Sleep(100 * time.Millisecond)
+	tw.activeIdx.Store(0)
 
 	const n = 10
 	appended := make(chan error, 1)
@@ -163,8 +169,8 @@ func TestFlushWaitingForCatalogLockDoesNotBlockAppends(t *testing.T) {
 	tw.catalogMu.Unlock()
 	catalogLocked = false
 	<-flushed
-	flushReservedSlot(tw, 0, tw.catalogMu)
-	flushReservedSlot(tw, 1, tw.catalogMu)
+	tw.flushSlotDirect(0, tw.catalogMu)
+	tw.flushSlotDirect(1, tw.catalogMu)
 	assertLakeRows(t, tw.db, n)
 }
 
@@ -227,8 +233,8 @@ func TestMultiTableWriterFlushKeepsConcurrentAppends(t *testing.T) {
 func TestEmptyFlushRecordsNoRows(t *testing.T) {
 	tw := newFlushRaceTableWriter(t)
 	tw.tableFQN = "empty_flush_" + time.Now().Format("150405.000000000")
-	flushReservedSlot(tw, 0, tw.catalogMu)
-	flushReservedSlot(tw, 1, nil)
+	tw.flushSlotDirect(0, tw.catalogMu)
+	tw.flushSlotDirect(1, nil)
 	if metrics.DucklakeTableFlushedRows.DeleteLabelValues(tw.tableFQN) {
 		t.Fatal("empty flush recorded flushed rows")
 	}
@@ -238,15 +244,9 @@ func TestEmptyFlushRecordsNoRows(t *testing.T) {
 	if err := tw.Write([]interface{}{int64(1)}); err != nil {
 		t.Fatal(err)
 	}
-	flushReservedSlot(tw, int(tw.activeIdx.Load()), tw.catalogMu)
+	tw.flushSlotDirect(int(tw.activeIdx.Load()), tw.catalogMu)
 	if !metrics.DucklakeTableFlushedRows.DeleteLabelValues(tw.tableFQN) {
 		t.Fatal("flush of one row recorded no flushed rows")
 	}
 	assertLakeRows(t, tw.db, 1)
-}
-
-// Direct test calls must obey the same reservation contract as queued jobs.
-func flushReservedSlot(tw *TableWriter, slot int, catalogMu *sync.Mutex) error {
-	tw.slotMu[slot].Lock()
-	return tw.flushSlotDirect(slot, catalogMu)
 }
