@@ -477,10 +477,7 @@ func (c *CompactionService) compactionLoop() {
 	}()
 
 	interval := c.compactionPollInterval()
-	firstDelay := 5 * time.Minute
-	if interval < firstDelay {
-		firstDelay = interval
-	}
+	firstDelay := c.compactionFirstDelay()
 
 	logger.Info("CompactionService: Periodic loop started",
 		"interval_sec", c.config.CheckIntervalSec,
