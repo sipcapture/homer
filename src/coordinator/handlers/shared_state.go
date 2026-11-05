@@ -6,6 +6,7 @@ package handlers
 import (
 	"encoding/json"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -18,16 +19,53 @@ func (h *AuthHandler) SetRuntimeState(state *services.RuntimeState) {
 	h.avatarStore.shared = state
 }
 
-func (h *AuthHandler) sessionIsRevoked(c echo.Context, id string) bool {
+// A recent successful answer can bridge a brief settings outage. Entries expire
+// after five seconds; failures never extend that window.
+type revocationAnswer struct {
+	revoked bool
+	expires time.Time
+}
+
+type revocationCache struct {
+	mu      sync.Mutex
+	entries map[string]revocationAnswer
+}
+
+func (r *revocationCache) remember(id string, revoked bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := time.Now()
+	for key, entry := range r.entries {
+		if !now.Before(entry.expires) {
+			delete(r.entries, key)
+		}
+	}
+	if r.entries == nil {
+		r.entries = make(map[string]revocationAnswer)
+	}
+	if len(r.entries) >= 10000 {
+		clear(r.entries)
+	}
+	r.entries[id] = revocationAnswer{revoked: revoked, expires: now.Add(5 * time.Second)}
+}
+
+func (h *AuthHandler) sessionIsRevoked(c echo.Context, id string) (bool, error) {
 	if h.runtimeState == nil {
-		return h.sessionStore.IsRevoked(id)
+		return h.sessionStore.IsRevoked(id), nil
 	}
 	_, found, err := h.runtimeState.Get(c.Request().Context(), "revoked-session", id, false)
-	if err != nil {
-		slog.Error("shared session lookup failed", "error", err)
-		return true
+	if err == nil {
+		h.revocations.remember(id, found)
+		return found, nil
 	}
-	return found
+	slog.Error("shared session lookup failed", "error", err)
+	h.revocations.mu.Lock()
+	answer, ok := h.revocations.entries[id]
+	h.revocations.mu.Unlock()
+	if ok && time.Now().Before(answer.expires) {
+		return answer.revoked, nil
+	}
+	return false, err
 }
 
 func (h *AuthHandler) revokeSession(c echo.Context, id string, expires time.Time) error {
@@ -35,7 +73,11 @@ func (h *AuthHandler) revokeSession(c echo.Context, id string, expires time.Time
 		h.sessionStore.Revoke(id, expires)
 		return nil
 	}
-	return h.runtimeState.Put(c.Request().Context(), "revoked-session", id, []byte{1}, expires)
+	if err := h.runtimeState.Put(c.Request().Context(), "revoked-session", id, []byte{1}, expires); err != nil {
+		return err
+	}
+	h.revocations.remember(id, true)
+	return nil
 }
 
 func (h *AuthHandler) putOAuthState(c echo.Context, state, provider, verifier string) error {
