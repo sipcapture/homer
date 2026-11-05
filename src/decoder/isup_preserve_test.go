@@ -40,14 +40,21 @@ func TestDecodeHEPPreservesISUPBody(t *testing.T) {
 	if strings.IndexByte(h.Payload, 0) >= 0 {
 		t.Fatal("stored payload still contains NUL")
 	}
-	got := isup.DecodeSIP(h.Payload)
+	if strings.Contains(h.Payload, "X-Homer-Binary-Body") {
+		t.Fatal("binary body was written into the SIP payload")
+	}
+	if string(h.ISUPBody) != string(body) {
+		t.Fatalf("isup body %x", h.ISUPBody)
+	}
+	restored := isup.MessageBytes(h.Payload, h.ISUPBody)
+	got := isup.DecodeSIP(restored)
 	if got == nil || len(got.Messages) != 1 || got.Messages[0].CalledPartyNumber == nil {
 		t.Fatalf("decode %#v", got)
 	}
 	if got.Messages[0].CalledPartyNumber.Digits != "632107608" {
 		t.Fatalf("digits %s", got.Messages[0].CalledPartyNumber.Digits)
 	}
-	if isup.RestoreBinarySIPPayload(h.Payload) != sip {
+	if restored != sip {
 		t.Fatal("stored payload does not restore to the captured SIP message")
 	}
 }

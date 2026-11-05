@@ -1533,7 +1533,7 @@ func (h *SearchHandler) V4MessageDecoded(c echo.Context) error {
 	resp := MessageDecodedResponseV4{}
 	resp.Data.Data = decoded
 	if len(decoded) > 0 {
-		if payload := rowString(decoded[0]["payload"]); payload != "" {
+		if payload := isup.MessageBytes(rowString(decoded[0]["payload"]), decoded[0]["isup_body"]); payload != "" {
 			resp.Data.ISUP = isup.DecodeSIP(payload)
 		}
 		if raw, err := h.decodeWithShark(c.Request().Context(), protoType, eventType, decoded[0]); err != nil {

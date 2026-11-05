@@ -5,6 +5,8 @@
 package ducklake
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -132,6 +134,14 @@ func JSONSafeInsertRows(rows [][]interface{}) [][]interface{} {
 	for i, row := range rows {
 		nr := make([]interface{}, len(row))
 		for j, cell := range row {
+			if raw, ok := cell.([]byte); ok {
+				if len(raw) == 0 {
+					nr[j] = nil
+				} else {
+					nr[j] = base64.StdEncoding.EncodeToString(raw)
+				}
+				continue
+			}
 			if text, ok := jsonCellText(cell); ok {
 				if _, isString := cell.(string); isString {
 					nr[j] = cell
@@ -147,7 +157,55 @@ func JSONSafeInsertRows(rows [][]interface{}) [][]interface{} {
 	return out
 }
 
+func isupBodySQL(cell interface{}) string {
+	var body []byte
+	switch x := cell.(type) {
+	case []byte:
+		body = x
+	case string:
+		raw, err := base64.StdEncoding.DecodeString(x)
+		if err != nil {
+			return "NULL"
+		}
+		body = raw
+	}
+	if len(body) == 0 {
+		return "NULL"
+	}
+	var b strings.Builder
+	b.Grow(len(body)*4 + 8)
+	b.WriteByte('\'')
+	for _, c := range body {
+		b.WriteString(`\x`)
+		b.WriteString(hex.EncodeToString([]byte{c}))
+	}
+	b.WriteString(`'::BLOB`)
+	return b.String()
+}
+
 func bindInsertArg(col string, cell interface{}) interface{} {
+	if col == "isup_body" {
+		switch x := cell.(type) {
+		case nil:
+			return nil
+		case []byte:
+			if len(x) == 0 {
+				return nil
+			}
+			return x
+		case string:
+			if x == "" {
+				return nil
+			}
+			raw, err := base64.StdEncoding.DecodeString(x)
+			if err != nil || len(raw) == 0 {
+				return nil
+			}
+			return raw
+		default:
+			return nil
+		}
+	}
 	if col == "data_extra" {
 		if text, ok := jsonCellText(cell); ok && text != "" {
 			return text
@@ -209,9 +267,12 @@ func BuildParameterizedInsert(lakeName string, key TableKey, rows [][]interface{
 	}
 	tupleParts := make([]string, len(cols))
 	for i, col := range cols {
-		if col == "data_extra" {
+		switch col {
+		case "data_extra":
 			tupleParts[i] = "CAST(? AS JSON)"
-		} else {
+		case "isup_body":
+			tupleParts[i] = "CAST(? AS BLOB)"
+		default:
 			tupleParts[i] = "?"
 		}
 	}
@@ -290,6 +351,10 @@ func BuildInsertMultiValues(lakeName string, key TableKey, rows [][]interface{})
 			// data_extra is JSON in DuckLake. Row builders emit it as a
 			// string, json.RawMessage or pooled *[]byte (see
 			// buildExtraJSONCell); all three carry the raw JSON text.
+			if cols[ci] == "isup_body" {
+				parts[ci] = isupBodySQL(cell)
+				continue
+			}
 			if cols[ci] == "data_extra" {
 				text, _ := jsonCellText(cell)
 				if text != "" {

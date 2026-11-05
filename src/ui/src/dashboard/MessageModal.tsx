@@ -13,6 +13,7 @@ import {
   payloadAsString,
 } from '@/lib/jsonDisplay'
 import { formatDecoded } from '@/lib/isupDisplay'
+import { BINARY_BODY_LABEL, sipViewParts } from '@/lib/sipIDisplay'
 import { highlightSIP } from '@/lib/sipDisplay'
 import { useLocale } from '@/components/locale/locale-provider'
 import { captureIdOf } from './flow/flow-data'
@@ -192,6 +193,8 @@ export default function MessageModal({ modal, onClose, timeZone }) {
   const { uuid, loading, data, error, messageContext, modalKey } = modal
   const payload = payloadAsString(data?.payload)
   const payloadIsJson = isJsonDisplayable(data?.payload ?? payload)
+  const sipParts = payloadIsJson ? null : sipViewParts(payload)
+  const sipHasBinaryBody = Boolean(sipParts?.some((part) => part.kind === 'binary'))
   const payloadHtml = payloadIsJson ? highlightJSON(data?.payload ?? payload) : highlightSIP(payload)
   const decodedText = formatDecoded(decoded)
 
@@ -288,10 +291,30 @@ export default function MessageModal({ modal, onClose, timeZone }) {
               </Tabs>
             ) : (
               <ScrollArea className="h-[320px] border border-border bg-muted/30">
-                <pre
-                  className="whitespace-pre p-2 font-mono text-[11px] leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: payloadHtml || '(no payload)' }}
-                />
+                <pre className="whitespace-pre p-2 font-mono text-[11px] leading-relaxed">
+                  {sipHasBinaryBody ? (
+                    sipParts.map((part, index) =>
+                      part.kind === 'binary' ? (
+                        <button
+                          key={index}
+                          type="button"
+                          className="cursor-pointer border-0 bg-transparent p-0 font-mono text-[11px] text-sky-500 underline underline-offset-2 hover:text-sky-400 disabled:cursor-default disabled:opacity-60"
+                          onClick={handleDecode}
+                          disabled={decoding}
+                        >
+                          {decoding ? 'Decoding...' : BINARY_BODY_LABEL}
+                        </button>
+                      ) : (
+                        <span
+                          key={index}
+                          dangerouslySetInnerHTML={{ __html: highlightSIP(part.text) }}
+                        />
+                      ),
+                    )
+                  ) : (
+                    <span dangerouslySetInnerHTML={{ __html: payloadHtml || '(no payload)' }} />
+                  )}
+                </pre>
               </ScrollArea>
             )}
 

@@ -106,7 +106,7 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				"uuid", "timestamp", "session_id", "caller", "callee",
 				"src_ip", "dst_ip", "src_port", "dst_port",
 				"method", "response_code", "cseq_method",
-				"protocol", "node_id", "cid", "payload", "data_extra",
+				"protocol", "node_id", "cid", "payload", "data_extra", "isup_body",
 			},
 			CreateSQL: `
 				uuid VARCHAR,
@@ -126,12 +126,13 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				node_id VARCHAR,
 				cid VARCHAR,
 				payload VARCHAR,
-				data_extra JSON
+				data_extra JSON,
+				isup_body BLOB
 			`,
 			InsertSQL: `(uuid, date, timestamp, session_id, caller, callee, src_ip, dst_ip,
 				src_port, dst_port, method, response_code, cseq_method,
-				protocol, node_id, cid, payload, data_extra)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
+				protocol, node_id, cid, payload, data_extra, isup_body)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, ?)`,
 		},
 
 		// SIP Registration - REGISTER
@@ -144,7 +145,7 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				"aor", "contact", "expires", "user_agent",
 				"src_ip", "dst_ip", "src_port", "dst_port",
 				"method", "response_code",
-				"protocol", "node_id", "payload", "data_extra",
+				"protocol", "node_id", "payload", "data_extra", "isup_body",
 			},
 			CreateSQL: `
 				uuid VARCHAR,
@@ -164,12 +165,13 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				protocol UINTEGER,
 				node_id VARCHAR,
 				payload VARCHAR,
-				data_extra JSON
+				data_extra JSON,
+				isup_body BLOB
 			`,
 			InsertSQL: `(uuid, date, timestamp, session_id, aor, contact, expires, user_agent,
 				src_ip, dst_ip, src_port, dst_port, method, response_code,
-				protocol, node_id, payload, data_extra)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
+				protocol, node_id, payload, data_extra, isup_body)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, ?)`,
 		},
 
 		// SIPREC - signaling from in-process SRS
@@ -181,7 +183,7 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				"uuid", "timestamp", "session_id", "caller", "callee",
 				"src_ip", "dst_ip", "src_port", "dst_port",
 				"method", "response_code", "cseq_method",
-				"protocol", "node_id", "cid", "payload", "data_extra",
+				"protocol", "node_id", "cid", "payload", "data_extra", "isup_body",
 			},
 			CreateSQL: `
 				uuid VARCHAR,
@@ -201,12 +203,13 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				node_id VARCHAR,
 				cid VARCHAR,
 				payload VARCHAR,
-				data_extra JSON
+				data_extra JSON,
+				isup_body BLOB
 			`,
 			InsertSQL: `(uuid, date, timestamp, session_id, caller, callee, src_ip, dst_ip,
 				src_port, dst_port, method, response_code, cseq_method,
-				protocol, node_id, cid, payload, data_extra)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
+				protocol, node_id, cid, payload, data_extra, isup_body)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, ?)`,
 		},
 
 		// SIP Default - OPTIONS, NOTIFY, SUBSCRIBE, PUBLISH, MESSAGE
@@ -218,7 +221,7 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				"uuid", "timestamp", "session_id",
 				"src_ip", "dst_ip", "src_port", "dst_port",
 				"method", "response_code",
-				"protocol", "node_id", "cid", "payload", "data_extra",
+				"protocol", "node_id", "cid", "payload", "data_extra", "isup_body",
 			},
 			CreateSQL: `
 				uuid VARCHAR,
@@ -235,12 +238,13 @@ func GetTableSchemas() map[TableKey]*TableSchema {
 				node_id VARCHAR,
 				cid VARCHAR,
 				payload VARCHAR,
-				data_extra JSON
+				data_extra JSON,
+				isup_body BLOB
 			`,
 			InsertSQL: `(uuid, date, timestamp, session_id, src_ip, dst_ip,
 				src_port, dst_port, method, response_code,
-				protocol, node_id, cid, payload, data_extra)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON)`,
+				protocol, node_id, cid, payload, data_extra, isup_body)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::JSON, ?)`,
 		},
 
 		// RTCP JSON - reports with stats
@@ -559,6 +563,17 @@ func NewTableWriter(db *sql.DB, lakeName string, schema *TableSchema, batchSize 
 		memCreateSQL := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", mem, schema.CreateSQL)
 		if _, err := db.Exec(memCreateSQL); err != nil {
 			return nil, fmt.Errorf("failed to create memory table %s: %w", mem, err)
+		}
+	}
+
+	// Existing lakes were created before isup_body. ADD COLUMN leaves old
+	// Parquet files readable: the new column is NULL on those rows.
+	if strings.Contains(schema.CreateSQL, "isup_body") {
+		for _, table := range append([]string{tableFQN}, tw.memTables[:]...) {
+			alter := fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS isup_body BLOB", table)
+			if _, err := db.Exec(alter); err != nil {
+				return nil, fmt.Errorf("add isup_body to %s: %w", table, err)
+			}
 		}
 	}
 

@@ -8,6 +8,7 @@ package isup
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"mime"
 	"strconv"
@@ -20,14 +21,227 @@ import (
 // RestoreBinarySIPPayload (PCAP) and DecodeSIP.
 const binaryBodyHeader = "X-Homer-Binary-Body"
 
+// multiBodyMagic prefixes isup_body when one SIP message carries more than
+// one application/isup part. A single part is stored as the raw body.
+const multiBodyMagic = "ISI1"
+
+// DetachISUPBody removes application/isup bodies that cannot live in a UTF-8
+// VARCHAR column. The returned payload keeps the SIP headers and any text
+// parts; body is the original octets for isup_body, or nil when there is
+// nothing to store. Messages already rewritten with X-Homer-Binary-Body
+// (11.0.376) are left unchanged.
+func DetachISUPBody(payload string) (stored string, body []byte) {
+	if !unsafeUTF8(payload) {
+		return payload, nil
+	}
+	headers, nl, rawBody, ok := splitSIP(payload)
+	if !ok {
+		return payload, nil
+	}
+	if _, has := headerValue(headers, nl, binaryBodyHeader); has {
+		return payload, nil
+	}
+	ct, _ := headerValue(headers, nl, "Content-Type")
+	if boundary, multipart := multipartBoundary(ct); multipart {
+		newBody, parts := detachMultipartISUP(rawBody, boundary, nl)
+		if len(parts) == 0 {
+			return payload, nil
+		}
+		headers, _ = replaceHeaderValue(headers, nl, "Content-Length", strconv.Itoa(len(newBody)))
+		return headers + nl + nl + newBody, packISUPBodies(parts)
+	}
+	if _, isup := isISUPType(ct); !isup || !unsafeUTF8(rawBody) {
+		return payload, nil
+	}
+	return setSIPBody(headers, nl, ""), []byte(rawBody)
+}
+
+// AttachISUPBody puts a stored isup_body back into the SIP message and
+// updates Content-Length. A nil body returns payload unchanged.
+func AttachISUPBody(payload string, body []byte) string {
+	if len(body) == 0 {
+		return payload
+	}
+	headers, nl, rawBody, ok := splitSIP(payload)
+	if !ok {
+		return payload
+	}
+	ct, _ := headerValue(headers, nl, "Content-Type")
+	if boundary, multipart := multipartBoundary(ct); multipart {
+		newBody := attachMultipartISUP(rawBody, boundary, nl, body)
+		headers, _ = replaceHeaderValue(headers, nl, "Content-Length", strconv.Itoa(len(newBody)))
+		return headers + nl + nl + newBody
+	}
+	if _, isup := isISUPType(ct); !isup {
+		return payload
+	}
+	parts := unpackISUPBodies(body, 1)
+	return setSIPBody(headers, nl, string(parts[0]))
+}
+
+// MessageBytes restores a SIP message for PCAP and Decode. 11.0.376 rows
+// carry the body as hex inside the payload. Later rows keep it in isup_body.
+func MessageBytes(payload string, isupBody interface{}) string {
+	payload = RestoreBinarySIPPayload(payload)
+	body := BodyFromCell(isupBody)
+	if len(body) == 0 {
+		return payload
+	}
+	return AttachISUPBody(payload, body)
+}
+
+// BodyFromCell reads an isup_body value from a search row. DuckDB returns
+// []byte. A JSON API returns the same bytes as standard base64.
+func BodyFromCell(v interface{}) []byte {
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case []byte:
+		if len(t) == 0 {
+			return nil
+		}
+		return t
+	case string:
+		if t == "" {
+			return nil
+		}
+		raw, err := base64.StdEncoding.DecodeString(t)
+		if err != nil || len(raw) == 0 {
+			return nil
+		}
+		return raw
+	default:
+		return nil
+	}
+}
+
+func packISUPBodies(parts [][]byte) []byte {
+	if len(parts) == 0 {
+		return nil
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	out := make([]byte, 6, 6+len(parts)*8)
+	copy(out, multiBodyMagic)
+	binary.BigEndian.PutUint16(out[4:6], uint16(len(parts)))
+	var lenb [4]byte
+	for _, part := range parts {
+		binary.BigEndian.PutUint32(lenb[:], uint32(len(part)))
+		out = append(out, lenb[:]...)
+		out = append(out, part...)
+	}
+	return out
+}
+
+func unpackISUPBodies(body []byte, nparts int) [][]byte {
+	if nparts <= 1 {
+		return [][]byte{body}
+	}
+	if decoded, ok := unpackISUPEnvelope(body); ok && len(decoded) == nparts {
+		return decoded
+	}
+	out := make([][]byte, nparts)
+	out[0] = body
+	return out
+}
+
+func unpackISUPEnvelope(body []byte) ([][]byte, bool) {
+	if len(body) < 6 || string(body[:4]) != multiBodyMagic {
+		return nil, false
+	}
+	n := int(binary.BigEndian.Uint16(body[4:6]))
+	if n <= 1 {
+		return nil, false
+	}
+	rest := body[6:]
+	out := make([][]byte, 0, n)
+	for i := 0; i < n; i++ {
+		if len(rest) < 4 {
+			return nil, false
+		}
+		l := int(binary.BigEndian.Uint32(rest[:4]))
+		rest = rest[4:]
+		if l < 0 || len(rest) < l {
+			return nil, false
+		}
+		out = append(out, rest[:l])
+		rest = rest[l:]
+	}
+	if len(rest) != 0 {
+		return nil, false
+	}
+	return out, true
+}
+
+func setSIPBody(headers, nl, body string) string {
+	if headers != "" {
+		headers, _ = replaceHeaderValue(headers, nl, "Content-Length", strconv.Itoa(len(body)))
+	}
+	return headers + nl + nl + body
+}
+
+func detachMultipartISUP(body, boundary, nl string) (string, [][]byte) {
+	var parts [][]byte
+	newBody, changed := mapMultipart(body, boundary, nl, func(part, pnl string) (string, bool) {
+		headers, hnl, pbody, ok := splitSIP(part)
+		if !ok {
+			return part, false
+		}
+		ct, _ := headerValue(headers, hnl, "Content-Type")
+		if _, isup := isISUPType(ct); !isup || !unsafeUTF8(pbody) {
+			return part, false
+		}
+		parts = append(parts, []byte(pbody))
+		return setSIPBody(headers, hnl, ""), true
+	})
+	if !changed {
+		return body, nil
+	}
+	return newBody, parts
+}
+
+func attachMultipartISUP(body, boundary, nl string, blob []byte) string {
+	nparts := 0
+	mapMultipart(body, boundary, nl, func(part, pnl string) (string, bool) {
+		headers, hnl, _, ok := splitSIP(part)
+		if !ok {
+			return part, false
+		}
+		ct, _ := headerValue(headers, hnl, "Content-Type")
+		if _, isup := isISUPType(ct); isup {
+			nparts++
+		}
+		return part, false
+	})
+	bodies := unpackISUPBodies(blob, nparts)
+	idx := 0
+	newBody, _ := mapMultipart(body, boundary, nl, func(part, pnl string) (string, bool) {
+		headers, hnl, _, ok := splitSIP(part)
+		if !ok {
+			return part, false
+		}
+		ct, _ := headerValue(headers, hnl, "Content-Type")
+		if _, isup := isISUPType(ct); !isup {
+			return part, false
+		}
+		var raw []byte
+		if idx < len(bodies) {
+			raw = bodies[idx]
+		}
+		idx++
+		return setSIPBody(headers, hnl, string(raw)), true
+	})
+	return newBody
+}
+
 // PreserveBinarySIPPayload rewrites a SIP message so a binary body survives
 // toUTF8 and a UTF-8 text column. NUL and non-UTF-8 octets are the bytes
 // toUTF8 drops; SIP-I ISUP is full of them.
 //
-// Text messages are returned unchanged. A binary body is stored as hex and
-// marked with X-Homer-Binary-Body. Multipart messages encode only the binary
-// parts, so SDP stays readable. Hex cannot contain a MIME boundary ("--"),
-// so the multipart framing stays unambiguous.
+// 11.0.376 stored that body as hex inside the SIP message. New messages use
+// DetachISUPBody and the isup_body column instead. This function remains so
+// already stored rows can be restored.
 func PreserveBinarySIPPayload(payload string) string {
 	if !unsafeUTF8(payload) {
 		return payload

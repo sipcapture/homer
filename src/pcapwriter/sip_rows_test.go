@@ -128,9 +128,9 @@ func TestSIPSearchRowsToPCAP_RestoresBinaryISUP(t *testing.T) {
 		"Content-Length: 11\r\n" +
 		"\r\n" +
 		string(body)
-	stored := isup.PreserveBinarySIPPayload(original)
-	if stored == original {
-		t.Fatal("expected binary SIP to be rewritten for storage")
+	stored, blob := isup.DetachISUPBody(original)
+	if stored == original || len(blob) == 0 {
+		t.Fatal("expected the ISUP body to move out of the SIP payload")
 	}
 	raw, err := pcapwriter.SIPSearchRowsToPCAP([]map[string]interface{}{
 		{
@@ -140,6 +140,7 @@ func TestSIPSearchRowsToPCAP_RestoresBinaryISUP(t *testing.T) {
 			"src_port":  5060,
 			"dst_port":  5060,
 			"payload":   stored,
+			"isup_body": blob,
 		},
 	})
 	if err != nil {
