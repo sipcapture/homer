@@ -49,6 +49,15 @@
     "api_settings": {
       "enable_token_access": false,
       "auth_token_header": "Auth-Token"
+    },
+    "decoder_shark": {
+      "active": false,
+      "bin": "/usr/bin/tshark",
+      "param": "",
+      "protocols": ["1_call", "1_registration", "1_default"],
+      "uid": 0,
+      "gid": 0,
+      "timeout_sec": 15
     }
   },
   "log": {
