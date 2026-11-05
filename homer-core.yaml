@@ -16,6 +16,8 @@ description: |
 vendor: "QXIP"
 homepage: "http://qxip.net"
 # See homer-core_workflow.yaml: no nfpm license: — Packagecloud + deb "License:" field.
+scripts:
+  postinstall: ./scripts/package-postinstall.sh
 contents:
   # Basic file that applies to all packagers
   - src: /tmp/pkg/homer
@@ -39,6 +41,10 @@ contents:
     dst: /etc/systemd/system/homer-core.service
   - src: /tmp/pkg/examples/homer-core.init
     dst: /etc/init.d/homer-core
+    file_info:
+      mode: 0755
+  - src: /tmp/pkg/examples/homer-core.tmpfiles.conf
+    dst: /usr/lib/tmpfiles.d/homer-core.conf
      # Simple config file
   - src: /tmp/pkg/examples/homer.json
     dst: /usr/local/homer-core/etc/homer.json.example
