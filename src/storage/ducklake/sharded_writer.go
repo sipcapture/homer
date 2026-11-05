@@ -20,10 +20,11 @@ import (
 //
 // For reads, all shards are queried and results merged via UNION ALL.
 type ShardedWriter struct {
-	shards []*MultiTableWriter
-	count  int
-	next   atomic.Uint64
-	config Config
+	shards  []*MultiTableWriter
+	count   int
+	next    atomic.Uint64
+	config  Config
+	failure *instanceFailure // shared by every shard (see Invalidated)
 }
 
 // NewShardedWriter creates N MultiTableWriter shards. Each shard gets its own
@@ -41,9 +42,10 @@ func NewShardedWriter(config Config) (*ShardedWriter, error) {
 	}
 
 	sw := &ShardedWriter{
-		shards: make([]*MultiTableWriter, n),
-		count:  n,
-		config: config,
+		shards:  make([]*MultiTableWriter, n),
+		count:   n,
+		config:  config,
+		failure: newInstanceFailure(),
 	}
 
 	for i := 0; i < n; i++ {
@@ -70,7 +72,7 @@ func NewShardedWriter(config Config) (*ShardedWriter, error) {
 		// ShardCount=1 inside each shard to avoid recursion
 		shardCfg.ShardCount = 1
 
-		mtw, err := NewMultiTableWriter(shardCfg)
+		mtw, err := newMultiTableWriter(shardCfg, sw.failure)
 		if err != nil {
 			// Clean up already-created shards
 			for j := 0; j < i; j++ {
@@ -115,6 +117,13 @@ func (sw *ShardedWriter) WriteRecord(key TableKey, values []interface{}) error {
 	idx := sw.next.Add(1) - 1
 	shard := sw.shards[idx%uint64(sw.count)]
 	return shard.WriteRecord(key, values)
+}
+
+// Invalidated returns a channel that receives one error when a fatal DuckDB
+// error has invalidated the instance of any shard (see
+// MultiTableWriter.Invalidated).
+func (sw *ShardedWriter) Invalidated() <-chan error {
+	return sw.failure.ch
 }
 
 // Shards returns all underlying MultiTableWriter instances (for reader access).

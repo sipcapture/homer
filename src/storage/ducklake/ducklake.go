@@ -237,6 +237,10 @@ type MultiTableWriter struct {
 	// MarkCatalogAttached) after db is closed.
 	releaseAttachMark func()
 
+	// failure receives the first error after which DuckDB invalidated db
+	// (see Invalidated). Shared by all shards of a ShardedWriter.
+	failure *instanceFailure
+
 	// Centralized single-writer flush queue. When non-nil, all DuckLake INSERT
 	// operations go through a single goroutine, eliminating catalog contention.
 	flushQueueCh chan centralFlushJob
@@ -285,6 +289,12 @@ type Snapshot struct {
 
 // NewMultiTableWriter creates a new multi-table DuckLake writer
 func NewMultiTableWriter(config Config) (*MultiTableWriter, error) {
+	return newMultiTableWriter(config, newInstanceFailure())
+}
+
+// newMultiTableWriter creates a writer that reports an invalidated DuckDB
+// instance on failure.
+func newMultiTableWriter(config Config, failure *instanceFailure) (*MultiTableWriter, error) {
 	ct, err := ResolveCatalogType(config.CatalogType, config.CatalogPath)
 	if err != nil {
 		return nil, err
@@ -327,6 +337,7 @@ func NewMultiTableWriter(config Config) (*MultiTableWriter, error) {
 		flushInterval: config.FlushInterval,
 		lakeName:      config.LakeName,
 		searchBuffer:  config.SearchBuffer,
+		failure:       failure,
 	}
 
 	// Enable single-writer flush queue: explicit config or auto for SQLite (always)
@@ -663,6 +674,7 @@ func (mtw *MultiTableWriter) getOrCreateTable(key TableKey) (*TableWriter, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to create table for %s: %w", key.String(), err)
 	}
+	tw.onFatalFlush = func(err error) { mtw.noteFlushError(tw, err) }
 
 	mtw.tables[key] = tw
 	logger.Info("Created new table", "table", tw.TableFQN())
