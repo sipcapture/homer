@@ -93,7 +93,7 @@ func RegisterSystemFlags() (*flag.FlagSet, *systemFlagRefs) {
 	refs.RebuildCleanupOrphans = fs.Bool("rebuild-cleanup-orphans", false, "with --rebuild-catalog: after a successful rebuild, sweep genuinely unreferenced leftover files (registered originals are kept)")
 	refs.InstallExtensions = fs.Bool("install-extensions", false, "install DuckDB extensions (ducklake, sqlite, httpfs, aws) and exit")
 	refs.Reload = fs.Bool("reload", false, "send SIGHUP to running homer-core process to reload config")
-	refs.PidFile = fs.String("pid-file", "/var/run/homer-core.pid", "path to PID file (used with --reload)")
+	refs.PidFile = fs.String("pid-file", "/run/homer-core/homer-core.pid", "path to PID file (used with --reload)")
 	refs.DuckDBVersion = fs.Bool("duckdb-version", false, "show DuckDB version and exit")
 	refs.GenerateExampleConfig = fs.Bool("generate-example-config", false, "generate example JSON configuration and exit")
 

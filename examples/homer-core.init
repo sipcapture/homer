@@ -5,43 +5,71 @@
 # Required-Stop:	$syslog $local_fs $remote_fs $network
 # Default-Start:	2 3 4 5
 # Default-Stop:		0 1 6
-# Short-Description: HEPAgent
+# Short-Description: Homer Core
 ### END INIT INFO
 
 . /lib/lsb/init-functions
 prog=homer-core
-PIDFILE=/var/run/$prog.pid
-HOMER_CONFIG="-config-path /usr/local/homer-core/etc/homer.json"
+PIDFILE=/run/homer-core/homer-core.pid
+DAEMON=/usr/local/homer-core/bin/homer
 DESC="HOMER Application Server"
+
+prepare_dirs() {
+	mkdir -p /var/lib/homer /var/log/homer /data/homer /run/homer-core
+	if ! id homer >/dev/null 2>&1; then
+		log_failure_msg "user homer does not exist; install the homer-core package or create the system user"
+		return 1
+	fi
+	chown homer:homer /var/lib/homer /var/log/homer /run/homer-core
+	chmod 0750 /var/lib/homer /var/log/homer /run/homer-core
+	# Leave a /data/homer owned by someone else (for example Docker uid 1000) alone.
+	if [ "$(stat -c '%u' /data/homer)" = "0" ]; then
+		chown homer:homer /data/homer
+		chmod 0750 /data/homer
+	fi
+}
+
 start() {
 	log_daemon_msg "Starting $DESC" "$prog"
-	start_daemon -p $PIDFILE /usr/local/homer-core/bin/homer $HOMER_CONFIG
-	if [ $? -ne 0 ]; then
+	if ! prepare_dirs; then
 		log_end_msg 1
 		exit 1
 	fi
-	if [ $? -eq 0 ]; then
-		log_end_msg 0
+	if ! HOME=/usr/local/homer-core start-stop-daemon --start --oknodo --quiet --background \
+		--chuid homer:homer --chdir /var/lib/homer \
+		--pidfile "$PIDFILE" --exec "$DAEMON" -- \
+		-config-path /usr/local/homer-core/etc/homer.json -pid-file "$PIDFILE"
+	then
+		log_end_msg 1
+		exit 1
 	fi
-	exit 0
+	log_end_msg 0
+}
+
+stop_pid() {
+	pidfile=$1
+	if [ ! -f "$pidfile" ]; then
+		return 0
+	fi
+	if ! start-stop-daemon --stop --oknodo --quiet --retry=TERM/90/KILL/5 --pidfile "$pidfile"; then
+		return 1
+	fi
+	rm -f "$pidfile"
 }
 
 stop() {
 	log_daemon_msg "Stopping $DESC" "$prog"
-	killproc -p $PIDFILE /usr/local/homer-core/bin/homer
-	if [ $? -ne 0 ]; then
+	# The previous package wrote /var/run/homer-core.pid while running as root.
+	status=0
+	stop_pid "$PIDFILE" || status=1
+	if [ "$PIDFILE" != /var/run/homer-core.pid ]; then
+		stop_pid /var/run/homer-core.pid || status=1
+	fi
+	if [ "$status" -ne 0 ]; then
 		log_end_msg 1
 		exit 1
 	fi
-	if [ $? -eq 0 ]; then
-		log_end_msg 0
-	fi
-}
-
-force_reload() {
-	stop
-	start
-
+	log_end_msg 0
 }
 
 case "$1" in
@@ -51,16 +79,12 @@ start)
 stop)
 	stop
 	;;
-force-reload)
-	force_reload
-	;;
-restart)
+force-reload|restart)
 	stop
 	start
 	;;
-
 *)
-	echo "$Usage: $prog {start|stop|force-reload|restart}"
+	echo "Usage: $prog {start|stop|force-reload|restart}"
 	exit 2
 	;;
 esac

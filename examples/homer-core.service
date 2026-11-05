@@ -1,18 +1,45 @@
-
-# cp homer-core.service /etc/systemd/system/
+# Packaged by homer-core (deb/rpm). The postinstall script creates the
+# system user homer and the directories below, then restarts the service
+# if it is already running.
+#
 # systemctl daemon-reload
-# systemctl start homer-core
-# systemctl enable homer-core
+# systemctl enable --now homer-core
+#
+# Manual install, without the package script:
+#   groupadd --system homer
+#   useradd --system --gid homer --home-dir /var/lib/homer --shell /usr/sbin/nologin homer
+#   mkdir -p /var/lib/homer /var/log/homer /data/homer /run/homer-core
+#   chown homer:homer /var/lib/homer /var/log/homer /data/homer /run/homer-core
+#
+# The binary and this unit stay root-owned. homer.json must be readable by
+# homer (root:homer, mode 0640). A TLS key and certificate must be readable
+# by homer as well. HOME points at the install prefix so DuckDB finds the
+# bundled extensions; /usr/local/homer-core/.duckdb is the only part of that
+# tree the service user can write.
+#
+# Example listen ports are above 1024, so the service needs no extra
+# capability. A port below 1024 needs CAP_NET_BIND_SERVICE.
 
 [Unit]
-Description=HEPAgent
+Description=Homer Core
 After=network.target
 
 [Service]
-Environment="HOME=/usr/local/homer-core"
-ExecStart=/usr/local/homer-core/bin/homer -config-path /usr/local/homer-core/etc/homer.json
+User=homer
+Group=homer
+WorkingDirectory=/var/lib/homer
+Environment=HOME=/usr/local/homer-core
+StateDirectory=homer
+StateDirectoryMode=0750
+LogsDirectory=homer
+LogsDirectoryMode=0750
+RuntimeDirectory=homer-core
+RuntimeDirectoryMode=0750
+PIDFile=/run/homer-core/homer-core.pid
+ExecStart=/usr/local/homer-core/bin/homer -config-path /usr/local/homer-core/etc/homer.json -pid-file /run/homer-core/homer-core.pid
 Restart=always
 RestartSec=3s
+NoNewPrivileges=true
 Type=simple
 
 [Install]

@@ -106,7 +106,7 @@ func initServerFlags() ServerFlags {
 	sf.LogPathHomerServer = flag.String("homer-core-log-path", "", "the path of the log file")
 	sf.SyslogDisable = flag.Bool("syslog-disable", false, "disable syslog, use only stdout for logging")
 	sf.LogLevel = flag.String("log-level", "", "set log level: debug, info, warn, error, trace")
-	sf.PidFile = flag.String("pid-file", "/var/run/homer-core.pid", "path to PID file")
+	sf.PidFile = flag.String("pid-file", "/run/homer-core/homer-core.pid", "path to PID file")
 	sf.ResetAdminPassword = flag.Bool("reset-admin-password", false, "set admin password in settings DuckDB from coordinator.auth.admin_password_hash and exit")
 	sf.PprofListen = flag.String("pprof", "", "optional net/http/pprof listen address, e.g. 127.0.0.1:6060 (CPU: go tool pprof http://ADDR/debug/pprof/profile)")
 	return sf
@@ -138,7 +138,7 @@ Server flags (no subcommand):
   --config-path <path>          Path to config file or directory
   --log-level <level>           Set log level: debug, info, warn, error, trace
   --syslog-disable              Disable syslog, use only stdout
-  --pid-file <path>             Path to PID file (default: /var/run/homer-core.pid)
+  --pid-file <path>             Path to PID file (default: /run/homer-core/homer-core.pid)
   --pprof <host:port>           Optional pprof HTTP (e.g. 127.0.0.1:6060); see net/http/pprof
   --reset-admin-password        Set admin password in settings DB from config hash and exit
   -v, --version                 Show version and exit
@@ -196,7 +196,7 @@ system -- System operations:
   --compaction-merge-list-limit <n>     Limit for merge list (default: 50)
   --install-extensions          Install DuckDB extensions (ducklake, sqlite)
   --reload                      Send SIGHUP to running process
-  --pid-file <path>             PID file path (default: /var/run/homer-core.pid)
+  --pid-file <path>             PID file path (default: /run/homer-core/homer-core.pid)
   --duckdb-version              Show DuckDB version
   --generate-example-config     Generate example JSON config
 

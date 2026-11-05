@@ -67,7 +67,7 @@ HOMER_COORDINATOR_DECODER_SHARK_GID=0
 HOMER_COORDINATOR_DECODER_SHARK_TIMEOUT_SEC=15
 ```
 
-If the coordinator runs as root, set `uid` and `gid` to an unprivileged user. With the official image the process is already `homer`, so leave both at `0`.
+If the coordinator runs as root, set `uid` and `gid` to an unprivileged user. The official image and the deb/rpm service already run as `homer`, so leave both at `0`.
 
 ## What Decode does
 

@@ -182,7 +182,7 @@ homer --config-path /etc/homer/homer.json --log-level debug --syslog-disable
 | `--config-path <path>` | Path to config file or directory |
 | `--log-level <level>` | Log level: debug, info, warn, error, trace |
 | `--syslog-disable` | Disable syslog, use only stdout |
-| `--pid-file <path>` | PID file path (default: /var/run/homer-core.pid) |
+| `--pid-file <path>` | PID file path (default: /run/homer-core/homer-core.pid) |
 
 ### Search (via coordinator API)
 

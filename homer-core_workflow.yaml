@@ -18,6 +18,8 @@ vendor: "QXIP"
 homepage: "http://qxip.net"
 # license omitted on purpose: nfpm writes "License:" into deb control; Packagecloud
 # has rejected uploads with that non-standard field (500). SPDX remains in description.
+scripts:
+  postinstall: ./scripts/package-postinstall.sh
 contents:
   # Basic file that applies to all packagers
   - src: ./homer
@@ -41,11 +43,16 @@ contents:
     dst: /etc/systemd/system/homer-core.service
   - src: ./examples/homer-core.init
     dst: /etc/init.d/homer-core
+    file_info:
+      mode: 0755
+  - src: ./examples/homer-core.tmpfiles.conf
+    dst: /usr/lib/tmpfiles.d/homer-core.conf
      # Simple config file
   - src: ./examples/homer.json
     dst: /usr/local/homer-core/etc/homer.json.example
     type: config
   # Pre-downloaded DuckDB extensions ($HOME/.duckdb; HOME=/usr/local/homer-core in homer-core.service).
+  # The service user can write this directory; the rest of the prefix stays root.
   # Build: scripts/download_duckdb_extensions.sh (see Makefile download-extensions).
   # Set DUCKDB_VERSION and EXT_PLATFORM to match the script (CI sets both before nfpm).
   - src: ./bundled_extensions/${DUCKDB_VERSION}/${EXT_PLATFORM}/ducklake.duckdb_extension
