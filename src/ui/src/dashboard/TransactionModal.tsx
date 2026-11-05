@@ -755,7 +755,10 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     setQosLoading(true)
     setQosError('')
     try {
-      const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone)
+      const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone, {
+        proto_type: modal?.protoType || 1,
+        event_type: modal?.eventType || 'call',
+      })
       const data = await apiPost('/transactions/qos', body)
       setQosData(data?.data || {})
     } catch (err) {
@@ -788,7 +791,10 @@ export default function TransactionModal({ modal, onClose, timeZone }) {
     setEventsLoading(true)
     setEventsError('')
     try {
-      const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone)
+      const body = buildTransactionTabBody(sessionIdsForApi, items, timeRange, timeZone, {
+        proto_type: modal?.protoType || 1,
+        event_type: modal?.eventType || 'call',
+      })
       const data = await apiPost('/transactions/events', body)
       const payload = data?.data || {}
       const rows = promoteDataExtraNodeName(payload.items || [])

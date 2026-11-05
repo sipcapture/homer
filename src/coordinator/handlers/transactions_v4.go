@@ -1281,7 +1281,7 @@ func (h *SearchHandler) expandCorrelatedSessionIDs(ctx context.Context, req *Tra
 	table := getTableName(h.flightService.LakeName(), protoType, eventType)
 	baseRows, err := h.executeTransactionMessagesSQL(ctx, table, ids, req.Timestamp.From, req.Timestamp.To)
 	if err != nil {
-		logger.Warn("transaction export: correlation base query failed, exporting requested sessions only",
+		logger.Warn("transaction correlation: base query failed, using requested sessions only",
 			"err", err.Error(), "proto", protoType, "event", eventType)
 		return ids
 	}
@@ -1579,6 +1579,8 @@ func (h *SearchHandler) V4TransactionQos(c echo.Context) error {
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
 	}
+	// Expand to the legs the correlation script links, same as /transactions/messages.
+	ids = h.expandCorrelatedSessionIDs(c.Request().Context(), &req, ids)
 	sidCondition := buildSessionIDMatchOrChain(ids)
 
 	tsCondition := ""
@@ -1644,6 +1646,8 @@ func (h *SearchHandler) V4TransactionCallInfo(c echo.Context) error {
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
 	}
+	// Expand to the legs the correlation script links, same as /transactions/messages.
+	ids = h.expandCorrelatedSessionIDs(c.Request().Context(), &req, ids)
 
 	protoType := req.ProtoType
 	if protoType == 0 {
@@ -1731,6 +1735,8 @@ func (h *SearchHandler) V4TransactionEvents(c echo.Context) error {
 	if err != nil {
 		return writeError(c, http.StatusBadRequest, "Bad Request", err.Error())
 	}
+	// Expand to the legs the correlation script links, same as /transactions/messages.
+	ids = h.expandCorrelatedSessionIDs(c.Request().Context(), &req, ids)
 
 	table := getTableName(h.flightService.LakeName(), 100, "default")
 	where := buildSessionIDMatchOrChain(ids)
