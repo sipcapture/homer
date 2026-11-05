@@ -26,7 +26,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
 	"github.com/sipcapture/homer-core/src/coordinator/sqlvalidator"
+	"github.com/sipcapture/homer-core/src/isup"
 	"github.com/sipcapture/homer-core/src/pcapwriter"
+	"github.com/sipcapture/homer-core/src/shark"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 	"github.com/sipcapture/homer-core/src/utils/metrics"
 )
@@ -228,7 +230,10 @@ type MessageResponseV4 struct {
 
 type MessageDecodedResponseV4 struct {
 	Data struct {
-		Data []map[string]interface{} `json:"data"`
+		Data       []map[string]interface{} `json:"data"`
+		ISUP       *isup.Result             `json:"isup,omitempty"`
+		Shark      json.RawMessage          `json:"shark,omitempty"`
+		SharkError string                   `json:"shark_error,omitempty"`
 	} `json:"data"`
 	Meta Meta `json:"meta"`
 }
@@ -249,9 +254,9 @@ type SearchObjectV4 struct {
 	Filter struct {
 		ProtoType     int      `json:"proto_type"`
 		EventType     string   `json:"event_type"`
-		Method        string   `json:"method"` // legacy single value; comma-separated OK; merged with methods
-		Methods       []string `json:"methods,omitempty"` // multi-select + custom methods → SQL IN (...)
-		ResponseCode  string   `json:"response_code,omitempty"` // comma-separated OK; merged with response_codes
+		Method        string   `json:"method"`                   // legacy single value; comma-separated OK; merged with methods
+		Methods       []string `json:"methods,omitempty"`        // multi-select + custom methods → SQL IN (...)
+		ResponseCode  string   `json:"response_code,omitempty"`  // comma-separated OK; merged with response_codes
 		ResponseCodes []string `json:"response_codes,omitempty"` // multi-select + custom codes → SQL IN (...)
 		CallID        string   `json:"call_id"`
 		SessionID     string   `json:"session_id,omitempty"` // alias for call_id (matches DuckLake column name)
@@ -268,13 +273,13 @@ type SearchObjectV4 struct {
 		DstPort       int      `json:"dst_port"`
 		CaptureID     int      `json:"capture_id"`
 		Node          string   `json:"node"`
-		NodeID        string   `json:"node_id,omitempty"` // alias for node
-		NodeName      string   `json:"node_name,omitempty"` // HEP 0x0013 in data_extra.node_name
-		Aor           string   `json:"aor,omitempty"`           // SIP registration column
+		NodeID        string   `json:"node_id,omitempty"`     // alias for node
+		NodeName      string   `json:"node_name,omitempty"`   // HEP 0x0013 in data_extra.node_name
+		Aor           string   `json:"aor,omitempty"`         // SIP registration column
 		Contact       string   `json:"contact,omitempty"`     // SIP registration column
 		Expires       string   `json:"expires,omitempty"`     // SIP registration column
 		CseqMethod    string   `json:"cseq_method,omitempty"` // SIP call column cseq_method
-		Payload       string   `json:"payload,omitempty"` // full-text search in payload (LOG)
+		Payload       string   `json:"payload,omitempty"`     // full-text search in payload (LOG)
 		// OTLP metrics (proto_type 201) — Protocol Search form + metric-name picker.
 		Name        string   `json:"name,omitempty"`         // exact metric name (preferred over call_id→name LIKE)
 		Type        string   `json:"type,omitempty"`         // single OTLP metric kind (gauge, sum, …)
@@ -1527,8 +1532,42 @@ func (h *SearchHandler) V4MessageDecoded(c echo.Context) error {
 	h.enrichRowsWithIPAliases(c.Request().Context(), decoded)
 	resp := MessageDecodedResponseV4{}
 	resp.Data.Data = decoded
+	if len(decoded) > 0 {
+		if payload := rowString(decoded[0]["payload"]); payload != "" {
+			resp.Data.ISUP = isup.DecodeSIP(payload)
+		}
+		if raw, err := h.decodeWithShark(c.Request().Context(), protoType, eventType, decoded[0]); err != nil {
+			resp.Data.SharkError = err.Error()
+		} else if len(raw) > 0 {
+			resp.Data.Shark = raw
+		}
+	}
 	resp.Meta = buildMeta(c, "")
 	return c.JSON(http.StatusOK, resp)
+}
+
+// decodeWithShark pipes one stored message through tshark when decoder_shark
+// is active for this proto/event. A nil result means the decoder is off.
+func (h *SearchHandler) decodeWithShark(ctx context.Context, protoType int, eventType string, row map[string]interface{}) (json.RawMessage, error) {
+	if !shark.Enabled(h.decoderShark, protoType, eventType) {
+		return nil, nil
+	}
+	pcap, err := pcapwriter.SIPSearchRowsToPCAP([]map[string]interface{}{row})
+	if err != nil {
+		return nil, err
+	}
+	return shark.DecodePCAP(ctx, h.decoderShark, pcap)
+}
+
+func rowString(v interface{}) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case []byte:
+		return string(t)
+	default:
+		return ""
+	}
 }
 
 func (h *SearchHandler) V4TransactionQos(c echo.Context) error {

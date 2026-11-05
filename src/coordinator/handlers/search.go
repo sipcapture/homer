@@ -83,6 +83,8 @@ type SearchHandler struct {
 	// SELECT uuid, timestamp (filter/sort/LIMIT), then a bounded SELECT * by
 	// uuid IN (…). Mirrors storage.ducklake.search.lazy_payload (default on).
 	lazyPayloadHydration bool
+	// decoderShark is the optional tshark dissector used by POST /messages/decoded.
+	decoderShark config.DecoderSharkConfig
 }
 
 // NewSearchHandler creates a new search handler.
@@ -126,6 +128,11 @@ func (h *SearchHandler) SetLazyPayloadHydration(enabled bool) {
 // be called concurrently with in-flight requests.
 func (h *SearchHandler) SetCorrelator(c Correlator) {
 	h.correlation = c
+}
+
+// SetDecoderShark configures the optional tshark decoder (coordinator.decoder_shark).
+func (h *SearchHandler) SetDecoderShark(cfg config.DecoderSharkConfig) {
+	h.decoderShark = cfg
 }
 
 // SimpleSearchRequest represents the simple UI search request

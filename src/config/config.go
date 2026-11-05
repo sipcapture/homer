@@ -443,6 +443,10 @@ type CoordinatorConfig struct {
 	// governs what the coordinator itself is willing to forward to the UI.
 	HepStream CoordinatorHepStreamConfig `json:"hep_stream" mapstructure:"hep_stream"`
 
+	// DecoderShark runs tshark on the message PCAP when Decode is clicked,
+	// the same external dissector HOMER 7 exposed as decoder_shark.
+	DecoderShark DecoderSharkConfig `json:"decoder_shark" mapstructure:"decoder_shark"`
+
 	// Widgets configures dashboard widget picker categories (see widgets.control).
 	Widgets WidgetsConfig `json:"widgets" mapstructure:"widgets"`
 
@@ -462,6 +466,26 @@ type CoordinatorConfig struct {
 
 	// MCP runtime settings propagated from top-level config in modular startup.
 	MCP MCPConfig `json:"-" mapstructure:"-"`
+}
+
+// DecoderSharkConfig is the HOMER 7 decoder_shark block. When active, Decode
+// writes the message to a PCAP and pipes it to tshark -T json.
+type DecoderSharkConfig struct {
+	// Active enables the external decoder. Off by default.
+	Active bool `json:"active" mapstructure:"active" default:"false"`
+	// Bin is the tshark executable. Default /usr/bin/tshark.
+	Bin string `json:"bin" mapstructure:"bin" default:"/usr/bin/tshark"`
+	// Param is extra tshark arguments, split on whitespace (for example "-d udp.port==5060,sip").
+	Param string `json:"param" mapstructure:"param"`
+	// Protocols limits decode to "proto_event" keys such as "1_call".
+	// Empty means every protocol.
+	Protocols []string `json:"protocols" mapstructure:"protocols"`
+	// UID and GID are applied together when the coordinator runs as root.
+	// Leave both at 0 to keep the current user.
+	UID uint32 `json:"uid" mapstructure:"uid"`
+	GID uint32 `json:"gid" mapstructure:"gid"`
+	// TimeoutSec bounds one tshark invocation. Default 15.
+	TimeoutSec int `json:"timeout_sec" mapstructure:"timeout_sec" default:"15"`
 }
 
 // CorrelationScriptingConfig configures the Lua correlation engine used by the
