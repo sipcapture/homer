@@ -89,10 +89,9 @@ func (s *RuntimeState) Put(ctx context.Context, namespace, key string, payload [
 func (s *RuntimeState) Get(ctx context.Context, namespace, key string, consume bool) ([]byte, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	queryRow := s.db.QueryRowContext
+	queryRow := postgresQueryRow(s.db)
 	query := `SELECT payload FROM public.homer_runtime_state WHERE namespace=$1 AND key=$2 AND expires_at > CURRENT_TIMESTAMP`
 	if consume {
-		queryRow = postgresQueryRow(s.db)
 		query = `DELETE FROM public.homer_runtime_state WHERE namespace=$1 AND key=$2 AND expires_at > CURRENT_TIMESTAMP RETURNING payload`
 	}
 	var payload []byte
