@@ -349,6 +349,20 @@ Single optional OAuth2 IdP object (`OAuthProviderConfig` in `src/config/config.g
 
 The deprecated **`oauth2_providers`** array is still accepted at startup and migrated with a log warning; prefer **`oauth2_provider`**.
 
+### decoder_shark
+
+External tshark dissection for the Decode button. Off by default. Full setup, Docker, and the response fields are in [DECODER_SHARK.md](DECODER_SHARK.md).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `active` | bool | false | Pipe the message PCAP to tshark on `POST /api/v4/messages/decoded` |
+| `bin` | string | `/usr/bin/tshark` | tshark executable |
+| `param` | string | "" | Extra tshark arguments, split on whitespace |
+| `protocols` | string[] | empty | `proto_event` keys such as `1_call`. Empty matches every protocol |
+| `uid` | uint | 0 | With `gid`, drop privileges when the coordinator is root |
+| `gid` | uint | 0 | Group paired with `uid` |
+| `timeout_sec` | int | 15 | Kill tshark after this many seconds |
+
 ## API Endpoints
 
 ### Authentication
