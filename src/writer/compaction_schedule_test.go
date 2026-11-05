@@ -92,6 +92,23 @@ func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
 	if second.compactionDue() {
 		t.Fatal("sequential replica ignored shared completion")
 	}
+	// A schedule read error must not disable the owner of the advisory lock.
+	probe, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = probe.Exec(ctx, "ALTER TABLE public.homer_maintenance_schedule RENAME COLUMN completed_at TO broken")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.compactionDue() {
+		t.Fatal("schedule read failure disabled compaction")
+	}
+	_, err = probe.Exec(ctx, "ALTER TABLE public.homer_maintenance_schedule RENAME COLUMN broken TO completed_at")
+	_ = probe.Close(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 	releaseOther()
 	// No DuckDB is available: the schedule must skip before catalog operations.
 	second.runCompaction()
