@@ -32,7 +32,7 @@ func newBufferTestWriter(t *testing.T) *TableWriter {
 	return tw
 }
 
-func TestBufferReuseWaitsForQueuedFlush(t *testing.T) {
+func TestBufferReuseContinuesDuringQueuedFlush(t *testing.T) {
 	tw := newBufferTestWriter(t)
 	tw.catalogMu.Lock()
 	var once sync.Once
@@ -51,22 +51,18 @@ func TestBufferReuseWaitsForQueuedFlush(t *testing.T) {
 	go func() { writeDone <- tw.Write([]interface{}{int64(3)}) }()
 	select {
 	case err := <-writeDone:
-		t.Fatalf("busy buffer was reused: %v", err)
-	case <-time.After(50 * time.Millisecond):
-	}
-	release()
-	select {
-	case err := <-writeDone:
 		if err != nil {
 			t.Fatal(err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("writer did not resume after flush")
+		t.Fatal("queued flush blocked reuse before acquiring the catalog lock")
 	}
-	tw.Flush()
-	for i := range tw.slotMu {
-		tw.slotMu[i].Lock()
-		tw.slotMu[i].Unlock()
+	release()
+	// Direct flushes also drain any rows not picked up by the queued jobs.
+	for slot := range tw.memTables {
+		if err := tw.flushSlotDirect(slot, tw.catalogMu); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var n, distinct int
 	if err := tw.db.QueryRow("SELECT count(*), count(DISTINCT id) FROM saved").Scan(&n, &distinct); err != nil {
@@ -84,7 +80,6 @@ func TestFailedBufferInsertRetainsRows(t *testing.T) {
 	}
 	insert := tw.flushInsertSQL[0]
 	tw.flushInsertSQL[0] = "INSERT INTO missing_table SELECT * FROM buffer_a"
-	tw.slotMu[0].Lock()
 	if err := tw.flushSlotDirect(0, tw.catalogMu); err == nil {
 		t.Fatal("expected insert failure")
 	}
@@ -93,7 +88,6 @@ func TestFailedBufferInsertRetainsRows(t *testing.T) {
 		t.Fatalf("failed insert discarded rows: %d %v", n, err)
 	}
 	tw.flushInsertSQL[0] = insert
-	tw.slotMu[0].Lock()
 	if err := tw.flushSlotDirect(0, tw.catalogMu); err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +103,6 @@ func TestFailedBufferClearDoesNotReinsert(t *testing.T) {
 	}
 	truncate := tw.flushTruncateSQL[0]
 	tw.flushTruncateSQL[0] = "TRUNCATE TABLE missing_table"
-	tw.slotMu[0].Lock()
 	if err := tw.flushSlotDirect(0, tw.catalogMu); err == nil {
 		t.Fatal("expected clear failure")
 	}
@@ -119,7 +112,6 @@ func TestFailedBufferClearDoesNotReinsert(t *testing.T) {
 	if err := tw.Write([]interface{}{int64(2)}); err != nil {
 		t.Fatal(err)
 	}
-	tw.slotMu[0].Lock()
 	if err := tw.flushSlotDirect(0, tw.catalogMu); err != nil {
 		t.Fatal(err)
 	}
@@ -129,5 +121,57 @@ func TestFailedBufferClearDoesNotReinsert(t *testing.T) {
 	}
 	if n != 2 || distinct != 2 {
 		t.Fatalf("clear retry duplicated rows: %d unique=%d", n, distinct)
+	}
+}
+
+// While a failed TRUNCATE remains broken, an append must preserve its Go batch
+// and keep new rows out of the committed memory table.
+func TestFailedBufferClearRetainsNewBatch(t *testing.T) {
+	tw := newBufferTestWriter(t)
+	if err := tw.Write([]interface{}{int64(1)}); err != nil {
+		t.Fatal(err)
+	}
+	truncate := tw.flushTruncateSQL[0]
+	tw.flushTruncateSQL[0] = "TRUNCATE TABLE missing_table"
+	if err := tw.flushSlotDirect(0, tw.catalogMu); err == nil {
+		t.Fatal("expected clear failure")
+	}
+	if err := tw.Write([]interface{}{int64(2)}); err == nil {
+		t.Fatal("append should fail while clear is broken")
+	}
+	var rows int
+	if err := tw.db.QueryRow("SELECT count(*) FROM buffer_a").Scan(&rows); err != nil || rows != 1 {
+		t.Fatalf("new rows mixed with committed rows: %d %v", rows, err)
+	}
+	tw.flushTruncateSQL[0] = truncate
+	if err := tw.Write([]interface{}{int64(3)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.flushSlotDirect(0, tw.catalogMu); err != nil {
+		t.Fatal(err)
+	}
+	var distinct int
+	if err := tw.db.QueryRow("SELECT count(*), count(DISTINCT id) FROM saved").Scan(&rows, &distinct); err != nil || rows != 3 || distinct != 3 {
+		t.Fatalf("retained batch lost or duplicated: rows=%d distinct=%d err=%v", rows, distinct, err)
+	}
+}
+
+func TestFailedBufferClearRetryWithoutAppend(t *testing.T) {
+	tw := newBufferTestWriter(t)
+	if err := tw.Write([]interface{}{int64(1)}); err != nil {
+		t.Fatal(err)
+	}
+	truncate := tw.flushTruncateSQL[0]
+	tw.flushTruncateSQL[0] = "TRUNCATE TABLE missing_table"
+	if err := tw.flushSlotDirect(0, tw.catalogMu); err == nil {
+		t.Fatal("expected clear failure")
+	}
+	tw.flushTruncateSQL[0] = truncate
+	if err := tw.flushSlotDirect(0, tw.catalogMu); err != nil {
+		t.Fatal(err)
+	}
+	var saved, buffered int
+	if err := tw.db.QueryRow("SELECT (SELECT count(*) FROM saved), (SELECT count(*) FROM buffer_a)").Scan(&saved, &buffered); err != nil || saved != 1 || buffered != 0 {
+		t.Fatalf("retry should only clear: saved=%d buffered=%d err=%v", saved, buffered, err)
 	}
 }

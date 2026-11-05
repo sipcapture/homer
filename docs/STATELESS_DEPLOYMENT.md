@@ -192,8 +192,9 @@ already saturated shared database or object store.
 | Go batch | `storage.ducklake.batch_size` triggers appending, default 10,000 records per table; not a total memory cap |
 | DuckDB buffers | Two memory tables per table, with no fixed row capacity; constrained by memory/spill configuration |
 
-Each buffer is reserved while its flush is queued or running. The other buffer
-can accept data; when both are busy, appending waits. Failed inserts retain the
+A queued flush does not reserve its buffer. Appends can reuse that buffer while
+the job waits for the catalog lock; they wait only while the flush holds the
+buffer lock across INSERT and TRUNCATE. Failed inserts retain the
 memory-table rows. If an insert succeeds but clearing the buffer fails, retries
 clear those committed rows without inserting them again. Final flush failures
 are returned during shutdown.
