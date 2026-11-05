@@ -6,6 +6,8 @@ package decoder
 
 import (
 	"time"
+
+	"github.com/sipcapture/homer-core/src/isup"
 )
 
 // ApplyCapturedSIP fills h with link metadata and SIP payload, then runs SIP parsing.
@@ -31,6 +33,6 @@ func ApplyCapturedSIP(d *Decoder, h *HEP, srcIP, dstIP string, srcPort, dstPort,
 	h.Tmsec = uint32((nano % 1e9) / 1000)
 	h.ProtoType = 1
 	h.NodeID = nodeID
-	h.Payload = payload
+	h.Payload = isup.PreserveBinarySIPPayload(payload)
 	return h.parseSIP()
 }

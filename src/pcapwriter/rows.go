@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sipcapture/homer-core/src/isup"
 )
 
 // ErrNoSIPPacketsInRows is returned when no row had a non-empty payload field.
@@ -153,7 +155,7 @@ func SIPSearchRowsToPCAP(rows []map[string]interface{}) ([]byte, error) {
 	}
 	written := 0
 	for _, row := range rows {
-		payload := RowStr(row, "payload")
+		payload := isup.RestoreBinarySIPPayload(RowStr(row, "payload"))
 		if payload == "" {
 			continue
 		}

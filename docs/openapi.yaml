@@ -2982,6 +2982,9 @@ components:
           type: array
           items:
             type: object
+        isup:
+          type: object
+          description: ITU-T Q.763 decode of an application/isup SIP body, when the message is SIP-I.
     MessageDecodedResponse:
       type: object
       properties:

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sipcapture/homer-core/src/isup"
 	"github.com/sipcapture/homer-core/src/pcapwriter"
 )
 
@@ -116,4 +117,35 @@ func TestRowTimeOptional(t *testing.T) {
 			t.Fatal("expected !ok")
 		}
 	})
+}
+
+func TestSIPSearchRowsToPCAP_RestoresBinaryISUP(t *testing.T) {
+	body := []byte{0x01, 0x00, 0x60, 0x00, 0x0a, 0x03, 0x02, 0x00, 0x02, 0x83, 0x90}
+	original := "INVITE sip:100@example.com SIP/2.0\r\n" +
+		"Call-ID: isup@example.com\r\n" +
+		"CSeq: 1 INVITE\r\n" +
+		"Content-Type: application/isup;version=itu-t92+\r\n" +
+		"Content-Length: 11\r\n" +
+		"\r\n" +
+		string(body)
+	stored := isup.PreserveBinarySIPPayload(original)
+	if stored == original {
+		t.Fatal("expected binary SIP to be rewritten for storage")
+	}
+	raw, err := pcapwriter.SIPSearchRowsToPCAP([]map[string]interface{}{
+		{
+			"timestamp": "2020-05-01T12:00:00Z",
+			"src_ip":    "10.0.0.1",
+			"dst_ip":    "10.0.0.2",
+			"src_port":  5060,
+			"dst_port":  5060,
+			"payload":   stored,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(original)) {
+		t.Fatal("pcap does not contain the original SIP message with the binary ISUP body")
+	}
 }
