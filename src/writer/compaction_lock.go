@@ -92,3 +92,13 @@ func (c *CompactionService) runInlineFlushCycle() {
 func (c *CompactionService) maintenanceSQL() maintenancelock.DB {
 	return maintenancelock.DB{Raw: c.database(), Lease: c.maintenanceLease.Load()}
 }
+
+// compactionFirstDelay also bounds startup retries when another replica owns
+// the lock. PostgreSQL must begin its minute polling immediately.
+func (c *CompactionService) compactionFirstDelay() time.Duration {
+	interval := c.compactionPollInterval()
+	if interval < 5*time.Minute {
+		return interval
+	}
+	return 5 * time.Minute
+}
