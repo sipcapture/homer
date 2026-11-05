@@ -28,7 +28,7 @@ import (
 
 // AuthHandler handles authentication-related API endpoints
 type AuthHandler struct {
-	runtimeState   *services.RuntimeState
+	runtimeState   runtimeStateStore
 	revocations    revocationCache
 	jwtSecret      string
 	expireHours    int
