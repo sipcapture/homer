@@ -500,3 +500,102 @@ func TestV4TransactionExportText_Correlate_ThroughHandler(t *testing.T) {
 		t.Fatalf("correlated export missing legs: %q", out)
 	}
 }
+
+// postTransactionTab runs a /transactions/* tab handler with a JSON body and fails on non-200.
+func postTransactionTab(t *testing.T, handler func(echo.Context) error, body string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	if err := handler(echo.New().NewContext(req, rec)); err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func assertSQLHasSessions(t *testing.T, sql string, sids ...string) {
+	t.Helper()
+	for _, sid := range sids {
+		if !strings.Contains(sql, "'"+sid+"'") {
+			t.Fatalf("SQL missing session %q: %s", sid, sql)
+		}
+	}
+}
+
+func TestV4TransactionCallInfo_ExpandsCorrelatedLegs(t *testing.T) {
+	var sqls []string
+	// 1st call: base rows for correlation; 2nd: callinfo detail query.
+	h, done := newTestSearchHandler(t, [][]map[string]interface{}{
+		{{"session_id": "b1"}},
+		{{"session_id": "a", "method": "INVITE"}, {"session_id": "b1", "method": "INVITE"}},
+	}, &sqls)
+	defer done()
+	corr := &fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a"}}}
+	h.SetCorrelator(corr)
+
+	postTransactionTab(t, h.V4TransactionCallInfo, `{"session_id":"b1","proto_type":1,"event_type":"call"}`)
+
+	if len(sqls) != 2 {
+		t.Fatalf("expected 2 SQL calls (base + callinfo), got %d: %v", len(sqls), sqls)
+	}
+	assertSQLHasSessions(t, sqls[1], "a", "b1")
+	if atomic.LoadInt32(&corr.correlates) != 1 {
+		t.Fatalf("expected correlator to run once, got %d", corr.correlates)
+	}
+}
+
+func TestV4TransactionCallInfo_NoCorrelator_QueriesRequestedOnly(t *testing.T) {
+	var sqls []string
+	h, done := newTestSearchHandler(t, [][]map[string]interface{}{
+		{{"session_id": "b1", "method": "INVITE"}},
+	}, &sqls)
+	defer done()
+
+	postTransactionTab(t, h.V4TransactionCallInfo, `{"session_id":"b1","proto_type":1,"event_type":"call"}`)
+
+	if len(sqls) != 1 {
+		t.Fatalf("expected a single callinfo query without correlation, got %d: %v", len(sqls), sqls)
+	}
+	if strings.Contains(sqls[0], "'a'") {
+		t.Fatalf("callinfo should not query uncorrelated sessions: %s", sqls[0])
+	}
+}
+
+func TestV4TransactionQos_ExpandsCorrelatedLegs(t *testing.T) {
+	var sqls []string
+	// base, then rtcp, rtp, vqrtcpxr queries.
+	h, done := newTestSearchHandler(t, [][]map[string]interface{}{
+		{{"session_id": "b1"}},
+		{},
+	}, &sqls)
+	defer done()
+	h.SetCorrelator(&fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a"}}})
+
+	postTransactionTab(t, h.V4TransactionQos, `{"session_id":"b1","proto_type":1,"event_type":"call"}`)
+
+	if len(sqls) != 4 {
+		t.Fatalf("expected 4 SQL calls (base + rtcp + rtp + vqrtcpxr), got %d: %v", len(sqls), sqls)
+	}
+	for _, q := range sqls[1:] {
+		assertSQLHasSessions(t, q, "a", "b1")
+	}
+}
+
+func TestV4TransactionEvents_ExpandsCorrelatedLegs(t *testing.T) {
+	var sqls []string
+	h, done := newTestSearchHandler(t, [][]map[string]interface{}{
+		{{"session_id": "b1"}},
+		{},
+	}, &sqls)
+	defer done()
+	h.SetCorrelator(&fakeCorrelator{hasReturn: true, result: &CorrelationResult{ExtraSessionIDs: []string{"a"}}})
+
+	postTransactionTab(t, h.V4TransactionEvents, `{"session_id":"b1","proto_type":1,"event_type":"call"}`)
+
+	if len(sqls) != 2 {
+		t.Fatalf("expected 2 SQL calls (base + events), got %d: %v", len(sqls), sqls)
+	}
+	assertSQLHasSessions(t, sqls[1], "a", "b1")
+}
