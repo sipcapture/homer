@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,7 +41,11 @@ func Acquire(parent context.Context, dsns ...string) (*Lease, bool, error) {
 		if err != nil {
 			return nil, false, errors.New("invalid maintenance catalog connection")
 		}
-		configs[fmt.Sprintf("%s:%d/%s", cfg.Host, cfg.Port, cfg.Database)] = cfg
+		identity, err := catalogIdentity(parent, cfg)
+		if err != nil {
+			return nil, false, err
+		}
+		configs[identity] = cfg
 	}
 	keys := make([]string, 0, len(configs))
 	for key := range configs {
@@ -126,4 +132,36 @@ func Try(ctx context.Context, dsn string) (func(), bool, error) {
 		return nil, acquired, err
 	}
 	return l.Release, true, nil
+}
+
+// catalogIdentity resolves aliases before opening sessions so one process cannot
+// contend with itself when multiple volumes refer to the same database.
+func catalogIdentity(ctx context.Context, cfg *pgx.ConnConfig) (string, error) {
+	host := strings.TrimSuffix(strings.ToLower(cfg.Host), ".")
+	if !strings.HasPrefix(host, "/") {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		addresses, err := net.DefaultResolver.LookupHost(ctx, host)
+		if err != nil {
+			return "", errors.New("resolve maintenance catalog host failed")
+		}
+		for i, address := range addresses {
+			ip := net.ParseIP(address)
+			if ip != nil && ip.IsLoopback() {
+				addresses[i] = "127.0.0.1"
+			} else if ip != nil {
+				addresses[i] = ip.String()
+			}
+		}
+		sort.Strings(addresses)
+		if len(addresses) == 0 {
+			return "", errors.New("maintenance catalog host has no addresses")
+		}
+		host = addresses[0]
+	}
+	port := cfg.Port
+	if port == 0 {
+		port = 5432
+	}
+	return fmt.Sprintf("%s:%d/%s", host, port, cfg.Database), nil
 }
