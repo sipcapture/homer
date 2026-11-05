@@ -190,9 +190,10 @@ func TestPostgresStatelessCoordinatorReplicas(t *testing.T) {
 	}
 	settings := map[string]any{
 		"stateless": true,
-		"ingest":    map[string]any{"enable": false}, "storage": map[string]any{"enable": false}, "node": map[string]any{"enable": false},
+		"ingest":    map[string]any{"enable": false, "hep_stream": map[string]any{"enable": false}}, "storage": map[string]any{"enable": false}, "node": map[string]any{"enable": false},
 		"coordinator": map[string]any{
-			"enable": true, "settings_db_type": "postgres", "settings_db_path": dsn,
+			"hep_stream": map[string]any{"enable": false},
+			"enable":     true, "settings_db_type": "postgres", "settings_db_path": dsn,
 			"jwt":         map[string]any{"secret": uuid.NewString(), "expire_hours": 1, "cookie_enable": false},
 			"auth":        map[string]any{"type": "internal", "admin_user": "scale-admin", "admin_password_hash": hash},
 			"correlation": map[string]any{"enable": false, "seed_default": false},

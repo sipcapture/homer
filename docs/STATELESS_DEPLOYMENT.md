@@ -43,7 +43,7 @@ environment:
 ```json
 {
   "stateless": true,
-  "ingest": { "enable": true, "queue_size": 200000 },
+  "ingest": { "enable": true, "queue_size": 200000, "hep_stream": { "enable": false } },
   "storage": {
     "enable": true,
     "ducklake": {
@@ -71,6 +71,7 @@ environment:
   },
   "coordinator": {
     "enable": true,
+    "hep_stream": { "enable": false },
     "auth": { "type": "internal", "admin_user": "admin" },
     "http_server": { "host": "0.0.0.0", "port": 8080 }
   },
@@ -82,7 +83,9 @@ With no explicit coordinator nodes, configuration adds the pod's local reader.
 Every reader sees the shared catalog's committed data. Do not configure the
 coordinator to fan out to all replicas of that same catalog: it can return the
 same records multiple times. Leave `search_buffer` disabled for this topology;
-unflushed memory buffers belong only to their writer process.
+unflushed memory buffers belong only to their writer process. Startup rejects
+\`search_buffer\` and either live HEP stream setting in stateless mode; explicitly
+disable both HEP stream settings, which default to enabled.
 
 Mount writable ephemeral scratch space for spill and extension caches. No local
 settings, catalog, or Parquet volume is required. Size container memory for the
