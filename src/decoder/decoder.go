@@ -32,6 +32,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/sipcapture/homer-core/src/homerconfig"
+	"github.com/sipcapture/homer-core/src/isup"
 	"github.com/sipcapture/homer-core/src/sipparser"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
@@ -376,6 +377,12 @@ func (h *HEP) normPayload() {
 		dedupCache.Set(kh[:], tb[:])
 	}
 
+	// SIP-I carries a binary ISUP body. toUTF8 strips NULs and invalid UTF-8,
+	// which corrupts that body before it ever reaches storage. Hex-encode it
+	// first so the VARCHAR payload stays lossless.
+	if h.ProtoType == 1 {
+		h.Payload = isup.PreserveBinarySIPPayload(h.Payload)
+	}
 	h.Payload = toUTF8(h.Payload, "")
 }
 

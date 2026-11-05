@@ -12,6 +12,7 @@ import {
   isJsonDisplayable,
   payloadAsString,
 } from '@/lib/jsonDisplay'
+import { formatISUP } from '@/lib/isupDisplay'
 import { highlightSIP } from '@/lib/sipDisplay'
 import { useLocale } from '@/components/locale/locale-provider'
 import { captureIdOf } from './flow/flow-data'
@@ -157,12 +158,42 @@ export default function MessageModal({ modal, onClose, timeZone }) {
     setJsonPayloadTab('pretty')
   }, [modal?.uuid])
 
+  React.useEffect(() => {
+    const payload = payloadAsString(modal?.data?.payload)
+    if (!modal?.uuid || !/application\/isup/i.test(payload)) return
+    let cancelled = false
+    setDecoding(true)
+    setDecodeError('')
+    const body = {
+      uuid: modal.uuid,
+      proto_type: modal.messageContext?.proto_type ?? 1,
+      event_type: modal.messageContext?.event_type ?? 'call',
+    }
+    if (modal.messageContext?.timestamp?.from != null && modal.messageContext?.timestamp?.to != null) {
+      body.timestamp = modal.messageContext.timestamp
+    }
+    apiPost('/messages/decoded', body)
+      .then((res) => {
+        if (!cancelled) setDecoded(res?.data || {})
+      })
+      .catch((err) => {
+        if (!cancelled) setDecodeError(err?.message || 'Decode failed')
+      })
+      .finally(() => {
+        if (!cancelled) setDecoding(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [modal?.uuid, modal?.data?.payload])
+
   if (!modal) return null
 
   const { uuid, loading, data, error, messageContext, modalKey } = modal
   const payload = payloadAsString(data?.payload)
   const payloadIsJson = isJsonDisplayable(data?.payload ?? payload)
   const payloadHtml = payloadIsJson ? highlightJSON(data?.payload ?? payload) : highlightSIP(payload)
+  const isupText = formatISUP(decoded?.isup)
 
   const handleDecode = async () => {
     if (!uuid || decoding) return
@@ -276,8 +307,8 @@ export default function MessageModal({ modal, onClose, timeZone }) {
                   Decoded
                 </span>
                 <ScrollArea className="h-[200px] border border-border bg-muted/30">
-                  <pre className="whitespace-pre p-2 font-mono text-[11px] leading-relaxed text-foreground">
-                    {typeof decoded === 'object' ? JSON.stringify(decoded, null, 2) : String(decoded)}
+                  <pre className="whitespace-pre-wrap break-words p-2 font-mono text-[11px] leading-relaxed text-foreground">
+                    {isupText || (typeof decoded === 'object' ? JSON.stringify(decoded, null, 2) : String(decoded))}
                   </pre>
                 </ScrollArea>
               </>
