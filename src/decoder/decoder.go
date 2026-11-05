@@ -144,6 +144,10 @@ type HEP struct {
 	// CustomLokiLabels is set by Lua SetLokiLabel (allowlisted keys only, max 5 per message).
 	CustomLokiLabels map[string]string `json:"-"`
 
+	// ISUPBody is the raw application/isup body taken out of Payload.
+	// Nil for ordinary SIP. Stored in the isup_body BLOB column.
+	ISUPBody []byte
+
 	// decoder reference for config access
 	decoder *Decoder
 
@@ -378,10 +382,10 @@ func (h *HEP) normPayload() {
 	}
 
 	// SIP-I carries a binary ISUP body. toUTF8 strips NULs and invalid UTF-8,
-	// which corrupts that body before it ever reaches storage. Hex-encode it
-	// first so the VARCHAR payload stays lossless.
+	// which would corrupt that body. Lift it into ISUPBody first; payload
+	// keeps the SIP headers for the VARCHAR column.
 	if h.ProtoType == 1 {
-		h.Payload = isup.PreserveBinarySIPPayload(h.Payload)
+		h.Payload, h.ISUPBody = isup.DetachISUPBody(h.Payload)
 	}
 	h.Payload = toUTF8(h.Payload, "")
 }

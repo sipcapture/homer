@@ -5,10 +5,17 @@
 package ducklake
 
 import (
+	"bytes"
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
 	"time"
+
+	duckdb "github.com/duckdb/duckdb-go/v2"
 )
 
 func TestBuildParameterizedInsertAllowlist(t *testing.T) {
@@ -87,5 +94,95 @@ func TestBuildParameterizedInsertJSONRoundTrip(t *testing.T) {
 	}
 	if len(args) != n {
 		t.Fatalf("args=%d cols=%d", len(args), n)
+	}
+}
+
+func TestISUPBodySurvivesJSONInsert(t *testing.T) {
+	key := TableKey{ProtoType: ProtoTypeSIP, SubType: SIPTypeCall}
+	n := len(InsertColumnNamesForKey(key))
+	row := make([]interface{}, n)
+	for i := range row {
+		row[i] = "x"
+	}
+	body := []byte{0x01, 0x00, 0xff, 0x60}
+	row[n-1] = body
+
+	safe := JSONSafeInsertRows([][]interface{}{row})
+	raw, err := json.Marshal(safe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded [][]interface{}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := decoded[0][n-1].(string)
+	if !ok || got != base64.StdEncoding.EncodeToString(body) {
+		t.Fatalf("wire form %v", decoded[0][n-1])
+	}
+	_, args, err := BuildParameterizedInsert("homer_lake", key, decoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, ok := args[len(args)-1].([]byte)
+	if !ok || !bytes.Equal(bound, body) {
+		t.Fatalf("bound %#v", args[len(args)-1])
+	}
+
+	sqlText, err := BuildInsertMultiValues("homer_lake", key, [][]interface{}{row})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sqlText, `\x01\x00\xff\x60'::BLOB`) {
+		t.Fatalf("blob literal missing: %s", sqlText)
+	}
+}
+
+func TestAppenderKeepsInvalidUTF8Blob(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE t (payload VARCHAR, isup_body BLOB)`); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte{0x01, 0x00, 0xff}
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	err = conn.Raw(func(driverConn any) error {
+		appender, err := duckdb.NewAppenderFromConn(driverConn.(driver.Conn), "", "t")
+		if err != nil {
+			return err
+		}
+		if err := appender.AppendRow("INVITE", body); err != nil {
+			appender.Close()
+			return err
+		}
+		if err := appender.AppendRow("OPTIONS", nil); err != nil {
+			appender.Close()
+			return err
+		}
+		return appender.Close()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []byte
+	if err := db.QueryRow(`SELECT isup_body FROM t WHERE payload = 'INVITE'`).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, body) {
+		t.Fatalf("blob %x", got)
+	}
+	var ordinary []byte
+	if err := db.QueryRow(`SELECT isup_body FROM t WHERE payload = 'OPTIONS'`).Scan(&ordinary); err != nil {
+		t.Fatal(err)
+	}
+	if ordinary != nil {
+		t.Fatalf("ordinary sip stored %x", ordinary)
 	}
 }

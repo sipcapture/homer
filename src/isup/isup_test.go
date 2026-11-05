@@ -92,29 +92,29 @@ func TestDecodeREL(t *testing.T) {
 	}
 }
 
-func TestPreserveRoundTripSinglePart(t *testing.T) {
+func TestDetachRoundTripSinglePart(t *testing.T) {
 	body := sampleIAM()
 	original := sipInvite(body, "application/isup;version=itu-t92+")
 	if !unsafeUTF8(original) {
 		t.Fatal("sample should contain NUL")
 	}
-	stored := PreserveBinarySIPPayload(original)
+	stored, blob := DetachISUPBody(original)
 	if unsafeUTF8(stored) || !utf8.ValidString(stored) {
 		t.Fatal("stored payload is not valid UTF-8")
 	}
-	if strings.IndexByte(stored, 0) >= 0 {
-		t.Fatal("stored payload still contains NUL")
+	if strings.Contains(stored, "X-Homer-Binary-Body") {
+		t.Fatal("binary body was written into the SIP message")
 	}
-	if !strings.Contains(stored, "X-Homer-Binary-Body: hex") {
-		t.Fatalf("marker missing:\n%s", stored)
+	if !bytesEqual(blob, body) {
+		t.Fatalf("blob %x", blob)
 	}
 	if !strings.Contains(stored, "Content-Type: application/isup;version=itu-t92+") {
 		t.Fatal("content type was rewritten")
 	}
-	if RestoreBinarySIPPayload(stored) != original {
-		t.Fatalf("restore mismatch\noriginal:\n%q\nrestored:\n%q", original, RestoreBinarySIPPayload(stored))
+	if AttachISUPBody(stored, blob) != original {
+		t.Fatalf("restore mismatch\noriginal:\n%q\nrestored:\n%q", original, AttachISUPBody(stored, blob))
 	}
-	got := DecodeSIP(stored)
+	got := DecodeSIP(MessageBytes(stored, blob))
 	if got == nil || len(got.Messages) != 1 {
 		t.Fatalf("decode: %#v", got)
 	}
@@ -140,17 +140,17 @@ func TestPreserveRoundTripMultipart(t *testing.T) {
 	body.Write(iam)
 	body.WriteString("\r\n--sipb--")
 	original := sipInvite([]byte(body.String()), `multipart/mixed;boundary=sipb`)
-	stored := PreserveBinarySIPPayload(original)
+	stored, blob := DetachISUPBody(original)
 	if !strings.Contains(stored, "v=0") {
-		t.Fatal("SDP part was encoded")
+		t.Fatal("SDP part was removed")
 	}
 	if strings.IndexByte(stored, 0) >= 0 || !utf8.ValidString(stored) {
 		t.Fatal("multipart payload is not valid UTF-8")
 	}
-	if RestoreBinarySIPPayload(stored) != original {
-		t.Fatalf("multipart restore mismatch\noriginal %q\nrestored %q", original, RestoreBinarySIPPayload(stored))
+	if AttachISUPBody(stored, blob) != original {
+		t.Fatalf("multipart restore mismatch\noriginal %q\nrestored %q", original, AttachISUPBody(stored, blob))
 	}
-	got := DecodeSIP(stored)
+	got := DecodeSIP(MessageBytes(stored, blob))
 	if got == nil || len(got.Messages) != 1 || got.Messages[0].CallingPartyNumber == nil {
 		t.Fatalf("multipart decode: %#v", got)
 	}
@@ -161,7 +161,7 @@ func TestPreserveRoundTripMultipart(t *testing.T) {
 
 func TestPreserveLeavesTextSIP(t *testing.T) {
 	msg := sipInvite([]byte("v=0\r\n"), "application/sdp")
-	if PreserveBinarySIPPayload(msg) != msg {
+	if stored, blob := DetachISUPBody(msg); stored != msg || blob != nil {
 		t.Fatal("text SIP was rewritten")
 	}
 	if DecodeSIP(msg) != nil {
@@ -180,12 +180,35 @@ func TestDecodeSIPRawBinary(t *testing.T) {
 	}
 }
 
+func TestLegacyHexPayloadStillRestores(t *testing.T) {
+	original := sipInvite(sampleREL(), "application/isup;version=itu-t92+")
+	stored := PreserveBinarySIPPayload(original)
+	if !strings.Contains(stored, "X-Homer-Binary-Body: hex") {
+		t.Fatal("legacy marker missing")
+	}
+	if MessageBytes(stored, nil) != original {
+		t.Fatal("legacy payload did not restore")
+	}
+}
+
 func TestDecodeANSINotDecoded(t *testing.T) {
 	msg := sipInvite(sampleIAM(), "application/isup;version=ansi")
 	got := DecodeSIP(msg)
 	if got == nil || len(got.Messages) != 1 || got.Messages[0].Error == "" {
 		t.Fatalf("ansi: %#v", got)
 	}
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func sipInvite(body []byte, contentType string) string {

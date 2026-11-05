@@ -33,6 +33,6 @@ func ApplyCapturedSIP(d *Decoder, h *HEP, srcIP, dstIP string, srcPort, dstPort,
 	h.Tmsec = uint32((nano % 1e9) / 1000)
 	h.ProtoType = 1
 	h.NodeID = nodeID
-	h.Payload = isup.PreserveBinarySIPPayload(payload)
+	h.Payload, h.ISUPBody = isup.DetachISUPBody(payload)
 	return h.parseSIP()
 }

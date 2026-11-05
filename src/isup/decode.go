@@ -68,8 +68,8 @@ type Parameter struct {
 }
 
 // DecodeSIP finds application/isup bodies in a SIP message and decodes them.
-// It understands the hex form written by PreserveBinarySIPPayload and a raw
-// binary body. A message that is not SIP-I returns nil.
+// It understands a raw binary body and the hex form written into the SIP
+// message by 11.0.376. A message that is not SIP-I returns nil.
 func DecodeSIP(payload string) *Result {
 	headers, nl, body, ok := splitSIP(payload)
 	if !ok {

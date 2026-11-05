@@ -155,7 +155,7 @@ func SIPSearchRowsToPCAP(rows []map[string]interface{}) ([]byte, error) {
 	}
 	written := 0
 	for _, row := range rows {
-		payload := isup.RestoreBinarySIPPayload(RowStr(row, "payload"))
+		payload := isup.MessageBytes(RowStr(row, "payload"), row["isup_body"])
 		if payload == "" {
 			continue
 		}

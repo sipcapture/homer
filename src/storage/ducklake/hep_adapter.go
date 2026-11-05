@@ -238,8 +238,8 @@ func (a *MultiTableAdapter) buildSIPCallValues(hep *decoder.HEP, uid string, dat
 
 	// Columns: uuid, date, timestamp, session_id, caller, callee, src_ip, dst_ip,
 	//          src_port, dst_port, method, response_code, cseq_method,
-	//          protocol, node_id, cid, payload, data_extra
-	row := getRowSlice(18)
+	//          protocol, node_id, cid, payload, data_extra, isup_body
+	row := getRowSlice(19)
 	row[0] = uid
 	row[1] = date
 	row[2] = ts
@@ -258,6 +258,7 @@ func (a *MultiTableAdapter) buildSIPCallValues(hep *decoder.HEP, uid string, dat
 	row[15] = hep.CID
 	row[16] = hep.Payload
 	row[17] = extraJSON
+	row[18] = isupBodyCell(hep)
 	return row
 }
 
@@ -279,8 +280,8 @@ func (a *MultiTableAdapter) buildSIPRegistrationValues(hep *decoder.HEP, uid str
 
 	// Columns: uuid, date, timestamp, session_id, aor, contact, expires, user_agent,
 	//          src_ip, dst_ip, src_port, dst_port, method, response_code,
-	//          protocol, node_id, payload, data_extra
-	row := getRowSlice(18)
+	//          protocol, node_id, payload, data_extra, isup_body
+	row := getRowSlice(19)
 	row[0] = uid
 	row[1] = date
 	row[2] = ts
@@ -299,6 +300,7 @@ func (a *MultiTableAdapter) buildSIPRegistrationValues(hep *decoder.HEP, uid str
 	row[15] = nodeID
 	row[16] = hep.Payload
 	row[17] = extraJSON
+	row[18] = isupBodyCell(hep)
 	return row
 }
 
@@ -316,8 +318,8 @@ func (a *MultiTableAdapter) buildSIPDefaultValues(hep *decoder.HEP, uid string, 
 
 	// Columns: uuid, date, timestamp, session_id, src_ip, dst_ip,
 	//          src_port, dst_port, method, response_code,
-	//          protocol, node_id, cid, payload, data_extra
-	row := getRowSlice(15)
+	//          protocol, node_id, cid, payload, data_extra, isup_body
+	row := getRowSlice(16)
 	row[0] = uid
 	row[1] = date
 	row[2] = ts
@@ -333,7 +335,15 @@ func (a *MultiTableAdapter) buildSIPDefaultValues(hep *decoder.HEP, uid string, 
 	row[12] = hep.CID
 	row[13] = hep.Payload
 	row[14] = extraJSON
+	row[15] = isupBodyCell(hep)
 	return row
+}
+
+func isupBodyCell(hep *decoder.HEP) interface{} {
+	if hep == nil || len(hep.ISUPBody) == 0 {
+		return nil
+	}
+	return hep.ISUPBody
 }
 
 // buildRTCPValues builds values for RTCP/RTP packets
