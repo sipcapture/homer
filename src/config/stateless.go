@@ -21,6 +21,12 @@ func validateStateless(cfg *Config) error {
 		}
 		return nil
 	}
+	if err := require(!cfg.Storage.DuckLake.SearchBuffer && !cfg.Node.DuckLake.SearchBuffer, "search_buffer", "must be disabled"); err != nil {
+		return err
+	}
+	if err := require(!cfg.Ingest.HepStream.Enable && !cfg.Coordinator.HepStream.Enable, "hep_stream.enable", "must be disabled"); err != nil {
+		return err
+	}
 	secret := func(value string) bool { return strings.TrimSpace(value) != "" && !IsShippedPlaceholderSecret(value) }
 	if cfg.Coordinator.Enable {
 		if err := require(IsPostgresSettingsPath(cfg.Coordinator.SettingsDBPath), "coordinator.settings_db_path", "must be a PostgreSQL connection string"); err != nil {
