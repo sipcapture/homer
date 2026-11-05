@@ -337,6 +337,7 @@ python3 -m venv .venv-docs && .venv-docs/bin/pip install -r docs-requirements.tx
 - [Compaction Setup](docs/COMPACTION_SETUP.md) - File compaction
 - [VQRTCP collector](docs/VQRTCP.md) - SIP QoS reports (`vqrtcpxr_stats`, QoS UI)
 - [SIPREC support](docs/SIPREC.md) - Signaling SRS (`hep_proto_1_siprec`)
+- [tshark decode](docs/DECODER_SHARK.md) - `coordinator.decoder_shark`, the HOMER 7 external dissector
 
 ## License
 Released under the [AGPL-3.0 License](LICENSE.md)

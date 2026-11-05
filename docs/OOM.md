@@ -23,9 +23,12 @@ Original error: Failed to create checkpoint ... failed to pin block
 (... GiB/... GiB used)
 ```
 
-A FATAL pin/checkpoint error **invalidates the in-memory DuckDB**. The
-process keeps running but every later flush/search fails until restart.
-Raise `memory_limit` and restart; retrying the flush cannot recover it.
+A FATAL pin/checkpoint error **invalidates the in-memory DuckDB**. Every
+later flush/search on it fails, and retrying the flush cannot recover it.
+When a flush hits such an error and the writer instance is confirmed
+invalidated, homer logs "Writer DuckDB instance was invalidated" and exits
+with status 1, so that a supervisor (the Docker restart policy, systemd,
+Kubernetes) restarts it. Raise `memory_limit` to keep it from happening again.
 
 ## Docker image (`ghcr.io/sipcapture/homer`)
 

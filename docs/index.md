@@ -25,6 +25,7 @@ ingest, DuckLake storage, Node (FlightSQL), and Coordinator (REST API).
 | Storage | [Architecture](STORAGE_ARCHITECTURE.md) · [Layout](STORAGE_LAYOUT.md) · [Policies](STORAGE_POLICIES.md) · [Native tier move](NATIVE_TIER_MOVE.md) · [Retention](RETENTION.md) · [Catalog backup](CATALOG.md) |
 | Performance | [Ingest tuning](INGEST_PERFORMANCE.md) · [DuckDB tuning](DUCKDB_TUNING.md) · [Troubleshooting](TROUBLESHOOTING.md) · [OOM](OOM.md) |
 | MCP / LLM | [MCP server](MCP.md) · [MCP UI guide](MCP_UI_GUIDE.md) |
+| Decode | [tshark (`decoder_shark`)](DECODER_SHARK.md) |
 
 ## Repository
 
