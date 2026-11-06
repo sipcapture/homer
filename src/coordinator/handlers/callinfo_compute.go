@@ -23,7 +23,35 @@ import (
 
 const callInfoMaxRows = 50000
 
-var rtpmapCodecRe = regexp.MustCompile(`(?i)a=rtpmap:\d+\s+([A-Za-z0-9._+-]+)`)
+// rfc3551Static maps static RTP payload types to their encoding names.
+// Dynamic types (96–127) stay unnamed until an a=rtpmap line provides one.
+// Reserved and unassigned types are omitted; an rtpmap still overrides these.
+var rfc3551Static = map[int]string{
+	0:  "PCMU",
+	3:  "GSM",
+	4:  "G723",
+	5:  "DVI4",
+	6:  "DVI4",
+	7:  "LPC",
+	8:  "PCMA",
+	9:  "G722",
+	10: "L16",
+	11: "L16",
+	12: "QCELP",
+	13: "CN",
+	14: "MPA",
+	15: "G728",
+	16: "DVI4",
+	17: "DVI4",
+	18: "G729",
+	25: "CelB",
+	26: "JPEG",
+	28: "nv",
+	31: "H261",
+	32: "MPV",
+	33: "MP2T",
+	34: "H263",
+}
 
 func stringFrom(v interface{}) string {
 	if v == nil {
@@ -190,32 +218,143 @@ func pickUA(extra map[string]interface{}, payload string) string {
 	return ""
 }
 
+// extractCodecsFromSDP lists codecs from every active media section.
+// Payload types on the m= line are resolved with a=rtpmap when present,
+// otherwise with the RFC 3551 static table. Sections with port 0 are
+// rejected streams and contribute nothing. Order follows the m= lines.
 func extractCodecsFromSDP(payload string) string {
 	if payload == "" {
 		return ""
 	}
-	lower := strings.ToLower(payload)
-	if !strings.Contains(lower, "m=audio") && !strings.Contains(lower, "m=video") &&
-		!strings.Contains(lower, "application/sdp") {
+	if !strings.Contains(strings.ToLower(payload), "m=") {
 		return ""
 	}
+	payload = strings.ReplaceAll(payload, "\r\n", "\n")
+	payload = strings.ReplaceAll(payload, "\r", "\n")
+
 	seen := make(map[string]struct{})
 	var out []string
-	for _, m := range rtpmapCodecRe.FindAllStringSubmatch(payload, -1) {
-		if len(m) < 2 {
-			continue
+	var cur *sdpMediaSection
+	finish := func() {
+		if cur == nil || cur.port == 0 {
+			return
 		}
-		name := strings.TrimSpace(m[1])
-		if name == "" {
-			continue
+		for _, pt := range cur.pts {
+			name := cur.rtpmap[pt]
+			if name == "" {
+				name = rfc3551Static[pt]
+			}
+			if name == "" {
+				continue
+			}
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			out = append(out, name)
 		}
-		if _, ok := seen[name]; ok {
-			continue
-		}
-		seen[name] = struct{}{}
-		out = append(out, name)
 	}
+	for _, line := range strings.Split(payload, "\n") {
+		line = strings.TrimSpace(line)
+		if len(line) < 2 || line[1] != '=' {
+			continue
+		}
+		switch line[0] {
+		case 'm', 'M':
+			finish()
+			cur = parseSDPMedia(line[2:])
+		case 'a', 'A':
+			if cur == nil {
+				continue
+			}
+			if pt, name, ok := parseSDPRtpmap(line); ok {
+				cur.rtpmap[pt] = name
+			}
+		}
+	}
+	finish()
 	return strings.Join(out, ", ")
+}
+
+type sdpMediaSection struct {
+	port   int
+	pts    []int
+	rtpmap map[int]string
+}
+
+func parseSDPMedia(val string) *sdpMediaSection {
+	fields := strings.Fields(val)
+	if len(fields) < 3 {
+		return nil
+	}
+	port, err := strconv.Atoi(fields[1])
+	if err != nil || port < 0 {
+		return nil
+	}
+	sec := &sdpMediaSection{port: port, rtpmap: make(map[int]string)}
+	for _, f := range fields[3:] {
+		n, err := strconv.Atoi(f)
+		if err != nil || n < 0 || n > 127 {
+			continue
+		}
+		sec.pts = append(sec.pts, n)
+	}
+	return sec
+}
+
+func parseSDPRtpmap(line string) (pt int, name string, ok bool) {
+	val := line[2:]
+	const key = "rtpmap:"
+	if len(val) < len(key) || !strings.EqualFold(val[:len(key)], key) {
+		return 0, "", false
+	}
+	fields := strings.Fields(val[len(key):])
+	if len(fields) < 2 {
+		return 0, "", false
+	}
+	n, err := strconv.Atoi(fields[0])
+	if err != nil || n < 0 || n > 127 {
+		return 0, "", false
+	}
+	name = fields[1]
+	if i := strings.IndexByte(name, '/'); i >= 0 {
+		name = name[:i]
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return 0, "", false
+	}
+	return n, name, true
+}
+
+// cseqNumber reads the sequence from the CSeq header, stopping at the body.
+func cseqNumber(payload string) int {
+	if payload == "" {
+		return 0
+	}
+	payload = strings.ReplaceAll(payload, "\r\n", "\n")
+	payload = strings.ReplaceAll(payload, "\r", "\n")
+	started := false
+	for _, line := range strings.Split(payload, "\n") {
+		if line == "" {
+			if !started {
+				continue
+			}
+			break
+		}
+		started = true
+		if len(line) < 5 || !strings.EqualFold(line[:5], "cseq:") {
+			continue
+		}
+		rest := strings.TrimSpace(line[5:])
+		field, _, _ := strings.Cut(rest, " ")
+		n, err := strconv.Atoi(field)
+		if err != nil || n < 0 {
+			return 0
+		}
+		return n
+	}
+	return 0
 }
 
 func sipReplyAndCSeqMethod(methodCol, respCol, cseqCol string) (reply int, cseqMethod string) {
@@ -306,31 +445,127 @@ type sipCallLegMetrics struct {
 
 	timeInvite, timeBye, timeCancel int64
 	cdrRinging, cdrConnect, cdrStop int64
-	firstMs, lastMs int64
+	firstMs, lastMs                 int64
 
-	RingingTime   int64
-	Duration      int64 // answered leg: stop - connect (ms)
-	SessionDur    int64 // last - first (ms)
-	SRD           int64 // first response after INVITE (any 1xx-6xx)
-	SSS           int64 // first 101-199 after INVITE
-	FSSD          int64 // failed setup (INVITE error) delay
-	SDD           int64 // 200 OK to BYE disconnect delay
-	Status        int
-	LastBadReply  int
-	UAC, UAS      string
+	RingingTime                    int64
+	Duration                       int64 // answered leg: stop - connect (ms)
+	SessionDur                     int64 // last - first (ms)
+	SRD                            int64 // first response after INVITE (any 1xx-6xx)
+	SSS                            int64 // first 101-199 after INVITE
+	FSSD                           int64 // failed setup (INVITE error) delay
+	SDD                            int64 // 200 OK to BYE disconnect delay
+	Status                         int
+	LastBadReply                   int
+	UAC, UAS                       string
 	SrcIP, SrcPort, DstIP, DstPort string
-	Caller, Callee string
-	MsgCount      int
-	Codecs        string
-	Methods       map[string]int
-	FromParty     string
-	RuriParty     string
+	Caller, Callee                 string
+	MsgCount                       int
+	// CodecsOffered is the first SDP offer (INVITE, or the 200 when the
+	// INVITE had none). CodecNegotiated is the latest answer: 200 OK to
+	// INVITE/UPDATE, or the ACK when the offer was in the 200.
+	CodecsOffered   string
+	CodecNegotiated string
+	// sdpOfferTxn records INVITE/UPDATE transactions whose request carried
+	// an offer. sdpAnsweredTxn records transactions whose 200 was already
+	// consumed, so a retransmission is not treated as a new offer.
+	sdpOfferTxn      map[string]struct{}
+	sdpAnsweredTxn   map[string]struct{}
+	hasDelayedOffer  bool
+	delayedOfferCSeq int
+	Methods          map[string]int
+	FromParty        string
+	RuriParty        string
 }
 
-func (m *sipCallLegMetrics) ingestSDP(payload string) {
-	if c := extractCodecsFromSDP(payload); c != "" && m.Codecs == "" {
-		m.Codecs = c
+func sdpTxnKey(method string, cseq int) string {
+	return method + ":" + strconv.Itoa(cseq)
+}
+
+// takeOffer finds the request that this 200 answers. The CSeq number is
+// preferred. A single outstanding offer is used only when one side omitted
+// the CSeq header, so a different transaction number is not paired with it.
+func (m *sipCallLegMetrics) takeOffer(method string, cseq int) (string, bool) {
+	key := sdpTxnKey(method, cseq)
+	if _, ok := m.sdpOfferTxn[key]; ok {
+		return key, true
 	}
+	prefix := method + ":"
+	found := ""
+	count := 0
+	for k := range m.sdpOfferTxn {
+		if strings.HasPrefix(k, prefix) {
+			found = k
+			count++
+		}
+	}
+	if count == 1 && (cseq == 0 || strings.HasSuffix(found, ":0")) {
+		return found, true
+	}
+	return "", false
+}
+
+func (m *sipCallLegMetrics) noteOffer(codecs string) {
+	if codecs != "" && m.CodecsOffered == "" {
+		m.CodecsOffered = codecs
+	}
+}
+
+func (m *sipCallLegMetrics) noteAnswer(codecs string) {
+	if codecs != "" {
+		m.CodecNegotiated = codecs
+	}
+}
+
+// observeSDP pairs SDP offers and answers on a single call leg.
+// A request with SDP is the offer. The matching 200 is the answer, except
+// when the request had no SDP: then the 200 is a delayed offer and the ACK
+// carries the answer. A later re-INVITE or UPDATE answer replaces the
+// negotiated list; the original offer is kept.
+func (m *sipCallLegMetrics) observeSDP(reqMethod string, reply int, cseqMethod, payload string) {
+	n := cseqNumber(payload)
+	switch reqMethod {
+	case "INVITE", "UPDATE":
+		key := sdpTxnKey(reqMethod, n)
+		// A new request reuses the CSeq key when the header is missing (0).
+		// Drop the previous answer mark so this transaction's 200 is applied.
+		delete(m.sdpAnsweredTxn, key)
+		if c := extractCodecsFromSDP(payload); c != "" {
+			m.noteOffer(c)
+			m.sdpOfferTxn[key] = struct{}{}
+		} else {
+			delete(m.sdpOfferTxn, key)
+		}
+		return
+	case "ACK":
+		if m.hasDelayedOffer && (n == m.delayedOfferCSeq || n == 0 || m.delayedOfferCSeq == 0) {
+			if c := extractCodecsFromSDP(payload); c != "" {
+				m.noteAnswer(c)
+			}
+			m.hasDelayedOffer = false
+		}
+		return
+	}
+	if reply != 200 || (cseqMethod != "INVITE" && cseqMethod != "UPDATE") {
+		return
+	}
+	if _, answered := m.sdpAnsweredTxn[sdpTxnKey(cseqMethod, n)]; answered {
+		return
+	}
+	c := extractCodecsFromSDP(payload)
+	if key, ok := m.takeOffer(cseqMethod, n); ok {
+		m.noteAnswer(c)
+		delete(m.sdpOfferTxn, key)
+		m.sdpAnsweredTxn[key] = struct{}{}
+		m.sdpAnsweredTxn[sdpTxnKey(cseqMethod, n)] = struct{}{}
+		return
+	}
+	if c == "" {
+		return
+	}
+	m.noteOffer(c)
+	m.hasDelayedOffer = true
+	m.delayedOfferCSeq = n
+	m.sdpAnsweredTxn[sdpTxnKey(cseqMethod, n)] = struct{}{}
 }
 
 func buildFromParty(caller string, extra map[string]interface{}) string {
@@ -362,7 +597,12 @@ func buildRURIParty(callee string, extra map[string]interface{}) string {
 }
 
 func computeSIPCallLeg(sessionID string, rows []map[string]interface{}) map[string]interface{} {
-	st := &sipCallLegMetrics{sessionID: sessionID, Methods: make(map[string]int)}
+	st := &sipCallLegMetrics{
+		sessionID:      sessionID,
+		Methods:        make(map[string]int),
+		sdpOfferTxn:    make(map[string]struct{}),
+		sdpAnsweredTxn: make(map[string]struct{}),
+	}
 	for _, row := range rows {
 		ts := rowTimestampMs(row["timestamp"])
 		if ts <= 0 {
@@ -383,6 +623,7 @@ func computeSIPCallLeg(sessionID string, rows []map[string]interface{}) map[stri
 		reqMethod := sipRequestMethod(methodCol, respCol)
 		payload := stringFrom(row["payload"])
 		extra := parseDataExtraMap(row["data_extra"])
+		st.observeSDP(reqMethod, reply, cseqMethod, payload)
 
 		if lbl := eventLabelForMetrics(methodCol, reply, reqMethod); lbl != "" {
 			st.Methods[lbl]++
@@ -400,7 +641,6 @@ func computeSIPCallLeg(sessionID string, rows []map[string]interface{}) map[stri
 			st.FromParty = buildFromParty(st.Caller, extra)
 			st.RuriParty = buildRURIParty(st.Callee, extra)
 			st.Status = 1
-			st.ingestSDP(payload)
 		} else if reqMethod == "BYE" && st.timeBye == 0 {
 			st.timeBye = ts
 			st.cdrStop = ts
@@ -440,7 +680,6 @@ func computeSIPCallLeg(sessionID string, rows []map[string]interface{}) map[stri
 					st.RingingTime = st.cdrConnect - st.cdrRinging
 				}
 				st.UAS = pickUA(extra, payload)
-				st.ingestSDP(payload)
 			} else if reply > 400 && reply < 700 && reply != 401 && reply != 402 && reply != 407 && reply != 487 &&
 				st.FSSD == 0 && cseqMethod == "INVITE" {
 				switch {
@@ -513,14 +752,22 @@ func computeSIPCallLeg(sessionID string, rows []map[string]interface{}) map[stri
 		})
 	}
 
+	codecs := st.CodecNegotiated
+	if codecs == "" {
+		codecs = st.CodecsOffered
+	}
+
 	out := map[string]interface{}{
 		"session_id": st.sessionID,
 		"caller":     nullIfEmpty(st.Caller),
 		"callee":     nullIfEmpty(st.Callee),
 		"uac":        nullIfEmpty(st.UAC),
 		"uas":        nullIfEmpty(st.UAS),
-		"codecs":     nullIfEmpty(st.Codecs),
-		"status":     homerStatusText(st.Status),
+		// codecs is the negotiated set when an answer exists, otherwise the offer.
+		"codecs":           nullIfEmpty(codecs),
+		"codecs_offered":   nullIfEmpty(st.CodecsOffered),
+		"codec_negotiated": nullIfEmpty(st.CodecNegotiated),
+		"status":           homerStatusText(st.Status),
 		"status_code": func() interface{} {
 			if st.Status == 0 {
 				return nil
