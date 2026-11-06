@@ -17,6 +17,8 @@ const LABELS = {
   failed_session_setup_delay_ms: 'Failed setup delay',
   session_disconnect_delay_ms: 'Session disconnect delay',
   codecs: 'Codecs',
+  codecs_offered: 'Codecs offered',
+  codec_negotiated: 'Codec negotiated',
   uac: 'UAC',
   uas: 'UAS',
   source: 'Source',
@@ -242,6 +244,15 @@ function layoutHiddenKeys(row) {
   if (row.from_party) {
     h.add('caller')
     h.add('callee')
+  }
+  // codecs is the negotiated list when an answer exists, otherwise the offer.
+  // Show the offer beside it only when the two differ. codec_negotiated
+  // repeats codecs whenever an answer was recorded.
+  if (row.codec_negotiated && row.codec_negotiated === row.codecs) {
+    h.add('codec_negotiated')
+  }
+  if (row.codecs_offered && row.codecs_offered === row.codecs) {
+    h.add('codecs_offered')
   }
   return h
 }
