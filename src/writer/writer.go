@@ -185,6 +185,9 @@ func New(ingestCfg *config.IngestConfig, storageCfg *config.StorageConfig, promC
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize script engine: %w", err)
 		}
+		// Workers share this engine. LuaEngine.Run serializes them: a
+		// lua.State cannot be entered from two goroutines, and script
+		// globals stay process-wide instead of being split per worker.
 		w.scriptEngine = scriptEngine
 		logger.Info("Writer: Lua scripting engine initialized")
 	}
