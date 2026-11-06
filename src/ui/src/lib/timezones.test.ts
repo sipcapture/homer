@@ -5,6 +5,7 @@ import {
   filterTimeZones,
   getTimeZones,
   isValidTimeZone,
+  suggestTimeZones,
   timeZoneLabel,
 } from './timezones'
 
@@ -83,5 +84,23 @@ describe('timeZoneLabel', () => {
   it('labels the local pseudo-zone', () => {
     expect(timeZoneLabel('local')).toBe('Browser (Local)')
     expect(timeZoneLabel('UTC')).toBe('UTC')
+  })
+})
+
+describe('suggestTimeZones', () => {
+  const all = ['local', 'UTC', 'Africa/Cairo', 'America/Sao_Paulo', 'Europe/Kyiv']
+
+  it('returns the short common list when the query is blank', () => {
+    expect(suggestTimeZones('', all)).toEqual([...COMMON_TIME_ZONES])
+    expect(suggestTimeZones('   ', all)).toEqual([...COMMON_TIME_ZONES])
+  })
+
+  it('searches the full list once the user types', () => {
+    expect(suggestTimeZones('cairo', all)).toEqual(['Africa/Cairo'])
+    expect(suggestTimeZones('xyzzy', all)).toEqual([])
+  })
+
+  it('searches the runtime list by default', () => {
+    expect(suggestTimeZones('cairo')).toEqual(['Africa/Cairo'])
   })
 })

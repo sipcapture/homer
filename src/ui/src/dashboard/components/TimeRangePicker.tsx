@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import type { CalendarPreset } from '../utils/resolveTimeRange'
 import { useLocale } from '@/components/locale/locale-provider'
-import { filterTimeZones, getTimeZones, timeZoneLabel } from '@/lib/timezones'
+import { suggestTimeZones, timeZoneLabel } from '@/lib/timezones'
 
 const QUICK_RANGES = [
   { label: 'Last 5 minutes', minutes: 5 },
@@ -130,8 +130,13 @@ export default function TimeRangePicker({
   const [absFrom, setAbsFrom] = useState('')
   const [absTo, setAbsTo] = useState('')
   const [tzQuery, setTzQuery] = useState('')
-  const allTimeZones = useMemo(() => getTimeZones(), [])
-  const visibleTimeZones = useMemo(() => filterTimeZones(allTimeZones, tzQuery), [allTimeZones, tzQuery])
+  // Blank search: common zones only (plus the current one, so the selection stays visible).
+  // Typing: matches from every zone the browser supports.
+  const visibleTimeZones = useMemo(() => {
+    const list = suggestTimeZones(tzQuery)
+    if (!tzQuery.trim() && !list.includes(timeZone)) return [timeZone, ...list]
+    return list
+  }, [tzQuery, timeZone])
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -328,6 +333,11 @@ export default function TimeRangePicker({
                     className="h-8 pl-7 text-xs"
                   />
                 </div>
+                <div className="-mt-1 text-[10px] text-muted-foreground">
+                  {tzQuery.trim()
+                    ? `${visibleTimeZones.length} match${visibleTimeZones.length === 1 ? '' : 'es'}`
+                    : 'Common zones · type to search all'}
+                </div>
                 <ScrollArea className="h-[260px] pr-2">
                   <div className="flex flex-col gap-0.5">
                     {visibleTimeZones.length === 0 && (
@@ -357,7 +367,7 @@ export default function TimeRangePicker({
                   </div>
                 </ScrollArea>
                 <div className="border-t border-border pt-2 text-[11px] text-muted-foreground">
-                  Current: <strong className="text-foreground">{timeZone === 'local' ? 'Browser' : timeZone}</strong>
+                  Current: <strong className="text-foreground">{timeZoneLabel(timeZone)}</strong>
                 </div>
               </div>
             </TabsContent>

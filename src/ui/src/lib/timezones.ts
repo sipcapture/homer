@@ -107,3 +107,13 @@ export function filterTimeZones(zones: readonly string[], query: string): string
   if (!q) return [...zones]
   return zones.filter((z) => normalizeForSearch(`${z} ${timeZoneLabel(z)}`).includes(q))
 }
+
+/**
+ * What a time zone picker should list for a search box value: the short
+ * {@link COMMON_TIME_ZONES} list while the box is empty, and matches from the
+ * full list once the user types.
+ */
+export function suggestTimeZones(query: string, allZones: readonly string[] = getTimeZones()): string[] {
+  if (!query.trim()) return [...COMMON_TIME_ZONES]
+  return filterTimeZones(allZones, query)
+}
