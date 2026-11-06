@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/sipcapture/golua/lua"
 	"github.com/sipcapture/homer-core/src/decoder"
@@ -19,8 +20,16 @@ import (
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
-// LuaEngine implements the ScriptEngine interface for Lua
+// LuaEngine implements the ScriptEngine interface for Lua.
+//
+// One engine is shared by every ingest worker. lua.State is not
+// goroutine-safe (the golua mutex only guards the Go state table), and
+// the script API finds its packet through hepPkt. mu covers both: the
+// packet pointer is published inside the same critical section as
+// DoString. Locking only the Lua call would still let another Run
+// replace hepPkt before the callbacks read it.
 type LuaEngine struct {
+	mu        sync.Mutex
 	hepPkt    **decoder.HEP
 	functions []string
 	LuaState  *lua.State
@@ -87,14 +96,24 @@ func NewLuaEngine(cfg *ScriptConfig) (*LuaEngine, error) {
 	return d, nil
 }
 
-// Run executes the Lua scripts on the HEP packet
+// Run executes the Lua scripts on the HEP packet.
+//
+// Callbacks (GetRawMessage, SetSIPHeader, …) run on this goroutine while
+// mu is held, so they must not lock mu themselves.
 func (d *LuaEngine) Run(hep *decoder.HEP) error {
 	// Check HEP filter
 	if !ShouldProcessHEP(hep.ProtoType, d.config.HEPFilter) {
 		return nil
 	}
 
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.LuaState == nil {
+		return fmt.Errorf("lua engine is closed")
+	}
+
 	d.hepPkt = &hep
+	defer func() { d.hepPkt = nil }()
 
 	for _, v := range d.functions {
 		err := d.LuaState.DoString(v)
@@ -105,30 +124,39 @@ func (d *LuaEngine) Run(hep *decoder.HEP) error {
 	return nil
 }
 
-// Close closes the Lua engine
+// Close closes the Lua engine. It is safe to call more than once.
 func (d *LuaEngine) Close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if d.LuaState != nil {
 		d.LuaState.Close()
+		d.LuaState = nil
 	}
 }
 
-// Reload reloads the Lua scripts
+// Reload reloads the Lua scripts.
+// The directory is read outside mu so a slow disk does not block ingest.
 func (d *LuaEngine) Reload() error {
 	code, err := ScanLuaCode(d.config.Folder)
 	if err != nil {
 		return fmt.Errorf("failed to scan script folder: %w", err)
 	}
 
-	if code.Len() > 0 {
-		err = d.LuaState.DoString(code.String())
-		if err != nil {
-			return fmt.Errorf("failed to reload Lua scripts: %w", err)
-		}
-
-		d.functions = ExtractFunctions(code)
-		logger.Info("Scripting: Reloaded Lua functions", "count", len(d.functions))
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.LuaState == nil {
+		return fmt.Errorf("lua engine is closed")
+	}
+	if code.Len() == 0 {
+		return nil
 	}
 
+	if err = d.LuaState.DoString(code.String()); err != nil {
+		return fmt.Errorf("failed to reload Lua scripts: %w", err)
+	}
+
+	d.functions = ExtractFunctions(code)
+	logger.Info("Scripting: Reloaded Lua functions", "count", len(d.functions))
 	return nil
 }
 
