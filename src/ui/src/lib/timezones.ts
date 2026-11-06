@@ -7,8 +7,11 @@
 
 export const LOCAL_TIME_ZONE = 'local'
 
-/** Used when `Intl.supportedValuesOf` is not available (older browsers). */
-export const FALLBACK_TIME_ZONES: readonly string[] = [
+/**
+ * Short list of commonly used zones. Offered as presets by the clock widget,
+ * and used as the picker list when `Intl.supportedValuesOf` is not available.
+ */
+export const COMMON_TIME_ZONES: readonly string[] = [
   LOCAL_TIME_ZONE,
   'UTC',
   'Europe/London',
@@ -42,18 +45,18 @@ type SupportedValuesOf = (key: 'timeZone') => string[]
 
 /**
  * Builds the selectable list: `local`, `UTC`, then every zone the runtime
- * supports, sorted. Falls back to {@link FALLBACK_TIME_ZONES} when
+ * supports, sorted. Falls back to {@link COMMON_TIME_ZONES} when
  * `Intl.supportedValuesOf` is missing or fails.
  */
 export function buildTimeZoneList(supportedValuesOf: SupportedValuesOf | undefined): string[] {
   let zones: string[]
   try {
-    if (typeof supportedValuesOf !== 'function') return [...FALLBACK_TIME_ZONES]
+    if (typeof supportedValuesOf !== 'function') return [...COMMON_TIME_ZONES]
     zones = supportedValuesOf('timeZone')
   } catch {
-    return [...FALLBACK_TIME_ZONES]
+    return [...COMMON_TIME_ZONES]
   }
-  if (!Array.isArray(zones) || zones.length === 0) return [...FALLBACK_TIME_ZONES]
+  if (!Array.isArray(zones) || zones.length === 0) return [...COMMON_TIME_ZONES]
 
   const unique = new Set<string>()
   for (const z of zones) {

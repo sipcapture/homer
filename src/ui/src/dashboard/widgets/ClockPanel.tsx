@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useLocale } from '@/components/locale/locale-provider'
-import { getTimeZones, isValidTimeZone } from '@/lib/timezones'
+import { COMMON_TIME_ZONES, isValidTimeZone } from '@/lib/timezones'
 
 const MAX_ZONES = 8
 
@@ -119,7 +119,7 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
         ? 'grid-cols-2'
         : 'grid-cols-2 sm:grid-cols-3'
 
-  const presetsToAdd = useMemo(() => getTimeZones().filter(z => !zones.includes(z)), [zones])
+  const presetsToAdd = COMMON_TIME_ZONES.filter(z => !zones.includes(z))
 
   return (
     <div className="relative flex h-full min-h-0 flex-col p-2 text-foreground">
@@ -163,7 +163,7 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
                 </div>
                 {presetsToAdd.length > 0 && (
                   <div className="grid gap-1">
-                    <Label className="text-[11px] text-muted-foreground">Add time zone</Label>
+                    <Label className="text-[11px] text-muted-foreground">Add preset</Label>
                     <Select onValueChange={v => { addPreset(v) }}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Choose timezone…" />

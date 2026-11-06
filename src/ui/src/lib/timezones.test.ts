@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  FALLBACK_TIME_ZONES,
+  COMMON_TIME_ZONES,
   buildTimeZoneList,
   filterTimeZones,
   getTimeZones,
@@ -25,12 +25,12 @@ describe('buildTimeZoneList', () => {
   })
 
   it('falls back when Intl.supportedValuesOf is unavailable', () => {
-    expect(buildTimeZoneList(undefined)).toEqual([...FALLBACK_TIME_ZONES])
+    expect(buildTimeZoneList(undefined)).toEqual([...COMMON_TIME_ZONES])
   })
 
   it('falls back when Intl.supportedValuesOf throws or returns nothing', () => {
-    expect(buildTimeZoneList(() => { throw new RangeError('nope') })).toEqual([...FALLBACK_TIME_ZONES])
-    expect(buildTimeZoneList(() => [])).toEqual([...FALLBACK_TIME_ZONES])
+    expect(buildTimeZoneList(() => { throw new RangeError('nope') })).toEqual([...COMMON_TIME_ZONES])
+    expect(buildTimeZoneList(() => [])).toEqual([...COMMON_TIME_ZONES])
   })
 
   it('getTimeZones uses the real runtime list', () => {
@@ -41,14 +41,14 @@ describe('buildTimeZoneList', () => {
   })
 })
 
-describe('fallback list', () => {
+describe('common list', () => {
   it('uses the current IANA name for Kyiv', () => {
-    expect(FALLBACK_TIME_ZONES).toContain('Europe/Kyiv')
-    expect(FALLBACK_TIME_ZONES).not.toContain('Europe/Kiev')
+    expect(COMMON_TIME_ZONES).toContain('Europe/Kyiv')
+    expect(COMMON_TIME_ZONES).not.toContain('Europe/Kiev')
   })
 
   it('only contains valid zones', () => {
-    for (const z of FALLBACK_TIME_ZONES) expect(isValidTimeZone(z)).toBe(true)
+    for (const z of COMMON_TIME_ZONES) expect(isValidTimeZone(z)).toBe(true)
   })
 })
 
