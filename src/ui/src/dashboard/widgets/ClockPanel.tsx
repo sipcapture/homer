@@ -14,30 +14,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useLocale } from '@/components/locale/locale-provider'
+import { getTimeZones, isValidTimeZone } from '@/lib/timezones'
 
 const MAX_ZONES = 8
-
-/** Popular IANA zones + browser local pseudo-zone */
-const PRESET_TIMEZONES = [
-  'local',
-  'UTC',
-  'Europe/London',
-  'Europe/Berlin',
-  'Europe/Paris',
-  'Europe/Moscow',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Sao_Paulo',
-  'Asia/Dubai',
-  'Asia/Kolkata',
-  'Asia/Shanghai',
-  'Asia/Tokyo',
-  'Asia/Seoul',
-  'Australia/Sydney',
-  'Pacific/Auckland',
-] as const
 
 export interface ClockPanelConfig {
   /** @deprecated use timeZones */
@@ -49,17 +28,6 @@ export interface ClockPanelConfig {
 interface ClockPanelProps {
   config?: ClockPanelConfig
   onConfigChange?: (cfg: ClockPanelConfig) => void
-}
-
-function isValidTimeZone(id: string): boolean {
-  const z = id.trim()
-  if (!z || z === 'local') return true
-  try {
-    Intl.DateTimeFormat(undefined, { timeZone: z }).format()
-    return true
-  } catch {
-    return false
-  }
 }
 
 function normalizeZones(config?: ClockPanelConfig): string[] {
@@ -151,7 +119,7 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
         ? 'grid-cols-2'
         : 'grid-cols-2 sm:grid-cols-3'
 
-  const presetsToAdd = PRESET_TIMEZONES.filter(z => !zones.includes(z))
+  const presetsToAdd = useMemo(() => getTimeZones().filter(z => !zones.includes(z)), [zones])
 
   return (
     <div className="relative flex h-full min-h-0 flex-col p-2 text-foreground">
@@ -195,7 +163,7 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
                 </div>
                 {presetsToAdd.length > 0 && (
                   <div className="grid gap-1">
-                    <Label className="text-[11px] text-muted-foreground">Add preset</Label>
+                    <Label className="text-[11px] text-muted-foreground">Add time zone</Label>
                     <Select onValueChange={v => { addPreset(v) }}>
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Choose timezone…" />
