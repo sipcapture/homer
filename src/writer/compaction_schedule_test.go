@@ -103,6 +103,7 @@ func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
 	if !first.compactionDue() {
 		t.Fatal("partial cycle must remain due")
 	}
+	t.Run("vacuum and tiering contend with writer merge", func(t *testing.T) { checkCompactionMaintenanceContention(t, first, dsn, dataPath) })
 	release()
 	first.runCompaction()
 	if first.totalCompactions != 1 {
