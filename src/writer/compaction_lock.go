@@ -8,20 +8,23 @@ import (
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
-// PostgreSQL polls eligibility separately from the full compaction interval so
-// another replica can retry interrupted/partial work promptly.
+// Stateless PostgreSQL polls eligibility separately from the full compaction
+// interval so another replica can retry interrupted/partial work promptly.
 func (c *CompactionService) compactionPollInterval() time.Duration {
 	interval := time.Duration(c.config.CheckIntervalSec) * time.Second
 	if interval <= 0 {
 		interval = time.Hour
 	}
-	if (c.config.CatalogType == ducklake.CatalogPostgres || ducklake.IsPostgresCatalogPath(c.catalogPath)) && interval > time.Minute {
+	if c.config.Stateless && (c.config.CatalogType == ducklake.CatalogPostgres || ducklake.IsPostgresCatalogPath(c.catalogPath)) && interval > time.Minute {
 		return time.Minute
 	}
 	return interval
 }
 
 func (c *CompactionService) compactionDue() bool {
+	if !c.config.Stateless {
+		return true
+	}
 	lease := c.maintenanceLease.Load()
 	if lease == nil {
 		return true
@@ -42,6 +45,9 @@ func (c *CompactionService) compactionDue() bool {
 }
 
 func (c *CompactionService) recordCompactionCompletion() bool {
+	if !c.config.Stateless {
+		return true
+	}
 	if c.cycleIncomplete.Load() {
 		logger.Warn("CompactionService: cycle partially failed; shared completion not advanced")
 		return false
@@ -56,10 +62,10 @@ func (c *CompactionService) recordCompactionCompletion() bool {
 }
 
 func (c *CompactionService) tryMaintenanceLock() (func(), bool) {
-	if c.config.CatalogType != ducklake.CatalogPostgres && !ducklake.IsPostgresCatalogPath(c.catalogPath) {
+	if !c.config.Stateless || (c.config.CatalogType != ducklake.CatalogPostgres && !ducklake.IsPostgresCatalogPath(c.catalogPath)) {
 		return func() {}, true
 	}
-	lease, acquired, err := ducklake.AcquireMaintenance(c.context(), c.config.CatalogType, c.catalogPath)
+	lease, acquired, err := ducklake.AcquireMaintenance(c.context(), c.config.Stateless, c.config.CatalogType, c.catalogPath)
 	if err != nil {
 		logger.Warn("CompactionService: PostgreSQL maintenance lock unavailable; skipping cycle", "error", err)
 		return nil, false
@@ -94,7 +100,7 @@ func (c *CompactionService) maintenanceSQL() maintenancelock.DB {
 }
 
 // compactionFirstDelay also bounds startup retries when another replica owns
-// the lock. PostgreSQL must begin its minute polling immediately.
+// the lock. Stateless PostgreSQL begins its minute polling immediately.
 func (c *CompactionService) compactionFirstDelay() time.Duration {
 	interval := c.compactionPollInterval()
 	if interval < 5*time.Minute {

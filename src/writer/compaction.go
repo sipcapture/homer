@@ -164,6 +164,7 @@ func (c *CompactionService) clearBrokenParquet(tableName string, err error) erro
 
 // CompactionConfig holds compaction settings
 type CompactionConfig struct {
+	Stateless        bool                 `json:"-"` // Supplied by the top-level stateless configuration.
 	CatalogType      ducklake.CatalogType `json:"-"` // Supplied by storage.ducklake.catalog_type.
 	Enable           bool                 `json:"enable"`
 	CheckIntervalSec int                  `json:"check_interval_sec"` // How often to run compaction (default: 3600 = 1 hour)
@@ -465,9 +466,9 @@ func (c *CompactionService) Stop() {
 	logger.Info("CompactionService stopped")
 }
 
-// compactionLoop checks PostgreSQL eligibility at least once a minute; the
-// shared marker enforces CheckIntervalSec between successful cycles. SQLite
-// retains its local interval and initial delay of up to five minutes.
+// compactionLoop checks stateless PostgreSQL eligibility at least once a minute.
+// The shared marker enforces CheckIntervalSec between successful cycles. Other
+// modes retain their local interval and initial delay of up to five minutes.
 func (c *CompactionService) compactionLoop() {
 	defer c.wg.Done()
 	defer func() {

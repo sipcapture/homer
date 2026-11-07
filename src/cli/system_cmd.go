@@ -179,7 +179,7 @@ func runCompaction(f SystemFlags) (retErr error) {
 	if err != nil {
 		return err
 	}
-	lease, acquired, err := ducklake.AcquireMaintenance(context.Background(), duckCfg.CatalogType, catalogPath)
+	lease, acquired, err := ducklake.AcquireMaintenance(context.Background(), cfg.Stateless, duckCfg.CatalogType, catalogPath)
 	if err != nil {
 		return err
 	}

@@ -82,7 +82,7 @@ func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
 	}
 	newReplica := func(alias string) *CompactionService {
 		c := NewCompactionService(db, alias, dataPath, dsn, CompactionConfig{
-			CatalogType: ducklake.CatalogPostgres, CheckIntervalSec: 1800, Engine: EngineDuckDB,
+			Stateless: true, CatalogType: ducklake.CatalogPostgres, CheckIntervalSec: 1800, Engine: EngineDuckDB,
 		}, nil, nil, nil)
 		t.Cleanup(c.cancel)
 		return c
@@ -165,24 +165,56 @@ func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
 	if second.totalCompactions != 0 || second.cycleRunning.Load() || second.maintenanceLease.Load() != nil {
 		t.Fatal("skipped cycle ran or leaked cycle/lease state")
 	}
+
+	releaseLegacyOwner, acquired := second.tryMaintenanceLock()
+	if !acquired {
+		t.Fatal("cannot hold maintenance lock for legacy-mode check")
+	}
+	defer releaseLegacyOwner()
+	legacy := newReplica("lake")
+	legacy.config.Stateless = false
+	probe, err = pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer probe.Close(context.Background())
+	var before, after time.Time
+	if err := probe.QueryRow(ctx, "SELECT completed_at FROM public.homer_maintenance_schedule WHERE task='homer.maintenance.compaction.completed_at'").Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	// second still owns the PostgreSQL maintenance lock; legacy mode must run.
+	legacy.runCompaction()
+	if legacy.totalCompactions != 1 || legacy.maintenanceLease.Load() != nil {
+		t.Fatal("non-stateless PostgreSQL compaction was coordinated")
+	}
+	if err := probe.QueryRow(ctx, "SELECT completed_at FROM public.homer_maintenance_schedule WHERE task='homer.maintenance.compaction.completed_at'").Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if !before.Equal(after) {
+		t.Fatal("non-stateless compaction changed the shared schedule")
+	}
 }
 
 func TestCompactionEligibilityPollInterval(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		typ     ducklake.CatalogType
-		path    string
-		seconds int
-		want    time.Duration
+		name      string
+		stateless bool
+		typ       ducklake.CatalogType
+		path      string
+		seconds   int
+		want      time.Duration
 	}{
-		{"postgres", ducklake.CatalogPostgres, "", 1800, time.Minute},
-		{"dsn", "", "postgres://localhost/lake", 1800, time.Minute},
-		{"short", ducklake.CatalogPostgres, "", 10, 10 * time.Second},
-		{"default", ducklake.CatalogPostgres, "", 0, time.Minute},
-		{"sqlite", ducklake.CatalogSQLite, "catalog.sqlite", 1800, 30 * time.Minute},
+		{"postgres", true, ducklake.CatalogPostgres, "", 1800, time.Minute},
+		{"dsn", true, "", "postgres://localhost/lake", 1800, time.Minute},
+		{"short", true, ducklake.CatalogPostgres, "", 10, 10 * time.Second},
+		{"default", true, ducklake.CatalogPostgres, "", 0, time.Minute},
+		{"sqlite", false, ducklake.CatalogSQLite, "catalog.sqlite", 1800, 30 * time.Minute},
+		{"postgres-off", false, ducklake.CatalogPostgres, "", 1800, 30 * time.Minute},
+		{"dsn-off", false, "", "postgres://localhost/lake", 1800, 30 * time.Minute},
+		{"default-off", false, ducklake.CatalogPostgres, "", 0, time.Hour},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			c := &CompactionService{catalogPath: tc.path, config: CompactionConfig{CatalogType: tc.typ, CheckIntervalSec: tc.seconds}}
+			c := &CompactionService{catalogPath: tc.path, config: CompactionConfig{Stateless: tc.stateless, CatalogType: tc.typ, CheckIntervalSec: tc.seconds}}
 			if got := c.compactionPollInterval(); got != tc.want {
 				t.Fatalf("poll interval=%v want=%v", got, tc.want)
 			}
@@ -192,15 +224,17 @@ func TestCompactionEligibilityPollInterval(t *testing.T) {
 
 func TestCompactionFirstDelay(t *testing.T) {
 	for _, tc := range []struct {
-		typ     ducklake.CatalogType
-		seconds int
-		want    time.Duration
+		typ       ducklake.CatalogType
+		stateless bool
+		seconds   int
+		want      time.Duration
 	}{
-		{ducklake.CatalogPostgres, 1800, time.Minute},
-		{ducklake.CatalogPostgres, 10, 10 * time.Second},
-		{ducklake.CatalogSQLite, 1800, 5 * time.Minute},
+		{ducklake.CatalogPostgres, true, 1800, time.Minute},
+		{ducklake.CatalogPostgres, true, 10, 10 * time.Second},
+		{ducklake.CatalogSQLite, false, 1800, 5 * time.Minute},
+		{ducklake.CatalogPostgres, false, 1800, 5 * time.Minute},
 	} {
-		c := &CompactionService{config: CompactionConfig{CatalogType: tc.typ, CheckIntervalSec: tc.seconds}}
+		c := &CompactionService{config: CompactionConfig{Stateless: tc.stateless, CatalogType: tc.typ, CheckIntervalSec: tc.seconds}}
 		if got := c.compactionFirstDelay(); got != tc.want {
 			t.Fatalf("delay=%v want=%v", got, tc.want)
 		}

@@ -62,7 +62,7 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 	quote := func(value string) string {
 		return "'" + strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), "'", `\'`) + "'"
 	}
-	owner, acquired, err := ducklake.AcquireMaintenance(ctx, ducklake.CatalogPostgres, u.String())
+	owner, acquired, err := ducklake.AcquireMaintenance(ctx, true, ducklake.CatalogPostgres, u.String())
 	if err != nil || !acquired {
 		t.Fatalf("CLI test lock owner: %v %v", acquired, err)
 	}
@@ -78,8 +78,24 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 	if err := os.WriteFile(configFile, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
+	var statelessConfig map[string]any
+	if err := json.Unmarshal(raw, &statelessConfig); err != nil {
+		t.Fatal(err)
+	}
+	statelessConfig["stateless"] = true
+	statelessConfig["ingest"] = map[string]any{"enable": false, "hep_stream": map[string]any{"enable": false}}
+	statelessConfig["coordinator"].(map[string]any)["hep_stream"] = map[string]any{"enable": false}
+	// Contention must stop before the validated remote path is accessed.
+	statelessConfig["storage"].(map[string]any)["ducklake"].(map[string]any)["data_path"] = "s3://not-used/contention"
+	encoded, err := json.Marshal(statelessConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configFile, encoded, 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := runCompaction(SystemFlags{ConfigPath: configFile, CompactionMerge: true}); err == nil || !strings.Contains(err.Error(), "already running") {
-		t.Fatalf("CLI bypassed shared maintenance lock: %v", err)
+		t.Fatalf("stateless CLI maintenance bypassed another owner's lock: %v", err)
 	}
 	owner.Release()
 	for _, catalogPath := range []string{
@@ -120,4 +136,16 @@ func TestPostgresCatalogCLIReadsInlinedRows(t *testing.T) {
 			t.Fatal("CLI opened a writable PostgreSQL DuckLake catalog")
 		}
 	}
+	legacyOwner, acquired, err := ducklake.AcquireMaintenance(ctx, true, ducklake.CatalogPostgres, u.String())
+	if err != nil || !acquired {
+		t.Fatalf("legacy CLI test lock owner: %v %v", acquired, err)
+	}
+	defer legacyOwner.Release()
+	if err := os.WriteFile(configFile, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCompaction(SystemFlags{ConfigPath: configFile, CompactionMerge: true}); err != nil {
+		t.Fatalf("non-stateless CLI maintenance was coordinated: %v", err)
+	}
+
 }

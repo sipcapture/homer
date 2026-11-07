@@ -888,6 +888,7 @@ func (w *Writer) startCompactionService() error {
 	autoEnable := w.shouldAutoEnableCompactionForTieredHot()
 	cfg := compactionConfigFromStorage(storage.Compaction, storage.Compaction.Enable || autoEnable)
 	cfg.CatalogType = ducklake.CatalogType(storage.CatalogType)
+	cfg.Stateless = storage.Stateless
 	if !storage.Compaction.Enable && autoEnable {
 		logger.Info("Writer: DuckLake compaction auto-enabled (tiered storage with local hot volume)",
 			"lake", w.ducklakeManager.GetLakeName())
@@ -996,6 +997,7 @@ func (w *Writer) startTieringService() error {
 
 	// Create tiered storage manager
 	tsmConfig := ducklake.TieredStorageConfig{
+		Stateless:               w.storageConfig.DuckLake.Stateless,
 		Enable:                  policy.Enable,
 		Volumes:                 volumes,
 		TTLMoveIntervalSec:      policy.TTLMoveIntervalSec,

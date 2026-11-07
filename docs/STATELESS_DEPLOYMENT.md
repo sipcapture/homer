@@ -4,10 +4,11 @@ Enable top-level `stateless: true` to run Homer without a persistent local data
 disk. PostgreSQL stores application settings, DuckLake metadata, and shared
 coordinator state; S3 or Azure stores Parquet data. Local DuckDB instances remain
 the query engine. Stateless validation and shared coordinator HTTP state are
-opt-in. PostgreSQL DuckLake maintenance coordination also applies when
-`stateless` is false: existing PostgreSQL deployments acquire advisory locks
-and use the Homer-owned schedule table described below. SQLite maintenance
-keeps its existing coordination behavior.
+opt-in. Cross-replica PostgreSQL maintenance locks, the shared compaction
+schedule, and accelerated eligibility polling are enabled only by top-level
+`stateless: true`. With the flag disabled or omitted, PostgreSQL and SQLite keep
+their existing maintenance coordination and schedules. General flush-buffer
+correctness fixes apply in both modes.
 
 ## Prepare shared storage and secrets
 
@@ -16,8 +17,8 @@ one for the DuckLake catalog. Homer creates tables, but does not create database
 or automatically migrate existing local data. Install matching DuckDB extensions
 in the runtime image using `homer-core --install-extensions`.
 
-Provide the same configuration and secrets to every replica. For example, inject
-these values through Kubernetes Secrets or your deployment's secret manager:
+Enable the flag and provide the same configuration and secrets on every replica.
+For example, inject these values through Kubernetes Secrets or your deployment's secret manager:
 
 ```sh
 HOMER_COORDINATOR_SETTINGS_DB_TYPE=postgres
@@ -96,10 +97,10 @@ settings, catalog, or Parquet volume is required. Size container memory for the
 whole process, including Go memory, DuckDB instances, ingest queues, and any
 maintenance instance; a DuckDB memory limit is not a container memory limit.
 
-Automatic maintenance is disabled in this example. For PostgreSQL catalogs,
-coordination is enabled independently of the `stateless` flag. Replicas acquire
-a database-scoped session advisory lock for the whole
-automatic maintenance cycle (retention, merge, snapshot expiration, and cleanup).
+Automatic maintenance is disabled in this example. With `stateless: true`,
+replicas using PostgreSQL catalogs acquire a database-scoped session advisory
+lock for the whole automatic maintenance cycle (retention, merge, snapshot
+expiration, and cleanup).
 A replica skips the cycle if another replica holds the lock or acquisition fails.
 The lock uses a dedicated connection to the actual primary catalog database;
 closing that session releases it. Use a direct PostgreSQL endpoint or session
@@ -120,9 +121,9 @@ consistent across replicas: after a fully successful cycle, all replicas skip
 until that interval has elapsed. The schedule survives pod restarts and is
 independent for each catalog/shard.
 
-PostgreSQL replicas check eligibility every minute (or the configured interval
-when shorter), so interrupted or partially failed cycles can be retried without
-waiting a full compaction interval. Failed retention, inline flush, merge, or
+Stateless PostgreSQL replicas check eligibility every minute (or the configured
+interval when shorter), so interrupted or partially failed cycles can be retried
+without waiting a full compaction interval. Failed retention, inline flush, merge, or
 cleanup steps prevent the completion timestamp from advancing. Other steps may
 still finish, and the next attempt works against the current catalog rather than
 resuming a checkpoint.
@@ -132,8 +133,9 @@ public.homer_maintenance_schedule, plus SELECT, INSERT, and UPDATE on that table
 DuckLake's own metadata permissions do not automatically grant these Homer-table
 permissions. If provisioning or schedule access fails, automatic compaction still runs under the advisory lock; without
 a readable/writable completion marker it may run on every eligibility poll
-instead of the full configured interval. This behavior also applies to existing
-PostgreSQL deployments with stateless mode disabled.
+instead of the full configured interval. When `stateless` is disabled or omitted,
+Homer does not acquire cross-replica advisory locks, provision or query this
+schedule table, or require its permissions.
 
 Only a valid recent marker suppresses compaction. Inline flushing when compaction
 is disabled and manually requested maintenance keep their existing schedules.

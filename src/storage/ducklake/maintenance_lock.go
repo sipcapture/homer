@@ -9,9 +9,13 @@ import (
 	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
 )
 
-// AcquireMaintenance locks participating PostgreSQL catalogs. SQLite keeps its
-// existing file/process locks. Local aliases are not part of the lock identity.
-func AcquireMaintenance(ctx context.Context, ct CatalogType, paths ...string) (*maintenancelock.Lease, bool, error) {
+// AcquireMaintenance locks participating PostgreSQL catalogs only in stateless
+// mode. Other modes retain their existing coordination. Local aliases are not
+// part of the lock identity.
+func AcquireMaintenance(ctx context.Context, stateless bool, ct CatalogType, paths ...string) (*maintenancelock.Lease, bool, error) {
+	if !stateless {
+		return maintenancelock.Uncoordinated(ctx), true, nil
+	}
 	dsns := make([]string, 0, len(paths))
 	for _, path := range paths {
 		if ct == CatalogPostgres || IsPostgresCatalogPath(path) {

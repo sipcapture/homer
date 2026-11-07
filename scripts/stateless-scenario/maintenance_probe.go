@@ -22,7 +22,7 @@ func run() error {
 		S3UseSSL:    strings.HasPrefix(os.Getenv("AWS_ENDPOINT_URL_S3"), "https://"),
 		S3AccessKey: os.Getenv("AWS_ACCESS_KEY_ID"), S3SecretKey: os.Getenv("AWS_SECRET_ACCESS_KEY")}
 	manager, err := ducklake.NewTieredStorageManager(ducklake.TieredStorageConfig{
-		CatalogType: ducklake.CatalogPostgres, CatalogPath: dsn, Volumes: []ducklake.Volume{volume},
+		Stateless: true, CatalogType: ducklake.CatalogPostgres, CatalogPath: dsn, Volumes: []ducklake.Volume{volume},
 		TuningThreads: 1, TuningMemoryLimit: "256MB", TuningTempDirectory: os.Getenv("SCENARIO_SPILL_PATH"),
 	})
 	if err != nil {

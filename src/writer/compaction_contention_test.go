@@ -49,7 +49,7 @@ func checkCompactionMaintenanceContention(t *testing.T, c *CompactionService, ds
 	}
 	cfg := config.NodeConfig{
 		FlightServer: config.FlightServerConfig{Host: "127.0.0.1", Port: port, AuthToken: "contention-test", MaxMessageSize: 16777216},
-		DuckLake: config.DuckLakeConfig{CatalogType: "postgres", CatalogPath: dsn, DataPath: dataPath, LakeName: "lake",
+		DuckLake: config.DuckLakeConfig{Stateless: true, CatalogType: "postgres", CatalogPath: dsn, DataPath: dataPath, LakeName: "lake",
 			Volumes: []config.VolumeConfig{{Name: "hot", Type: "local", CatalogType: "postgres", CatalogPath: dsn, Path: dataPath}},
 			Tuning:  config.DuckDBTuning{Threads: 1, MemoryLimit: "256MB"}},
 	}
@@ -64,7 +64,7 @@ func checkCompactionMaintenanceContention(t *testing.T, c *CompactionService, ds
 	// The tiering manager has its own real DuckDB attached to this catalog.
 	volume := ducklake.Volume{Name: "hot", Type: ducklake.VolumeTypeLocal, LakeName: "hot", CatalogPath: dsn, Path: dataPath}
 	tier, err := ducklake.NewTieredStorageManager(ducklake.TieredStorageConfig{
-		CatalogType: ducklake.CatalogPostgres, CatalogPath: dsn, Volumes: []ducklake.Volume{volume},
+		Stateless: true, CatalogType: ducklake.CatalogPostgres, CatalogPath: dsn, Volumes: []ducklake.Volume{volume},
 		TuningThreads: 1, TuningMemoryLimit: "256MB", TTLMoveIntervalSec: 3600,
 	})
 	if err != nil {
