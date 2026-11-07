@@ -16,7 +16,10 @@ import (
 
 // RuntimeState holds expiring coordinator state shared by stateless replicas.
 // Keys are hashed so bearer credentials do not appear in table keys or errors.
-type RuntimeState struct{ db *sql.DB }
+type RuntimeState struct {
+	native *sql.DB
+	owner  *settingsPostgresDriver
+}
 
 // LockSettingsBootstrap serializes first-run DDL and seeds across replicas.
 // Closing the dedicated session releases the lock even after startup fails.
@@ -60,7 +63,23 @@ func NewRuntimeState(db *sql.DB) (*RuntimeState, error) {
 	if _, err := db.Exec("CALL pg_clear_cache()"); err != nil {
 		return nil, fmt.Errorf("refresh shared runtime state schema: %w", err)
 	}
-	return &RuntimeState{db: db}, nil
+	owner := db.Driver().(*settingsPostgresDriver)
+	native := stdlib.OpenDB(*owner.config.Copy())
+	native.SetMaxOpenConns(8)
+	native.SetMaxIdleConns(8)
+	native.SetConnMaxIdleTime(5 * time.Minute)
+	if !owner.registerRuntimePool(native) {
+		_ = native.Close()
+		return nil, fmt.Errorf("settings database closed while initializing runtime state")
+	}
+	return &RuntimeState{native: native, owner: owner}, nil
+}
+
+// Close releases the native pool. Closing the owning settings database also
+// closes registered pools, including on coordinator construction failures.
+func (s *RuntimeState) Close() error {
+	s.owner.unregisterRuntimePool(s.native)
+	return s.native.Close()
 }
 
 func runtimeKey(key string) string {
@@ -72,7 +91,7 @@ func (s *RuntimeState) Put(ctx context.Context, namespace, key string, payload [
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var ok int
-	return postgresQueryRow(s.db)(ctx, `
+	return s.native.QueryRowContext(ctx, `
 		WITH expired AS (
 			DELETE FROM public.homer_runtime_state WHERE (namespace, key) IN (
 				SELECT namespace, key FROM public.homer_runtime_state WHERE expires_at <= CURRENT_TIMESTAMP
@@ -89,7 +108,7 @@ func (s *RuntimeState) Put(ctx context.Context, namespace, key string, payload [
 func (s *RuntimeState) Get(ctx context.Context, namespace, key string, consume bool) ([]byte, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	queryRow := postgresQueryRow(s.db)
+	queryRow := s.native.QueryRowContext
 	query := `SELECT payload FROM public.homer_runtime_state WHERE namespace=$1 AND key=$2 AND expires_at > CURRENT_TIMESTAMP`
 	if consume {
 		query = `DELETE FROM public.homer_runtime_state WHERE namespace=$1 AND key=$2 AND expires_at > CURRENT_TIMESTAMP RETURNING payload`

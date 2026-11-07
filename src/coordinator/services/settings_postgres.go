@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -27,8 +28,10 @@ const settingsPostgresCatalog = "homer_settings"
 // DuckDB driver; no SQL is inspected, intercepted, or retried.
 type settingsPostgresDriver struct {
 	driver.Driver
-	config *pgx.ConnConfig
-	closed atomic.Bool
+	config       *pgx.ConnConfig
+	closed       atomic.Bool
+	runtimeMu    sync.Mutex
+	runtimePools map[*sql.DB]struct{}
 }
 
 type settingsPostgresConnector struct {
@@ -39,8 +42,35 @@ type settingsPostgresConnector struct {
 func (c *settingsPostgresConnector) Driver() driver.Driver { return c.backend }
 
 func (c *settingsPostgresConnector) Close() error {
+	c.backend.runtimeMu.Lock()
 	c.backend.closed.Store(true)
-	return c.Connector.Close()
+	pools := c.backend.runtimePools
+	c.backend.runtimePools = nil
+	c.backend.runtimeMu.Unlock()
+	var closeErr error
+	for pool := range pools {
+		closeErr = errors.Join(closeErr, pool.Close())
+	}
+	return errors.Join(closeErr, c.Connector.Close())
+}
+
+func (d *settingsPostgresDriver) registerRuntimePool(pool *sql.DB) bool {
+	d.runtimeMu.Lock()
+	defer d.runtimeMu.Unlock()
+	if d.closed.Load() {
+		return false
+	}
+	if d.runtimePools == nil {
+		d.runtimePools = make(map[*sql.DB]struct{})
+	}
+	d.runtimePools[pool] = struct{}{}
+	return true
+}
+
+func (d *settingsPostgresDriver) unregisterRuntimePool(pool *sql.DB) {
+	d.runtimeMu.Lock()
+	defer d.runtimeMu.Unlock()
+	delete(d.runtimePools, pool)
 }
 
 func openPostgresSettingsDB(dsn string) (*sql.DB, error) {
