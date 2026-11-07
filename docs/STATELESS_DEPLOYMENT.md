@@ -273,12 +273,18 @@ and failed-TRUNCATE recovery without losing new batches or duplicating committed
 rows. Multi-process lake tests also exercise 20 ms stress flushing with 4,096
 unique records and concurrent SQL compaction.
 
-**Deferred external validation:** the two-replica deployment and writer-kill
-scenarios during flush and compaction have not been run against real S3 or Azure.
-Azure maintenance currently has tests using a fake object store; real Azure
-maintenance has not been run. These local tests do not establish recovery of
-uncommitted in-memory packets after abrupt writer termination, Kubernetes traffic
-distribution, or sustained production throughput.
+On 2026-11-07 the full two-process scenario passed against an external
+S3-compatible endpoint and shared local PostgreSQL, using 16 rows per batch.
+It covered both flush queue modes and killing a writer during flush and during
+compaction. Durable-data verification waits for maintenance to finish and holds
+the existing advisory lock while reading; this is a test-only workaround for the
+known immediate-cleanup/read race. Production cleanup behavior is unchanged.
+This run does not establish correctness of reads overlapping physical cleanup.
+
+Real Azure maintenance has not been run; its tests use a fake object store.
+The scenario also does not establish recovery of uncommitted in-memory packets
+after abrupt writer termination, Kubernetes traffic distribution, or sustained
+production throughput.
 
 Run from `src`, against disposable services:
 
@@ -298,3 +304,7 @@ go test -race ./storage/ducklake -run 'TestBufferReuse|TestFailedBuffer' -count=
 
 The object-storage tests create and remove unique buckets. Install matching
 DuckDB extensions and the project's build dependencies before running them.
+
+For a runnable two-process deployment and controlled writer-interruption harness
+using an existing S3-compatible bucket, see
+[the real scenario guide](../scripts/stateless-scenario/README.md).
