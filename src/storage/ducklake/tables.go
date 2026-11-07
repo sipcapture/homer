@@ -469,9 +469,9 @@ type TableWriter struct {
 	// activeIdx 0 → memTables[0] is active (receives writes), memTables[1] is standby.
 	memTables [2]string
 	activeIdx atomic.Int32
-	// Appenders hold a read lock; flushes hold a write lock across INSERT and
-	// TRUNCATE. Jobs acquire the catalog lock before locking a memory table.
-	memMu [2]sync.RWMutex
+	// Each table permits one appender. Appends and INSERT/TRUNCATE flushes
+	// hold the exclusive slot lock; queued jobs take the catalog lock first.
+	memMu [2]sync.Mutex
 	// Protected by memMu. Committed rows must be cleared before another INSERT
 	// or append, including after a failed TRUNCATE.
 	slotCommitted [2]bool
@@ -593,8 +593,8 @@ var batchSlicePool sync.Pool // elements: *[][]interface{}
 // flushBatch drains the Go-side batch into the currently active in-memory
 // DuckDB table using the Appender API. This bypasses SQL parsing entirely —
 // rows are written directly via DuckDB's columnar DataChunk interface.
-// batchMu only protects the batch handoff. The active memory table is read-
-// locked until the appender commits; waiting for a flush leaves batchMu free.
+// batchMu only protects the batch handoff. The active memory table is held
+// exclusively until the appender commits; waiting leaves batchMu free.
 func (tw *TableWriter) flushBatch() error {
 	tw.batchMu.Lock()
 	if len(tw.batch) == 0 {
@@ -616,16 +616,27 @@ func (tw *TableWriter) flushBatch() error {
 
 	tw.batchMu.Unlock()
 
+	committed := false
+	defer func() {
+		if !committed {
+			tw.batchMu.Lock()
+			tw.batch = append(rows, tw.batch...)
+			tw.batchMu.Unlock()
+			return
+		}
+		// Only successful batches may return their rows to the pools.
+		for _, row := range rows {
+			putRowSlice(row)
+		}
+		clear(rows)
+		batchSlicePool.Put(&rows)
+	}()
+
 	slot, err := tw.lockActiveMem()
 	if err != nil {
-		// The previous INSERT committed but its rows could not be cleared.
-		// Keep this detached batch for retry instead of appending to stale rows.
-		tw.batchMu.Lock()
-		tw.batch = append(rows, tw.batch...)
-		tw.batchMu.Unlock()
 		return err
 	}
-	defer tw.memMu[slot].RUnlock()
+	defer tw.memMu[slot].Unlock()
 
 	start := time.Now()
 	nRows := len(rows)
@@ -645,23 +656,22 @@ func (tw *TableWriter) flushBatch() error {
 		vals = make([]driver.Value, nCols)
 	}
 
+	defer driverValPool.Put(&vals)
 	ctx := context.Background()
 	sqlConn, err := tw.db.Conn(ctx)
 	if err != nil {
-		driverValPool.Put(&vals)
-		// Clear per-row references and return row slices to pool before returning
-		// the outer slice, so packet payload strings are not retained in pooled memory.
-		for _, row := range rows {
-			putRowSlice(row)
-		}
-		for i := range rows {
-			rows[i] = nil
-		}
-		batchSlicePool.Put(&rows)
 		metrics.RecordPipelineStageError("ducklake", "batch_insert", "conn_error")
 		return fmt.Errorf("appender conn for %s: %w", memTable, err)
 	}
 	defer sqlConn.Close()
+	// Appender.Close can flush rows even after an earlier AppendRow error.
+	// An explicit transaction makes the whole batch retryable without copies
+	// of partially appended rows remaining in the memory table.
+	tx, err := sqlConn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin append into %s: %w", memTable, err)
+	}
+	defer tx.Rollback()
 
 	err = sqlConn.Raw(func(driverConn interface{}) error {
 		dc, ok := driverConn.(driver.Conn)
@@ -684,52 +694,38 @@ func (tw *TableWriter) flushBatch() error {
 		return appender.Close()
 	})
 
-	// Return pooled slices regardless of error outcome.
-	driverValPool.Put(&vals)
-	// Return row slices to pool: Appender has already copied the data.
-	for _, row := range rows {
-		putRowSlice(row)
-	}
-	// Clear row references before returning outer slice to pool.
-	for i := range rows {
-		rows[i] = nil
-	}
-	batchSlicePool.Put(&rows)
-
 	if err != nil {
 		metrics.RecordPipelineStageError("ducklake", "batch_insert", "insert_error")
 		return fmt.Errorf("appender INSERT into %s (%d rows): %w", memTable, nRows, err)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit append into %s: %w", memTable, err)
+	}
+	committed = true
 	metrics.RecordPipelineStageDuration("ducklake", "batch_insert", time.Since(start).Seconds())
 
 	return nil
 }
 
-// lockActiveMem returns a read-locked active slot. A swap while waiting
-// redirects the append to the new active slot. Failed clears are retried under
-// the write lock so committed rows never mix with newly appended rows.
+// lockActiveMem returns an exclusively locked active slot, redirecting a
+// waiter if a swap changed the active table. Committed rows must be cleared
+// before admitting new rows, including after an earlier failed TRUNCATE.
 func (tw *TableWriter) lockActiveMem() (int, error) {
 	for {
 		slot := int(tw.activeIdx.Load())
-		tw.memMu[slot].RLock()
+		tw.memMu[slot].Lock()
 		if int(tw.activeIdx.Load()) != slot {
-			tw.memMu[slot].RUnlock()
+			tw.memMu[slot].Unlock()
 			continue
 		}
-		if !tw.slotCommitted[slot] {
-			return slot, nil
-		}
-		tw.memMu[slot].RUnlock()
-		tw.memMu[slot].Lock()
-		var err error
 		if tw.slotCommitted[slot] {
-			err = tw.clearSlot(slot)
+			if err := tw.clearSlot(slot); err != nil {
+				tw.memMu[slot].Unlock()
+				return 0, err
+			}
 		}
-		tw.memMu[slot].Unlock()
-		if err != nil {
-			return 0, err
-		}
+		return slot, nil
 	}
 }
 
