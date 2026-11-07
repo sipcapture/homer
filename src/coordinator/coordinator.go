@@ -853,6 +853,10 @@ func (c *Coordinator) Stop() error {
 
 	// Close flight connections
 	c.flightService.CloseAll()
+	if c.runtimeState != nil {
+		_ = c.runtimeState.Close()
+		c.runtimeState = nil
+	}
 	if c.settingsDB != nil {
 		_ = c.settingsDB.Close()
 		c.settingsDB = nil
