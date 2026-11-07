@@ -84,7 +84,7 @@ Every reader sees the shared catalog's committed data. Do not configure the
 coordinator to fan out to all replicas of that same catalog: it can return the
 same records multiple times. Leave `search_buffer` disabled for this topology;
 unflushed memory buffers belong only to their writer process. Startup rejects
-\`search_buffer\` and either live HEP stream setting in stateless mode; explicitly
+`search_buffer` and either live HEP stream setting in stateless mode; explicitly
 disable both HEP stream settings, which default to enabled.
 
 Mount writable ephemeral scratch space for spill and extension caches. No local
@@ -224,23 +224,43 @@ budget. Kubernetes documents its signal and grace-period behavior under
 
 Stateless mode shares revoked sessions, OAuth state and one-time login tokens,
 avatars, and export jobs/payloads through PostgreSQL. OAuth entries are consumed
-atomically, session lookups fail closed on database errors, and bootstrap schema
-and seed operations are serialized between replicas. Export entries expire after
-24 hours. Multiplayer Netris/NetChess hubs are disabled; live streams, active
-connections, ingest buffers, and correlation caches remain ephemeral.
+atomically. Revocation lookups have a one-second timeout and can reuse a
+successful answer for up to five seconds during an outage; without a usable
+answer, authentication returns HTTP 503. Bootstrap schema and seed operations
+are serialized between replicas. Export entries expire after
+24 hours. Multiplayer Netris/NetChess hubs, live HEP streams, and search buffers
+are disabled. Active connections, ingest buffers, and correlation caches remain
+ephemeral.
 
 PostgreSQL sharding and tiering cannot currently be combined. Independent shard
 databases must be pre-provisioned and reader volumes explicitly configured.
 The combined-pod example uses one shard to avoid those additional routing steps.
 
-Integration checks cover two independent coordinator processes, cross-replica
-login/settings/exports, OAuth PKCE handoff and replay rejection, revocation,
-concurrent bootstrap, and process restarts. Lake tests use two writer processes,
-two independent DuckDB readers, one SQL compactor, PostgreSQL, and S3-compatible
-RustFS. Normal and 20 ms stress flushing preserve 4,096 unique records in both
-per-table and centralized queue modes. These tests do not certify Kubernetes
-traffic distribution, sustained production throughput, or failure-free recovery
-from abrupt writer termination.
+Integration checks cover two combined processes, each running network ingest,
+writer, node, and coordinator with stateless mode enabled. The test ingests on
+replica A and searches through replica B's coordinator and local node, checking
+unique Call-IDs. The same run covers cross-replica settings, exports, OAuth PKCE
+handoff/replay rejection, logout, and process restarts. A separate coordinator-only
+case exercises concurrent first-run bootstrap.
+
+Schedule tests use PostgreSQL metadata created by DuckLake and real Parquet
+files. They check successful merging, row preservation, shared completion,
+and actual compaction while schedule reads and completion writes fail. Node
+HTTP vacuum and tiering deletion/cleanup are tested while writer merge work owns
+the same catalog's maintenance lease.
+
+Focused buffer tests use PostgreSQL and S3-compatible RustFS in per-table and
+central-queue modes. They check reuse while flushes wait for the catalog lock,
+and failed-TRUNCATE recovery without losing new batches or duplicating committed
+rows. Multi-process lake tests also exercise 20 ms stress flushing with 4,096
+unique records and concurrent SQL compaction.
+
+**Deferred external validation:** the two-replica deployment and writer-kill
+scenarios during flush and compaction have not been run against real S3 or Azure.
+Azure maintenance currently has tests using a fake object store; real Azure
+maintenance has not been run. These local tests do not establish recovery of
+uncommitted in-memory packets after abrupt writer termination, Kubernetes traffic
+distribution, or sustained production throughput.
 
 Run from `src`, against disposable services:
 
@@ -252,7 +272,9 @@ go test ./coordinator -run TestPostgresStatelessCoordinatorReplicas -count=1 -v
 export HOMER_TEST_S3_ENDPOINT='http://127.0.0.1:9000'
 export HOMER_TEST_S3_ACCESS_KEY='test-access-key'
 export HOMER_TEST_S3_SECRET_KEY='test-secret-key'
-go test ./storage/ducklake -run TestPostgresHorizontalWritersAndReaders -count=1 -v
+go test ./coordinator -run TestPostgresStatelessCombinedReplicas -count=1 -v
+go test ./writer -run TestPostgresCompactionSchedule -count=1 -v
+go test ./storage/ducklake -run 'TestPostgres(HorizontalWritersAndReaders|ObjectStorage)' -count=1 -v
 go test -race ./storage/ducklake -run 'TestBufferReuse|TestFailedBuffer' -count=5
 ```
 
