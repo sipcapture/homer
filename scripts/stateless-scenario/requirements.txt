@@ -1,0 +1,4 @@
+bcrypt>=4.1
+boto3>=1.36
+psycopg[binary]>=3.2
+python-dotenv>=1.0
