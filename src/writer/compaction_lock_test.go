@@ -17,7 +17,7 @@ func TestPostgresCompetingMaintenanceSkipsCatalogWork(t *testing.T) {
 	if dsn == "" {
 		t.Skip("set HOMER_TEST_POSTGRES_DSN for PostgreSQL integration")
 	}
-	c := NewCompactionService(nil, "different_alias", "", dsn, CompactionConfig{}, nil, nil, nil)
+	c := NewCompactionService(nil, "different_alias", "", dsn, CompactionConfig{Stateless: true}, nil, nil, nil)
 	defer c.cancel()
 	release, acquired, err := maintenancelock.Try(c.context(), config.NormalizePostgresDSN(dsn))
 	if err != nil || !acquired {
@@ -52,7 +52,7 @@ func TestPostgresMaintenanceLossInterruptsDuckDB(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	c := NewCompactionService(db, "lake", "", dsn, CompactionConfig{}, nil, nil, nil)
+	c := NewCompactionService(db, "lake", "", dsn, CompactionConfig{Stateless: true}, nil, nil, nil)
 	defer c.cancel()
 	release, acquired := c.tryMaintenanceLock()
 	if !acquired {
@@ -110,5 +110,21 @@ func TestPostgresMaintenanceLossInterruptsDuckDB(t *testing.T) {
 	defer next()
 	if _, err := c.execWithRetry("CREATE TABLE permitted_after_takeover(id INTEGER)"); err != nil {
 		t.Fatalf("next cycle failed: %v", err)
+	}
+}
+
+func TestPostgresMaintenanceRequiresStateless(t *testing.T) {
+	c := &CompactionService{catalogPath: "not a valid PostgreSQL DSN", config: CompactionConfig{CatalogType: "postgres"}}
+	release, acquired := c.tryMaintenanceLock()
+	if !acquired || release == nil || c.maintenanceLease.Load() != nil {
+		t.Fatal("non-stateless compaction attempted a PostgreSQL lease")
+	}
+	release()
+	if !c.compactionDue() || !c.recordCompactionCompletion() {
+		t.Fatal("non-stateless compaction used shared scheduling")
+	}
+	c.config.Stateless = true
+	if _, acquired := c.tryMaintenanceLock(); acquired {
+		t.Fatal("stateless compaction bypassed PostgreSQL acquisition")
 	}
 }

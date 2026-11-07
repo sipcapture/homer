@@ -31,6 +31,15 @@ type Lease struct {
 
 func (l *Lease) Context() context.Context { return l.ctx }
 
+// Uncoordinated preserves a caller's cancellation without opening PostgreSQL
+// sessions or starting a lock monitor. Used when stateless mode is disabled.
+func Uncoordinated(parent context.Context) *Lease {
+	ctx, cancel := context.WithCancel(parent)
+	done := make(chan struct{})
+	close(done)
+	return &Lease{ctx: ctx, cancel: cancel, done: done}
+}
+
 // Acquire locks catalogs in stable order without waiting. Partial acquisition
 // is rolled back on contention/error. Use direct connections or session pooling,
 // never transaction pooling. Database identity ignores local DuckDB aliases.

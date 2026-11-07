@@ -725,6 +725,8 @@ type DuckDBTuning struct {
 
 // DuckLakeConfig configures DuckLake storage
 type DuckLakeConfig struct {
+	// Stateless is inherited from the top-level setting, never a nested override.
+	Stateless     bool   `json:"-" mapstructure:"-"`
 	CatalogType   string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"` // DuckLake catalog — sqlite or postgres
 	CatalogPath   string `json:"catalog_path" mapstructure:"catalog_path" default:"homer_catalog.sqlite"`
 	DataPath      string `json:"data_path" mapstructure:"data_path" default:"/var/lib/homer/parquet"`
@@ -1841,6 +1843,8 @@ func setDefaults(v *viper.Viper) {
 // applyDefaults applies default values for missing fields
 func applyDefaults(cfg *Config) {
 	cfg.Coordinator.Stateless = cfg.Stateless
+	cfg.Storage.DuckLake.Stateless = cfg.Stateless
+	cfg.Node.DuckLake.Stateless = cfg.Stateless
 	// Ingest defaults
 	if cfg.Ingest.UDP.Port == 0 {
 		cfg.Ingest.UDP.Port = 9060

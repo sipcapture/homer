@@ -67,6 +67,7 @@ type Volume struct {
 
 // TieredStorageConfig holds configuration for tiered storage
 type TieredStorageConfig struct {
+	Stateless          bool // Inherited from the top-level setting; enables replica coordination.
 	Enable             bool
 	Volumes            []Volume
 	TTLMoveIntervalSec int
@@ -1355,7 +1356,7 @@ func fileExists(path string) bool {
 }
 
 func (tsm *TieredStorageManager) acquireMaintenance(paths ...string) (*maintenancelock.Lease, error) {
-	lease, acquired, err := AcquireMaintenance(context.Background(), tsm.config.CatalogType, paths...)
+	lease, acquired, err := AcquireMaintenance(context.Background(), tsm.config.Stateless, tsm.config.CatalogType, paths...)
 	if err != nil {
 		return nil, err
 	}

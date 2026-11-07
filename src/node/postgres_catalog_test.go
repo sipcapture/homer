@@ -5,6 +5,7 @@ package node
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"github.com/sipcapture/homer-core/src/storage/ducklake"
 	"net"
 	"net/http"
@@ -69,16 +70,26 @@ func TestNodeReadsPostgresDuckLakeCatalog(t *testing.T) {
 	if _, err := attachVolume(reader, "lake", vol); err != nil {
 		t.Fatal(err)
 	}
-	lease, acquired, err := ducklake.AcquireMaintenance(ctx, ducklake.CatalogPostgres, u.String())
+	lease, acquired, err := ducklake.AcquireMaintenance(ctx, true, ducklake.CatalogPostgres, u.String())
 	if err != nil || !acquired {
 		t.Fatalf("vacuum test owner: %v %v", acquired, err)
 	}
 	defer lease.Release()
-	n := &Node{db: reader, volumes: []VolumeInfo{info}}
+	n := &Node{config: &config.NodeConfig{DuckLake: config.DuckLakeConfig{Stateless: true}}, db: reader, volumes: []VolumeInfo{info}}
 	response := httptest.NewRecorder()
 	n.handleVacuum(response, httptest.NewRequest(http.MethodPost, "/vacuum", nil))
 	if response.Code != http.StatusConflict {
 		t.Fatalf("vacuum bypassed maintenance lock: status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	n.config.DuckLake.Stateless = false
+	response = httptest.NewRecorder()
+	n.handleVacuum(response, httptest.NewRequest(http.MethodPost, "/vacuum", nil))
+	var result struct {
+		Success bool `json:"success"`
+	}
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &result) != nil || !result.Success {
+		t.Fatalf("non-stateless vacuum was gated by another replica: %d %s", response.Code, response.Body.String())
 	}
 	lease.Release()
 	var id int

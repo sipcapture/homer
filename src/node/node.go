@@ -2063,7 +2063,8 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 			paths = append(paths, vol.CatalogPath)
 		}
 	}
-	lease, acquired, lockErr := ducklake.AcquireMaintenance(r.Context(), ducklake.CatalogPostgres, paths...)
+	stateless := n.config != nil && n.config.DuckLake.Stateless
+	lease, acquired, lockErr := ducklake.AcquireMaintenance(r.Context(), stateless, ducklake.CatalogPostgres, paths...)
 	if lockErr != nil || !acquired {
 		status := http.StatusConflict
 		message := "catalog maintenance is already running"

@@ -102,7 +102,7 @@ func TestStatelessEnvironmentAndTokenInheritance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.Stateless || !cfg.Coordinator.Stateless {
+	if !cfg.Stateless || !cfg.Coordinator.Stateless || !cfg.Storage.DuckLake.Stateless || !cfg.Node.DuckLake.Stateless {
 		t.Fatal("stateless setting not propagated")
 	}
 	cfg = statelessConfig()
@@ -131,7 +131,7 @@ func TestPostgresWithoutStatelessKeepsLocalSecrets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cfg.Stateless || cfg.Coordinator.Stateless {
+			if cfg.Stateless || cfg.Coordinator.Stateless || cfg.Storage.DuckLake.Stateless || cfg.Node.DuckLake.Stateless {
 				t.Fatal("PostgreSQL implicitly enabled stateless mode")
 			}
 			if cfg.Node.FlightServer.AuthToken == "" {
@@ -141,5 +141,19 @@ func TestPostgresWithoutStatelessKeepsLocalSecrets(t *testing.T) {
 				t.Fatalf("stateful token was not persisted: %v", err)
 			}
 		})
+	}
+}
+
+func TestStatelessMaintenanceInheritance(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		cfg := &Config{Stateless: enabled}
+		// Derived values cannot independently enable or disable the feature.
+		cfg.Coordinator.Stateless = !enabled
+		cfg.Storage.DuckLake.Stateless = !enabled
+		cfg.Node.DuckLake.Stateless = !enabled
+		applyDefaults(cfg)
+		if cfg.Coordinator.Stateless != enabled || cfg.Storage.DuckLake.Stateless != enabled || cfg.Node.DuckLake.Stateless != enabled {
+			t.Fatalf("top-level stateless=%v not inherited", enabled)
+		}
 	}
 }
