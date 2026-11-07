@@ -3,7 +3,11 @@
 Enable top-level `stateless: true` to run Homer without a persistent local data
 disk. PostgreSQL stores application settings, DuckLake metadata, and shared
 coordinator state; S3 or Azure stores Parquet data. Local DuckDB instances remain
-the query engine. Existing deployments retain their defaults when this mode is off.
+the query engine. Stateless validation and shared coordinator HTTP state are
+opt-in. PostgreSQL DuckLake maintenance coordination also applies when
+`stateless` is false: existing PostgreSQL deployments acquire advisory locks
+and use the Homer-owned schedule table described below. SQLite maintenance
+keeps its existing coordination behavior.
 
 ## Prepare shared storage and secrets
 
@@ -92,8 +96,9 @@ settings, catalog, or Parquet volume is required. Size container memory for the
 whole process, including Go memory, DuckDB instances, ingest queues, and any
 maintenance instance; a DuckDB memory limit is not a container memory limit.
 
-Automatic maintenance is disabled in this example. When enabled for PostgreSQL
-catalogs, replicas acquire a database-scoped session advisory lock for the whole
+Automatic maintenance is disabled in this example. For PostgreSQL catalogs,
+coordination is enabled independently of the `stateless` flag. Replicas acquire
+a database-scoped session advisory lock for the whole
 automatic maintenance cycle (retention, merge, snapshot expiration, and cleanup).
 A replica skips the cycle if another replica holds the lock or acquisition fails.
 The lock uses a dedicated connection to the actual primary catalog database;
@@ -120,10 +125,18 @@ when shorter), so interrupted or partially failed cycles can be retried without
 waiting a full compaction interval. Failed retention, inline flush, merge, or
 cleanup steps prevent the completion timestamp from advancing. Other steps may
 still finish, and the next attempt works against the current catalog rather than
-resuming a checkpoint. The catalog user needs permission to create and read/write the Homer schedule
-table. Schedule read failures run the cycle under the advisory lock; only a valid
-recent marker suppresses compaction. Inline flushing when compaction is disabled and
-manually requested maintenance keep their existing schedules.
+resuming a checkpoint.
+
+The catalog role needs CREATE on the schedule schema (public) to provision
+public.homer_maintenance_schedule, plus SELECT, INSERT, and UPDATE on that table.
+DuckLake's own metadata permissions do not automatically grant these Homer-table
+permissions. If provisioning or schedule access fails, automatic compaction still runs under the advisory lock; without
+a readable/writable completion marker it may run on every eligibility poll
+instead of the full configured interval. This behavior also applies to existing
+PostgreSQL deployments with stateless mode disabled.
+
+Only a valid recent marker suppresses compaction. Inline flushing when compaction
+is disabled and manually requested maintenance keep their existing schedules.
 
 Maintenance checks owning sessions before SQL and monitors them every second.
 Detected connection loss cancels the operation context, including in-flight SQL
@@ -192,10 +205,11 @@ already saturated shared database or object store.
 | Go batch | `storage.ducklake.batch_size` triggers appending, default 10,000 records per table; not a total memory cap |
 | DuckDB buffers | Two memory tables per table, with no fixed row capacity; constrained by memory/spill configuration |
 
-A queued flush does not reserve its buffer. Appends can reuse that buffer while
-the job waits for the catalog lock; they wait only while the flush holds the
-buffer lock across INSERT and TRUNCATE. Failed inserts retain the
-memory-table rows. If an insert succeeds but clearing the buffer fails, retries
+Each buffer admits one appender at a time. A queued flush does not reserve its
+buffer: appends can reuse it while the job waits for the catalog lock. Appends
+and INSERT/TRUNCATE flushes hold the same exclusive buffer lock. Connection or
+appender failures retain the entire Go batch for retry, and partially appended
+rows are rolled back. Failed lake inserts retain the memory-table rows. If an insert succeeds but clearing the buffer fails, retries
 clear those committed rows without inserting them again. Final flush failures
 are returned during shutdown.
 
@@ -226,8 +240,12 @@ Stateless mode shares revoked sessions, OAuth state and one-time login tokens,
 avatars, and export jobs/payloads through PostgreSQL. OAuth entries are consumed
 atomically. Revocation lookups have a one-second timeout and can reuse a
 successful answer for up to five seconds during an outage; without a usable
-answer, authentication returns HTTP 503. Bootstrap schema and seed operations
-are serialized between replicas. Export entries expire after
+answer, authentication returns HTTP 503. The cached answer can be "not revoked":
+a revocation written by another replica during that outage may not be observed
+until the database recovers or the cached answer expires. Runtime-state reads
+and writes reuse a native PostgreSQL pool capped at eight connections per
+coordinator. Bootstrap schema and seed operations are serialized between replicas.
+Export entries expire after
 24 hours. Multiplayer Netris/NetChess hubs, live HEP streams, and search buffers
 are disabled. Active connections, ingest buffers, and correlation caches remain
 ephemeral.
