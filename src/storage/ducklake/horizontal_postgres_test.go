@@ -97,62 +97,9 @@ func TestPostgresHorizontalWritersAndReaders(t *testing.T) {
 }
 
 func runPostgresHorizontalWritersAndReaders(t *testing.T, interval time.Duration, queue bool) {
-	endpoint := os.Getenv("HOMER_TEST_S3_ENDPOINT")
-	if endpoint == "" {
-		t.Skip("set HOMER_TEST_S3_ENDPOINT for concurrent object-storage integration")
-	}
-	dsn, dir := postgresLakeFixture(t)
+	cfg, client, bucket, dir := postgresObjectStorageFixture(t, interval, queue)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	client := s3.NewFromConfig(aws.Config{Region: "us-east-1", Credentials: credentials.NewStaticCredentialsProvider(
-		os.Getenv("HOMER_TEST_S3_ACCESS_KEY"), os.Getenv("HOMER_TEST_S3_SECRET_KEY"), "")}, func(o *s3.Options) { o.BaseEndpoint = aws.String(endpoint); o.UsePathStyle = true })
-	bucket := "homer-scale-" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	if _, err := client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		cleanupCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)
-		defer stop()
-		pages := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{Bucket: aws.String(bucket)})
-		for pages.HasMorePages() {
-			page, err := pages.NextPage(cleanupCtx)
-			if err != nil {
-				break
-			}
-			for _, object := range page.Contents {
-				_, _ = client.DeleteObject(cleanupCtx, &s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: object.Key})
-			}
-		}
-		_, _ = client.DeleteBucket(cleanupCtx, &s3.DeleteBucketInput{Bucket: aws.String(bucket)})
-	})
-	installer, err := sql.Open("duckdb", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, ext := range []string{"httpfs", "aws"} {
-		if _, err := installer.Exec("LOAD " + ext); err == nil {
-			continue
-		}
-		if _, err := installer.Exec("INSTALL " + ext + " FROM 'https://extensions.duckdb.org'"); err != nil {
-			_ = installer.Close()
-			t.Fatal(err)
-		}
-	}
-	_ = installer.Close()
-	cfg := Config{CatalogType: CatalogPostgres, CatalogPath: dsn, DataPath: "s3://" + bucket + "/parquet", LakeName: "lake", ShardCount: 1,
-		BatchSize: 32, FlushInterval: interval, FlushQueue: &queue, DataInliningRowLimit: 0,
-		S3Region: "us-east-1", S3AccessKeyID: os.Getenv("HOMER_TEST_S3_ACCESS_KEY"), S3SecretAccessKey: os.Getenv("HOMER_TEST_S3_SECRET_KEY"),
-		S3Endpoint: strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://"), S3UseSSL: strings.HasPrefix(endpoint, "https://"), S3URLStyle: "path",
-		TuningThreads: 1, TuningMemoryLimit: "256MB", TuningTempDirectory: filepath.Join(dir, "bootstrap-spill")}
-	// Initialize once, then have independently started writers contend on the
-	// same existing catalog, tables and remote Parquet directory.
-	bootstrap, err := NewManager(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := bootstrap.Stop(); err != nil {
-		t.Fatal(err)
-	}
 	hep, err := decoder.DecodeHEP(decoder.BenchHEP3SIPPacket())
 	if err != nil {
 		t.Fatal(err)
@@ -295,4 +242,67 @@ func runPostgresHorizontalWritersAndReaders(t *testing.T, interval time.Duration
 		t.Fatalf("no remote Parquet objects: %v", err)
 	}
 	t.Log("two writer processes, two independent readers, concurrent SQL compaction: 4096 rows, no missing or duplicate IDs")
+}
+
+// postgresObjectStorageFixture provisions a private DuckLake catalog and bucket.
+// It is shared by multi-process tests and focused buffer failure/reuse tests.
+func postgresObjectStorageFixture(t *testing.T, interval time.Duration, queue bool) (Config, *s3.Client, string, string) {
+	t.Helper()
+	endpoint := os.Getenv("HOMER_TEST_S3_ENDPOINT")
+	if endpoint == "" {
+		t.Skip("set HOMER_TEST_S3_ENDPOINT for concurrent object-storage integration")
+	}
+	dsn, dir := postgresLakeFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	client := s3.NewFromConfig(aws.Config{Region: "us-east-1", Credentials: credentials.NewStaticCredentialsProvider(
+		os.Getenv("HOMER_TEST_S3_ACCESS_KEY"), os.Getenv("HOMER_TEST_S3_SECRET_KEY"), "")}, func(o *s3.Options) { o.BaseEndpoint = aws.String(endpoint); o.UsePathStyle = true })
+	bucket := "homer-scale-" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		pages := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{Bucket: aws.String(bucket)})
+		for pages.HasMorePages() {
+			page, err := pages.NextPage(cleanupCtx)
+			if err != nil {
+				break
+			}
+			for _, object := range page.Contents {
+				_, _ = client.DeleteObject(cleanupCtx, &s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: object.Key})
+			}
+		}
+		_, _ = client.DeleteBucket(cleanupCtx, &s3.DeleteBucketInput{Bucket: aws.String(bucket)})
+	})
+	installer, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ext := range []string{"httpfs", "aws"} {
+		if _, err := installer.Exec("LOAD " + ext); err == nil {
+			continue
+		}
+		if _, err := installer.Exec("INSTALL " + ext + " FROM 'https://extensions.duckdb.org'"); err != nil {
+			_ = installer.Close()
+			t.Fatal(err)
+		}
+	}
+	_ = installer.Close()
+	cfg := Config{CatalogType: CatalogPostgres, CatalogPath: dsn, DataPath: "s3://" + bucket + "/parquet", LakeName: "lake", ShardCount: 1,
+		BatchSize: 32, FlushInterval: interval, FlushQueue: &queue, DataInliningRowLimit: 0,
+		S3Region: "us-east-1", S3AccessKeyID: os.Getenv("HOMER_TEST_S3_ACCESS_KEY"), S3SecretAccessKey: os.Getenv("HOMER_TEST_S3_SECRET_KEY"),
+		S3Endpoint: strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://"), S3UseSSL: strings.HasPrefix(endpoint, "https://"), S3URLStyle: "path",
+		TuningThreads: 1, TuningMemoryLimit: "256MB", TuningTempDirectory: filepath.Join(dir, "bootstrap-spill")}
+	// Initialize shared catalog tables before opening independent writers.
+	bootstrap, err := NewManager(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bootstrap.Stop(); err != nil {
+		t.Fatal(err)
+	}
+
+	return cfg, client, bucket, dir
 }
