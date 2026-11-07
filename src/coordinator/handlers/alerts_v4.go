@@ -64,6 +64,9 @@ func (h *AlertsHandler) V4AlertsDeleteAll(c echo.Context) error {
 	if _, err := getUsernameFromContext(c); err != nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
 	}
+	if !isAdmin(c) {
+		return writeError(c, http.StatusForbidden, "Forbidden", "Admin privileges required")
+	}
 	if err := h.svc.DeleteAll(c.Request().Context()); err != nil {
 		return writeError(c, http.StatusInternalServerError, "Server Error", err.Error())
 	}
