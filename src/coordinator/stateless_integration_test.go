@@ -1,3 +1,5 @@
+//go:build !vet
+
 // Copyright (C) 2026 Homer Server Contributors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -40,6 +42,8 @@ func TestStatelessCoordinatorProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stopModules := startCombinedTestModules(t, cfg)
+	defer stopModules()
 	c, err := New(&cfg.Coordinator)
 	if err != nil {
 		t.Fatal(err)
@@ -154,6 +158,14 @@ func statelessTestDatabase(t *testing.T) string {
 }
 
 func TestPostgresStatelessCoordinatorReplicas(t *testing.T) {
+	runStatelessReplicaIntegration(t, false)
+}
+
+func TestPostgresStatelessCombinedReplicas(t *testing.T) {
+	runStatelessReplicaIntegration(t, true)
+}
+
+func runStatelessReplicaIntegration(t *testing.T, combined bool) {
 	rootT := t
 	dsn := statelessTestDatabase(t)
 	var challenge string
@@ -211,8 +223,15 @@ func TestPostgresStatelessCoordinatorReplicas(t *testing.T) {
 	if err := os.WriteFile(configPath, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	// Start both processes before waiting, exercising concurrent first-run bootstrap.
-	a, b := startStatelessProcess(t, configPath), startStatelessProcess(t, configPath)
+	configPaths := []string{configPath, configPath}
+	if combined {
+		configPaths = combinedReplicaConfigs(t, settings)
+	}
+	a := startStatelessProcess(t, configPaths[0])
+	if combined {
+		_ = a.address(t)
+	}
+	b := startStatelessProcess(t, configPaths[1])
 	addresses := []string{a.address(t), b.address(t)}
 	client := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	request := func(base, method, path, token, body string) (int, http.Header, []byte, error) {
@@ -255,6 +274,9 @@ func TestPostgresStatelessCoordinatorReplicas(t *testing.T) {
 		return result.Data.Token
 	}
 	token := login(addresses[0])
+	if combined {
+		verifyCombinedIngestAndSearch(t, configPaths, addresses, token)
+	}
 	t.Run("alternating authenticated requests", func(t *testing.T) {
 		var wg sync.WaitGroup
 		for i := 0; i < 40; i++ {
@@ -293,7 +315,7 @@ func TestPostgresStatelessCoordinatorReplicas(t *testing.T) {
 		// Crash the creator, restart with the same external configuration, and
 		// verify neither the JWT nor the export depends on its original process.
 		a.stop()
-		a = startStatelessProcess(rootT, configPath)
+		a = startStatelessProcess(rootT, configPaths[0])
 		addresses[0] = a.address(t)
 		_, payload = expect(t, addresses[0], http.MethodGet, path+"/download", token, "", http.StatusOK)
 		if !strings.Contains(string(payload), "scale-export") {
@@ -304,7 +326,7 @@ func TestPostgresStatelessCoordinatorReplicas(t *testing.T) {
 		expect(t, addresses[1], http.MethodDelete, "/api/v4/auth/sessions/current", token, "", http.StatusNoContent)
 		expect(t, addresses[0], http.MethodGet, "/api/v4/me", token, "", http.StatusUnauthorized)
 		b.stop()
-		b = startStatelessProcess(rootT, configPath)
+		b = startStatelessProcess(rootT, configPaths[1])
 		addresses[1] = b.address(t)
 		expect(t, addresses[1], http.MethodGet, "/api/v4/me", token, "", http.StatusUnauthorized)
 	})
