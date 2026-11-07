@@ -1630,10 +1630,8 @@ paths:
           $ref: "#/components/responses/ServerError"
     post:
       tags: [Agents]
-      summary: Create agent subscription (Auth-Token)
+      summary: Create agent subscription (admin)
       operationId: agentSubscriptionsCreate
-      security:
-        - authTokenHeader: []
       requestBody:
         required: true
         content:
@@ -1651,6 +1649,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/ServerError"
   /agents/subscriptions/{subscriptionId}:
@@ -1677,7 +1677,7 @@ paths:
           $ref: "#/components/responses/ServerError"
     put:
       tags: [Agents]
-      summary: Update agent subscription
+      summary: Update agent subscription (admin)
       operationId: agentSubscriptionsUpdate
       parameters:
         - $ref: "#/components/parameters/AgentSubId"
@@ -1698,13 +1698,15 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/ServerError"
     delete:
       tags: [Agents]
-      summary: Delete agent subscription
+      summary: Delete agent subscription (admin)
       operationId: agentSubscriptionsDelete
       parameters:
         - $ref: "#/components/parameters/AgentSubId"
@@ -1713,6 +1715,8 @@ paths:
           description: Deleted
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":

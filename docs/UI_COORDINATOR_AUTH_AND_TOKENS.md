@@ -139,7 +139,7 @@ Tokens support optional **expiry**, **call limits**, and **active** flag; the se
 
 `coordinator.auth.disable_password_login: true` hides the username/password form **and** rejects `POST /api/v4/auth/sessions` with **403**. Username/password API login (including `homer search --user/--pass`) does not work in that mode.
 
-Use an **admin Auth-Token** for automation instead. Alias CRUD (`POST`/`PUT`/`DELETE /api/v4/aliases`) requires admin: create the token while signed in as an admin user so `user_object.user_group` is `admin`.
+Use an **admin Auth-Token** for automation instead. Alias CRUD (`POST`/`PUT`/`DELETE /api/v4/aliases`), agent-subscription writes (`POST`/`PUT`/`DELETE /api/v4/agents/subscriptions`), and `DELETE /api/v4/alerts` require admin: create the token while signed in as an admin user so `user_object.user_group` is `admin`. `POST /api/v4/alerts` stays open to any valid token so a Grafana webhook can ingest alerts.
 
 1. Set `coordinator.api_settings.enable_token_access` to `true` and restart.
 2. Sign in once via OAuth as an admin (Settings → Auth tokens).
