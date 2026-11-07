@@ -404,7 +404,7 @@ External tshark dissection for the Decode button. Off by default. Full setup, Do
 |--------|----------|-------------|
 | GET | `/api/v4/alerts` | List stored dashboard alerts (newest first) |
 | POST | `/api/v4/alerts` | Create alert (`title` or `message` required; optional `payload` JSON) |
-| DELETE | `/api/v4/alerts` | Delete all stored alerts |
+| DELETE | `/api/v4/alerts` | Delete all stored alerts (**admin**) |
 
 `payload.search` / `payload.homer_url` retain the query that fired so **Settings → Alerts** and the Alert widget can open dashboard search. See [ALERTS.md](./ALERTS.md).
 

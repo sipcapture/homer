@@ -6,7 +6,7 @@ Related:
 
 - [Dashboard URL search](SEARCH_URL.md) — `/?call_id=&from=&to=#dashboard`
 - [UI and API tokens](UI_COORDINATOR_AUTH_AND_TOKENS.md) — `Auth-Token` for Grafana webhooks
-- Coordinator: `GET`/`POST`/`DELETE /api/v4/alerts`
+- Coordinator: `GET`/`POST /api/v4/alerts` (any authenticated caller) and `DELETE /api/v4/alerts` (**admin**)
 
 ## Flow
 

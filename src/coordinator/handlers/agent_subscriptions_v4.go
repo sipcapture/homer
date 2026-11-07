@@ -178,6 +178,9 @@ func (h *AgentSubscriptionsHandler) V4AgentSubsCreate(c echo.Context) error {
 	if _, err := getUsernameFromContext(c); err != nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
 	}
+	if !isAdmin(c) {
+		return writeError(c, http.StatusForbidden, "Forbidden", "Admin privileges required")
+	}
 
 	var payload AgentSubV4
 	if err := c.Bind(&payload); err != nil {
@@ -228,6 +231,9 @@ func (h *AgentSubscriptionsHandler) V4AgentSubsUpdate(c echo.Context) error {
 	if _, err := getUsernameFromContext(c); err != nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
 	}
+	if !isAdmin(c) {
+		return writeError(c, http.StatusForbidden, "Forbidden", "Admin privileges required")
+	}
 
 	subscriptionID := c.Param("subscriptionId")
 	if subscriptionID == "" {
@@ -257,6 +263,9 @@ func (h *AgentSubscriptionsHandler) V4AgentSubsUpdate(c echo.Context) error {
 func (h *AgentSubscriptionsHandler) V4AgentSubsDelete(c echo.Context) error {
 	if _, err := getUsernameFromContext(c); err != nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
+	}
+	if !isAdmin(c) {
+		return writeError(c, http.StatusForbidden, "Forbidden", "Admin privileges required")
 	}
 
 	subscriptionID := c.Param("subscriptionId")
