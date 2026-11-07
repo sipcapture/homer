@@ -4,9 +4,9 @@ package maintenancelock
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,29 +35,27 @@ func (l *Lease) Context() context.Context { return l.ctx }
 // is rolled back on contention/error. Use direct connections or session pooling,
 // never transaction pooling. Database identity ignores local DuckDB aliases.
 func Acquire(parent context.Context, dsns ...string) (*Lease, bool, error) {
-	configs := make(map[string]*pgx.ConnConfig)
+	return acquireWithLookup(parent, net.DefaultResolver.LookupHost, dsns...)
+}
+
+type hostLookup func(context.Context, string) ([]string, error)
+
+func acquireWithLookup(parent context.Context, lookup hostLookup, dsns ...string) (*Lease, bool, error) {
+	configs := make([]*pgx.ConnConfig, 0, len(dsns))
 	for _, dsn := range dsns {
 		cfg, err := pgx.ParseConfig(dsn)
 		if err != nil {
 			return nil, false, errors.New("invalid maintenance catalog connection")
 		}
-		identity, err := catalogIdentity(parent, cfg)
-		if err != nil {
-			return nil, false, err
-		}
-		configs[identity] = cfg
+		configs = append(configs, cfg)
 	}
-	keys := make([]string, 0, len(configs))
-	for key := range configs {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	configs = deduplicateCatalogConfigs(parent, configs, lookup)
 	ctx, cancel := context.WithCancel(parent)
 	l := &Lease{ctx: ctx, cancel: cancel, done: make(chan struct{})}
 	failed := func() { close(l.done); l.Release() }
-	for _, key := range keys {
+	for _, cfg := range configs {
 		acquireCtx, stop := context.WithTimeout(ctx, 10*time.Second)
-		conn, err := pgx.ConnectConfig(acquireCtx, configs[key])
+		conn, err := pgx.ConnectConfig(acquireCtx, cfg)
 		if err != nil {
 			stop()
 			failed()
@@ -134,34 +132,99 @@ func Try(ctx context.Context, dsn string) (func(), bool, error) {
 	return l.Release, true, nil
 }
 
-// catalogIdentity resolves aliases before opening sessions so one process cannot
-// contend with itself when multiple volumes refer to the same database.
-func catalogIdentity(ctx context.Context, cfg *pgx.ConnConfig) (string, error) {
-	host := strings.TrimSuffix(strings.ToLower(cfg.Host), ".")
-	if !strings.HasPrefix(host, "/") {
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		addresses, err := net.DefaultResolver.LookupHost(ctx, host)
-		if err != nil {
-			return "", errors.New("resolve maintenance catalog host failed")
+// deduplicateCatalogConfigs groups catalogs whose host/address sets overlap.
+// Merging the entire sets also handles transitive aliases (A-B and B-C).
+// Resolution is only a deduplication hint: failure must not prevent pgx from
+// connecting with its own resolver/fallback behavior.
+func deduplicateCatalogConfigs(ctx context.Context, configs []*pgx.ConnConfig, lookup hostLookup) []*pgx.ConnConfig {
+	sort.Slice(configs, func(i, j int) bool { return configs[i].ConnString() < configs[j].ConnString() })
+	parent := make([]int, len(configs))
+	for i := range parent {
+		parent[i] = i
+	}
+	var root func(int) int
+	root = func(i int) int {
+		if parent[i] != i {
+			parent[i] = root(parent[i])
 		}
-		for i, address := range addresses {
-			ip := net.ParseIP(address)
-			if ip != nil && ip.IsLoopback() {
-				addresses[i] = "127.0.0.1"
-			} else if ip != nil {
-				addresses[i] = ip.String()
+		return parent[i]
+	}
+	sets := make([]map[string]bool, len(configs))
+	owners := make(map[string]int)
+	for i, cfg := range configs {
+		sets[i] = catalogAddressKeys(ctx, cfg, lookup)
+		for key := range sets[i] {
+			if previous, ok := owners[key]; ok {
+				parent[root(i)] = root(previous)
+			} else {
+				owners[key] = i
 			}
 		}
-		sort.Strings(addresses)
-		if len(addresses) == 0 {
-			return "", errors.New("maintenance catalog host has no addresses")
+	}
+	type group struct {
+		cfg  *pgx.ConnConfig
+		keys map[string]bool
+	}
+	merged := make(map[int]*group)
+	// configs are sorted, so the first member is a stable representative.
+	for i, cfg := range configs {
+		r := root(i)
+		if merged[r] == nil {
+			merged[r] = &group{cfg: cfg, keys: make(map[string]bool)}
 		}
-		host = addresses[0]
+		for key := range sets[i] {
+			merged[r].keys[key] = true
+		}
+	}
+	groups := make([]*group, 0, len(merged))
+	for _, g := range merged {
+		groups = append(groups, g)
+	}
+	minKey := func(keys map[string]bool) string {
+		var smallest string
+		for key := range keys {
+			if smallest == "" || key < smallest {
+				smallest = key
+			}
+		}
+		return smallest
+	}
+	sort.Slice(groups, func(i, j int) bool { return minKey(groups[i].keys) < minKey(groups[j].keys) })
+	result := make([]*pgx.ConnConfig, 0, len(groups))
+	for _, g := range groups {
+		result = append(result, g.cfg)
+	}
+	return result
+}
+
+func catalogAddressKeys(ctx context.Context, cfg *pgx.ConnConfig, lookup hostLookup) map[string]bool {
+	host := cfg.Host
+	if !strings.HasPrefix(host, "/") {
+		host = strings.TrimSuffix(strings.ToLower(host), ".")
 	}
 	port := cfg.Port
 	if port == 0 {
 		port = 5432
 	}
-	return fmt.Sprintf("%s:%d/%s", host, port, cfg.Database), nil
+	keys := make(map[string]bool)
+	add := func(address string) {
+		if ip := net.ParseIP(address); ip != nil {
+			if ip.IsLoopback() {
+				address = "127.0.0.1"
+			} else {
+				address = ip.String()
+			}
+		}
+		keys[net.JoinHostPort(address, strconv.Itoa(int(port)))+"/"+cfg.Database] = true
+	}
+	add(host)
+	if !strings.HasPrefix(host, "/") && net.ParseIP(host) == nil {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		addresses, _ := lookup(ctx, host)
+		for _, address := range addresses {
+			add(address)
+		}
+	}
+	return keys
 }
