@@ -296,7 +296,7 @@ func TestAllInOneSandboxCopiesWriterBuffers(t *testing.T) {
 	}
 
 	rows, _, plan, err = n.runSharedSelectWithMemoryPolicy(ctx, db,
-		"SELECT id FROM homer_lake.main.hep_proto_1_call ORDER BY timestamp DESC LIMIT 100")
+		"SELECT id, timestamp FROM homer_lake.main.hep_proto_1_call ORDER BY timestamp DESC LIMIT 100")
 	if err != nil {
 		t.Fatalf("top-N search (%s): %v", plan.mode, err)
 	}
