@@ -247,12 +247,13 @@ func TestAllInOneSandboxCopiesWriterBuffers(t *testing.T) {
 	for _, q := range []string{
 		fmt.Sprintf("ATTACH 'ducklake:sqlite:%s' AS homer_lake (DATA_PATH '%s');", catalog, data),
 		"CREATE TABLE homer_lake.main.hep_proto_1_call (id INTEGER, timestamp TIMESTAMP);",
-		"INSERT INTO homer_lake.main.hep_proto_1_call SELECT range, TIMESTAMP '2026-01-01' FROM range(5);",
-		// Writer buffers, as ducklake.NewTableWriter creates them.
+		"INSERT INTO homer_lake.main.hep_proto_1_call SELECT range, TIMESTAMP '2026-01-01' + to_seconds(range) FROM range(5);",
+		// Writer buffers, as ducklake.NewTableWriter creates them. Distinct
+		// timestamps, since merged rows without uuid dedup on timestamp.
 		"CREATE TABLE mem_hep_proto_1_call_a (id INTEGER, timestamp TIMESTAMP);",
 		"CREATE TABLE mem_hep_proto_1_call_b (id INTEGER, timestamp TIMESTAMP);",
-		"INSERT INTO mem_hep_proto_1_call_a SELECT range + 100, TIMESTAMP '2026-01-02' FROM range(3);",
-		"INSERT INTO mem_hep_proto_1_call_b SELECT range + 200, TIMESTAMP '2026-01-02' FROM range(2);",
+		"INSERT INTO mem_hep_proto_1_call_a SELECT range + 100, TIMESTAMP '2026-01-02' + to_seconds(range) FROM range(3);",
+		"INSERT INTO mem_hep_proto_1_call_b SELECT range + 200, TIMESTAMP '2026-01-03' + to_seconds(range) FROM range(2);",
 	} {
 		if _, err := w.Exec(q); err != nil {
 			t.Fatalf("writer %q: %v", q, err)
