@@ -131,7 +131,7 @@ See [FLIGHTSQL.md](FLIGHTSQL.md) for Grafana setup and coordinator proxy (`coord
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `duckdb_sandbox` | bool | true | After the lake is attached, turn off DuckDB external access on the node's query DuckDB. Only volume paths, catalog files and the spill directory stay reachable. In all-in-one mode it also moves reads off the writer DuckDB, and `search_buffer` stops showing unflushed rows. Env: `HOMER_NODE_DUCKDB_SANDBOX`. See [SECURITY.md](SECURITY.md#node-duckdb-sandbox). |
+| `duckdb_sandbox` | bool | true | After the lake is attached, turn off DuckDB external access on the node's query DuckDB. Only volume paths, catalog files and the spill directory stay reachable. In all-in-one mode it also moves reads off the writer DuckDB; `search_buffer` rows are copied in per search. Env: `HOMER_NODE_DUCKDB_SANDBOX`. See [SECURITY.md](SECURITY.md#node-duckdb-sandbox). |
 
 ### ducklake
 

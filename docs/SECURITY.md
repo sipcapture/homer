@@ -13,7 +13,7 @@ Homer 11.0.282–11.0.284 closes three coordinator security issues. **11.0.313**
 | Node `POST /query` (port+1) | Unauthenticated arbitrary DuckDB SQL / file read | `ValidateRawSQL` always; Bearer auth when `flight_server.auth_token` set; auto-token on non-loopback bind | All-in-one with default `0.0.0.0`: token auto-persisted; coordinator local node gets `token` automatically |
 | `sqlite_scan` / external scanners | Authenticated bypass of SQL denylist | Blocked in `ValidateRawSQL` | Legitimate lake `SELECT`s: **no change** |
 | `sniff_csv`, unlisted readers, `FROM 'path'` | Authenticated file read past the function denylist | Reader routines blocked by name shape (`read_`, `sniff_`, `parquet_`, `http_`, `iceberg_`, `delta_`, `st_read`, `*_scan`, `*_attach`) plus `getenv` / `duckdb_secrets`; string literals in table position rejected | Legitimate lake `SELECT`s: **no change** |
-| Raw SQL that gets past `ValidateRawSQL` | Each new DuckDB reader or path trick reopened host file access | Node query DuckDB runs with `enable_external_access = false`; only lake paths, catalog files and the spill directory are allowed | Standalone nodes: **no change** for lake queries. All-in-one: reads move to the node DuckDB, so `search_buffer` rows appear after the next flush. Tiered all-in-one (`storage_policy`) still reads on the writer DuckDB. Opt out with `node.duckdb_sandbox: false` |
+| Raw SQL that gets past `ValidateRawSQL` | Each new DuckDB reader or path trick reopened host file access | Node query DuckDB runs with `enable_external_access = false`; only lake paths, catalog files and the spill directory are allowed | Standalone nodes: **no change** for lake queries. All-in-one: reads move to the node DuckDB; `search_buffer` rows are copied in for each search. Tiered all-in-one (`storage_policy`) still reads on the writer DuckDB. Opt out with `node.duckdb_sandbox: false` |
 | Node `POST /vacuum` `expire_older_than` | SQL injection into `ducklake_expire_snapshots` | Duration is parsed and rendered as integer seconds | `1 hour`, `7 days`, Go durations (`1h`): **no change**. Other values: **400** |
 | Agent subscription writes and `DELETE /api/v4/alerts` | Any logged-in user could change capture-agent registrations or wipe stored alerts | `POST`/`PUT`/`DELETE /api/v4/agents/subscriptions` and `DELETE /api/v4/alerts` require admin. `GET` stays authenticated. `POST /api/v4/alerts` stays authenticated so Grafana webhooks keep working | Admin sessions and admin `Auth-Token` (`user_group: admin`): **no change**. Non-admin callers of those writes: **403** |
 
@@ -116,7 +116,7 @@ From then on `read_text('/etc/passwd')`, `FROM '/path'`, `COPY ... TO`, `ATTACH`
 
 **Scope:** this covers the node's own DuckDB, which serves raw SQL, FlightSQL and `/query`. The writer's DuckDB and the tiering DuckDB need full file access for flush, tier moves and maintenance, so they are never sandboxed.
 
-**All-in-one:** when the writer and node run in one process, the node reads the lake on its own sandboxed DuckDB, the same way a standalone node does. The writer's DuckDB is used only for `/exec` (PCAP import, bound parameters). This needs:
+**All-in-one:** when the writer and node run in one process, the node reads the lake on its own sandboxed DuckDB, the same way a standalone node does. The writer's DuckDB is used only for `/exec` (PCAP import, bound parameters) and to copy the memory buffers out. This needs:
 
 - `node.ducklake.lake_name` equal to `storage.ducklake.lake_name`;
 - a `default` volume in `node.ducklake.volumes` on the same catalog as `storage.ducklake.catalog_path`;
@@ -124,7 +124,7 @@ From then on `read_text('/etc/passwd')`, `FROM '/path'`, `COPY ... TO`, `ATTACH`
 
 The startup log shows `Node: all-in-one reads use the node's sandboxed DuckDB`. If a condition is not met, or the sandbox fell back, the node reads on the writer's DuckDB as before and logs `Node: all-in-one reads use the writer DuckDB, which is not sandboxed` with the reason. Only the SQL validator applies then.
 
-The memory buffers live in the writer's DuckDB, so `search_buffer` has no effect while reads are sandboxed: unflushed rows appear in search after the next flush (`flush_interval_sec`, default 30). Set `node.duckdb_sandbox: false` to see them earlier, at the cost of the sandbox.
+`search_buffer` keeps working. The memory buffers live in the writer's DuckDB, so before a search that reads them the node copies them out with a fixed query of its own: `COPY (SELECT * FROM mem_hep_proto_<table>_a|b [WHERE timestamp in the search range]) TO` a parquet file in the node spill directory, which the sandbox allows. The search then runs on the copies in the node DuckDB, and the copies and the file are removed afterwards. Searches that read the buffers run one at a time. User SQL never runs on the writer's DuckDB. If a copy fails, the search returns lake rows only and logs `Node: could not copy writer buffers`. FlightSQL does not include unflushed rows in this mode.
 
 **Opt out:** `node.duckdb_sandbox: false` or `HOMER_NODE_DUCKDB_SANDBOX=false`.
 
