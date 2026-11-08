@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"net"
@@ -608,11 +609,12 @@ func runServer() {
 			fmt.Fprintf(os.Stderr, "Failed to create node module: %v\n", err)
 			os.Exit(1)
 		}
-		// Share writer's DuckDB connection with node for real-time query visibility.
-		// Without this, the node's separate DuckDB can't see data flushed by the writer.
+		// With the sandbox on, reads stay on the node's own sandboxed DuckDB and
+		// the writer's DuckDB is used only for /exec. Otherwise the node shares
+		// the writer's DuckDB, which also shows the unflushed memory buffers.
 		if writerModule != nil {
 			if db := writerModule.GetDB(); db != nil {
-				n.SetSharedDB(db)
+				wireAllInOneNodeDB(n, db, &cfg.Node, &cfg.Storage)
 			}
 		}
 		if liveBroker != nil {
@@ -919,4 +921,26 @@ func runMCPSubcommand(args []string) error {
 		return fmt.Errorf("create mcp module: %w", err)
 	}
 	return m.Run()
+}
+
+// wireAllInOneNodeDB picks which DuckDB the all-in-one node reads from.
+func wireAllInOneNodeDB(n *node.Node, writerDB *sql.DB, nodeCfg *config.NodeConfig, storageCfg *config.StorageConfig) {
+	isolate, reason := node.IsolatedReadsPlan(nodeCfg, storageCfg)
+	if isolate && !n.SandboxActive() {
+		isolate, reason = false, "the node DuckDB sandbox could not be applied"
+	}
+	if !isolate {
+		n.SetSharedDB(writerDB)
+		if nodeCfg.DuckDBSandboxEnabled() {
+			logger.Warn("Node: all-in-one reads use the writer DuckDB, which is not sandboxed; only the SQL validator applies",
+				"reason", reason)
+		}
+		return
+	}
+	n.SetWriterDB(writerDB)
+	logger.Info("Node: all-in-one reads use the node's sandboxed DuckDB")
+	if storageCfg.DuckLake.SearchBuffer {
+		logger.Warn("Node: search_buffer has no effect while node.duckdb_sandbox is on in all-in-one mode; unflushed rows appear in search after the next flush. Set node.duckdb_sandbox=false to show them earlier",
+			"flush_interval_sec", storageCfg.DuckLake.FlushInterval)
+	}
 }
