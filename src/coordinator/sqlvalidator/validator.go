@@ -294,6 +294,12 @@ var blockedFunctions = map[string]bool{
 	"MYSQL_QUERY":    true,
 	"GETENV":         true,
 	"DUCKDB_SECRETS": true,
+	// Functions that run a SQL string. The string is a literal to this
+	// validator, so anything inside it (read_text, getenv, ...) would
+	// bypass the checks above.
+	"QUERY":                       true,
+	"QUERY_TABLE":                 true,
+	"JSON_EXECUTE_SERIALIZED_SQL": true,
 }
 
 // isBlockedRoutine reports a DuckDB routine that can read or write files,
