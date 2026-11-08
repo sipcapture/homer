@@ -609,9 +609,9 @@ func runServer() {
 			fmt.Fprintf(os.Stderr, "Failed to create node module: %v\n", err)
 			os.Exit(1)
 		}
-		// With the sandbox on, reads stay on the node's own sandboxed DuckDB and
-		// the writer's DuckDB is used only for /exec. Otherwise the node shares
-		// the writer's DuckDB, which also shows the unflushed memory buffers.
+		// With the sandbox on, reads stay on the node's own sandboxed DuckDB; the
+		// writer's DuckDB is used for /exec and to copy the memory buffers out.
+		// Otherwise the node reads on the writer's DuckDB directly.
 		if writerModule != nil {
 			if db := writerModule.GetDB(); db != nil {
 				wireAllInOneNodeDB(n, db, &cfg.Node, &cfg.Storage)
@@ -938,9 +938,6 @@ func wireAllInOneNodeDB(n *node.Node, writerDB *sql.DB, nodeCfg *config.NodeConf
 		return
 	}
 	n.SetWriterDB(writerDB)
-	logger.Info("Node: all-in-one reads use the node's sandboxed DuckDB")
-	if storageCfg.DuckLake.SearchBuffer {
-		logger.Warn("Node: search_buffer has no effect while node.duckdb_sandbox is on in all-in-one mode; unflushed rows appear in search after the next flush. Set node.duckdb_sandbox=false to show them earlier",
-			"flush_interval_sec", storageCfg.DuckLake.FlushInterval)
-	}
+	logger.Info("Node: all-in-one reads use the node's sandboxed DuckDB",
+		"search_buffer_copy", storageCfg.DuckLake.SearchBuffer)
 }

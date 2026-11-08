@@ -52,9 +52,10 @@ type Node struct {
 	catalog       *DuckLakeCatalog
 	listener      net.Listener
 	db            *sql.DB
-	sharedDB      *sql.DB // shared with writer module for real-time visibility
-	tieredQueryDB *sql.DB // writer TieredStorageManager DuckDB (homer_lake_hot / _cold)
-	writerDB      *sql.DB // writer DuckDB for /exec only; reads stay on db (see allinone.go)
+	sharedDB      *sql.DB    // shared with writer module for real-time visibility
+	tieredQueryDB *sql.DB    // writer TieredStorageManager DuckDB (homer_lake_hot / _cold)
+	writerDB      *sql.DB    // writer DuckDB for /exec and buffer copies; reads stay on db (see allinone.go)
+	bufferMu      sync.Mutex // one buffer copy at a time on db (see stageBufferTables)
 	mu            sync.RWMutex
 	running       bool
 	volumes       []VolumeInfo // Attached storage volumes for tiered storage
@@ -770,6 +771,7 @@ type memoryUnionQueries struct {
 	memSQL      string
 	combinedSQL string
 	ok          bool
+	memTables   []string // writer buffer tables the memory SQL reads
 }
 
 type sharedQueryPlanLog struct {
@@ -777,7 +779,8 @@ type sharedQueryPlanLog struct {
 	lakeSQL     string
 	memSQL      string
 	combinedSQL string
-	lakeChunks  int // number of time chunks the lake sub-query was split into
+	lakeChunks  int      // number of time chunks the lake sub-query was split into
+	memTables   []string // writer buffer tables the memory SQL reads
 }
 
 func normalizeSQLWhitespace(s string) string {
@@ -1017,6 +1020,7 @@ func (n *Node) planSharedSelect(sql string) (plan sharedQueryPlanLog, mergeSepar
 		plan.lakeSQL = mq.lakeSQL
 		plan.memSQL = mq.memSQL
 		plan.combinedSQL = ""
+		plan.memTables = mq.memTables
 		timeSlice = shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause)
 		return plan, true, timeSlice
 	}
@@ -1024,12 +1028,14 @@ func (n *Node) planSharedSelect(sql string) (plan sharedQueryPlanLog, mergeSepar
 	plan.lakeSQL = mq.lakeSQL
 	plan.memSQL = mq.memSQL
 	plan.combinedSQL = mq.combinedSQL
+	plan.memTables = mq.memTables
 	return plan, false, false
 }
 
 func (n *Node) buildMemoryUnionQueries(sql string) memoryUnionQueries {
 	out := memoryUnionQueries{lakeSQL: sql}
-	if n.sharedDB == nil {
+	copyBuffers := n.bufferCopyEnabled()
+	if n.sharedDB == nil && !copyBuffers {
 		return out
 	}
 	upper := strings.ToUpper(strings.TrimSpace(sql))
@@ -1066,6 +1072,12 @@ func (n *Node) buildMemoryUnionQueries(sql string) memoryUnionQueries {
 	tableSuffix := sql[suffixStart:suffixEnd]
 	memTableA := "mem_hep_proto_" + tableSuffix + "_a"
 	memTableB := "mem_hep_proto_" + tableSuffix + "_b"
+	out.memTables = []string{memTableA, memTableB}
+	if copyBuffers {
+		// Copies of the writer buffers live in the node DuckDB's own catalog.
+		memTableA = stagedBufferCatalog + memTableA
+		memTableB = stagedBufferCatalog + memTableB
+	}
 	lakeTableFQN := sql[lakeStart:suffixEnd]
 
 	// Aggregate/GROUP BY/DISTINCT results cannot be unioned row-wise (each
@@ -1153,6 +1165,18 @@ func shouldSplitLakeAndMem(sql, baseSQL, orderByClause, limitClause string) bool
 
 func (n *Node) runSharedSelectWithMemoryPolicy(ctx context.Context, db *sql.DB, sql string) ([]map[string]interface{}, []string, sharedQueryPlanLog, error) {
 	plan, mergeSeparately, timeSlice := n.planSharedSelect(sql)
+	if plan.mode != "no_mem_union" && n.bufferCopyEnabled() {
+		n.bufferMu.Lock()
+		defer n.bufferMu.Unlock()
+		cleanup, err := n.stageBufferTables(ctx, db, plan.memTables, sql)
+		if err != nil {
+			logger.Warn("Node: could not copy writer buffers into the sandboxed DuckDB; searching the lake only", "error", err)
+			plan = sharedQueryPlanLog{mode: "no_mem_union", lakeSQL: sql, combinedSQL: sql}
+			mergeSeparately, timeSlice = false, false
+		} else {
+			defer cleanup()
+		}
+	}
 	if !mergeSeparately {
 		query := sql
 		if plan.mode == "single_union" {
@@ -1481,7 +1505,8 @@ func (n *Node) handleExec(w http.ResponseWriter, r *http.Request) {
 // prepareFlightSQLDataSQL applies node query rewrites (tiered volumes + memory union) after Grafana/sqlrewrite.
 func (n *Node) prepareFlightSQLDataSQL(q string) string {
 	q = n.rewriteQueryForVolumes(q)
-	if !n.searchBufferEnabled() {
+	if !n.searchBufferEnabled() || n.bufferCopyEnabled() {
+		// With copied buffers, the copy exists only while an HTTP /query runs.
 		return q
 	}
 	mq := n.buildMemoryUnionQueries(q)
