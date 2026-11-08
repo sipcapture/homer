@@ -104,7 +104,10 @@ Otherwise the flag is silently stripped and payload is omitted.
 `/api/v4/stream/hep` is behind the standard v4 JWT middleware. Browsers
 cannot set an `Authorization` header on a WebSocket handshake, so the
 server additionally accepts `?access_token=<jwt>`. Tokens are still
-validated the same way — short-lived, same secret, same claims.
+validated the same way — short-lived, same secret, same claims. Prefer the
+`Authorization` header or the session cookie where the client supports it.
+The coordinator's request log masks `access_token` (and other credential
+parameters) as `REDACTED`.
 
 The node's own `/stream` endpoint uses the same Bearer token as `/query`
 (`node.flight_server.auth_token`, sent by the coordinator from

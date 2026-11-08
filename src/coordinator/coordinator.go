@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ import (
 	"github.com/sipcapture/homer-core/src/coordinator/games/netchess"
 	"github.com/sipcapture/homer-core/src/coordinator/games/netris"
 	"github.com/sipcapture/homer-core/src/coordinator/handlers"
+	"github.com/sipcapture/homer-core/src/coordinator/requestlog"
 	"github.com/sipcapture/homer-core/src/coordinator/services"
 	"github.com/sipcapture/homer-core/src/homerconfig"
 	mcppkg "github.com/sipcapture/homer-core/src/mcp"
@@ -214,9 +216,8 @@ func (c *Coordinator) setupEcho() {
 	c.echo.Use(middleware.RequestID())
 
 	// Logger middleware
-	c.echo.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
-		Format: "${time_rfc3339} ${method} ${uri} ${status} ${latency_human}\n",
-	}))
+	// Request logger. Query-string credentials (e.g. ?access_token=) are masked.
+	c.echo.Use(requestlog.Middleware(os.Stdout))
 
 	// Setup routes
 	c.setupRoutes()
