@@ -54,6 +54,7 @@ type Node struct {
 	db            *sql.DB
 	sharedDB      *sql.DB // shared with writer module for real-time visibility
 	tieredQueryDB *sql.DB // writer TieredStorageManager DuckDB (homer_lake_hot / _cold)
+	writerDB      *sql.DB // writer DuckDB for /exec only; reads stay on db (see allinone.go)
 	mu            sync.RWMutex
 	running       bool
 	volumes       []VolumeInfo // Attached storage volumes for tiered storage
@@ -1449,7 +1450,7 @@ func (n *Node) handleExec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := n.queryDB()
+	db := n.execDB()
 	if db == nil {
 		writeJSON(w, http.StatusServiceUnavailable, QueryResponse{
 			Success: false,
