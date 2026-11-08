@@ -167,6 +167,16 @@ func (n *Node) stageBufferTables(ctx context.Context, nodeDB *sql.DB, tables []s
 			cleanup()
 			return nil, fmt.Errorf("unexpected buffer table %q", t)
 		}
+		// Use the name as the writer's catalog spells it, so no text taken
+		// from the search reaches the statements below.
+		var name string
+		if err := writer.QueryRowContext(ctx,
+			`SELECT table_name FROM duckdb_tables() WHERE database_name = current_database() AND schema_name = 'main' AND table_name = ?`,
+			t).Scan(&name); err != nil {
+			cleanup()
+			return nil, fmt.Errorf("buffer table %q: %w", t, err)
+		}
+		t = name
 		f, err := os.CreateTemp(dir, "homer-buffer-*.parquet")
 		if err != nil {
 			cleanup()
