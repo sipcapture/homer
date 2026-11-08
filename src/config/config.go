@@ -347,6 +347,18 @@ type NodeConfig struct {
 
 	// DuckLake storage for reading
 	DuckLake DuckLakeConfig `json:"ducklake" mapstructure:"ducklake"`
+
+	// DuckDBSandbox turns off DuckDB external access on the node's own query
+	// DuckDB once the lake is attached. Only volume paths, catalog files and
+	// the spill directory stay reachable, so SQL that gets past the validator
+	// still cannot read host files, write elsewhere, ATTACH or LOAD.
+	// nil = enabled (default); set false to opt out.
+	DuckDBSandbox *bool `json:"duckdb_sandbox" mapstructure:"duckdb_sandbox"`
+}
+
+// DuckDBSandboxEnabled reports whether the node query DuckDB is sandboxed.
+func (c *NodeConfig) DuckDBSandboxEnabled() bool {
+	return c == nil || c.DuckDBSandbox == nil || *c.DuckDBSandbox
 }
 
 // SmartRoutingConfig controls time-range node pruning for UI search fan-out.

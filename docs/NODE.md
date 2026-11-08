@@ -127,6 +127,12 @@ The Node module exposes **DuckDB Airport** on `flight_server` (Arrow Flight with
 
 See [FLIGHTSQL.md](FLIGHTSQL.md) for Grafana setup and coordinator proxy (`coordinator.flightsql_server`, default port **32010**).
 
+### duckdb_sandbox
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `duckdb_sandbox` | bool | true | After the lake is attached, turn off DuckDB external access on the node's query DuckDB. Only volume paths, catalog files and the spill directory stay reachable. Env: `HOMER_NODE_DUCKDB_SANDBOX`. See [SECURITY.md](SECURITY.md#node-duckdb-sandbox). |
+
 ### ducklake
 
 | Parameter | Type | Description |

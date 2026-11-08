@@ -13,6 +13,7 @@ Homer 11.0.282–11.0.284 closes three coordinator security issues. **11.0.313**
 | Node `POST /query` (port+1) | Unauthenticated arbitrary DuckDB SQL / file read | `ValidateRawSQL` always; Bearer auth when `flight_server.auth_token` set; auto-token on non-loopback bind | All-in-one with default `0.0.0.0`: token auto-persisted; coordinator local node gets `token` automatically |
 | `sqlite_scan` / external scanners | Authenticated bypass of SQL denylist | Blocked in `ValidateRawSQL` | Legitimate lake `SELECT`s: **no change** |
 | `sniff_csv`, unlisted readers, `FROM 'path'` | Authenticated file read past the function denylist | Reader routines blocked by name shape (`read_`, `sniff_`, `parquet_`, `http_`, `iceberg_`, `delta_`, `st_read`, `*_scan`, `*_attach`) plus `getenv` / `duckdb_secrets`; string literals in table position rejected | Legitimate lake `SELECT`s: **no change** |
+| Raw SQL that gets past `ValidateRawSQL` | Each new DuckDB reader or path trick reopened host file access | Node query DuckDB runs with `enable_external_access = false`; only lake paths, catalog files and the spill directory are allowed | Standalone nodes: **no change** for lake queries. Opt out with `node.duckdb_sandbox: false`. All-in-one queries on the writer DuckDB are not sandboxed yet |
 | Node `POST /vacuum` `expire_older_than` | SQL injection into `ducklake_expire_snapshots` | Duration is parsed and rendered as integer seconds | `1 hour`, `7 days`, Go durations (`1h`): **no change**. Other values: **400** |
 | Agent subscription writes and `DELETE /api/v4/alerts` | Any logged-in user could change capture-agent registrations or wipe stored alerts | `POST`/`PUT`/`DELETE /api/v4/agents/subscriptions` and `DELETE /api/v4/alerts` require admin. `GET` stays authenticated. `POST /api/v4/alerts` stays authenticated so Grafana webhooks keep working | Admin sessions and admin `Auth-Token` (`user_group: admin`): **no change**. Non-admin callers of those writes: **403** |
 
@@ -95,6 +96,27 @@ See [AUTH_LDAP_AND_OAUTH.md](./AUTH_LDAP_AND_OAUTH.md#internal-duckdb-authentica
 Invalid SQL returns **400** with `SQL validation failed`. Grafana-style read-only panels using single `SELECT` statements continue to work.
 
 See [LINE_PROTOCOL.md](./LINE_PROTOCOL.md) (Statistics API section).
+
+---
+
+## Node DuckDB sandbox
+
+`ValidateRawSQL` is a denylist: it has to know every DuckDB routine and syntax that opens a file. The sandbox is the second layer. DuckDB itself refuses the access, whatever SQL reaches it.
+
+When the node opens its query DuckDB (startup and every catalog reconnect), it loads its extensions, creates secrets and attaches the volumes, then:
+
+1. turns off extension autoinstall, autoload and community extensions;
+2. sets `allowed_directories` to every volume `path`, the `DATA_PATH` stored in each catalog, and the spill `temp_directory`;
+3. sets `allowed_paths` to the SQLite catalog files (`catalog.sqlite`, `-wal`, `-shm`), never their directory, since `homer_settings.duckdb` often sits next to them;
+4. sets `enable_external_access = false`.
+
+From then on `read_text('/etc/passwd')`, `FROM '/path'`, `COPY ... TO`, `ATTACH`, `INSTALL`/`LOAD`, `EXPORT DATABASE` and URLs outside the lake fail with a DuckDB permission error. DuckDB does not let SQL turn external access back on, or widen the allow lists or `temp_directory`, while the instance runs.
+
+**Fallback:** right after applying it, the node reads each lake's catalog and one row of one table. If DuckDB denies that, or DuckDB does not recognise a remote volume prefix (its `httpfs` / `azure` extension is not loaded), the node reopens DuckDB without the sandbox and logs `Node: DuckDB sandbox could not be applied`. Search keeps working; please report the log line.
+
+**Scope:** this covers the node's own DuckDB, which serves raw SQL, FlightSQL and `/query` on a standalone node. In the all-in-one process, the node queries the writer's DuckDB (for unflushed rows) and the tiering DuckDB. Those still need full file access for flush, tier moves and maintenance, so they are not sandboxed yet.
+
+**Opt out:** `node.duckdb_sandbox: false` or `HOMER_NODE_DUCKDB_SANDBOX=false`.
 
 ---
 
