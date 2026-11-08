@@ -94,19 +94,10 @@ func (n *Node) SetBroker(b *hepstream.Broker) {
 
 // New creates a new Node module
 func New(cfg *config.NodeConfig) (*Node, error) {
-	// Connect to DuckLake database
-	db, err := sql.Open("duckdb", "")
+	// Connect to DuckLake database and get attached volumes
+	db, volumes, err := openNodeDuckDB(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open DuckDB: %w", err)
-	}
-	// Use single connection to ensure ATTACH catalogs are always visible
-	db.SetMaxOpenConns(1)
-
-	// Configure DuckDB for DuckLake and get attached volumes
-	volumes, err := configureDuckLake(db, cfg)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to configure DuckLake: %w", err)
+		return nil, err
 	}
 
 	// Create DuckLake catalog with volume support
@@ -360,16 +351,8 @@ func (n *Node) refreshCatalog() {
 	n.refreshMu.Lock()
 	defer n.refreshMu.Unlock()
 
-	newDB, err := sql.Open("duckdb", "")
+	newDB, newVolumes, err := openNodeDuckDB(n.config)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Node: catalog reconnect failed to open DuckDB: %v", err))
-		return
-	}
-	newDB.SetMaxOpenConns(1)
-
-	newVolumes, err := configureDuckLake(newDB, n.config)
-	if err != nil {
-		_ = newDB.Close()
 		logger.Error(fmt.Sprintf("Node: catalog reconnect failed: %v", err))
 		return
 	}

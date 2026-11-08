@@ -71,3 +71,75 @@ func TestNodeReadsPostgresDuckLakeCatalog(t *testing.T) {
 		t.Fatalf("node read: %d %v", id, err)
 	}
 }
+
+// TestPostgresNodeDuckDBSandbox checks that the node sandbox keeps a
+// PostgreSQL DuckLake catalog readable, including rows written after the
+// sandbox went on, and does not fall back.
+func TestPostgresNodeDuckDBSandbox(t *testing.T) {
+	dsn := os.Getenv("HOMER_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("set HOMER_TEST_POSTGRES_DSN for PostgreSQL node integration")
+	}
+	ctx := context.Background()
+	admin, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := "homer_sbx_" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+name); err != nil {
+		_ = admin.Close(ctx)
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = admin.Exec(ctx, "DROP DATABASE "+name+" WITH (FORCE)"); _ = admin.Close(ctx) })
+	pc, _ := pgx.ParseConfig(dsn)
+	u := url.URL{Scheme: "postgresql", Host: net.JoinHostPort(pc.Host, strconv.Itoa(int(pc.Port))), User: url.UserPassword(pc.User, pc.Password), Path: "/" + name, RawQuery: "sslmode=disable"}
+
+	data := filepath.Join(t.TempDir(), "data") + "/"
+	vol := config.VolumeConfig{Name: "default", Type: "local", CatalogType: "postgres", CatalogPath: u.String(), Path: data}
+
+	writer, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = writer.Close() })
+	writer.SetMaxOpenConns(1)
+	if _, err := writer.Exec("LOAD ducklake; LOAD postgres"); err != nil {
+		t.Fatalf("load checksum-verified extensions (run scripts/download_duckdb_extensions.sh): %v", err)
+	}
+	if _, err := attachVolume(writer, "homer_lake", vol); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Exec("CREATE TABLE homer_lake.main.t (id BIGINT); INSERT INTO homer_lake.main.t VALUES (1)"); err != nil {
+		t.Fatal(err)
+	}
+
+	on := true
+	cfg := &config.NodeConfig{
+		DuckDBSandbox: &on,
+		DuckLake: config.DuckLakeConfig{
+			LakeName: "homer_lake",
+			Tuning:   config.DuckDBTuning{TempDirectory: filepath.Join(t.TempDir(), "spill")},
+			Volumes:  []config.VolumeConfig{vol},
+		},
+	}
+	db, _, err := openNodeDuckDB(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var ext string
+	if err := db.QueryRow("SELECT current_setting('enable_external_access')::VARCHAR").Scan(&ext); err != nil || ext != "false" {
+		t.Fatalf("sandbox fell back with a PostgreSQL catalog: %q %v", ext, err)
+	}
+	if _, err := writer.Exec("INSERT INTO homer_lake.main.t VALUES (2)"); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := db.QueryRow("SELECT count(*) FROM homer_lake.main.t").Scan(&n); err != nil || n != 2 {
+		t.Fatalf("sandboxed read: n=%d err=%v", n, err)
+	}
+	if _, err := db.Exec("SELECT * FROM read_text('/etc/passwd')"); err == nil {
+		t.Fatal("expected read_text to be refused")
+	}
+}
