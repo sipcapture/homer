@@ -197,7 +197,7 @@ func (n *Node) Start() error {
 	mux.HandleFunc("/health", n.handleHealth)
 	mux.HandleFunc("/vacuum", withBearerAuth(authTok, n.handleVacuum))
 	mux.HandleFunc("/metadata/stats", withBearerAuth(authTok, n.handleMetadataStats))
-	mux.HandleFunc("/stream", n.handleStream)
+	mux.HandleFunc("/stream", withBearerAuth(authTok, n.handleStream))
 
 	n.httpServer = &http.Server{
 		Addr:         httpAddr,

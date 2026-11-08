@@ -18,15 +18,18 @@ import (
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
-// streamUpgrader upgrades node-side HTTP to WebSocket. We reuse the
-// gorilla-compatible fork already pulled in by src/server and allow any
-// origin: the node HTTP port sits behind the coordinator on a private
-// network and is not meant for direct browser access (same trust
-// boundary as /query).
+// streamUpgrader upgrades node-side HTTP to WebSocket. Only the coordinator
+// is meant to connect, and its Go dialer sends no Origin header. Requests
+// with an Origin come from a browser, so they are refused: otherwise any web
+// page open on a host that can reach the node could read the live stream.
 var streamUpgrader = websocket.Upgrader{
 	ReadBufferSize:  16 * 1024,
 	WriteBufferSize: 16 * 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	CheckOrigin:     streamCheckOrigin,
+}
+
+func streamCheckOrigin(r *http.Request) bool {
+	return r.Header.Get("Origin") == ""
 }
 
 const (
