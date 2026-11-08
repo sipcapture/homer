@@ -161,10 +161,13 @@ func (a *MultiTableAdapter) getTableKey(hep *decoder.HEP) TableKey {
 	key := TableKey{ProtoType: hep.ProtoType}
 
 	// For SIP packets, determine sub-type based on method
-	if hep.ProtoType == ProtoTypeSIP && hep.SIP != nil {
-		// Get effective method: for responses use CSeq method, for requests use FirstMethod
-		method := GetSIPMethod(hep.SIP.FirstMethod, hep.SIP.CseqMethod, hep.SIP.FirstResp)
-		key.SubType = GetSIPType(method)
+	if hep.ProtoType == ProtoTypeSIP {
+		key.SubType = SIPTypeDefault
+		if hep.SIP != nil {
+			// Get effective method: for responses use CSeq method, for requests use FirstMethod
+			method := GetSIPMethod(hep.SIP.FirstMethod, hep.SIP.CseqMethod, hep.SIP.FirstResp)
+			key.SubType = GetSIPType(method)
+		}
 	}
 
 	return key
