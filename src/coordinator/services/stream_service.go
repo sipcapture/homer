@@ -11,7 +11,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -230,7 +232,12 @@ func (s *StreamService) dialNode(ctx context.Context, n config.NodeEndpoint, f h
 	dialCtx, dialCancel := context.WithTimeout(ctx, s.dialTimeout)
 	defer dialCancel()
 
-	conn, _, err := dialer.DialContext(dialCtx, u, nil)
+	var hdr http.Header
+	if tok := strings.TrimSpace(n.Token); tok != "" {
+		hdr = http.Header{}
+		hdr.Set("Authorization", "Bearer "+tok)
+	}
+	conn, _, err := dialer.DialContext(dialCtx, u, hdr)
 	if err != nil {
 		return nil, err
 	}

@@ -181,3 +181,41 @@ func TestHandleStream_ProtoFilter(t *testing.T) {
 		t.Fatalf("expected proto=5 frame, got %s", buf)
 	}
 }
+
+func TestNodeStream_RequiresBearerToken(t *testing.T) {
+	broker := hepstream.NewBroker(hepstream.Config{Enable: true, BufferSize: 10, MaxSubscribers: 4, PerSubQueueLen: 4})
+	n := newTestNode(broker)
+	srv := httptest.NewServer(withBearerAuth("s3cret", n.handleStream))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/stream"
+
+	_, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err == nil {
+		t.Fatal("expected dial without token to fail")
+	}
+	if resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without token, got %v", resp)
+	}
+
+	hdr := http.Header{}
+	hdr.Set("Authorization", "Bearer s3cret")
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, hdr)
+	if err != nil {
+		t.Fatalf("dial with token: %v", err)
+	}
+	conn.Close()
+}
+
+func TestNodeStream_RejectsBrowserOrigin(t *testing.T) {
+	broker := hepstream.NewBroker(hepstream.Config{Enable: true, BufferSize: 10, MaxSubscribers: 4, PerSubQueueLen: 4})
+	n := newTestNode(broker)
+	srv := httptest.NewServer(http.HandlerFunc(n.handleStream))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/stream"
+
+	hdr := http.Header{}
+	hdr.Set("Origin", "https://evil.example")
+	if _, _, err := websocket.DefaultDialer.Dial(wsURL, hdr); err == nil {
+		t.Fatal("expected dial with a browser Origin to be refused")
+	}
+}

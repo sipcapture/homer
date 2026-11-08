@@ -39,7 +39,7 @@ Two endpoints exist:
 
 | Endpoint                        | Auth            | Purpose                                              |
 |--------------------------------|-----------------|------------------------------------------------------|
-| `GET /stream` (node port)      | none (firewall) | Node-local fan-out. Intended for coordinators / ops. |
+| `GET /stream` (node port)      | node Bearer token | Node-local fan-out. Intended for coordinators / ops. |
 | `GET /api/v4/stream/hep`        | JWT             | UI-facing aggregate; fans in from every node.        |
 
 ## Configuration
@@ -105,6 +105,12 @@ Otherwise the flag is silently stripped and payload is omitted.
 cannot set an `Authorization` header on a WebSocket handshake, so the
 server additionally accepts `?access_token=<jwt>`. Tokens are still
 validated the same way — short-lived, same secret, same claims.
+
+The node's own `/stream` endpoint uses the same Bearer token as `/query`
+(`node.flight_server.auth_token`, sent by the coordinator from
+`coordinator.nodes[].token`). It also refuses any handshake that carries a
+browser `Origin` header, so a web page cannot read the stream through a
+user's browser.
 
 ## Frame format
 
@@ -192,8 +198,8 @@ The HttpOnly `homer_session` cookie is sent on the WebSocket handshake automatic
 TOKEN=$(cat ~/.homer/jwt)
 wscat -c "ws://localhost:8081/api/v4/stream/hep?proto=1&method=INVITE&access_token=$TOKEN"
 
-# Node-local (no auth):
-wscat -c "ws://127.0.0.1:8083/stream?proto=1"
+# Node-local (Bearer token required when node.flight_server.auth_token is set):
+wscat -H "Authorization: Bearer $NODE_TOKEN" -c "ws://127.0.0.1:8083/stream?proto=1"
 ```
 
 ## Operational notes
