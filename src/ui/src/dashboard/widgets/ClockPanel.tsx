@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useLocale } from '@/components/locale/locale-provider'
-import { isValidTimeZone, suggestTimeZones, timeZoneLabel } from '@/lib/timezones'
+import { canonicalTimeZone, suggestTimeZones, timeZoneLabel } from '@/lib/timezones'
 
 const MAX_ZONES = 8
 
@@ -36,16 +36,17 @@ function normalizeZones(config?: ClockPanelConfig): string[] {
     const seen = new Set<string>()
     const out: string[] = []
     for (const z of raw) {
-      const t = typeof z === 'string' ? z.trim() : ''
-      if (!t || seen.has(t) || !isValidTimeZone(t)) continue
+      // Saved configs may hold legacy or mis-cased names (Asia/Calcutta, europe/berlin).
+      const t = typeof z === 'string' ? canonicalTimeZone(z) : null
+      if (!t || seen.has(t)) continue
       seen.add(t)
       out.push(t)
       if (out.length >= MAX_ZONES) break
     }
     if (out.length) return out
   }
-  const legacy = config?.timeZone?.trim()
-  if (legacy && isValidTimeZone(legacy)) return [legacy === '' ? 'local' : legacy]
+  const legacy = config?.timeZone ? canonicalTimeZone(config.timeZone) : null
+  if (legacy) return [legacy]
   return ['local']
 }
 
@@ -106,13 +107,16 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
     return suggestTimeZones(query).filter(z => !zones.includes(z))
   }, [query, zones])
 
-  // A valid IANA name that is not in the list (e.g. an alias like Etc/GMT+3) can still be added as typed.
+  // A valid IANA name that is not in the list (e.g. Etc/GMT+3) can still be added.
+  // Compare by canonical name so "europe/berlin" or "Asia/Calcutta" never duplicate a clock.
+  const typedZone = query ? canonicalTimeZone(query) : null
   const exactTyped =
-    query && !zones.includes(query) && !suggestions.includes(query) && isValidTimeZone(query) ? query : null
+    typedZone && !zones.includes(typedZone) && !suggestions.includes(typedZone) ? typedZone : null
 
   const addZone = (z: string) => {
-    if (!z || zones.includes(z) || atLimit || !isValidTimeZone(z)) return
-    handleZonesChange([...zones, z])
+    const zone = canonicalTimeZone(z)
+    if (!zone || zones.includes(zone) || atLimit) return
+    handleZonesChange([...zones, zone])
     setTzQuery('')
   }
 
@@ -194,7 +198,9 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
                   <div className="text-[10px] text-muted-foreground">
                     {atLimit
                       ? `Limit of ${MAX_ZONES} clocks reached. Remove one to add another.`
-                      : exactTyped
+                      : typedZone && zones.includes(typedZone)
+                        ? `${timeZoneLabel(typedZone)} is already added`
+                        : exactTyped
                         ? 'Not in the list, but a valid IANA name · Enter adds it as typed'
                         : query
                         ? `${suggestions.length} match${suggestions.length === 1 ? '' : 'es'} · Enter adds the first`

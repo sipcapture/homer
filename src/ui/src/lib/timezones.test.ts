@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   COMMON_TIME_ZONES,
+  LEGACY_TIME_ZONE_ALIASES,
+  buildCommonTimeZones,
   buildTimeZoneList,
+  canonicalTimeZone,
   filterTimeZones,
   getTimeZones,
   isValidTimeZone,
@@ -34,11 +37,80 @@ describe('buildTimeZoneList', () => {
     expect(buildTimeZoneList(() => [])).toEqual([...COMMON_TIME_ZONES])
   })
 
-  it('getTimeZones uses the real runtime list', () => {
+  it('lists the current name for every legacy ID V8 reports, once', () => {
+    // What Chromium/Node return from Intl.supportedValuesOf('timeZone').
+    const v8 = ['Asia/Calcutta', 'Asia/Katmandu', 'Asia/Saigon', 'Europe/Kiev', 'America/Buenos_Aires', 'Asia/Kolkata']
+    expect(buildTimeZoneList(() => v8)).toEqual([
+      'local',
+      'UTC',
+      'America/Argentina/Buenos_Aires',
+      'Asia/Ho_Chi_Minh',
+      'Asia/Kathmandu',
+      'Asia/Kolkata',
+      'Europe/Kyiv',
+    ])
+  })
+
+  it('keeps the legacy name when the runtime does not know the current one (old ICU)', () => {
+    const noKyiv = (z: string) => z !== 'Europe/Kyiv' && isValidTimeZone(z)
+    expect(buildTimeZoneList(() => ['Europe/Kiev', 'Europe/Berlin'], noKyiv)).toEqual([
+      'local',
+      'UTC',
+      'Europe/Berlin',
+      'Europe/Kiev',
+    ])
+  })
+
+  it('getTimeZones uses the real runtime list, with no legacy names left', () => {
     const list = getTimeZones()
     expect(list.slice(0, 2)).toEqual(['local', 'UTC'])
     expect(list).toContain('America/Sao_Paulo')
-    expect(list).not.toContain('Europe/Kiev')
+    expect(list).toContain('Asia/Kolkata')
+    expect(list.filter((z) => z in LEGACY_TIME_ZONE_ALIASES)).toEqual([])
+    expect(new Set(list).size).toBe(list.length)
+  })
+})
+
+describe('legacy aliases', () => {
+  it('only map to names this runtime accepts', () => {
+    for (const current of Object.values(LEGACY_TIME_ZONE_ALIASES)) expect(isValidTimeZone(current)).toBe(true)
+  })
+})
+
+describe('canonicalTimeZone', () => {
+  it('fixes case, since Intl accepts zone IDs case-insensitively', () => {
+    expect(canonicalTimeZone('europe/berlin')).toBe('Europe/Berlin')
+    expect(canonicalTimeZone('  AMERICA/SAO_PAULO ')).toBe('America/Sao_Paulo')
+    expect(canonicalTimeZone('LOCAL')).toBe('local')
+  })
+
+  it('returns the current name for legacy aliases, whatever spelling Intl resolves to', () => {
+    expect(canonicalTimeZone('Asia/Calcutta')).toBe('Asia/Kolkata')
+    expect(canonicalTimeZone('Asia/Kolkata')).toBe('Asia/Kolkata')
+    expect(canonicalTimeZone('asia/saigon')).toBe('Asia/Ho_Chi_Minh')
+  })
+
+  it('keeps the legacy name when the current one is unknown to the runtime', () => {
+    const noKyiv = (z: string) => z !== 'Europe/Kyiv' && isValidTimeZone(z)
+    expect(canonicalTimeZone('Europe/Kiev', noKyiv)).toBe('Europe/Kiev')
+  })
+
+  it('returns null for unknown or empty input', () => {
+    expect(canonicalTimeZone('Mars/Olympus')).toBeNull()
+    expect(canonicalTimeZone('  ')).toBeNull()
+  })
+})
+
+describe('buildCommonTimeZones', () => {
+  it('is the common list on a current runtime', () => {
+    expect(buildCommonTimeZones()).toEqual([...COMMON_TIME_ZONES])
+  })
+
+  it('swaps Europe/Kyiv for Europe/Kiev on old ICU instead of offering a zone that throws', () => {
+    const noKyiv = (z: string) => z !== 'Europe/Kyiv' && isValidTimeZone(z)
+    const list = buildCommonTimeZones(noKyiv)
+    expect(list).toContain('Europe/Kiev')
+    expect(list).not.toContain('Europe/Kyiv')
   })
 })
 
@@ -102,5 +174,22 @@ describe('suggestTimeZones', () => {
 
   it('searches the runtime list by default', () => {
     expect(suggestTimeZones('cairo')).toEqual(['Africa/Cairo'])
+  })
+})
+
+describe('search with legacy names (V8)', () => {
+  const v8List = buildTimeZoneList(() => ['Asia/Calcutta', 'Asia/Katmandu', 'Asia/Saigon', 'Europe/Kiev'])
+
+  it.each([
+    ['kolkata', ['Asia/Kolkata']],
+    ['calcutta', ['Asia/Kolkata']],
+    ['kathmandu', ['Asia/Kathmandu']],
+    ['katmandu', ['Asia/Kathmandu']],
+    ['ho chi minh', ['Asia/Ho_Chi_Minh']],
+    ['saigon', ['Asia/Ho_Chi_Minh']],
+    ['kyiv', ['Europe/Kyiv']],
+    ['kiev', ['Europe/Kyiv']],
+  ])('%s finds %j', (query, expected) => {
+    expect(suggestTimeZones(query, v8List)).toEqual(expected)
   })
 })

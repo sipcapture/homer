@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import type { CalendarPreset } from '../utils/resolveTimeRange'
 import { useLocale } from '@/components/locale/locale-provider'
-import { suggestTimeZones, timeZoneLabel } from '@/lib/timezones'
+import { canonicalTimeZone, suggestTimeZones, timeZoneLabel } from '@/lib/timezones'
 
 const QUICK_RANGES = [
   { label: 'Last 5 minutes', minutes: 5 },
@@ -132,11 +132,13 @@ export default function TimeRangePicker({
   const [tzQuery, setTzQuery] = useState('')
   // Blank search: common zones only (plus the current one, so the selection stays visible).
   // Typing: matches from every zone the browser supports.
+  // The saved value may be a legacy or mis-cased name; compare by canonical name.
+  const currentZone = useMemo(() => canonicalTimeZone(timeZone) ?? timeZone, [timeZone])
   const visibleTimeZones = useMemo(() => {
     const list = suggestTimeZones(tzQuery)
-    if (!tzQuery.trim() && !list.includes(timeZone)) return [timeZone, ...list]
+    if (!tzQuery.trim() && !list.includes(currentZone)) return [currentZone, ...list]
     return list
-  }, [tzQuery, timeZone])
+  }, [tzQuery, currentZone])
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -346,7 +348,7 @@ export default function TimeRangePicker({
                       </div>
                     )}
                     {visibleTimeZones.map((tz) => {
-                      const active = timeZone === tz
+                      const active = currentZone === tz
                       return (
                         <Button
                           key={tz}
@@ -367,7 +369,7 @@ export default function TimeRangePicker({
                   </div>
                 </ScrollArea>
                 <div className="border-t border-border pt-2 text-[11px] text-muted-foreground">
-                  Current: <strong className="text-foreground">{timeZoneLabel(timeZone)}</strong>
+                  Current: <strong className="text-foreground">{timeZoneLabel(currentZone)}</strong>
                 </div>
               </div>
             </TabsContent>
