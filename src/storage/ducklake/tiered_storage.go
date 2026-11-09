@@ -219,6 +219,9 @@ func (tsm *TieredStorageManager) Start() (startErr error) {
 			return fmt.Errorf("failed to attach volume %s: %w", vol.Name, err)
 		}
 	}
+	if err := tsm.syncSIPColumns(); err != nil {
+		return err
+	}
 
 	// Enable WAL on the hot catalog to reduce SQLite lock contention with the writer.
 	if tsm.config.CatalogType == CatalogSQLite && tsm.primaryVolume != nil && tsm.primaryVolume.CatalogPath != "" {
@@ -551,44 +554,49 @@ func (tsm *TieredStorageManager) QueryAllVolumes(tableName, whereClause string, 
 	return allResults, nil
 }
 
-// partitionMoveAction is the next step MovePartition should take after counting
-// source and destination rows. The source is never deleted unless the destination
-// is empty (copy, then delete) or the destination row count matches the source
-// (delete-only retry after a previous successful copy).
-type partitionMoveAction int
-
-const (
-	partitionMoveNone partitionMoveAction = iota
-	partitionMoveCopy
-	partitionMoveDeleteSourceOnly
-	// partitionMoveReplaceDest deletes the destination partition and copies
-	// again. A non-zero destination whose row count differs from the source is
-	// an incomplete or duplicated prior copy (sipcapture/homer#1025, #1080).
-	// The source stays until a later attempt sees equal counts (#866).
-	partitionMoveReplaceDest
-)
-
-// partitionMovePlan decides how MovePartition should proceed.
-//
-// Delete-only retry is only safe when dstCount == srcCount (#866). Any other
-// non-empty destination is discarded and copied again so a failed attempt
-// cannot stick forever (#1080).
-func partitionMovePlan(srcCount, dstCount int64) (partitionMoveAction, error) {
-	if srcCount < 0 || dstCount < 0 {
-		return partitionMoveNone, fmt.Errorf(
-			"invalid partition row counts: source_rows=%d destination_rows=%d",
-			srcCount, dstCount)
+func (tsm *TieredStorageManager) syncSIPColumns() error {
+	if tsm.primaryVolume == nil {
+		return nil
 	}
-	if srcCount == 0 {
-		return partitionMoveNone, nil
+	rows, err := tsm.db.Query("SELECT table_name FROM information_schema.columns WHERE table_catalog = ? AND table_schema = 'main' AND column_name = 'isup_body'", tsm.primaryVolume.LakeName)
+	if err != nil {
+		return fmt.Errorf("list source SIP schema migrations: %w", err)
 	}
-	if dstCount == 0 {
-		return partitionMoveCopy, nil
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		if strings.HasPrefix(name, "hep_proto_1_") {
+			tables = append(tables, name)
+		}
 	}
-	if dstCount == srcCount {
-		return partitionMoveDeleteSourceOnly, nil
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
 	}
-	return partitionMoveReplaceDest, nil
+	for _, volume := range tsm.volumes {
+		if volume == tsm.primaryVolume {
+			continue
+		}
+		for _, table := range tables {
+			var columns, migrated int
+			if err := tsm.db.QueryRow("SELECT COUNT(*), COUNT(*) FILTER (WHERE column_name = 'isup_body') FROM information_schema.columns WHERE table_catalog = ? AND table_schema = 'main' AND table_name = ?", volume.LakeName, table).Scan(&columns, &migrated); err != nil {
+				return fmt.Errorf("inspect destination SIP schema: %w", err)
+			}
+			if columns == 0 || migrated > 0 {
+				continue
+			}
+			statement := fmt.Sprintf("ALTER TABLE \"%s\".main.\"%s\" ADD COLUMN isup_body BLOB", strings.ReplaceAll(volume.LakeName, `"`, `""`), strings.ReplaceAll(table, `"`, `""`))
+			if _, err := tsm.db.Exec(statement); err != nil {
+				return fmt.Errorf("migrate destination SIP schema %s: %w", table, err)
+			}
+		}
+	}
+	return nil
 }
 
 // MovePartition moves a partition (date) from source to destination volume.
@@ -639,30 +647,7 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 		return nil
 	}
 
-	action, err := partitionMovePlan(srcCount, dstCount)
-	if err != nil {
-		logger.Error("TieredStorageManager: refusing partition move",
-			"table", tableName,
-			"date", date,
-			"source_rows", srcCount,
-			"destination_rows", dstCount,
-			"error", err)
-		return err
-	}
-	switch action {
-	case partitionMoveDeleteSourceOnly:
-		logger.Info("TieredStorageManager: Destination already has partition; retrying source delete only",
-			"table", tableName,
-			"date", date,
-			"rows", dstCount)
-		return tsm.deleteSourcePartition(srcTable, date, tableName, srcCount, dstCount, hotLocker)
-	case partitionMoveReplaceDest:
-		if err := tsm.discardIncompleteDestination(dstTable, date, tableName, dstVol, srcCount, dstCount); err != nil {
-			return err
-		}
-	}
-
-	if tsm.useNativeMove(srcVol, dstVol) {
+	if dstCount == 0 && tsm.useNativeMove(srcVol, dstVol) {
 		err := tsm.movePartitionNative(tableName, date, srcVol, dstVol)
 		if err == nil {
 			return nil
@@ -777,8 +762,8 @@ func (tsm *TieredStorageManager) movePartitionNative(tableName, date string, src
 
 func (tsm *TieredStorageManager) movePartitionDuckDB(srcTable, dstTable, tableName, date string, srcCount int64, hotLocker CatalogLocker) error {
 	insertSQL := fmt.Sprintf(
-		"INSERT INTO %s SELECT * FROM %s WHERE date = ?",
-		dstTable, srcTable,
+		"INSERT INTO %s BY NAME SELECT source.* FROM %s AS source WHERE source.date = ? AND NOT EXISTS (SELECT 1 FROM %s AS destination WHERE destination.date = ? AND destination.uuid = source.uuid)",
+		dstTable, srcTable, dstTable,
 	)
 	if _, err := execWithRetry(
 		tsm.db,
@@ -787,45 +772,11 @@ func (tsm *TieredStorageManager) movePartitionDuckDB(srcTable, dstTable, tableNa
 		hotLocker,
 		insertSQL,
 		date,
+		date,
 	); err != nil {
 		return fmt.Errorf("failed to insert into destination: %w", err)
 	}
-	return tsm.deleteSourcePartition(srcTable, date, tableName, srcCount, 0, hotLocker)
-}
-
-// discardIncompleteDestination removes one date partition from the destination
-// so the following copy starts from an empty partition. The source is not
-// touched (sipcapture/homer#1080).
-func (tsm *TieredStorageManager) discardIncompleteDestination(dstTable, date, tableName string, dstVol *Volume, srcCount, dstCount int64) error {
-	volumeName := ""
-	var locker CatalogLocker
-	if dstVol != nil {
-		volumeName = dstVol.Name
-		locker = tsm.hotCatalogLocker(dstVol)
-	}
-	logger.Warn("TieredStorageManager: discarding incomplete destination partition before retry",
-		"table", tableName,
-		"date", date,
-		"volume", volumeName,
-		"source_rows", srcCount,
-		"destination_rows", dstCount)
-
-	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE date = ?", dstTable)
-	if _, err := execWithRetry(
-		tsm.db,
-		tieringMaxRetries,
-		tieringBaseBackoff,
-		locker,
-		deleteSQL,
-		date,
-	); err != nil {
-		return fmt.Errorf("failed to discard incomplete destination partition: %w", err)
-	}
-	return nil
-}
-
-func (tsm *TieredStorageManager) deleteSourcePartition(srcTable, date, tableName string, srcCount, dstCount int64, hotLocker CatalogLocker) error {
-	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE date = ?", srcTable)
+	deleteSQL := fmt.Sprintf("DELETE FROM %s AS source WHERE source.date = ? AND EXISTS (SELECT 1 FROM %s AS destination WHERE destination.date = ? AND destination.uuid = source.uuid)", srcTable, dstTable)
 	if _, err := execWithRetry(
 		tsm.db,
 		tieringMaxRetries,
@@ -833,15 +784,12 @@ func (tsm *TieredStorageManager) deleteSourcePartition(srcTable, date, tableName
 		hotLocker,
 		deleteSQL,
 		date,
+		date,
 	); err != nil {
-		rowsCopied := srcCount
-		if dstCount > 0 {
-			rowsCopied = dstCount
-		}
 		logger.Warn("TieredStorageManager: Partition copied, source delete pending",
 			"table", tableName,
 			"date", date,
-			"rows", rowsCopied,
+			"rows", srcCount,
 			"error", err)
 		return fmt.Errorf("source delete failed after copy: %w", err)
 	}
