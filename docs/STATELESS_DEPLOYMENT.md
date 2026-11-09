@@ -17,6 +17,14 @@ one for the DuckLake catalog. Homer creates tables, but does not create database
 or automatically migrate existing local data. Install matching DuckDB extensions
 in the runtime image using `homer-core --install-extensions`.
 
+Stateless coordinators serialize settings initialization with a dedicated
+PostgreSQL advisory lock. Connecting and waiting for this bootstrap lock share
+a 60-second timeout. If another replica still holds the lock at that point,
+startup fails with an `acquire settings bootstrap lock` error; Homer does not
+retry internally. Restart that replica after initialization finishes, or let
+your deployment's restart policy retry it. The initializing replica releases
+the lock when bootstrap finishes or its PostgreSQL session closes.
+
 Enable the flag and provide the same configuration and secrets on every replica.
 For example, inject these values through Kubernetes Secrets or your deployment's secret manager:
 
