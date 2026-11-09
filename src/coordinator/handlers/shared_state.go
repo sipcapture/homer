@@ -46,16 +46,16 @@ func (r *revocationCache) remember(id string, revoked bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now()
-	for key, entry := range r.entries {
-		if !now.Before(entry.expires) {
-			delete(r.entries, key)
-		}
-	}
 	if r.entries == nil {
 		r.entries = make(map[string]revocationAnswer)
 	}
-	if len(r.entries) >= 10000 {
-		clear(r.entries)
+	if _, exists := r.entries[id]; !exists && len(r.entries) >= 10000 {
+		// Eviction only shortens the optional outage fallback. Never scan the
+		// entire cache on the authentication hot path.
+		for key := range r.entries {
+			delete(r.entries, key)
+			break
+		}
 	}
 	r.entries[id] = revocationAnswer{revoked: revoked, expires: now.Add(5 * time.Second)}
 }
@@ -74,8 +74,12 @@ func (h *AuthHandler) sessionIsRevoked(c echo.Context, id string) (bool, error) 
 	slog.Error("shared session lookup failed", "error", err)
 	h.revocations.mu.Lock()
 	answer, ok := h.revocations.entries[id]
+	if ok && !time.Now().Before(answer.expires) {
+		delete(h.revocations.entries, id)
+		ok = false
+	}
 	h.revocations.mu.Unlock()
-	if ok && time.Now().Before(answer.expires) {
+	if ok {
 		return answer.revoked, nil
 	}
 	return false, err

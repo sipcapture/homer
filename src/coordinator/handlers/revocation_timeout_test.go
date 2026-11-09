@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -53,5 +54,19 @@ func TestSessionRevocationTimeoutFallback(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestRevocationCacheBound(t *testing.T) {
+	var cache revocationCache
+	for i := 0; i < 11000; i++ {
+		cache.remember(fmt.Sprint(i), false)
+	}
+	if len(cache.entries) != 10000 {
+		t.Fatalf("cache bound: %d", len(cache.entries))
+	}
+	cache.remember("10999", true)
+	if len(cache.entries) != 10000 || !cache.entries["10999"].revoked {
+		t.Fatal("updating entry evicted another answer")
 	}
 }
