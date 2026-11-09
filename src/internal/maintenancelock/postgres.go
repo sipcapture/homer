@@ -49,7 +49,16 @@ func Acquire(parent context.Context, dsns ...string) (*Lease, bool, error) {
 
 type hostLookup func(context.Context, string) ([]string, error)
 
+// AcquireUntil bounds connection attempts without expiring a successful lease.
+func AcquireUntil(parent context.Context, deadline time.Time, dsns ...string) (*Lease, bool, error) {
+	return acquireWithLookupUntil(parent, net.DefaultResolver.LookupHost, deadline, dsns...)
+}
+
 func acquireWithLookup(parent context.Context, lookup hostLookup, dsns ...string) (*Lease, bool, error) {
+	return acquireWithLookupUntil(parent, lookup, time.Time{}, dsns...)
+}
+
+func acquireWithLookupUntil(parent context.Context, lookup hostLookup, deadline time.Time, dsns ...string) (*Lease, bool, error) {
 	configs := make([]*pgx.ConnConfig, 0, len(dsns))
 	for _, dsn := range dsns {
 		cfg, err := pgx.ParseConfig(dsn)
@@ -58,12 +67,18 @@ func acquireWithLookup(parent context.Context, lookup hostLookup, dsns ...string
 		}
 		configs = append(configs, cfg)
 	}
-	configs = deduplicateCatalogConfigs(parent, configs, lookup)
+	acquisitionCtx := parent
+	if !deadline.IsZero() {
+		var stop context.CancelFunc
+		acquisitionCtx, stop = context.WithDeadline(parent, deadline)
+		defer stop()
+	}
+	configs = deduplicateCatalogConfigs(acquisitionCtx, configs, lookup)
 	ctx, cancel := context.WithCancel(parent)
 	l := &Lease{ctx: ctx, cancel: cancel, done: make(chan struct{})}
 	failed := func() { close(l.done); l.Release() }
 	for _, cfg := range configs {
-		acquireCtx, stop := context.WithTimeout(ctx, 10*time.Second)
+		acquireCtx, stop := context.WithTimeout(acquisitionCtx, 10*time.Second)
 		conn, err := pgx.ConnectConfig(acquireCtx, cfg)
 		if err != nil {
 			stop()
