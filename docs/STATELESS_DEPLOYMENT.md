@@ -315,3 +315,9 @@ DuckDB extensions and the project's build dependencies before running them.
 For a runnable two-process deployment and controlled writer-interruption harness
 using an existing S3-compatible bucket, see
 [the real scenario guide](../scripts/stateless-scenario/README.md).
+
+Shared export creation accepts request bodies up to 1 MiB. Each generated payload
+is limited to 10 MiB, and its encoded runtime-state record to 16 MiB; larger
+requests or results return HTTP 413. Shared exports expire after 24 hours.
+Status and download endpoints require the creating username in both deployment
+modes. Another user, or an older export without an owner, receives HTTP 404.

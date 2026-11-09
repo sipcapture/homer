@@ -15,6 +15,7 @@ import (
 )
 
 type exportJob struct {
+	Owner       string
 	ID          string
 	Type        string
 	Status      string
