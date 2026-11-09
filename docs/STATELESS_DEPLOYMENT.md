@@ -124,16 +124,19 @@ independent for each catalog/shard.
 Stateless PostgreSQL replicas check eligibility every minute (or the configured
 interval when shorter), so interrupted or partially failed cycles can be retried
 without waiting a full compaction interval. Failed retention, inline flush, merge, or
-cleanup steps prevent the completion timestamp from advancing. Other steps may
+cleanup steps prevent the completion timestamp from advancing. Tables already
+quarantined from merging do not make subsequent cycles incomplete. Other steps may
 still finish, and the next attempt works against the current catalog rather than
 resuming a checkpoint.
 
 The catalog role needs CREATE on the schedule schema (public) to provision
 public.homer_maintenance_schedule, plus SELECT, INSERT, and UPDATE on that table.
 DuckLake's own metadata permissions do not automatically grant these Homer-table
-permissions. If provisioning or schedule access fails, automatic compaction still runs under the advisory lock; without
-a readable/writable completion marker it may run on every eligibility poll
-instead of the full configured interval. When `stateless` is disabled or omitted,
+permissions. If provisioning or schedule access fails, automatic compaction still
+runs under the advisory lock. If writing the marker fails after otherwise
+completed work, that replica waits its full configured interval before trying
+again. This local fallback cannot coordinate the schedules of different replicas.
+When `stateless` is disabled or omitted,
 Homer does not acquire cross-replica advisory locks, provision or query this
 schedule table, or require its permissions.
 

@@ -105,6 +105,12 @@ func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
 	}
 	t.Run("vacuum and tiering contend with writer merge", func(t *testing.T) { checkCompactionMaintenanceContention(t, first, dsn, dataPath) })
 	release()
+	first.mergeQuarantined.Store("measurement", "test quarantine")
+	first.cycleIncomplete.Store(false)
+	if err := first.mergeTablesDuckDB([]string{"lake.main.measurement"}); err != nil || first.cycleIncomplete.Load() {
+		t.Fatal("quarantine made cycle incomplete", err)
+	}
+	first.mergeQuarantined = unsupportedTables{}
 	first.runCompaction()
 	if first.totalCompactions != 1 {
 		t.Fatal("real compaction cycle did not complete")
@@ -154,6 +160,21 @@ func TestPostgresCompactionScheduleSkipsSequentialReplica(t *testing.T) {
 	if err := db.QueryRow("SELECT count(*), count(DISTINCT id) FROM lake.measurement").Scan(&count, &distinct); err != nil || count != 12 || distinct != 12 {
 		t.Fatalf("fallback lost or duplicated rows: %d/%d %v", count, distinct, err)
 	}
+	if fallback.totalCompactions != 1 {
+		t.Fatal("successful work not recorded locally")
+	}
+	releaseFallback, ok := fallback.tryMaintenanceLock()
+	if !ok {
+		t.Fatal("fallback lock unavailable")
+	}
+	if fallback.compactionDue() {
+		t.Fatal("unwritable schedule caused immediate repeat")
+	}
+	fallback.scheduleFallbackUntil.Store(time.Now().Add(-time.Second).UnixNano())
+	if !fallback.compactionDue() {
+		t.Fatal("local fallback suppressed work after interval")
+	}
+	releaseFallback()
 	_, err = probe.Exec(ctx, "ALTER TABLE public.homer_maintenance_schedule RENAME COLUMN broken TO completed_at")
 	_ = probe.Close(context.Background())
 	if err != nil {

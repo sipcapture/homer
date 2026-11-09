@@ -25,6 +25,9 @@ func (c *CompactionService) compactionDue() bool {
 	if !c.config.Stateless {
 		return true
 	}
+	if time.Now().UnixNano() < c.scheduleFallbackUntil.Load() {
+		return false
+	}
 	lease := c.maintenanceLease.Load()
 	if lease == nil {
 		return true
@@ -55,9 +58,15 @@ func (c *CompactionService) recordCompactionCompletion() bool {
 	if lease := c.maintenanceLease.Load(); lease != nil {
 		if err := lease.Complete("compaction"); err != nil {
 			logger.Warn("CompactionService: failed to record shared compaction schedule", "error", err)
-			return false
+			interval := time.Duration(c.config.CheckIntervalSec) * time.Second
+			if interval <= 0 {
+				interval = time.Hour
+			}
+			c.scheduleFallbackUntil.Store(time.Now().Add(interval).UnixNano())
+			return true // Work completed; only the cross-replica marker failed.
 		}
 	}
+	c.scheduleFallbackUntil.Store(0)
 	return true
 }
 

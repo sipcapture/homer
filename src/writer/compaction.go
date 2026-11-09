@@ -279,10 +279,11 @@ type CompactionService struct {
 	// wide table can exceed that gap, and native holds CatalogLock only for the
 	// short per-partition swap. A second cycle would then DELETE (retention)
 	// while the first is still rewriting the same parquet (sipcapture/homer#945).
-	cycleRunning      atomic.Bool
-	cycleIncomplete   atomic.Bool // Failed steps must not advance the shared schedule.
-	ghostRecoveryOnce sync.Once
-	maintenanceLease  atomic.Pointer[maintenancelock.Lease]
+	cycleRunning          atomic.Bool
+	scheduleFallbackUntil atomic.Int64 // Local pacing if the shared marker cannot be written.
+	cycleIncomplete       atomic.Bool  // Failed steps must not advance the shared schedule.
+	ghostRecoveryOnce     sync.Once
+	maintenanceLease      atomic.Pointer[maintenancelock.Lease]
 
 	// backupCatalog snapshots the SQLite catalog before a native merge; nil
 	// means defaultCatalogBackup.
@@ -871,7 +872,6 @@ func (c *CompactionService) mergeTablesDuckDB(tables []string) error {
 			continue
 		}
 		if reason, skip := c.mergeQuarantined.Load(tableName); skip {
-			c.cycleIncomplete.Store(true)
 			logger.Debug("CompactionService: table left out of merge", "table", tableName, "reason", reason)
 			continue
 		}
