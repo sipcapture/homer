@@ -9,6 +9,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,10 +22,14 @@ import (
 
 type ExportsHandler struct {
 	store  *ExportStore
-	shared *services.RuntimeState
+	shared runtimeStateStore
 }
 
 func (h *ExportsHandler) SetRuntimeState(state *services.RuntimeState) { h.shared = state }
+
+// Bound both request decoding and the bytea stored for each shared export.
+const maxSharedExportBytes = 10 << 20
+const maxExportRequestBytes = 1 << 20
 
 type sharedExport struct {
 	Job     exportJob
@@ -67,12 +72,24 @@ type ExportStatusResponseV4 struct {
 }
 
 func (h *ExportsHandler) V4ExportsCreate(c echo.Context) error {
-	if _, err := getUsernameFromContext(c); err != nil {
+	username, err := getUsernameFromContext(c)
+	if err != nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
 	}
 
+	if h.shared != nil {
+		c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxExportRequestBytes)
+	}
 	var req ExportRequestV4
 	if err := c.Bind(&req); err != nil {
+		var sizeErr *http.MaxBytesError
+		if errors.As(err, &sizeErr) {
+			return writeError(c, http.StatusRequestEntityTooLarge, "Payload Too Large", "Export request exceeds 1 MiB")
+		}
+		var httpErr *echo.HTTPError
+		if errors.As(err, &httpErr) && httpErr.Code == http.StatusRequestEntityTooLarge {
+			return writeError(c, http.StatusRequestEntityTooLarge, "Payload Too Large", "Export request exceeds 1 MiB")
+		}
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid request body")
 	}
 	if req.Type == "" {
@@ -82,17 +99,23 @@ func (h *ExportsHandler) V4ExportsCreate(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid export type")
 	}
 
-	job := exportJob{ID: newExportID(), Type: strings.ToLower(req.Type), CreatedAt: time.Now().UTC(), Status: "completed"}
+	job := exportJob{Owner: username, ID: newExportID(), Type: strings.ToLower(req.Type), CreatedAt: time.Now().UTC(), Status: "completed"}
 	job.DownloadURL = "/api/v4/exports/" + job.ID + "/download"
 	if h.shared != nil {
 		payload, contentType, err := exportPayload(job.ID, job.Type, req.Query)
 		if err != nil {
 			return writeError(c, http.StatusInternalServerError, "Server Error", "Failed to create export")
 		}
+		if len(payload) > maxSharedExportBytes {
+			return writeError(c, http.StatusRequestEntityTooLarge, "Payload Too Large", "Export exceeds 10 MiB")
+		}
 		job.ContentType = contentType
 		data, err := json.Marshal(sharedExport{Job: job, Payload: payload})
 		if err != nil {
 			return err
+		}
+		if len(data) > 16<<20 {
+			return writeError(c, http.StatusRequestEntityTooLarge, "Payload Too Large", "Encoded export exceeds 16 MiB")
 		}
 		if err := h.shared.Put(c.Request().Context(), "export", job.ID, data, time.Now().Add(24*time.Hour)); err != nil {
 			return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to store export")
@@ -112,7 +135,8 @@ func (h *ExportsHandler) V4ExportsCreate(c echo.Context) error {
 }
 
 func (h *ExportsHandler) V4ExportsGet(c echo.Context) error {
-	if _, err := getUsernameFromContext(c); err != nil {
+	username, err := getUsernameFromContext(c)
+	if err != nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
 	}
 
@@ -129,7 +153,7 @@ func (h *ExportsHandler) V4ExportsGet(c echo.Context) error {
 		}
 		job, ok = shared.Job, found
 	}
-	if !ok {
+	if !ok || job.Owner != username {
 		return writeError(c, http.StatusNotFound, "Not Found", "Export not found")
 	}
 
@@ -141,7 +165,8 @@ func (h *ExportsHandler) V4ExportsGet(c echo.Context) error {
 }
 
 func (h *ExportsHandler) V4ExportsDownload(c echo.Context) error {
-	if _, err := getUsernameFromContext(c); err != nil {
+	username, err := getUsernameFromContext(c)
+	if err != nil {
 		return writeError(c, http.StatusUnauthorized, "Unauthorized", "Not authenticated")
 	}
 
@@ -155,13 +180,13 @@ func (h *ExportsHandler) V4ExportsDownload(c echo.Context) error {
 		if err != nil {
 			return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to retrieve export")
 		}
-		if !found {
+		if !found || shared.Job.Owner != username {
 			return writeError(c, http.StatusNotFound, "Not Found", "Export not found")
 		}
 		return c.Blob(http.StatusOK, shared.Job.ContentType, shared.Payload)
 	}
 	job, ok := h.store.Get(exportID)
-	if !ok || job.FilePath == "" {
+	if !ok || job.Owner != username || job.FilePath == "" {
 		return writeError(c, http.StatusNotFound, "Not Found", "Export not found")
 	}
 

@@ -184,4 +184,17 @@ func TestPostgresSharedExports(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "shared-call") {
 		t.Fatalf("download lost: %s", rec.Body.String())
 	}
+	for _, handler := range []func(echo.Context) error{b.V4ExportsGet, b.V4ExportsDownload} {
+		c, rec = makeContext(http.MethodGet, "")
+		c.Set("user", &jwt.Token{Claims: &JWTClaims{Username: "bob"}})
+		c.SetParamNames("exportId")
+		c.SetParamValues(created.Data.ExportID)
+		if err := handler(c); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("other user retrieved export: %d", rec.Code)
+		}
+	}
+
 }
