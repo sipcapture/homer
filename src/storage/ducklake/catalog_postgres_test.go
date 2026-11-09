@@ -170,7 +170,7 @@ func TestPostgresDuckLakeTieredVolumes(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = tsm.Stop() })
-	if _, err := tsm.db.Exec("CALL hot.set_option('DATA_INLINING_ROW_LIMIT', 0); CALL cold.set_option('DATA_INLINING_ROW_LIMIT', 0); CREATE TABLE hot.test (id BIGINT, date DATE, payload VARCHAR); CREATE TABLE cold.test (id BIGINT, date DATE, payload VARCHAR)"); err != nil {
+	if _, err := tsm.db.Exec("CALL hot.set_option('DATA_INLINING_ROW_LIMIT', 0); CALL cold.set_option('DATA_INLINING_ROW_LIMIT', 0); CREATE TABLE hot.test (uuid VARCHAR, date DATE, payload VARCHAR); CREATE TABLE cold.test (uuid VARCHAR, date DATE, payload VARCHAR)"); err != nil {
 		t.Fatal(err)
 	}
 	hep, err := decoder.DecodeHEP(decoder.BenchHEP3SIPPacket())
@@ -178,7 +178,7 @@ func TestPostgresDuckLakeTieredVolumes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer decoder.ReleaseHEP(hep)
-	if _, err := tsm.db.Exec("INSERT INTO hot.test VALUES (1, DATE '2026-01-01', ?), (2, DATE '2026-01-01', ?), (3, DATE '2026-01-02', ?)", hep.Payload, hep.Payload, hep.Payload); err != nil {
+	if _, err := tsm.db.Exec("INSERT INTO hot.test VALUES ('packet-1', DATE '2026-01-01', ?), ('packet-2', DATE '2026-01-01', ?), ('packet-3', DATE '2026-01-02', ?)", hep.Payload, hep.Payload, hep.Payload); err != nil {
 		t.Fatal(err)
 	}
 	hot, cold := tsm.volumes[0], tsm.volumes[1]
@@ -193,10 +193,10 @@ func TestPostgresDuckLakeTieredVolumes(t *testing.T) {
 		if err := tsm.db.QueryRow("SELECT count(*) FROM hot.test WHERE date = DATE '2026-01-01'").Scan(&hotOld); err != nil {
 			t.Fatal(err)
 		}
-		if err := tsm.db.QueryRow("SELECT count(*) FROM hot.test WHERE date = DATE '2026-01-02' AND id = 3 AND payload = ?", hep.Payload).Scan(&hotRecent); err != nil {
+		if err := tsm.db.QueryRow("SELECT count(*) FROM hot.test WHERE date = DATE '2026-01-02' AND uuid = 'packet-3' AND payload = ?", hep.Payload).Scan(&hotRecent); err != nil {
 			t.Fatal(err)
 		}
-		if err := tsm.db.QueryRow("SELECT count(*) FROM cold.test WHERE date = DATE '2026-01-01' AND id IN (1, 2) AND payload = ?", hep.Payload).Scan(&coldOld); err != nil {
+		if err := tsm.db.QueryRow("SELECT count(*) FROM cold.test WHERE date = DATE '2026-01-01' AND uuid IN ('packet-1', 'packet-2') AND payload = ?", hep.Payload).Scan(&coldOld); err != nil {
 			t.Fatal(err)
 		}
 		if hotOld != 0 || hotRecent != 1 || coldOld != 2 {
