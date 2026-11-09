@@ -480,9 +480,11 @@ type TableWriter struct {
 	// or append, including after a failed TRUNCATE.
 	slotCommitted [2]bool
 
-	batchMu   sync.Mutex
-	batch     [][]interface{}
-	batchSize int
+	appendMu      sync.Mutex // Serialize batch attempts without holding batchMu during I/O.
+	batchFailures int        // Protected by appendMu; reset after success or discard.
+	batchMu       sync.Mutex
+	batch         [][]interface{}
+	batchSize     int
 
 	// Pre-built flush/truncate SQL per buffer slot.
 	flushInsertSQL   [2]string // "INSERT INTO <lakeFQN> SELECT * FROM <memTable_N>"
@@ -592,6 +594,13 @@ func (tw *TableWriter) activeMemTable() string {
 // to the in-memory DuckDB table via a single multi-row INSERT.
 func (tw *TableWriter) Write(values []interface{}) error {
 	tw.batchMu.Lock()
+	// Bound the Go queue even while an appender is blocked or failing.
+	limit := max(1024, 2*tw.batchSize)
+	if len(tw.batch) >= limit {
+		tw.batchMu.Unlock()
+		tw.dropBatchRows([][]interface{}{values}, "queue_full", nil)
+		return fmt.Errorf("append queue for %s is full (%d rows)", tw.tableFQN, limit)
+	}
 	tw.batch = append(tw.batch, values)
 	needFlush := len(tw.batch) >= tw.batchSize
 	tw.batchMu.Unlock()
@@ -613,7 +622,20 @@ var batchSlicePool sync.Pool // elements: *[][]interface{}
 // rows are written directly via DuckDB's columnar DataChunk interface.
 // batchMu only protects the batch handoff. The active memory table is held
 // exclusively until the appender commits; waiting leaves batchMu free.
-func (tw *TableWriter) flushBatch() error {
+const appendMaxFailures = 3
+
+func (tw *TableWriter) dropBatchRows(rows [][]interface{}, reason string, err error) {
+	metrics.DucklakeBatchDroppedRows.WithLabelValues(reason).Add(float64(len(rows)))
+	logger.Error("Discarding failed DuckLake append batch", "table", tw.tableFQN, "rows", len(rows), "reason", reason, "error", err)
+	for _, row := range rows {
+		putRowSlice(row)
+	}
+	clear(rows)
+}
+
+func (tw *TableWriter) flushBatch() (result error) {
+	tw.appendMu.Lock()
+	defer tw.appendMu.Unlock()
 	tw.batchMu.Lock()
 	if len(tw.batch) == 0 {
 		tw.batchMu.Unlock()
@@ -635,18 +657,31 @@ func (tw *TableWriter) flushBatch() error {
 	tw.batchMu.Unlock()
 
 	committed := false
+	retryable := true // Connection and failed-clear errors get a bounded retry window.
 	defer func() {
 		if !committed {
+			tw.batchFailures++
 			tw.batchMu.Lock()
-			tw.batch = append(rows, tw.batch...)
+			if retryable && tw.batchFailures < appendMaxFailures && len(rows)+len(tw.batch) <= max(1024, 2*tw.batchSize) {
+				tw.batch = append(rows, tw.batch...)
+				tw.batchMu.Unlock()
+				return
+			}
 			tw.batchMu.Unlock()
-			return
+			reason := "retry_exhausted"
+			if !retryable {
+				reason = "non_retriable"
+			}
+			tw.dropBatchRows(rows, reason, result)
+			tw.batchFailures = 0
+			result = fmt.Errorf("discarded append batch for %s: %w", tw.tableFQN, result)
+		} else {
+			tw.batchFailures = 0
+			for _, row := range rows {
+				putRowSlice(row)
+			}
+			clear(rows)
 		}
-		// Only successful batches may return their rows to the pools.
-		for _, row := range rows {
-			putRowSlice(row)
-		}
-		clear(rows)
 		batchSlicePool.Put(&rows)
 	}()
 
@@ -701,6 +736,9 @@ func (tw *TableWriter) flushBatch() error {
 			return appErr
 		}
 		for _, row := range rows {
+			if len(row) != nCols {
+				return fmt.Errorf("append row has %d columns, expected %d", len(row), nCols)
+			}
 			for i, v := range row {
 				vals[i] = cellToDriverValue(v)
 			}
@@ -713,6 +751,7 @@ func (tw *TableWriter) flushBatch() error {
 	})
 
 	if err != nil {
+		retryable = isFlushRetriableError(err.Error())
 		metrics.RecordPipelineStageError("ducklake", "batch_insert", "insert_error")
 		return fmt.Errorf("appender INSERT into %s (%d rows): %w", memTable, nRows, err)
 	}
