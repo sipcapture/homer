@@ -69,7 +69,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       rustfs:
-        image: rustfs/rustfs:latest
+        image: rustfs/rustfs@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2
         env:
           RUSTFS_VOLUMES: /data
           RUSTFS_ADDRESS: 0.0.0.0:9000
