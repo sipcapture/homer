@@ -8,8 +8,8 @@ import (
 )
 
 // Exercise connection, appender construction, AppendRow, and Close failures
-// using the real DuckDB driver. No failed batch may be pooled or partly commit.
-func TestAppenderFailuresRetainEntireBatch(t *testing.T) {
+// using the real DuckDB driver. Transient failures retain rows; deterministic failures discard atomically.
+func TestAppenderFailuresRecoverOrDiscardBatch(t *testing.T) {
 	for _, failure := range []string{"connection", "create", "row", "close"} {
 		t.Run(failure, func(t *testing.T) {
 			tw := newBufferTestWriter(t)
@@ -49,7 +49,7 @@ func TestAppenderFailuresRetainEntireBatch(t *testing.T) {
 			if err := tw.flushBatch(); err == nil {
 				t.Fatalf("expected %s failure", failure)
 			}
-			if len(tw.batch) != 2 || tw.batch[0][0] != int64(1) || tw.batch[1][0] != value {
+			if failure == "connection" && (len(tw.batch) != 2 || tw.batch[0][0] != int64(1) || tw.batch[1][0] != value) {
 				t.Fatalf("failed batch was discarded or mutated: %#v", tw.batch)
 			}
 			tw.db = original
@@ -62,7 +62,15 @@ func TestAppenderFailuresRetainEntireBatch(t *testing.T) {
 			if err := original.QueryRow("SELECT count(*) FROM buffer_a").Scan(&rows); err != nil || rows != 0 {
 				t.Fatalf("partial batch committed: rows=%d err=%v", rows, err)
 			}
-			tw.batch[1][0] = int64(2)
+			if failure != "connection" {
+				if len(tw.batch) != 0 {
+					t.Fatal("deterministic failure retained poisoned batch")
+				}
+				_ = tw.Write([]interface{}{int64(1)})
+				_ = tw.Write([]interface{}{int64(2)})
+			} else {
+				tw.batch[1][0] = int64(2)
+			}
 			if err := tw.flushBatch(); err != nil {
 				t.Fatal(err)
 			}
@@ -101,4 +109,41 @@ func TestSingleAppenderConcurrentWrites(t *testing.T) {
 	if err := tw.db.QueryRow("SELECT count(*), count(DISTINCT id) FROM saved").Scan(&count, &distinct); err != nil || count != workers*rows || distinct != count {
 		t.Fatalf("concurrent appends lost/duplicated rows: %d/%d %v", count, distinct, err)
 	}
+}
+
+func TestAppenderRetryBound(t *testing.T) {
+	tw := newBufferTestWriter(t)
+	original := tw.db
+	closed, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = closed.Close()
+	tw.db = closed
+	defer func() { tw.db = original }()
+	for i := 0; i < appendMaxFailures; i++ {
+		if err := tw.Write([]interface{}{int64(i)}); err == nil {
+			t.Fatal("expected connection failure")
+		}
+	}
+	if len(tw.batch) != 0 {
+		t.Fatalf("exhausted batch retained %d rows", len(tw.batch))
+	}
+	tw.db = original
+	if err := tw.Write([]interface{}{int64(99)}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAppenderQueueBound(t *testing.T) {
+	tw := newBufferTestWriter(t)
+	tw.batchSize = 2048
+	tw.batch = make([][]interface{}, 4096)
+	if err := tw.Write([]interface{}{int64(1)}); err == nil {
+		t.Fatal("full queue accepted row")
+	}
+	if len(tw.batch) != 4096 {
+		t.Fatal("queue grew past bound")
+	}
+	tw.batch = nil
 }
