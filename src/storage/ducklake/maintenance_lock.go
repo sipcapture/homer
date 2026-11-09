@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sipcapture/homer-core/src/config"
 	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
@@ -13,6 +14,10 @@ import (
 // mode. Other modes retain their existing coordination. Local aliases are not
 // part of the lock identity.
 func AcquireMaintenance(ctx context.Context, stateless bool, ct CatalogType, paths ...string) (*maintenancelock.Lease, bool, error) {
+	return acquireMaintenanceUntil(ctx, time.Time{}, stateless, ct, paths...)
+}
+
+func acquireMaintenanceUntil(ctx context.Context, deadline time.Time, stateless bool, ct CatalogType, paths ...string) (*maintenancelock.Lease, bool, error) {
 	if !stateless {
 		return maintenancelock.Uncoordinated(ctx), true, nil
 	}
@@ -25,7 +30,7 @@ func AcquireMaintenance(ctx context.Context, stateless bool, ct CatalogType, pat
 			dsns = append(dsns, config.NormalizePostgresDSN(path))
 		}
 	}
-	return maintenancelock.Acquire(ctx, dsns...)
+	return maintenancelock.AcquireUntil(ctx, deadline, dsns...)
 }
 
 // PrimaryCatalogPath resolves the primary shard before opening a manager, so

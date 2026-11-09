@@ -1355,13 +1355,37 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+// Tiering retries brief writer contention within the same cycle. Partial
+// multi-catalog acquisitions are released by AcquireMaintenance on each attempt.
+const tieringMaintenanceWait = 5 * time.Second
+
 func (tsm *TieredStorageManager) acquireMaintenance(paths ...string) (*maintenancelock.Lease, error) {
-	lease, acquired, err := AcquireMaintenance(context.Background(), tsm.config.Stateless, tsm.config.CatalogType, paths...)
-	if err != nil {
-		return nil, err
+	ctx, cancel := context.WithTimeout(context.Background(), tieringMaintenanceWait)
+	defer cancel()
+	return tsm.acquireMaintenanceWithin(ctx, paths...)
+}
+
+func (tsm *TieredStorageManager) acquireMaintenanceWithin(ctx context.Context, paths ...string) (*maintenancelock.Lease, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("catalog maintenance is already running; timed out waiting: %w", err)
+		}
+		// Use the deadline for acquisition, but not for the returned lease's lifetime.
+		// A successful lease must survive until the maintenance operation releases it.
+		deadline, _ := ctx.Deadline()
+		lease, acquired, err := acquireMaintenanceUntil(context.Background(), deadline, tsm.config.Stateless, tsm.config.CatalogType, paths...)
+		if err != nil {
+			return nil, err
+		}
+		if acquired {
+			return lease, nil
+		}
+		timer := time.NewTimer(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, fmt.Errorf("catalog maintenance is already running; timed out waiting: %w", ctx.Err())
+		case <-timer.C:
+		}
 	}
-	if !acquired {
-		return nil, fmt.Errorf("catalog maintenance is already running")
-	}
-	return lease, nil
 }

@@ -109,7 +109,9 @@ identity. Writer compaction and inline flushing, node vacuum requests, CLI
 maintenance, and tiering moves/deletion/cleanup use the same lock. Tiering locks
 both source and destination catalogs before reading counts or moving a partition;
 multiple catalogs are acquired in a stable order with partial acquisitions released
-on contention. Vacuum returns HTTP 409 on contention and 503 on acquisition errors;
+on contention. Tiering retries lock contention within the same operation for up
+to five seconds, then returns a timeout so a later tiering cycle can retry.
+Vacuum returns HTTP 409 on contention and 503 on acquisition errors;
 CLI maintenance returns an error. Automatic operations retry on later cycles.
 
 Automatic compaction stores its shared completion timestamp as the global
