@@ -2047,9 +2047,16 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prevent reconnect from closing this handle, without holding the query
+	// mutex during potentially long object-storage maintenance.
+	n.refreshMu.Lock()
+	defer n.refreshMu.Unlock()
 	n.mu.RLock()
-	defer n.mu.RUnlock()
-	if n.db == nil {
+	rawDB := n.db
+	volumes := append([]VolumeInfo(nil), n.volumes...)
+	stateless := n.config != nil && n.config.DuckLake.Stateless
+	n.mu.RUnlock()
+	if rawDB == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
 			"success": false,
 			"error":   "database not initialized",
@@ -2057,13 +2064,12 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paths := make([]string, 0, len(n.volumes))
-	for _, vol := range n.volumes {
+	paths := make([]string, 0, len(volumes))
+	for _, vol := range volumes {
 		if vol.CatalogType == ducklake.CatalogPostgres || ducklake.IsPostgresCatalogPath(vol.CatalogPath) {
 			paths = append(paths, vol.CatalogPath)
 		}
 	}
-	stateless := n.config != nil && n.config.DuckLake.Stateless
 	lease, acquired, lockErr := ducklake.AcquireMaintenance(r.Context(), stateless, ducklake.CatalogPostgres, paths...)
 	if lockErr != nil || !acquired {
 		status := http.StatusConflict
@@ -2076,11 +2082,11 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer lease.Release()
-	db := maintenancelock.DB{Raw: n.db, Lease: lease}
+	db := maintenancelock.DB{Raw: rawDB, Lease: lease}
 	var allResults []map[string]interface{}
 	start := time.Now()
 	success := true
-	for _, vol := range n.volumes {
+	for _, vol := range volumes {
 		if err := lease.Check(); err != nil {
 			success = false
 			break
@@ -2094,7 +2100,7 @@ func (n *Node) handleVacuum(w http.ResponseWriter, r *http.Request) {
 		allResults = append(allResults, map[string]interface{}{"volume": vol.Name, "lake": vol.LakeName, "results": results})
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success": success, "volumes_count": len(n.volumes), "expire_older_than": expireOlderThan, "duration_ms": time.Since(start).Milliseconds(), "results": allResults,
+		"success": success, "volumes_count": len(volumes), "expire_older_than": expireOlderThan, "duration_ms": time.Since(start).Milliseconds(), "results": allResults,
 	})
 }
 
