@@ -195,7 +195,7 @@ func TestQueryKnownAzureFilesIncludesScheduled(t *testing.T) {
 		}
 	}
 
-	known, err := queryKnownAzureFiles(db, lake, "az://c/lake/")
+	known, err := queryKnownAzureFiles(context.Background(), db, lake, "az://c/lake/")
 	if err != nil {
 		t.Fatal(err)
 	}

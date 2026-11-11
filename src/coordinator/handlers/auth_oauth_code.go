@@ -52,7 +52,9 @@ func (h *AuthHandler) V4OAuth2Redirect(c echo.Context) error {
 			oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 		)
 	}
-	h.oauthState.Put(state, provider.Name, pkceVerifier, 15*time.Minute)
+	if err := h.putOAuthState(c, state, provider.Name, pkceVerifier); err != nil {
+		return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to store OAuth state")
+	}
 
 	authURL := provider.OAuth2Config.AuthCodeURL(state, opts...)
 	return c.Redirect(http.StatusFound, authURL)
@@ -81,7 +83,7 @@ func (h *AuthHandler) V4OAuth2Callback(c echo.Context) error {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Authorization code and state are required")
 	}
 
-	entry, ok := h.oauthState.Take(state)
+	entry, ok := h.takeOAuthState(c, state)
 	if !ok || entry.ProviderName != provider.Name {
 		return writeError(c, http.StatusBadRequest, "Bad Request", "Invalid or expired OAuth2 state")
 	}
@@ -167,7 +169,9 @@ func (h *AuthHandler) V4OAuth2Callback(c echo.Context) error {
 
 	one := newSessionID()
 	if h.oneTimeStore != nil {
-		h.oneTimeStore.Put(one, u.Username, isAdmin, 10*time.Minute)
+		if err := h.putOneTimeToken(c, one, u.Username, isAdmin); err != nil {
+			return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to store OAuth login")
+		}
 	}
 
 	target, err := resolveOAuthClientRedirect(c, provider)

@@ -35,6 +35,8 @@ func HashPassword(password string) (string, error) {
 
 // Config is the main configuration structure for Homer Server
 type Config struct {
+	// Stateless requires external durable storage and explicitly configured secrets.
+	Stateless   bool              `json:"stateless" mapstructure:"stateless" default:"false"`
 	Ingest      IngestConfig      `json:"ingest" mapstructure:"ingest"`
 	Storage     StorageConfig     `json:"storage" mapstructure:"storage"`
 	Node        NodeConfig        `json:"node" mapstructure:"node"`
@@ -373,7 +375,9 @@ type CoordinatorConfig struct {
 	// LocalSecretsDir overrides the directory for generated authentication secrets.
 	LocalSecretsDir string `json:"local_secrets_dir" mapstructure:"local_secrets_dir"`
 
-	Enable bool `json:"enable" mapstructure:"enable" default:"false"`
+	// Inherited from the top-level stateless setting.
+	Stateless bool `json:"-" mapstructure:"-"`
+	Enable    bool `json:"enable" mapstructure:"enable" default:"false"`
 
 	// SmartRouting: skip nodes with no data in the query time range (UI path).
 	SmartRouting SmartRoutingConfig `json:"smart_routing" mapstructure:"smart_routing"`
@@ -721,6 +725,8 @@ type DuckDBTuning struct {
 
 // DuckLakeConfig configures DuckLake storage
 type DuckLakeConfig struct {
+	// Stateless is inherited from the top-level setting, never a nested override.
+	Stateless     bool   `json:"-" mapstructure:"-"`
 	CatalogType   string `json:"catalog_type" mapstructure:"catalog_type" default:"sqlite"` // DuckLake catalog — sqlite or postgres
 	CatalogPath   string `json:"catalog_path" mapstructure:"catalog_path" default:"homer_catalog.sqlite"`
 	DataPath      string `json:"data_path" mapstructure:"data_path" default:"/var/lib/homer/parquet"`
@@ -1412,6 +1418,10 @@ func Load(configPath string) (*Config, error) {
 	// Legacy safety net for fields that don't carry struct tags yet.
 	applyDefaults(&cfg)
 
+	if err := validateStateless(&cfg); err != nil {
+		return nil, err
+	}
+
 	if err := normalizeCoordinatorAuth(&cfg.Coordinator); err != nil {
 		return nil, err
 	}
@@ -1832,6 +1842,9 @@ func setDefaults(v *viper.Viper) {
 
 // applyDefaults applies default values for missing fields
 func applyDefaults(cfg *Config) {
+	cfg.Coordinator.Stateless = cfg.Stateless
+	cfg.Storage.DuckLake.Stateless = cfg.Stateless
+	cfg.Node.DuckLake.Stateless = cfg.Stateless
 	// Ingest defaults
 	if cfg.Ingest.UDP.Port == 0 {
 		cfg.Ingest.UDP.Port = 9060
@@ -2094,7 +2107,7 @@ func applyDefaults(cfg *Config) {
 	// Resolve node HTTP / Airport Bearer token before wiring coordinator nodes.
 	// Exposed binds (default 0.0.0.0) with empty auth_token get an auto-generated
 	// persisted token (GHSA-rm5w-rqr7-2h54). Loopback-only binds may stay empty.
-	if cfg.Node.Enable {
+	if cfg.Node.Enable && !cfg.Stateless {
 		catalogPath := NodeCatalogPath(&cfg.Node)
 		tok, _, _, err := ResolveNodeFlightAuthToken(
 			cfg.Node.FlightServer.Host,
@@ -2118,7 +2131,7 @@ func applyDefaults(cfg *Config) {
 		}
 	}
 
-	if cfg.Coordinator.Enable && cfg.Coordinator.FlightSQLServer.Enable {
+	if cfg.Coordinator.Enable && cfg.Coordinator.FlightSQLServer.Enable && !cfg.Stateless {
 		fsqlTok := strings.TrimSpace(cfg.Coordinator.FlightSQLServer.AuthToken)
 		if fsqlTok == "" && cfg.Node.Enable {
 			fsqlTok = strings.TrimSpace(cfg.Node.FlightSQLServer.AuthToken)
@@ -2130,6 +2143,15 @@ func applyDefaults(cfg *Config) {
 		tok, _, _, err := ResolveRequiredAuthToken(fsqlTok, settingsPath, cfg.Coordinator.LocalSecretsDir, cfg.Coordinator.SettingsDBType)
 		if err == nil {
 			cfg.Coordinator.FlightSQLServer.AuthToken = tok
+		}
+	}
+
+	if cfg.Stateless {
+		if cfg.Node.FlightSQLServer.AuthToken == "" {
+			cfg.Node.FlightSQLServer.AuthToken = cfg.Node.FlightServer.AuthToken
+		}
+		if cfg.Coordinator.FlightSQLServer.AuthToken == "" && cfg.Node.Enable {
+			cfg.Coordinator.FlightSQLServer.AuthToken = cfg.Node.FlightSQLServer.AuthToken
 		}
 	}
 

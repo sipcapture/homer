@@ -84,3 +84,6 @@ src/ui/.env.local
 # nor embedded into the binary (see scripts/fetch-doom-wad.sh)
 gamedata/
 *.wad
+
+# Python scenario harness bytecode
+__pycache__/

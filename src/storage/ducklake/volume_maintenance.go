@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -150,7 +151,7 @@ func (tsm *TieredStorageManager) openMaintenanceDB() (*sql.DB, error) {
 
 // scheduledFileCount returns how many data files the lake still lists as
 // scheduled for deletion.
-func scheduledFileCount(db *sql.DB, lakeName string) (int64, error) {
+func scheduledFileCount(db maintenancelock.SQL, lakeName string) (int64, error) {
 	q := fmt.Sprintf("SELECT COUNT(*) FROM %s.ducklake_files_scheduled_for_deletion", ducklakeMetadataIdent(lakeName))
 	var n int64
 	if err := db.QueryRow(q).Scan(&n); err != nil {
@@ -159,16 +160,18 @@ func scheduledFileCount(db *sql.DB, lakeName string) (int64, error) {
 	return n, nil
 }
 
-func (tsm *TieredStorageManager) execFileCleanup(db *sql.DB, locker CatalogLocker, stmt string) error {
+func (tsm *TieredStorageManager) execFileCleanup(db maintenancelock.DB, locker CatalogLocker, stmt string) error {
+	if err := db.Check(); err != nil {
+		return err
+	}
 	if tsm.fileCleanupExec != nil {
-		return tsm.fileCleanupExec(db, locker, stmt)
+		return tsm.fileCleanupExec(db.Raw, locker, stmt)
 	}
 	_, err := execWithRetry(db, tieringMaxRetries, tieringBaseBackoff, locker, stmt)
 	return err
 }
 
-// runFileCleanup deletes superseded files and, when due, orphaned files for vol on db.
-func (tsm *TieredStorageManager) runFileCleanup(db *sql.DB, vol *Volume, locker CatalogLocker, cleanupSQL, orphanSQL string, record func(string, error)) {
+func (tsm *TieredStorageManager) runFileCleanup(db maintenancelock.DB, vol *Volume, locker CatalogLocker, cleanupSQL, orphanSQL string, record func(string, error)) {
 	before, countErr := scheduledFileCount(db, vol.LakeName)
 	err := tsm.execFileCleanup(db, locker, cleanupSQL)
 	record(cleanupSQL, err)

@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
 	"github.com/sipcapture/homer-core/src/storage/ducklake/mover"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
@@ -66,6 +67,7 @@ type Volume struct {
 
 // TieredStorageConfig holds configuration for tiered storage
 type TieredStorageConfig struct {
+	Stateless          bool // Inherited from the top-level setting; enables replica coordination.
 	Enable             bool
 	Volumes            []Volume
 	TTLMoveIntervalSec int
@@ -599,6 +601,13 @@ func partitionMovePlan(srcCount, dstCount int64) (partitionMoveAction, error) {
 // parquet files outside DuckDB so a large S3 copy does not hold the writer
 // catalog lock (sipcapture/homer#969). Native falls back to INSERT…SELECT.
 func (tsm *TieredStorageManager) MovePartition(tableName string, date string, srcVol, dstVol *Volume) error {
+	lease, err := tsm.acquireMaintenance(srcVol.CatalogPath, dstVol.CatalogPath)
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+	db := maintenancelock.DB{Raw: tsm.db, Lease: lease}
+
 	srcTable := fmt.Sprintf("%s.main.%s", srcVol.LakeName, tableName)
 	dstTable := fmt.Sprintf("%s.main.%s", dstVol.LakeName, tableName)
 
@@ -618,12 +627,12 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 
 	hotLocker := tsm.hotCatalogLocker(srcVol)
 
-	srcCount, err := tsm.partitionRowCount(srcTable, date)
+	srcCount, err := partitionRowCountSQL(db, srcTable, date)
 	if err != nil {
 		return fmt.Errorf("failed to count source partition rows: %w", err)
 	}
 
-	dstCount, err := tsm.partitionRowCount(dstTable, date)
+	dstCount, err := partitionRowCountSQL(db, dstTable, date)
 	if err != nil {
 		return fmt.Errorf("failed to count destination partition rows: %w", err)
 	}
@@ -655,9 +664,9 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 			"table", tableName,
 			"date", date,
 			"rows", dstCount)
-		return tsm.deleteSourcePartition(srcTable, date, tableName, srcCount, dstCount, hotLocker)
+		return tsm.deleteSourcePartition(db, srcTable, date, tableName, srcCount, dstCount, hotLocker)
 	case partitionMoveReplaceDest:
-		if err := tsm.discardIncompleteDestination(dstTable, date, tableName, dstVol, srcCount, dstCount); err != nil {
+		if err := tsm.discardIncompleteDestination(db, dstTable, date, tableName, dstVol, srcCount, dstCount); err != nil {
 			return err
 		}
 	}
@@ -676,7 +685,7 @@ func (tsm *TieredStorageManager) MovePartition(tableName string, date string, sr
 			"reason", err)
 	}
 
-	return tsm.movePartitionDuckDB(srcTable, dstTable, tableName, date, srcCount, hotLocker)
+	return tsm.movePartitionDuckDB(db, srcTable, dstTable, tableName, date, srcCount, hotLocker)
 }
 
 func (tsm *TieredStorageManager) MoveEngine() string {
@@ -775,13 +784,13 @@ func (tsm *TieredStorageManager) movePartitionNative(tableName, date string, src
 	return nil
 }
 
-func (tsm *TieredStorageManager) movePartitionDuckDB(srcTable, dstTable, tableName, date string, srcCount int64, hotLocker CatalogLocker) error {
+func (tsm *TieredStorageManager) movePartitionDuckDB(db maintenancelock.DB, srcTable, dstTable, tableName, date string, srcCount int64, hotLocker CatalogLocker) error {
 	insertSQL := fmt.Sprintf(
 		"INSERT INTO %s SELECT * FROM %s WHERE date = ?",
 		dstTable, srcTable,
 	)
 	if _, err := execWithRetry(
-		tsm.db,
+		db,
 		tieringMaxRetries,
 		tieringBaseBackoff,
 		hotLocker,
@@ -790,13 +799,13 @@ func (tsm *TieredStorageManager) movePartitionDuckDB(srcTable, dstTable, tableNa
 	); err != nil {
 		return fmt.Errorf("failed to insert into destination: %w", err)
 	}
-	return tsm.deleteSourcePartition(srcTable, date, tableName, srcCount, 0, hotLocker)
+	return tsm.deleteSourcePartition(db, srcTable, date, tableName, srcCount, 0, hotLocker)
 }
 
 // discardIncompleteDestination removes one date partition from the destination
 // so the following copy starts from an empty partition. The source is not
 // touched (sipcapture/homer#1080).
-func (tsm *TieredStorageManager) discardIncompleteDestination(dstTable, date, tableName string, dstVol *Volume, srcCount, dstCount int64) error {
+func (tsm *TieredStorageManager) discardIncompleteDestination(db maintenancelock.DB, dstTable, date, tableName string, dstVol *Volume, srcCount, dstCount int64) error {
 	volumeName := ""
 	var locker CatalogLocker
 	if dstVol != nil {
@@ -812,7 +821,7 @@ func (tsm *TieredStorageManager) discardIncompleteDestination(dstTable, date, ta
 
 	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE date = ?", dstTable)
 	if _, err := execWithRetry(
-		tsm.db,
+		db,
 		tieringMaxRetries,
 		tieringBaseBackoff,
 		locker,
@@ -824,10 +833,10 @@ func (tsm *TieredStorageManager) discardIncompleteDestination(dstTable, date, ta
 	return nil
 }
 
-func (tsm *TieredStorageManager) deleteSourcePartition(srcTable, date, tableName string, srcCount, dstCount int64, hotLocker CatalogLocker) error {
+func (tsm *TieredStorageManager) deleteSourcePartition(db maintenancelock.DB, srcTable, date, tableName string, srcCount, dstCount int64, hotLocker CatalogLocker) error {
 	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE date = ?", srcTable)
 	if _, err := execWithRetry(
-		tsm.db,
+		db,
 		tieringMaxRetries,
 		tieringBaseBackoff,
 		hotLocker,
@@ -857,9 +866,16 @@ func (tsm *TieredStorageManager) deleteSourcePartition(srcTable, date, tableName
 // DeletePartition permanently removes a date partition from the given volume.
 // Used to enforce max_data_age_days on the final storage-policy volume (no next tier).
 func (tsm *TieredStorageManager) DeletePartition(tableName string, date string, vol *Volume) error {
+	lease, err := tsm.acquireMaintenance(vol.CatalogPath)
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+	db := maintenancelock.DB{Raw: tsm.db, Lease: lease}
+
 	tableFQN := fmt.Sprintf("%s.main.%s", vol.LakeName, tableName)
 
-	count, err := tsm.partitionRowCount(tableFQN, date)
+	count, err := partitionRowCountSQL(db, tableFQN, date)
 	if err != nil {
 		return fmt.Errorf("failed to count partition rows: %w", err)
 	}
@@ -879,7 +895,7 @@ func (tsm *TieredStorageManager) DeletePartition(tableName string, date string, 
 
 	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE date = ?", tableFQN)
 	if _, err := execWithRetry(
-		tsm.db,
+		db,
 		tieringMaxRetries,
 		tieringBaseBackoff,
 		tsm.hotCatalogLocker(vol),
@@ -920,7 +936,19 @@ func volumeMaintenanceSQL(lakeName string, snapshotOlderThanSec int) []string {
 // obsolete in the DuckLake catalog while the objects stay on disk/S3
 // (issue #882 follow-up: cold physical space was never reclaimed because
 // the writer CompactionService only maintains the writer lake).
-func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlderThanSec int) error {
+func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlderThanSec int) (retErr error) {
+	lease, err := tsm.acquireMaintenance(vol.CatalogPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := lease.Check(); err != nil {
+			retErr = err
+		}
+		lease.Release()
+	}()
+	guarded := maintenancelock.DB{Raw: tsm.db, Lease: lease}
+
 	if err := tsm.refreshCredentialChainSecret(vol); err != nil {
 		logger.Warn("TieredStorageManager: failed to refresh S3 secret before maintenance",
 			"volume", vol.Name, "error", err)
@@ -951,7 +979,10 @@ func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlder
 	stmts := volumeMaintenanceSQL(vol.LakeName, snapshotOlderThanSec)
 	expireSQL, cleanupSQL, orphanSQL := stmts[0], stmts[1], stmts[2]
 	// expire_snapshots is catalog-only and stays on the tiering connection.
-	_, err := execWithRetry(tsm.db, tieringMaxRetries, tieringBaseBackoff, locker, expireSQL)
+	_, err = execWithRetry(guarded, tieringMaxRetries, tieringBaseBackoff, locker, expireSQL)
+	if lease.Check() != nil {
+		return lease.Context().Err()
+	}
 	record(expireSQL, err)
 
 	// cleanup_old_files / delete_orphaned_files open every az:// object through
@@ -969,7 +1000,7 @@ func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlder
 				locker.CatalogLock()
 				defer locker.CatalogUnlock()
 			}
-			err = RunAzureNativeFileCleanup(context.Background(), tsm.db, vol.LakeName, vol.Path, volumeAzureConfig(vol))
+			err = RunAzureNativeFileCleanup(lease.Context(), tsm.db, vol.LakeName, vol.Path, volumeAzureConfig(vol))
 		}()
 		record("azure native cleanup_old_files+delete_orphaned_files", err)
 	case usesDedicatedFileCleanupDB(vol):
@@ -978,9 +1009,9 @@ func (tsm *TieredStorageManager) RunVolumeMaintenance(vol *Volume, snapshotOlder
 			record("open maintenance DuckDB for file cleanup", err)
 			break
 		}
-		tsm.runFileCleanup(db, vol, locker, cleanupSQL, orphanSQL, record)
+		tsm.runFileCleanup(maintenancelock.DB{Raw: db, Lease: lease}, vol, locker, cleanupSQL, orphanSQL, record)
 	default:
-		tsm.runFileCleanup(tsm.db, vol, locker, cleanupSQL, orphanSQL, record)
+		tsm.runFileCleanup(guarded, vol, locker, cleanupSQL, orphanSQL, record)
 	}
 
 	if firstErr == nil {
@@ -999,9 +1030,13 @@ func (tsm *TieredStorageManager) hotCatalogLocker(srcVol *Volume) CatalogLocker 
 }
 
 func (tsm *TieredStorageManager) partitionRowCount(tableFQN, date string) (int64, error) {
+	return partitionRowCountSQL(tsm.db, tableFQN, date)
+}
+
+func partitionRowCountSQL(db maintenancelock.SQL, tableFQN, date string) (int64, error) {
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE date = ?", tableFQN)
 	var count int64
-	if err := tsm.db.QueryRow(query, date).Scan(&count); err != nil {
+	if err := db.QueryRow(query, date).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -1318,4 +1353,39 @@ func BuildAzureSecretSQL(secretName, accountName, accountKey, connectionString, 
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// Tiering retries brief writer contention within the same cycle. Partial
+// multi-catalog acquisitions are released by AcquireMaintenance on each attempt.
+const tieringMaintenanceWait = 5 * time.Second
+
+func (tsm *TieredStorageManager) acquireMaintenance(paths ...string) (*maintenancelock.Lease, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), tieringMaintenanceWait)
+	defer cancel()
+	return tsm.acquireMaintenanceWithin(ctx, paths...)
+}
+
+func (tsm *TieredStorageManager) acquireMaintenanceWithin(ctx context.Context, paths ...string) (*maintenancelock.Lease, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("catalog maintenance is already running; timed out waiting: %w", err)
+		}
+		// Use the deadline for acquisition, but not for the returned lease's lifetime.
+		// A successful lease must survive until the maintenance operation releases it.
+		deadline, _ := ctx.Deadline()
+		lease, acquired, err := acquireMaintenanceUntil(context.Background(), deadline, tsm.config.Stateless, tsm.config.CatalogType, paths...)
+		if err != nil {
+			return nil, err
+		}
+		if acquired {
+			return lease, nil
+		}
+		timer := time.NewTimer(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, fmt.Errorf("catalog maintenance is already running; timed out waiting: %w", ctx.Err())
+		case <-timer.C:
+		}
+	}
 }

@@ -106,6 +106,11 @@ var (
 		[]string{"protocol", "stage"},
 	)
 
+	DucklakeBatchDroppedRows = promauto.NewCounterVec(
+		prometheus.CounterOpts{Name: "homer_ducklake_batch_dropped_rows_total", Help: "Rows discarded after permanent append errors, exhausted retries, or a full append queue"},
+		[]string{"reason"},
+	)
+
 	// Pipeline stage error counter
 	PipelineStageErrors = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -430,4 +435,3 @@ func AddLineProtoPoints(db string, n int) {
 func RecordLineProtoWriteError(stage string) {
 	LineProtoWriteErrors.WithLabelValues(stage).Inc()
 }
-

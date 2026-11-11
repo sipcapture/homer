@@ -5,11 +5,13 @@
 package node
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseExpireOlderThan(t *testing.T) {
@@ -78,5 +80,48 @@ func TestHandleVacuumRejectsExpireInjection(t *testing.T) {
 	}
 	if strings.Contains(rr.Body.String(), "DROP TABLE") && strings.Contains(rr.Body.String(), "success\":true") {
 		t.Fatalf("injection must not succeed: %s", rr.Body.String())
+	}
+}
+
+// A vacuum waiting for a DuckDB connection must not hold n.mu and block search.
+func TestVacuumReleasesQueryMutex(t *testing.T) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	conn, err := db.Conn(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	n := &Node{db: db, volumes: []VolumeInfo{{LakeName: "lake"}}}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		n.handleVacuum(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/vacuum", nil))
+	}()
+	// Wait until maintenance owns refreshMu.
+	deadline := time.Now().Add(time.Second)
+	for n.refreshMu.TryLock() {
+		n.refreshMu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatal("vacuum did not start")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	available := make(chan struct{})
+	go func() { n.mu.Lock(); n.mu.Unlock(); close(available) }()
+	select {
+	case <-available:
+	case <-time.After(time.Second):
+		t.Error("vacuum held query mutex during I/O")
+	}
+	_ = conn.Close()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("vacuum did not finish")
 	}
 }
