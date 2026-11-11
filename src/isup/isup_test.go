@@ -191,6 +191,49 @@ func TestLegacyHexPayloadStillRestores(t *testing.T) {
 	}
 }
 
+func TestDecodeMultipartIAMDetails(t *testing.T) {
+	// The IAM from discussion 1109: ITU-T, called 1111111111, calling 2222222222.
+	body := []byte{
+		0x01, 0x10, 0x48, 0x00, 0x0a, 0x00, 0x02, 0x09,
+		0x07, 0x03, 0x90, 0x11, 0x11, 0x11, 0x11, 0x11,
+		0x08, 0x01, 0x80,
+		0x0a, 0x07, 0x03, 0x13, 0x22, 0x22, 0x22, 0x22, 0x22,
+		0x31, 0x02, 0x00, 0x00,
+		0x3a, 0x06, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00,
+	}
+	msg := Decode(body)
+	if msg.Error != "" {
+		t.Fatal(msg.Error)
+	}
+	for _, want := range []string{
+		"1111111111",
+		"2222222222",
+		"routing to internal network number not allowed",
+		"echo control device included",
+		"interworking encountered",
+		"connected line identity requested",
+		"Propagation delay counter: 0 ms",
+		"routine",
+		"path reserved",
+		"network identity 0000",
+	} {
+		if !strings.Contains(msg.Summary, want) {
+			t.Fatalf("summary missing %q\n%s", want, msg.Summary)
+		}
+	}
+}
+
+func TestDecodeACMSubscriberFree(t *testing.T) {
+	msg := Decode([]byte{0x06, 0x04, 0x00, 0x00})
+	if msg.Error != "" {
+		t.Fatal(msg.Error)
+	}
+	if !strings.Contains(msg.Summary, "subscriber free") {
+		t.Fatalf("summary: %s", msg.Summary)
+	}
+}
+
 func TestDecodeANSINotDecoded(t *testing.T) {
 	msg := sipInvite(sampleIAM(), "application/isup;version=ansi")
 	got := DecodeSIP(msg)

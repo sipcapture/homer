@@ -71,8 +71,29 @@ func TestDecodePCAP(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(args)
-	if !strings.Contains(got, "-Q -T json -r -") || !strings.Contains(got, "-d udp.port==5060,sip") {
+	if !strings.Contains(got, "-Q -T json --no-duplicate-keys -r -") || !strings.Contains(got, "-d udp.port==5060,sip") {
 		t.Fatalf("args %q", got)
+	}
+}
+
+func TestDecodePCAPRetriesWithoutDuplicateFlag(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "tshark")
+	script := "#!/bin/sh\n" +
+		"cat >/dev/null\n" +
+		"case \" $* \" in\n" +
+		"*--no-duplicate-keys*) echo \"tshark: unrecognized option '--no-duplicate-keys'\" >&2; exit 1;;\n" +
+		"esac\n" +
+		"printf '%s\\n' '[{\"_source\":{\"layers\":{\"isup.message_type\":\"12\"}}}]'\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := DecodePCAP(context.Background(), config.DecoderSharkConfig{Bin: bin, TimeoutSec: 5}, []byte{0xd4, 0xc3, 0xb2, 0xa1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "isup.message_type") {
+		t.Fatalf("raw %s", raw)
 	}
 }
 
