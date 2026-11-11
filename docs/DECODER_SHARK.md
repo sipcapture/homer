@@ -79,7 +79,7 @@ When `active` is true and the key matches:
 
 1. The stored row becomes one Ethernet / IPv4 or IPv6 / UDP packet. `src_ip`, `dst_ip`, `src_port`, and `dst_port` come from the row. A missing port becomes `5060`.
 2. A SIP-I body stored in `isup_body` is put back into the message before the PCAP is written. Rows from 11.0.376 that still carry `X-Homer-Binary-Body: hex` inside the payload are restored the same way, so tshark sees the original bytes.
-3. The coordinator runs `tshark -Q -T json -r -` and writes the PCAP to tshark's stdin. `param` is appended as separate arguments.
+3. The coordinator runs `tshark -Q -T json --no-duplicate-keys -r -` and writes the PCAP to tshark's stdin. `param` is appended as separate arguments. `--no-duplicate-keys` keeps every MIME part. Without it, tshark repeats one JSON key for each part of a multipart INVITE (ISUP, then SDP). A JSON parser keeps the last value only, so the ISUP dissection disappears from Decode. A BYE whose body is `application/isup` itself has one part and is unaffected. tshark that does not recognize the flag is run once more without it.
 
 tshark JSON is returned as `shark`. A failure is returned as `shark_error`. The rest of the response is still returned, including the built-in `isup` object.
 
@@ -106,7 +106,7 @@ Output is capped at 4 MiB. Larger output becomes `shark_error`.
 
 ## SIP-I
 
-For `application/isup;version=itu-t92+` the built-in decoder reads ITU-T Q.763 and fills `isup` without tshark: message type, called and calling numbers, and the Q.850 cause. ANSI (`version` containing `ansi`) is left to tshark.
+For `application/isup;version=itu-t92+` the built-in decoder reads ITU-T Q.763 and fills `isup` without tshark: message type, called and calling numbers, the Q.850 cause, and the fixed indicators (nature of connection, forward and backward call). Optional parameters include the forward-call flags, propagation delay, and MLPP precedence. ANSI (`version` containing `ansi`) is left to tshark.
 
 Messages captured before 11.0.376 may have a damaged binary body. Decode cannot repair those rows. From 11.0.376 onward the body is stored reversibly, and PCAP export writes the original bytes as well.
 

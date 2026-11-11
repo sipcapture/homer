@@ -35,10 +35,13 @@ type Message struct {
 	CallingPartyCategory string       `json:"calling_party_category,omitempty"`
 	TransmissionMedium   string       `json:"transmission_medium,omitempty"`
 	Event                string       `json:"event,omitempty"`
-	Parameters           []Parameter  `json:"parameters,omitempty"`
-	Hex                  string       `json:"hex,omitempty"`
-	Summary              string       `json:"summary,omitempty"`
-	Error                string       `json:"error,omitempty"`
+	// Indicators are the fixed Q.763 octets (nature of connection, forward
+	// and backward call indicators), one line each.
+	Indicators []string    `json:"indicators,omitempty"`
+	Parameters []Parameter `json:"parameters,omitempty"`
+	Hex        string      `json:"hex,omitempty"`
+	Summary    string      `json:"summary,omitempty"`
+	Error      string      `json:"error,omitempty"`
 }
 
 // PartyNumber is an ISUP address (called, calling, redirecting, …).
@@ -49,6 +52,8 @@ type PartyNumber struct {
 	Presentation    string `json:"presentation,omitempty"`
 	Screening       string `json:"screening,omitempty"`
 	Incomplete      bool   `json:"incomplete,omitempty"`
+	// INN is the called-party internal-network-number indicator.
+	INN string `json:"inn,omitempty"`
 }
 
 // Cause is a Q.850 cause indicator.
@@ -264,6 +269,11 @@ func applyLayout(msg *Message, b []byte, layout msgLayout) error {
 	case "IAM":
 		msg.CallingPartyCategory = cpcName(int(b[4]))
 		msg.TransmissionMedium = tmrName(int(b[5]))
+		msg.Indicators = append(msg.Indicators, natureOfConnection(b[1]), forwardCall(b[2], b[3]))
+	case "ACM", "CON":
+		msg.Indicators = append(msg.Indicators, backwardCall(b[1], b[2]))
+	case "COT":
+		msg.Indicators = append(msg.Indicators, continuity(b[1]))
 	case "CPG":
 		msg.Event = cpgEvent(b[1] & 0x7f)
 	}
@@ -361,6 +371,12 @@ func (msg *Message) addOptional(code byte, val []byte) {
 		if c, ok := decodeCause(val); ok && msg.Cause == nil {
 			msg.Cause = &c
 		}
+	case 8:
+		if text := optionalForwardCall(val); text != "" {
+			msg.addText(code, text)
+			return
+		}
+		msg.addHex(code, val)
 	case 33:
 		if n, ok := decodeCalling(val); ok {
 			msg.Parameters = append(msg.Parameters, Parameter{Code: int(code), Name: "Connected number", Digits: n.Digits, Text: partyTail(&n)})
@@ -369,6 +385,18 @@ func (msg *Message) addOptional(code byte, val []byte) {
 		if n, ok := decodeCalling(val); ok {
 			msg.OriginalCalledNumber = &n
 		}
+	case 49:
+		if text := propagationDelay(val); text != "" {
+			msg.addText(code, text)
+			return
+		}
+		msg.addHex(code, val)
+	case 58:
+		if text := mlppPrecedence(val); text != "" {
+			msg.addText(code, text)
+			return
+		}
+		msg.addHex(code, val)
 	case 63:
 		if n, ok := decodeCalling(val); ok {
 			msg.Parameters = append(msg.Parameters, Parameter{Code: int(code), Name: "Location number", Digits: n.Digits, Text: partyTail(&n)})
@@ -379,22 +407,35 @@ func (msg *Message) addOptional(code byte, val []byte) {
 			msg.Parameters = append(msg.Parameters, Parameter{Code: int(code), Name: "Generic number", Digits: n.Digits, Text: qual})
 		}
 	default:
-		msg.Parameters = append(msg.Parameters, Parameter{
-			Code: int(code),
-			Name: paramName(code),
-			Hex:  hex.EncodeToString(val),
-		})
+		msg.addHex(code, val)
 	}
+}
+
+func (msg *Message) addText(code byte, text string) {
+	msg.Parameters = append(msg.Parameters, Parameter{Code: int(code), Name: paramName(code), Text: text})
+}
+
+func (msg *Message) addHex(code byte, val []byte) {
+	msg.Parameters = append(msg.Parameters, Parameter{
+		Code: int(code),
+		Name: paramName(code),
+		Hex:  hex.EncodeToString(val),
+	})
 }
 
 func decodeCalled(b []byte) (PartyNumber, bool) {
 	if len(b) < 2 {
 		return PartyNumber{}, false
 	}
+	inn := "routing to internal network number allowed"
+	if b[1]&0x80 != 0 {
+		inn = "routing to internal network number not allowed"
+	}
 	return PartyNumber{
 		Digits:          decodeDigits(b[2:], b[0]&0x80 != 0),
 		NatureOfAddress: noaName(int(b[0] & 0x7f)),
 		NumberingPlan:   npiName(int((b[1] >> 4) & 0x07)),
+		INN:             inn,
 	}, true
 }
 
@@ -521,6 +562,11 @@ func (m Message) summary() string {
 	if m.Event != "" {
 		fmt.Fprintf(&b, "\nEvent: %s", m.Event)
 	}
+	for _, line := range m.Indicators {
+		if line != "" {
+			fmt.Fprintf(&b, "\n%s", line)
+		}
+	}
 	for _, p := range m.Parameters {
 		switch {
 		case p.Digits != "" && p.Text != "":
@@ -573,7 +619,180 @@ func partyTail(n *PartyNumber) string {
 	if n.Incomplete {
 		extra = append(extra, "incomplete")
 	}
+	if n.INN != "" {
+		extra = append(extra, n.INN)
+	}
 	return strings.Join(extra, ", ")
+}
+
+func natureOfConnection(v byte) string {
+	satellite := []string{
+		"no satellite circuit",
+		"one satellite circuit",
+		"two satellite circuits",
+		"spare",
+	}[v&0x03]
+	continuityCheck := []string{
+		"continuity check not required",
+		"continuity check required on this circuit",
+		"continuity check performed on a previous circuit",
+		"spare",
+	}[(v>>2)&0x03]
+	echo := "echo control device not included"
+	if v&0x10 != 0 {
+		echo = "echo control device included"
+	}
+	return "Nature of connection indicators: " + satellite + ", " + continuityCheck + ", " + echo
+}
+
+func forwardCall(b0, b1 byte) string {
+	national := "national call"
+	if b0&0x01 != 0 {
+		national = "international call"
+	}
+	endToEnd := []string{
+		"no end-to-end method",
+		"pass-along method available",
+		"SCCP method available",
+		"pass-along and SCCP methods available",
+	}[(b0>>1)&0x03]
+	interworking := "no interworking"
+	if b0&0x08 != 0 {
+		interworking = "interworking encountered"
+	}
+	info := "no end-to-end information"
+	if b0&0x10 != 0 {
+		info = "end-to-end information available"
+	}
+	used := "ISDN user part not used all the way"
+	if b0&0x20 != 0 {
+		used = "ISDN user part used all the way"
+	}
+	preference := []string{
+		"ISDN user part preferred all the way",
+		"ISDN user part not required all the way",
+		"ISDN user part required all the way",
+		"spare",
+	}[(b0>>6)&0x03]
+	access := "originating access non-ISDN"
+	if b1&0x01 != 0 {
+		access = "originating access ISDN"
+	}
+	sccp := sccpMethod((b1 >> 1) & 0x03)
+	ported := "number not translated"
+	if b1&0x10 != 0 {
+		ported = "number translated"
+	}
+	qor := "no QoR routing attempt"
+	if b1&0x20 != 0 {
+		qor = "QoR routing attempt in progress"
+	}
+	return "Forward call indicators: " + strings.Join([]string{
+		national, endToEnd, interworking, info, used, preference, access, sccp, ported, qor,
+	}, ", ")
+}
+
+func backwardCall(b0, b1 byte) string {
+	charge := []string{"no charge indication", "no charge", "charge", "spare"}[b0&0x03]
+	status := []string{"called party status: no indication", "subscriber free", "connect when free", "spare"}[(b0>>2)&0x03]
+	category := []string{"called party category: no indication", "ordinary subscriber", "payphone", "spare"}[(b0>>4)&0x03]
+	endToEnd := []string{
+		"no end-to-end method",
+		"pass-along method available",
+		"SCCP method available",
+		"pass-along and SCCP methods available",
+	}[(b0>>6)&0x03]
+	interworking := "no interworking"
+	if b1&0x01 != 0 {
+		interworking = "interworking encountered"
+	}
+	info := "no end-to-end information"
+	if b1&0x02 != 0 {
+		info = "end-to-end information available"
+	}
+	used := "ISDN user part not used all the way"
+	if b1&0x04 != 0 {
+		used = "ISDN user part used all the way"
+	}
+	holding := "holding not requested"
+	if b1&0x08 != 0 {
+		holding = "holding requested"
+	}
+	access := "terminating access non-ISDN"
+	if b1&0x10 != 0 {
+		access = "terminating access ISDN"
+	}
+	echo := "echo control device not included"
+	if b1&0x20 != 0 {
+		echo = "echo control device included"
+	}
+	return "Backward call indicators: " + strings.Join([]string{
+		charge, status, category, endToEnd, interworking, info, used, holding, access, echo, sccpMethod((b1 >> 6) & 0x03),
+	}, ", ")
+}
+
+func sccpMethod(v byte) string {
+	return []string{
+		"no SCCP method",
+		"connectionless SCCP method",
+		"connection-oriented SCCP method",
+		"connectionless and connection-oriented SCCP methods",
+	}[v&0x03]
+}
+
+func continuity(v byte) string {
+	if v&0x01 != 0 {
+		return "Continuity indicator: successful"
+	}
+	return "Continuity indicator: failed"
+}
+
+func optionalForwardCall(val []byte) string {
+	if len(val) < 1 {
+		return ""
+	}
+	v := val[0]
+	cug := []string{
+		"non-CUG call",
+		"spare",
+		"closed user group call, outgoing access allowed",
+		"closed user group call, outgoing access not allowed",
+	}[v&0x03]
+	segment := "no additional information will be sent"
+	if v&0x04 != 0 {
+		segment = "additional information will be sent in a segmentation message"
+	}
+	identity := "connected line identity not requested"
+	if v&0x80 != 0 {
+		identity = "connected line identity requested"
+	}
+	return cug + ", " + segment + ", " + identity
+}
+
+func propagationDelay(val []byte) string {
+	if len(val) < 2 {
+		return ""
+	}
+	ms := int(val[0])<<8 | int(val[1])
+	return fmt.Sprintf("%d ms", ms)
+}
+
+func mlppPrecedence(val []byte) string {
+	if len(val) < 6 {
+		return ""
+	}
+	lookAhead := []string{"allowed", "not allowed", "path reserved", "spare"}[(val[0]>>5)&0x03]
+	levels := []string{"flash override", "flash", "immediate", "priority", "routine"}
+	level := "spare"
+	if int(val[0]&0x0f) < len(levels) {
+		level = levels[val[0]&0x0f]
+	}
+	identity := string([]byte{
+		isupDigit(val[1] >> 4), isupDigit(val[1] & 0x0f),
+		isupDigit(val[2] >> 4), isupDigit(val[2] & 0x0f),
+	})
+	domain := int(val[3])<<16 | int(val[4])<<8 | int(val[5])
+	return fmt.Sprintf("%s, look-ahead for busy %s, network identity %s, service domain 0x%x", level, lookAhead, identity, domain)
 }
 
 func noaName(v int) string {
@@ -770,7 +989,9 @@ var paramNames = map[byte]string{
 	41:  "Optional backward call indicators",
 	42:  "User-to-user indicators",
 	44:  "Generic notification indicator",
+	49:  "Propagation delay counter",
 	57:  "Parameter compatibility information",
+	58:  "MLPP precedence",
 	61:  "Hop counter",
 	63:  "Location number",
 	192: "Generic number",

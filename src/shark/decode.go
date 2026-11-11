@@ -47,8 +47,16 @@ func Enabled(cfg config.DecoderSharkConfig, protoType int, eventType string) boo
 	return false
 }
 
-// DecodePCAP feeds pcap to `tshark -Q -T json -r -` and returns the JSON document.
-// Extra arguments come from cfg.Param, split on whitespace. The process is not a shell.
+// DecodePCAP feeds pcap to `tshark -Q -T json --no-duplicate-keys -r -` and
+// returns the JSON document. Extra arguments come from cfg.Param, split on
+// whitespace. The process is not a shell.
+//
+// --no-duplicate-keys is required for a SIP-I INVITE. tshark emits one JSON
+// object per MIME part under the same key. The body is ISUP and then SDP, and
+// a normal JSON parser keeps only the SDP part, so the ISUP dissection
+// disappears. A single application/isup body, such as BYE, has no repeated
+// key and was unaffected. tshark that does not know the flag is retried
+// without it.
 func DecodePCAP(ctx context.Context, cfg config.DecoderSharkConfig, pcap []byte) (json.RawMessage, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -67,12 +75,26 @@ func DecodePCAP(ctx context.Context, cfg config.DecoderSharkConfig, pcap []byte)
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	args := []string{"-Q", "-T", "json", "-r", "-"}
-	if extra := strings.TrimSpace(cfg.Param); extra != "" {
-		args = append(args, strings.Fields(extra)...)
+	extra := strings.Fields(strings.TrimSpace(cfg.Param))
+	raw, err := runTshark(ctx, bin, tsharkArgs(true, extra), pcap, timeout, cfg.UID, cfg.GID)
+	if err != nil && strings.Contains(err.Error(), "no-duplicate-keys") {
+		raw, err = runTshark(ctx, bin, tsharkArgs(false, extra), pcap, timeout, cfg.UID, cfg.GID)
 	}
+	return raw, err
+}
+
+func tsharkArgs(noDuplicateKeys bool, extra []string) []string {
+	args := []string{"-Q", "-T", "json"}
+	if noDuplicateKeys {
+		args = append(args, "--no-duplicate-keys")
+	}
+	args = append(args, "-r", "-")
+	return append(args, extra...)
+}
+
+func runTshark(ctx context.Context, bin string, args []string, pcap []byte, timeout time.Duration, uid, gid uint32) (json.RawMessage, error) {
 	cmd := exec.CommandContext(ctx, bin, args...)
-	applyCredentials(cmd, cfg.UID, cfg.GID)
+	applyCredentials(cmd, uid, gid)
 	// Kill the whole process group. tshark (or a shell stand-in) may leave
 	// children holding the pipes, and Wait would otherwise block until they exit.
 	cmd.Cancel = func() error { return killGroup(cmd) }
