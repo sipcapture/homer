@@ -107,6 +107,10 @@ jobs:
             exit 1
           fi
 
+      - name: Run DuckDB sandbox tests
+        working-directory: src
+        run: go test -race ./storage/ducklake ./node -run 'Sandbox' -count=1 -v -timeout=5m
+
       - name: Run config load error test
         working-directory: src
         run: go test -race -count=1 -timeout 2m -run '^TestServerExitsOnConfigLoadError$' .
