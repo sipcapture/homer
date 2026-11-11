@@ -15,8 +15,9 @@ Homer 11.0.282–11.0.284 closes three coordinator security issues. **11.0.313**
 | `sniff_csv`, unlisted readers, `FROM 'path'` | Authenticated file read past the function denylist | Reader routines blocked by name shape (`read_`, `sniff_`, `parquet_`, `http_`, `iceberg_`, `delta_`, `st_read`, `*_scan`, `*_attach`) plus `getenv` / `duckdb_secrets`; string literals in table position rejected | Legitimate lake `SELECT`s: **no change** |
 | Node `POST /vacuum` `expire_older_than` | SQL injection into `ducklake_expire_snapshots` | Duration is parsed and rendered as integer seconds | `1 hour`, `7 days`, Go durations (`1h`): **no change**. Other values: **400** |
 | Agent subscription writes and `DELETE /api/v4/alerts` | Any logged-in user could change capture-agent registrations or wipe stored alerts | `POST`/`PUT`/`DELETE /api/v4/agents/subscriptions` and `DELETE /api/v4/alerts` require admin. `GET` stays authenticated. `POST /api/v4/alerts` stays authenticated so Grafana webhooks keep working | Admin sessions and admin `Auth-Token` (`user_group: admin`): **no change**. Non-admin callers of those writes: **403** |
+| HEP `mutual_tls` with empty `cacert` | TLS and HTTPS ingest accepted any client | Those receivers refuse to start until `cacert` is set | `mutual_tls` off, or on with a CA file: **no change**. `mutual_tls` on and `cacert` empty: that receiver does not listen |
 
-GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv), [GHSA-263f-5xrw-c34r](https://github.com/sipcapture/homer/security/advisories/GHSA-263f-5xrw-c34r), [GHSA-c5mq-r27x-v29v](https://github.com/sipcapture/homer/security/advisories/GHSA-c5mq-r27x-v29v), [GHSA-q7c2-m23h-43g9](https://github.com/sipcapture/homer/security/advisories/GHSA-q7c2-m23h-43g9), [GHSA-9crr-mrfj-hjxr](https://github.com/sipcapture/homer/security/advisories/GHSA-9crr-mrfj-hjxr), [GHSA-9r5f-8f6c-8pff](https://github.com/sipcapture/homer/security/advisories/GHSA-9r5f-8f6c-8pff).
+GitHub Security Advisories: [GHSA-rqcc-94gv-wjm9](https://github.com/sipcapture/homer/security/advisories/GHSA-rqcc-94gv-wjm9), [GHSA-6xp5-7rcx-xfgx](https://github.com/sipcapture/homer/security/advisories/GHSA-6xp5-7rcx-xfgx), [GHSA-f46q-3v67-fmm4](https://github.com/sipcapture/homer/security/advisories/GHSA-f46q-3v67-fmm4), [GHSA-rm5w-rqr7-2h54](https://github.com/sipcapture/homer/security/advisories/GHSA-rm5w-rqr7-2h54), [GHSA-4687-q698-mccv](https://github.com/sipcapture/homer/security/advisories/GHSA-4687-q698-mccv), [GHSA-263f-5xrw-c34r](https://github.com/sipcapture/homer/security/advisories/GHSA-263f-5xrw-c34r), [GHSA-c5mq-r27x-v29v](https://github.com/sipcapture/homer/security/advisories/GHSA-c5mq-r27x-v29v), [GHSA-q7c2-m23h-43g9](https://github.com/sipcapture/homer/security/advisories/GHSA-q7c2-m23h-43g9), [GHSA-9crr-mrfj-hjxr](https://github.com/sipcapture/homer/security/advisories/GHSA-9crr-mrfj-hjxr), [GHSA-9r5f-8f6c-8pff](https://github.com/sipcapture/homer/security/advisories/GHSA-9r5f-8f6c-8pff), [GHSA-2v9j-m2v3-x9qr](https://github.com/sipcapture/homer/security/advisories/GHSA-2v9j-m2v3-x9qr).
 
 ---
 
@@ -136,6 +137,14 @@ The live HEP WebSocket `/stream` on the same HTTP port is still intended for pri
 
 ---
 
+## HEP mutual TLS (`mutual_tls` + `cacert`)
+
+**Before:** `ingest.tls`, `ingest.https`, and the legacy `SERVER_SETTINGS.TLS_SERVER` applied client-certificate checks only when `mutual_tls` and `cacert` were both set. `mutual_tls: true` with an empty `cacert` left `ClientAuth` at `NoClientCert`, so the listener completed handshakes with no client certificate. HEP ingest has no other authentication on these ports.
+
+**After (11.0.382):** The same receivers return an error and do not listen ([GHSA-2v9j-m2v3-x9qr](https://github.com/sipcapture/homer/security/advisories/GHSA-2v9j-m2v3-x9qr)). Set `cacert` to the CA that signs client certificates. `mutual_tls: false` is unchanged. The legacy HTTPS receiver already refused this combination.
+
+---
+
 ## Upgrade checklist
 
 1. **Review JWT** — If you never set `coordinator.jwt.secret`, after upgrade check coordinator logs for `jwt_secret_file` or set an explicit secret in config.
@@ -143,6 +152,7 @@ The live HEP WebSocket `/stream` on the same HTTP port is still intended for pri
 3. **Docker / explicit env** — set `HOMER_COORDINATOR_JWT_SECRET` yourself if you want a pinned key. Official Compose leaves it unset, so Homer generates `.homer_jwt_secret`. A copy that still has `change-this-to-a-secure-random-string-in-production` or `your-secret-token-here` does **not** keep those values. `HOMER_COORDINATOR_AUTH_ADMIN_PASSWORD_HASH` (as in `examples/docker/`) is unchanged.
 4. **Automation** — Scripts calling protected endpoints need `Authorization: Bearer …` or `Auth-Token` after upgrade if JWT was previously empty.
 5. **Node `/query`** — After 11.0.313, check logs for `auth_token_file` / Bearer requirement; set matching `coordinator.nodes[].token` for remote nodes; prefer loopback bind for local-only nodes.
+6. **HEP mutual TLS** — If `mutual_tls` is true, `cacert` must point at a CA file. An empty `cacert` stops that TLS or HTTPS receiver from listening.
 
 ---
 

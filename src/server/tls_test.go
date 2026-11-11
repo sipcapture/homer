@@ -223,6 +223,18 @@ func TestTLSConfigLoading(t *testing.T) {
 			},
 			expectError: false, // Should return nil config, not error
 		},
+		{
+			name: "mutual TLS without CA",
+			settings: &TLSSettings{
+				Enable:        true,
+				Cert:          certPath,
+				Key:           keyPath,
+				MutualTLS:     true,
+				MinTLSVersion: "TLS1.2",
+				MaxTLSVersion: "TLS1.3",
+			},
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -250,6 +262,76 @@ func TestTLSConfigLoading(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestLoadTLSConfigMutualTLSRequiresClientCert checks that a configured CA
+// actually turns on client-certificate verification.
+func TestLoadTLSConfigMutualTLSRequiresClientCert(t *testing.T) {
+	certPath, keyPath, err := generateTestCert()
+	if err != nil {
+		t.Fatalf("Failed to generate test certificates: %v", err)
+	}
+	defer os.RemoveAll(filepath.Dir(certPath))
+
+	config, err := loadTLSConfig(&TLSSettings{
+		Enable:        true,
+		Cert:          certPath,
+		Key:           keyPath,
+		CaCert:        certPath,
+		MutualTLS:     true,
+		MinTLSVersion: "TLS1.2",
+		MaxTLSVersion: "TLS1.3",
+	})
+	if err != nil {
+		t.Fatalf("loadTLSConfig: %v", err)
+	}
+	if config.ClientAuth != gtls.RequireAndVerifyClientCert {
+		t.Fatalf("ClientAuth = %v, want RequireAndVerifyClientCert", config.ClientAuth)
+	}
+	if config.ClientCAs == nil {
+		t.Fatal("ClientCAs is nil")
+	}
+}
+
+// TestHTTPSMutualTLSRequiresCACert checks the legacy HTTPS loader refuses
+// mutual TLS when cacert is empty.
+func TestHTTPSMutualTLSRequiresCACert(t *testing.T) {
+	certPath, keyPath, err := generateTestCert()
+	if err != nil {
+		t.Fatalf("Failed to generate test certificates: %v", err)
+	}
+	defer os.RemoveAll(filepath.Dir(certPath))
+
+	cfg := struct {
+		Enable             bool
+		Cert               string
+		Key                string
+		CaCert             string
+		MinTLSVersionNum   uint16
+		MaxTLSVersionNum   uint16
+		PreferServerCipher bool
+		MutualTLS          bool
+		InsecureSkipVerify bool
+	}{
+		Enable:           true,
+		Cert:             certPath,
+		Key:              keyPath,
+		MutualTLS:        true,
+		MinTLSVersionNum: tls.VersionTLS12,
+		MaxTLSVersionNum: tls.VersionTLS13,
+	}
+	if _, err := loadHTTPSTLSConfigInline(&cfg); err == nil {
+		t.Fatal("expected error for mutual TLS without cacert")
+	}
+
+	cfg.CaCert = certPath
+	loaded, err := loadHTTPSTLSConfigInline(&cfg)
+	if err != nil {
+		t.Fatalf("loadHTTPSTLSConfigInline: %v", err)
+	}
+	if loaded.ClientAuth != tls.RequireAndVerifyClientCert {
+		t.Fatalf("ClientAuth = %v, want RequireAndVerifyClientCert", loaded.ClientAuth)
 	}
 }
 
