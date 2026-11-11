@@ -48,16 +48,23 @@ func (s *HTTPSServer) Start() error {
 		MaxVersion:   getTLSVersion(s.config.MaxTLSVersion),
 	}
 
-	// Load CA cert for client verification if mutual TLS is enabled
+	// Load CA cert for client verification if mutual TLS is enabled.
+	// Fail closed when mutual_tls is set without cacert: otherwise
+	// ClientAuth stays NoClientCert and any client is accepted
+	// (GHSA-2v9j-m2v3-x9qr).
 	if s.config.MutualTLS && s.config.CaCert != "" {
 		caCert, err := os.ReadFile(s.config.CaCert)
 		if err != nil {
 			return fmt.Errorf("HTTPS load CA cert error: %w", err)
 		}
 		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			return fmt.Errorf("HTTPS parse CA cert error: no certificates in %s", s.config.CaCert)
+		}
 		tlsConfig.ClientCAs = caCertPool
 		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+	} else if s.config.MutualTLS && s.config.CaCert == "" {
+		return fmt.Errorf("mutual TLS is enabled but CA certificate (cacert) is not provided")
 	}
 
 	if s.config.InsecureSkipVerify {
