@@ -41,7 +41,7 @@ func run() error {
 		{"cleanup", func() error { return manager.RunVolumeMaintenance(&volume, 3600) }},
 	} {
 		if err := operation.call(); err == nil || !strings.Contains(err.Error(), "already running") {
-			return fmt.Errorf("tier %s did not reject maintenance contention", operation.name)
+			return fmt.Errorf("tier %s did not reject maintenance contention: %v", operation.name, err)
 		}
 	}
 	fmt.Println("SCENARIO_TIER_CONTENTION_PASSED")

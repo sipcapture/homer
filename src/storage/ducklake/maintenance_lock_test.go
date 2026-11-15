@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,6 +72,8 @@ func TestPostgresTieringWaitsForMaintenance(t *testing.T) {
 	if lease, err := manager.acquireMaintenanceWithin(ctx, dsn); err == nil {
 		lease.Release()
 		t.Fatal("wait exceeded contention bound")
+	} else if !strings.Contains(err.Error(), "already running") {
+		t.Fatalf("lost contention reason at deadline: %v", err)
 	}
 	done := make(chan *maintenancelock.Lease, 1)
 	errors := make(chan error, 1)
