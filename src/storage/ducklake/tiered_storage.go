@@ -1375,6 +1375,9 @@ func (tsm *TieredStorageManager) acquireMaintenanceWithin(ctx context.Context, p
 		deadline, _ := ctx.Deadline()
 		lease, acquired, err := acquireMaintenanceUntil(context.Background(), deadline, tsm.config.Stateless, tsm.config.CatalogType, paths...)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("catalog maintenance is already running; timed out waiting: %w", ctx.Err())
+			}
 			return nil, err
 		}
 		if acquired {
