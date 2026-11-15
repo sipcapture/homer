@@ -485,6 +485,8 @@ type TableWriter struct {
 	batchMu       sync.Mutex
 	batch         [][]interface{}
 	batchSize     int
+	batchSpace    chan struct{} // Broadcast under batchMu when a batch is handed off.
+	nextDropLog   atomic.Int64
 
 	// Pre-built flush/truncate SQL per buffer slot.
 	flushInsertSQL   [2]string // "INSERT INTO <lakeFQN> SELECT * FROM <memTable_N>"
@@ -592,23 +594,50 @@ func (tw *TableWriter) activeMemTable() string {
 
 // Write buffers a record. When the batch reaches batchSize, it is flushed
 // to the in-memory DuckDB table via a single multi-row INSERT.
-func (tw *TableWriter) Write(values []interface{}) error {
-	tw.batchMu.Lock()
-	// Bound the Go queue even while an appender is blocked or failing.
-	limit := max(1024, 2*tw.batchSize)
-	if len(tw.batch) >= limit {
-		tw.batchMu.Unlock()
-		tw.dropBatchRows([][]interface{}{values}, "queue_full", nil)
-		return fmt.Errorf("append queue for %s is full (%d rows)", tw.tableFQN, limit)
-	}
-	tw.batch = append(tw.batch, values)
-	needFlush := len(tw.batch) >= tw.batchSize
-	tw.batchMu.Unlock()
+const appendQueueWait = 5 * time.Second
 
-	if needFlush {
-		return tw.flushBatch()
+func (tw *TableWriter) Write(values []interface{}) error {
+	return tw.writeWithWait(values, appendQueueWait)
+}
+
+// Wait for space without holding batchMu, so the appender can drain the queue.
+// Start the timeout only when capacity is exhausted; notifications are shared
+// by all waiters and do not allocate a timer for normal writes.
+func (tw *TableWriter) writeWithWait(values []interface{}, wait time.Duration) error {
+	var timer *time.Timer
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
+	for {
+		tw.batchMu.Lock()
+		limit := max(1024, 2*tw.batchSize)
+		if len(tw.batch) < limit {
+			tw.batch = append(tw.batch, values)
+			needFlush := len(tw.batch) >= tw.batchSize
+			tw.batchMu.Unlock()
+			if needFlush {
+				return tw.flushBatch()
+			}
+			return nil
+		}
+		if tw.batchSpace == nil {
+			tw.batchSpace = make(chan struct{})
+		}
+		space := tw.batchSpace
+		tw.batchMu.Unlock()
+		if timer == nil {
+			timer = time.NewTimer(wait)
+		}
+		select {
+		case <-space:
+		case <-timer.C:
+			err := fmt.Errorf("append queue for %s remained full for %s (%d rows)", tw.tableFQN, wait, limit)
+			tw.dropBatchRows([][]interface{}{values}, "queue_timeout", err)
+			return err
+		}
 	}
-	return nil
 }
 
 // driverValPool recycles []driver.Value slices to avoid per-row allocation in flushBatch.
@@ -626,11 +655,19 @@ const appendMaxFailures = 3
 
 func (tw *TableWriter) dropBatchRows(rows [][]interface{}, reason string, err error) {
 	metrics.DucklakeBatchDroppedRows.WithLabelValues(reason).Add(float64(len(rows)))
-	logger.Error("Discarding failed DuckLake append batch", "table", tw.tableFQN, "rows", len(rows), "reason", reason, "error", err)
+	if tw.shouldLogBatchDrop(time.Now()) {
+		logger.Error("Discarding failed DuckLake append batch", "table", tw.tableFQN, "rows", len(rows), "reason", reason, "error", err)
+	}
 	for _, row := range rows {
 		putRowSlice(row)
 	}
 	clear(rows)
+}
+
+// Count every discarded row, but log at most once per table per ten seconds.
+func (tw *TableWriter) shouldLogBatchDrop(now time.Time) bool {
+	next := tw.nextDropLog.Load()
+	return now.UnixNano() >= next && tw.nextDropLog.CompareAndSwap(next, now.Add(10*time.Second).UnixNano())
 }
 
 func (tw *TableWriter) flushBatch() (result error) {
@@ -654,6 +691,10 @@ func (tw *TableWriter) flushBatch() (result error) {
 		}
 	}
 
+	if tw.batchSpace != nil {
+		close(tw.batchSpace)
+		tw.batchSpace = nil
+	}
 	tw.batchMu.Unlock()
 
 	committed := false

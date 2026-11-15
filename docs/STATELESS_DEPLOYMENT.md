@@ -329,3 +329,9 @@ is limited to 10 MiB, and its encoded runtime-state record to 16 MiB; larger
 requests or results return HTTP 413. Shared exports expire after 24 hours.
 Status and download endpoints require the creating username in both deployment
 modes. Another user, or an older export without an owner, receives HTTP 404.
+
+A full append queue applies backpressure for up to five seconds before discarding
+the incoming row. Every discarded row is counted by
+`homer_ducklake_batch_dropped_rows_total`; discard logs are limited to one per
+table per ten seconds. Permanent errors and the bounded failed-batch retry policy
+continue to apply in both deployment modes.
