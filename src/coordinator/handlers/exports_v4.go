@@ -8,6 +8,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -20,9 +21,14 @@ import (
 	"github.com/sipcapture/homer-core/src/coordinator/services"
 )
 
+type sharedExportStore interface {
+	runtimeStateStore
+	PutExport(context.Context, string, string, []byte, time.Time) error
+}
+
 type ExportsHandler struct {
 	store  *ExportStore
-	shared runtimeStateStore
+	shared sharedExportStore
 }
 
 func (h *ExportsHandler) SetRuntimeState(state *services.RuntimeState) { h.shared = state }
@@ -117,7 +123,10 @@ func (h *ExportsHandler) V4ExportsCreate(c echo.Context) error {
 		if len(data) > 16<<20 {
 			return writeError(c, http.StatusRequestEntityTooLarge, "Payload Too Large", "Encoded export exceeds 16 MiB")
 		}
-		if err := h.shared.Put(c.Request().Context(), "export", job.ID, data, time.Now().Add(24*time.Hour)); err != nil {
+		if err := h.shared.PutExport(c.Request().Context(), username, job.ID, data, time.Now().Add(24*time.Hour)); err != nil {
+			if errors.Is(err, services.ErrSharedExportLimit) {
+				return writeError(c, http.StatusTooManyRequests, "Too Many Requests", "At most 10 unexpired shared exports are allowed per user; retry after an export expires")
+			}
 			return writeError(c, http.StatusServiceUnavailable, "Service Unavailable", "Failed to store export")
 		}
 	} else {

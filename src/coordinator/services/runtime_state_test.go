@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -172,5 +173,77 @@ func TestPostgresRuntimeStatePoolReuseAndClose(t *testing.T) {
 	}
 	if stats := other.native.Stats(); stats.OpenConnections != 0 {
 		t.Fatalf("native connections leaked: %+v", stats)
+	}
+}
+
+func TestPostgresSharedExportCountLimitAcrossReplicas(t *testing.T) {
+	db := openPostgresSettingsForTest(t)
+	first, err := NewRuntimeState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := NewRuntimeState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	var accepted atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 24; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			state := first
+			if i%2 == 0 {
+				state = second
+			}
+			err := state.PutExport(t.Context(), "alice", fmt.Sprint(i), []byte("data"), time.Now().Add(time.Hour))
+			if err == nil {
+				accepted.Add(1)
+			} else if !errors.Is(err, ErrSharedExportLimit) {
+				t.Error(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	if accepted.Load() != MaxSharedExportsPerUser {
+		t.Fatalf("accepted %d exports across replicas", accepted.Load())
+	}
+	if err := second.PutExport(t.Context(), "bob", "bob-export", []byte("data"), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal("users share quota", err)
+	}
+	if _, err := first.native.Exec("UPDATE public.homer_runtime_state SET expires_at=CURRENT_TIMESTAMP-INTERVAL '1 second' WHERE namespace='export' AND owner_key=$1", runtimeKey("alice")); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.PutExport(t.Context(), "alice", "renewed", []byte("data"), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal("expiry did not release quota", err)
+	}
+	var count int
+	if err := first.native.QueryRow("SELECT count(*) FROM public.homer_runtime_state WHERE namespace='export' AND owner_key=$1", runtimeKey("alice")).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("expired payloads not removed: %d %v", count, err)
+	}
+}
+
+func TestPostgresSharedExportCountIncludesExistingRecords(t *testing.T) {
+	db := openPostgresSettingsForTest(t)
+	first, err := NewRuntimeState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	for i := 0; i < MaxSharedExportsPerUser; i++ {
+		if err := first.Put(t.Context(), "export", fmt.Sprint(i), []byte(`{"Job":{"Owner":"alice"},"Payload":""}`), time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Opening another replica migrates exports created before owner_key existed.
+	other, err := NewRuntimeState(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	if err := other.PutExport(t.Context(), "alice", "one-too-many", []byte("data"), time.Now().Add(time.Hour)); !errors.Is(err, ErrSharedExportLimit) {
+		t.Fatalf("existing exports bypass quota: %v", err)
 	}
 }

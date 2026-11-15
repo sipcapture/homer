@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -56,6 +57,12 @@ func NewRuntimeState(db *sql.DB) (*RuntimeState, error) {
 			namespace TEXT NOT NULL, key TEXT NOT NULL, payload BYTEA NOT NULL,
 			expires_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (namespace, key)
 		);
+		ALTER TABLE public.homer_runtime_state ADD COLUMN IF NOT EXISTS owner_key TEXT;
+		UPDATE public.homer_runtime_state
+		SET owner_key=encode(sha256(convert_to(convert_from(payload,'UTF8')::jsonb #>> '{Job,Owner}','UTF8')),'hex')
+		WHERE namespace='export' AND owner_key IS NULL AND expires_at>CURRENT_TIMESTAMP;
+
+		CREATE INDEX IF NOT EXISTS homer_runtime_state_export_owner ON public.homer_runtime_state (owner_key, expires_at) WHERE namespace='export';
 		CREATE INDEX IF NOT EXISTS homer_runtime_state_expiry ON public.homer_runtime_state (expires_at);`)
 	if err != nil {
 		return nil, fmt.Errorf("initialize shared runtime state: %w", err)
@@ -119,4 +126,38 @@ func (s *RuntimeState) Get(ctx context.Context, namespace, key string, consume b
 		return nil, false, nil
 	}
 	return payload, err == nil, err
+}
+
+// Export limits are enforced in PostgreSQL so concurrent replicas cannot each
+// admit a separate allowance. Owner names are hashed like other runtime keys.
+const MaxSharedExportsPerUser = 10
+
+var ErrSharedExportLimit = errors.New("shared export limit reached")
+
+func (s *RuntimeState) PutExport(ctx context.Context, owner, key string, payload []byte, expires time.Time) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	tx, err := s.native.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	ownerKey := runtimeKey(owner)
+	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,724193510))", ownerKey); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM public.homer_runtime_state WHERE namespace='export' AND owner_key=$1 AND expires_at<=CURRENT_TIMESTAMP", ownerKey); err != nil {
+		return err
+	}
+	var count int
+	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM public.homer_runtime_state WHERE namespace='export' AND owner_key=$1 AND expires_at>CURRENT_TIMESTAMP", ownerKey).Scan(&count); err != nil {
+		return err
+	}
+	if count >= MaxSharedExportsPerUser {
+		return ErrSharedExportLimit
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO public.homer_runtime_state (namespace,key,payload,expires_at,owner_key) VALUES ('export',$1,$2,$3,$4)", runtimeKey(key), payload, expires, ownerKey); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
