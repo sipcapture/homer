@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"context"
+	"github.com/sipcapture/homer-core/src/coordinator/services"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,8 +17,9 @@ import (
 )
 
 type exportMemoryState struct {
-	payload []byte
-	writes  int
+	payload    []byte
+	writes     int
+	quotaError error
 }
 
 func (s *exportMemoryState) Get(context.Context, string, string, bool) ([]byte, bool, error) {
@@ -27,6 +29,13 @@ func (s *exportMemoryState) Put(_ context.Context, _, _ string, p []byte, _ time
 	s.payload = p
 	s.writes++
 	return nil
+}
+
+func (s *exportMemoryState) PutExport(ctx context.Context, owner, key string, p []byte, expires time.Time) error {
+	if s.quotaError != nil {
+		return s.quotaError
+	}
+	return s.Put(ctx, "export", key, p, expires)
 }
 
 func exportContext(method, body, user string) (echo.Context, *httptest.ResponseRecorder) {
@@ -87,5 +96,18 @@ func TestLocalExportOwnership(t *testing.T) {
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("local export exposed: %d", rec.Code)
 		}
+	}
+}
+
+func TestSharedExportCountLimitResponse(t *testing.T) {
+	h := NewExportsHandler(NewExportStore())
+	state := &exportMemoryState{quotaError: services.ErrSharedExportLimit}
+	h.shared = state
+	c, rec := exportContext(http.MethodPost, `{"type":"text"}`, "alice")
+	if err := h.V4ExportsCreate(c); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusTooManyRequests || state.writes != 0 {
+		t.Fatalf("quota result: %d writes=%d", rec.Code, state.writes)
 	}
 }

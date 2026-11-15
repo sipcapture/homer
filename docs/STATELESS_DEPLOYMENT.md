@@ -330,6 +330,11 @@ requests or results return HTTP 413. Shared exports expire after 24 hours.
 Status and download endpoints require the creating username in both deployment
 modes. Another user, or an older export without an owner, receives HTTP 404.
 
+Shared exports are limited to ten unexpired records per username across all
+replicas. Expired exports release capacity and are removed when that user creates
+another export. Creation returns HTTP 429 at the limit; the user can retry after
+an existing export expires. The 24-hour expiration and payload limits still apply.
+
 A full append queue applies backpressure for up to five seconds before discarding
 the incoming row. Every discarded row is counted by
 `homer_ducklake_batch_dropped_rows_total`; discard logs are limited to one per
