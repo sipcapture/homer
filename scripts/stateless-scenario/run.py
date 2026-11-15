@@ -11,6 +11,7 @@ import base64
 import contextlib
 import datetime as dt
 import hashlib
+from http.client import RemoteDisconnected
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -182,7 +183,9 @@ class Replica:
                        "udp": {"enable": False}, "tcp": {"enable": False}, "tls": {"enable": False},
                        "http": {"enable": True, "host": "127.0.0.1", "port": self.ingest}},
             "storage": {"enable": True, "ducklake": lake},
-            "node": {"enable": True, "ducklake": lake,
+            # Buffer fault checks query the writer's process-local tables. Upstream's
+            # isolated sandboxed reader cannot expose those tables.
+            "node": {"enable": True, "duckdb_sandbox": False, "ducklake": lake,
                      "flight_server": {"host": "127.0.0.1", "port": self.flight}},
             "coordinator": {
                 "enable": True, "lake_name": "homer_lake", "settings_db_type": "postgres",
@@ -306,8 +309,10 @@ class Runner:
             "faults_requested": not args.no_faults, "timeout_seconds": args.timeout,
             "bucket": args.bucket, "prefix": self.prefix, "databases": self.database_names,
             "binary_sha256": binary_hash,
+            "node_read_mode": "writer-shared DuckDB; node.duckdb_sandbox=false for process-local buffer observation",
             "azure_maintenance": "untested against real Azure; this harness targets S3-compatible storage",
             "query_maintenance_coordination": "test-only wait for maintenance completion before durable-data verification; does not validate reads racing physical cleanup",
+            "verification_transport_retries": [],
             "oauth_provider": "local PKCE-validating stub", "phases": [], "processes": [],
             "durability_contract": "HTTP acknowledgement is not a durable commit; confirmed rows must survive",
         }
@@ -440,11 +445,33 @@ class Runner:
         with self.maintenance_idle():
             return self._counts()
 
+    def node_query(self, replica, query):
+        # These requests only SELECT. Replay transport failures before any
+        # result is consumed; SQL errors and integrity failures are not retried.
+        deadline = time.monotonic() + self.args.timeout
+        for attempt in range(3):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ScenarioError("node verification transport deadline exceeded")
+            try:
+                _, _, body = http("POST", f"http://127.0.0.1:{replica.flight + 1}/query",
+                                  {"sql": query}, self.node_token, expected=(200, 500, 503),
+                                  timeout=remaining)
+                return json.loads(body)
+            except (RemoteDisconnected, ConnectionResetError, TimeoutError) as exc:
+                self.report["verification_transport_retries"].append({
+                    "replica": replica.name, "attempt": attempt + 1,
+                    "error_type": type(exc).__name__,
+                })
+                self.save()
+                if attempt == 2:
+                    raise ScenarioError("node verification transport failed after three attempts") from exc
+                print("RETRY read-only node verification after " + type(exc).__name__, flush=True)
+                time.sleep(min(0.5, max(0, deadline - time.monotonic())))
+
     def _counts(self):
         query = "SELECT cid, count(*) AS n FROM homer_lake.hep_proto_1_call GROUP BY cid"
-        _, _, body = http("POST", f"http://127.0.0.1:{self.b.flight + 1}/query",
-                          {"sql": query}, self.node_token, expected=(200, 500, 503), timeout=self.args.timeout)
-        result = json.loads(body)
+        result = self.node_query(self.b, query)
         if not result.get("success"):
             error = str(result.get("error"))
             if not self.confirmed and "does not exist" in error:
@@ -656,11 +683,9 @@ class Runner:
                     query = ("SELECT cid, count(*) AS n FROM ("
                              "SELECT cid FROM mem_hep_proto_1_call_a UNION ALL "
                              "SELECT cid FROM mem_hep_proto_1_call_b) buffers GROUP BY cid")
-                    _, _, body = http("POST", f"http://127.0.0.1:{replica.flight + 1}/query",
-                                      {"sql": query}, self.node_token)
-                    result = json.loads(body)
+                    result = self.node_query(replica, query)
                     if not result.get("success"):
-                        raise ScenarioError("buffer observation query failed")
+                        raise ScenarioError("buffer observation query failed: " + str(result.get("error")))
                     rows = {row["cid"]: int(row["n"]) for row in result.get("data", [])}
                     check_rows(rows, set(), pending)
                     return pending <= rows.keys()

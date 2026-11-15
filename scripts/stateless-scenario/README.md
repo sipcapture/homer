@@ -5,6 +5,12 @@ host. Both run ingest, writer, node, and coordinator, using shared PostgreSQL an
 an existing object-storage bucket. It generates distinct Call-IDs and fails on
 missing committed rows, duplicate rows, or unexpected rows.
 
+The disposable scenario explicitly sets `node.duckdb_sandbox=false` so its buffer
+stress checks can query the writer's process-local memory tables. Each combined
+process uses its own writer-shared DuckDB; searches through B still verify A's
+committed data through the shared catalog and S3. This run does not validate
+upstream's separate sandboxed-reader mode. Production defaults are unchanged.
+
 Supply your S3 endpoint, bucket name, access key ID, and secret access key.
 The harness uses path-style S3 URLs and Signature Version 4. The signing region
 defaults to `us-east-1` and can be overridden; no backing storage provider is
@@ -138,6 +144,12 @@ immediate-cleanup/read race in the harness; it does **not** fix or validate
 production reads that overlap physical cleanup. No production deletion delay
 or retention configuration is introduced.
 
+Read-only node verification requests retry transport disconnects/timeouts up to
+three attempts within `--timeout`. Every failed attempt is recorded in
+`verification_transport_retries`; SQL errors and row-integrity failures are not
+retried. A passing run with transport retries does not establish uninterrupted
+HTTP query availability or change the node's production HTTP write timeout.
+
 HTTP acknowledgement is **not** a durable commit. Every row observed through B's
 committed-data query must remain present exactly once. Packets accepted only by
 the interrupted flush may be absent; the report lists these separately as
@@ -183,3 +195,17 @@ cleanup code and the test-only verification barrier. It used 16 rows per batch
 and covered both queue modes, both writer crashes, and JWT use after restart.
 Its private report and logs are under `local/scenario/runs/`. This result does
 not validate production reads racing file cleanup.
+
+Run `20261115T110739Z-5d97406d` passed the full external S3-compatible scenario
+with the bounded append backpressure and per-user export quota changes. Both
+queue modes, both writer crashes, survivor compaction, authentication, exports,
+and restart checks passed: 240 confirmed rows remained present exactly once,
+with 256 HTTP-accepted packets and 16 uncommitted at the flush crash.
+The report records five read-verification transport retries. Earlier attempts
+encountered the node's 30-second HTTP write deadline and the sandboxed-reader
+fixture mismatch; their failure reports are retained alongside the passing run.
+This passing run uses the explicit writer-shared read mode and bounded transport
+retries described above; it does not establish uninterrupted HTTP availability,
+sandboxed-reader correctness, or correctness during physical file cleanup.
+All 15 harness checks passed. Reports and logs remain private under
+`local/scenario/runs/`; real Azure maintenance remains untested.
