@@ -225,6 +225,32 @@ class ScenarioChecks(unittest.TestCase):
         finally:
             provider.close()
 
+    def test_node_verification_transport_replay_is_bounded_and_recorded(self):
+        runner = object.__new__(scenario.Runner)
+        runner.args = SimpleNamespace(timeout=10)
+        runner.node_token = "test-token"
+        runner.report = {"verification_transport_retries": []}
+        runner.save = mock.Mock()
+        replica = SimpleNamespace(name="b", flight=9000)
+        result = (200, {}, b'{"success":true,"data":[]}')
+        with mock.patch.object(scenario, "http", side_effect=[scenario.RemoteDisconnected(), result]) as request, mock.patch.object(scenario.time, "sleep"):
+            self.assertTrue(runner.node_query(replica, "SELECT 1")["success"])
+            self.assertEqual(request.call_count, 2)
+            self.assertEqual(request.call_args_list[0].args, request.call_args_list[1].args)
+        self.assertEqual(len(runner.report["verification_transport_retries"]), 1)
+        with mock.patch.object(scenario, "http", side_effect=scenario.RemoteDisconnected()) as request, mock.patch.object(scenario.time, "sleep"):
+            with self.assertRaises(scenario.ScenarioError):
+                runner.node_query(replica, "SELECT 1")
+            self.assertEqual(request.call_count, 3)
+
+    def test_node_verification_does_not_retry_sql_error(self):
+        runner = object.__new__(scenario.Runner)
+        runner.args = SimpleNamespace(timeout=10)
+        runner.node_token = "test-token"
+        with mock.patch.object(scenario, "http", return_value=(500, {}, b'{"success":false,"error":"query failed"}')) as request:
+            self.assertFalse(runner.node_query(SimpleNamespace(flight=9000), "SELECT 1")["success"])
+            self.assertEqual(request.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
