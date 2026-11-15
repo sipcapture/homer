@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // Exercise connection, appender construction, AppendRow, and Close failures
@@ -139,11 +141,123 @@ func TestAppenderQueueBound(t *testing.T) {
 	tw := newBufferTestWriter(t)
 	tw.batchSize = 2048
 	tw.batch = make([][]interface{}, 4096)
-	if err := tw.Write([]interface{}{int64(1)}); err == nil {
+	start := time.Now()
+	if err := tw.writeWithWait([]interface{}{int64(1)}, 25*time.Millisecond); err == nil {
 		t.Fatal("full queue accepted row")
+	}
+	if time.Since(start) < 25*time.Millisecond {
+		t.Fatal("full queue did not apply backpressure")
 	}
 	if len(tw.batch) != 4096 {
 		t.Fatal("queue grew past bound")
 	}
 	tw.batch = nil
+}
+
+func TestAppenderQueueWaitsAndRecovers(t *testing.T) {
+	tw := newBufferTestWriter(t)
+	tw.batchSize = 2048
+	for i := 0; i < 4096; i++ {
+		tw.batch = append(tw.batch, []interface{}{int64(i)})
+	}
+	done := make(chan error, 1)
+	go func() { done <- tw.Write([]interface{}{int64(4096)}) }()
+	select {
+	case err := <-done:
+		t.Fatalf("writer did not wait: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if err := tw.flushBatch(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("writer not woken after queue drained")
+	}
+	if err := tw.flushBatch(); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.flushSlotDirect(0, tw.catalogMu); err != nil {
+		t.Fatal(err)
+	}
+	var count, distinct int
+	if err := tw.db.QueryRow("SELECT count(*),count(DISTINCT id) FROM saved").Scan(&count, &distinct); err != nil || count != 4097 || distinct != 4097 {
+		t.Fatalf("backpressure lost rows: %d/%d %v", count, distinct, err)
+	}
+}
+
+func TestAppenderDropLogRateLimit(t *testing.T) {
+	tw := &TableWriter{}
+	now := time.Now()
+	var logged atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 128; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if tw.shouldLogBatchDrop(now) {
+				logged.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if logged.Load() != 1 {
+		t.Fatalf("log storm: %d logs", logged.Load())
+	}
+	if !tw.shouldLogBatchDrop(now.Add(10 * time.Second)) {
+		t.Fatal("log limiter did not recover")
+	}
+}
+
+func TestAppenderStalledSlotBackpressure(t *testing.T) {
+	tw := newBufferTestWriter(t)
+	tw.memMu[0].Lock()
+	var release sync.Once
+	unlock := func() { release.Do(tw.memMu[0].Unlock) }
+	defer unlock()
+	const rows = 1100
+	done := make(chan error, rows)
+	for i := 0; i < rows; i++ {
+		go func(i int) { done <- tw.Write([]interface{}{int64(i)}) }(i)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		tw.batchMu.Lock()
+		waiting := tw.batchSpace != nil
+		tw.batchMu.Unlock()
+		if waiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("writers did not fill stalled queue")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("stalled writer returned early: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	unlock()
+	for i := 0; i < rows; i++ {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("writer did not recover")
+		}
+	}
+	if err := tw.flushSlotDirect(0, tw.catalogMu); err != nil {
+		t.Fatal(err)
+	}
+	var count, distinct int
+	if err := tw.db.QueryRow("SELECT count(*),count(DISTINCT id) FROM saved").Scan(&count, &distinct); err != nil || count != rows || distinct != rows {
+		t.Fatalf("stalled slot lost rows: %d/%d %v", count, distinct, err)
+	}
 }
