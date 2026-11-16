@@ -22,7 +22,10 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # ubuntu-latest moved to 26.04. The arm64 cross toolchain then refuses to
+    # install: apt wants to downgrade host gcc/binutils and exits 100 without
+    # --allow-downgrades (11.0.385). 24.04 is the image that built 11.0.384.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -32,6 +35,10 @@ jobs:
     - uses: actions/checkout@v5
       with:
         submodules: true
+        # A manual rebuild uses the workflow file from the selected branch and
+        # the source from the named tag, so a runner fix does not change the
+        # released commit.
+        ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref_name || github.ref }}
     - name: Get current date
       if: inputs.releaseVersion == ''
       id: date
