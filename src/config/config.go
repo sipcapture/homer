@@ -2308,7 +2308,7 @@ func SaveExample(path string) error {
 				},
 			},
 			JWT: JWTConfig{
-				Secret:      "change-me-in-production",
+				Secret:      "",
 				ExpireHours: 24,
 			},
 			Auth: AuthConfig{

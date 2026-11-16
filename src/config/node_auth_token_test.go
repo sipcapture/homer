@@ -5,6 +5,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -76,6 +77,33 @@ func TestApplyDefaultsDiscardsShippedPlaceholders(t *testing.T) {
 	}
 	if cfg.Coordinator.Nodes[0].Token != cfg.Node.FlightServer.AuthToken {
 		t.Fatalf("node token %q != flight %q", cfg.Coordinator.Nodes[0].Token, cfg.Node.FlightServer.AuthToken)
+	}
+}
+
+func TestApplyDefaultsDiscardsExampleJWTPlaceholder(t *testing.T) {
+	cfg := Config{}
+	cfg.Coordinator.JWT.Secret = "change-me-in-production"
+	applyDefaults(&cfg)
+	if cfg.Coordinator.JWT.Secret != "" {
+		t.Fatalf("example jwt placeholder should be cleared, got %q", cfg.Coordinator.JWT.Secret)
+	}
+}
+
+func TestSaveExampleLeavesJWTSecretEmpty(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "homer.json")
+	if err := SaveExample(path); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Coordinator.JWT.Secret != "" {
+		t.Fatalf("generated example secret = %q", cfg.Coordinator.JWT.Secret)
 	}
 }
 
