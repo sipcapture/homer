@@ -441,8 +441,6 @@
   position: relative;
   overflow: inherit;
   opacity: 1;
-  margin-left: var(--flow-left-px, 12px);
-  margin-right: var(--flow-right-px, 12px);
   min-width: 0;
   min-height: 64px;
 }
@@ -459,10 +457,7 @@
 .item-flow-packet-container .bg-color-polygon {
   position: absolute;
   z-index: 0;
-  top: 0;
-  bottom: 0;
-  left: calc(-1 * var(--flow-left-px, 12px));
-  right: calc(-1 * var(--flow-right-px, 12px));
+  inset: 0;
   opacity: 0.28;
   filter: saturate(120%);
   pointer-events: none;
@@ -470,7 +465,7 @@
 
 .item-flow-packet-container .bg-color-tab {
   position: absolute;
-  left: calc(-1 * var(--flow-left-px, 12px));
+  left: 0;
   top: 0;
   bottom: 0;
   width: 5px;
@@ -478,21 +473,13 @@
   pointer-events: none;
 }
 
-.item-flow-packet-container.single-host .bg-color-polygon {
-  left: 0;
-  right: 0;
-}
-
-.item-flow-packet-container.single-host .bg-color-tab {
-  left: 0;
-}
-
 .item-flow-packet {
   position: relative;
   z-index: 1;
   width: 100%;
   min-width: 0;
-  padding: 8px 6px 10px;
+  /* No horizontal padding: the track's x origin must match the host centres' origin. */
+  padding: 8px 0 10px;
   border-bottom: 1px solid color-mix(in oklch, var(--color-border) 55%, transparent);
   cursor: pointer;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
@@ -601,18 +588,20 @@
 .item-flow-packet .arrow::after {
   content: '';
   position: absolute;
-  right: -1px;
+  right: 0;
   bottom: -6px;
-  border: 5px solid transparent;
-  border-left: 12px solid;
+  /* No trailing border, so the tip lands exactly on the line end (the host lifeline). */
+  border-style: solid;
+  border-color: transparent;
+  border-width: 5px 0 5px 12px;
   border-left-color: currentColor;
 }
 
 .item-flow-packet .arrow.left::after {
   right: initial;
-  left: -1px;
-  border: 5px solid transparent;
-  border-right: 12px solid;
+  left: 0;
+  border-color: transparent;
+  border-width: 5px 12px 5px 0;
   border-right-color: currentColor;
 }
 

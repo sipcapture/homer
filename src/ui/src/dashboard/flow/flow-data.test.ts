@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildFlow, buildHosts, endpointAlias, hostKey, hostKeyFromMessage,
   runtimeFingerprintOf, captureIdOf, consolidateFlowItems, canConsolidateFlowItems,
-  payloadTypeOf,
+  payloadTypeOf, flowSegmentPx,
 } from './flow-data'
 import type { FlowItemData, RawMessage } from './flow-data'
 
@@ -101,7 +101,7 @@ function makeFlowItem(overrides: Partial<FlowItemData> & { ts?: number } = {}): 
     dstIp: '10.0.0.2', srcPort: 5060, dstPort: 5060, callid: 'c1',
     callidColors: { color: '#000', tabColor: '#000', arrowColor: '#000' },
     methodColor: '#000', timeStr: '', fullDateStr: '', diffStr: '',
-    protoLabel: '', payloadType: 'SIP', start: 0, middle: 1, rightEnd: 0,
+    protoLabel: '', payloadType: 'SIP', start: 0, middle: 1,
     direction: false, isRadial: false, isLastHost: false, arrowStyleSolid: true,
     raw: { timestamp: ts ?? new Date('2026-01-01T00:00:00Z').getTime() },
     runtimeFingerprint: 'fp1',
@@ -280,5 +280,32 @@ describe('buildFlow RTCP rows', () => {
     expect(flowItems[0].description).toBe('jitter=9 loss=0%')
     expect(flowItems[0].payloadType).toBe('RTCP')
     expect(flowItems[0].arrowStyleSolid).toBe(false)
+  })
+})
+
+describe('flowSegmentPx', () => {
+  // Unevenly spaced lifelines, as produced by host cards of different widths.
+  const centers = [85, 509, 910, 1314, 1755]
+  const seg = (o: Partial<FlowItemData>) =>
+    flowSegmentPx({ start: 0, middle: 1, isRadial: false, isLastHost: false, ...o }, centers)
+
+  it('spans exactly between the measured centres of the two hosts', () => {
+    expect(seg({ start: 1, middle: 1 })).toEqual({ left: 509, width: 401 })
+    expect(seg({ start: 2, middle: 2 })).toEqual({ left: 910, width: 845 })
+  })
+
+  it('loops a self-message towards the next host, or the previous one for the last host', () => {
+    expect(seg({ start: 2, isRadial: true })).toEqual({ left: 910, width: 404 })
+    expect(seg({ start: 4, isRadial: true, isLastHost: true })).toEqual({ left: 1314, width: 441 })
+  })
+
+  it('uses a fixed loop width when there is a single host', () => {
+    expect(flowSegmentPx({ start: 0, middle: 1, isRadial: true, isLastHost: false }, [300]))
+      .toEqual({ left: 300, width: 280 })
+  })
+
+  it('returns null until the needed centres are measured', () => {
+    expect(flowSegmentPx({ start: 0, middle: 1, isRadial: false, isLastHost: false }, [])).toBeNull()
+    expect(flowSegmentPx({ start: 0, middle: 2, isRadial: false, isLastHost: false }, [10, 20])).toBeNull()
   })
 })

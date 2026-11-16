@@ -1,10 +1,12 @@
 import type { FlowItemData } from './flow-data'
+import { flowSegmentPx } from './flow-data'
 
 interface FlowItemProps {
   item: FlowItemData
   isSimplify: boolean
   isAbsoluteTime: boolean
-  singleHost?: boolean
+  /** Measured host centres (px from the left edge of the flow), one per host. */
+  hostCenters?: readonly number[]
   onClickItem?: (item: FlowItemData) => void
   expandedKey?: string | null
   setExpandedKey?: (key: string | null) => void
@@ -15,7 +17,7 @@ export function FlowItem({
   item,
   isSimplify,
   isAbsoluteTime,
-  singleHost,
+  hostCenters,
   onClickItem,
   expandedKey,
   setExpandedKey,
@@ -26,17 +28,15 @@ export function FlowItem({
   const canToggleSubItems = hasSubItems && typeof setExpandedKey === 'function'
   const showSubItems = canToggleSubItems && expandedKey === itemKey
 
-  const flexStart = item.start || 0.0000001
-  const flexMiddle = item.middle || 0.0000001
-  const flexRight = item.isRadial
-    ? Math.max(0.0000001, item.rightEnd - (item.isLastHost ? 0 : 1))
-    : item.rightEnd || 0.0000001
+  // Until host centres are measured the segment just fills the row; the
+  // layout effect in CallFlow measures before the first paint.
+  const segment = hostCenters ? flowSegmentPx(item, hostCenters) : null
 
   const arrowColor = item.callidColors.arrowColor
   const radialDottedClass = item.arrowStyleSolid ? '' : ' dotted'
-  const containerClass = `item-flow-packet-container${singleHost ? ' single-host' : ''}${
-    hasSubItems ? ' consolidated-parent' : ''
-  }${isSubItem ? ' consolidated-subitem' : ''}`
+  const containerClass = `item-flow-packet-container${hasSubItems ? ' consolidated-parent' : ''}${
+    isSubItem ? ' consolidated-subitem' : ''
+  }`
 
   return (
     <>
@@ -48,11 +48,11 @@ export function FlowItem({
           onClick={() => onClickItem?.(item)}
         >
           <div className="item-flow-track">
-            <div style={{ flex: flexStart }} />
+            <div style={{ flex: `0 0 ${segment?.left ?? 0}px` }} />
             <div
               className="item-flow-segment"
               style={{
-                flex: flexMiddle,
+                flex: segment ? `0 0 ${segment.width}px` : '1 1 0',
                 textAlign: item.direction ? 'right' : 'left',
               }}
             >
@@ -117,7 +117,6 @@ export function FlowItem({
               )}
               {isSimplify && <div className="call-text-date">{item.diffStr}</div>}
             </div>
-            <div style={{ flex: flexRight }} />
           </div>
         </div>
       </div>
@@ -128,7 +127,7 @@ export function FlowItem({
               item={subItem}
               isSimplify={isSimplify}
               isAbsoluteTime={isAbsoluteTime}
-              singleHost={singleHost}
+              hostCenters={hostCenters}
               onClickItem={onClickItem}
               expandedKey={expandedKey}
               setExpandedKey={setExpandedKey}

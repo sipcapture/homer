@@ -27,7 +27,6 @@ function makeItem(direction: boolean, overrides: Partial<FlowItemData> = {}): Fl
     payloadType: 'SIP',
     start: 0,
     middle: 1,
-    rightEnd: 0,
     direction,
     isRadial: false,
     isLastHost: false,
@@ -113,5 +112,18 @@ describe('FlowItem consolidation', () => {
     fireEvent.click(container.querySelector('.subitems-toggle')!)
     expect(setExpandedKey).toHaveBeenCalledWith('parent')
     expect(onClickItem).not.toHaveBeenCalled()
+  })
+})
+
+describe('FlowItem geometry', () => {
+  it('places the arrow segment at the measured host centres', () => {
+    const { container } = render(
+      <FlowItem item={makeItem(false, { start: 1, middle: 1 })} isSimplify={false}
+        isAbsoluteTime={false} hostCenters={[85, 509, 910]} />,
+    )
+    const spacer = container.querySelector<HTMLElement>('.item-flow-track > div:first-child')!
+    const segment = container.querySelector<HTMLElement>('.item-flow-segment')!
+    expect(spacer.style.flex).toBe('0 0 509px')
+    expect(segment.style.flex).toBe('0 0 401px')
   })
 })

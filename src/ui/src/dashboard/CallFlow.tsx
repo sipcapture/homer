@@ -70,7 +70,9 @@ export default function CallFlow({ items, timeZone, onClickMessage, onShowOtlpEv
   const innerWidth = Math.max(hosts.length * 220, 560)
 
   const innerRef = useRef<HTMLDivElement>(null)
-  const [gridLines, setGridLines] = useState<number[]>([])
+  // Host lifeline x-positions (px from the left of .callflow-inner). Both the
+  // grid lines and every arrow are positioned from these, so they cannot drift apart.
+  const [hostCenters, setHostCenters] = useState<number[]>([])
 
   useLayoutEffect(() => {
     const el = innerRef.current
@@ -87,18 +89,9 @@ export default function CallFlow({ items, timeZone, onClickMessage, onShowOtlpEv
         const rect = wrapper.getBoundingClientRect()
         positions.push(rect.left + rect.width / 2 - innerRect.left)
       })
-      setGridLines(positions)
-
-      if (positions.length >= 2) {
-        el.style.setProperty('--flow-left-px', `${positions[0]}px`)
-        el.style.setProperty('--flow-right-px', `${innerRect.width - positions[positions.length - 1]}px`)
-      } else if (positions.length === 1) {
-        el.style.setProperty('--flow-left-px', `${positions[0]}px`)
-        el.style.setProperty('--flow-right-px', `${innerRect.width - positions[0] - 280}px`)
-      } else {
-        el.style.removeProperty('--flow-left-px')
-        el.style.removeProperty('--flow-right-px')
-      }
+      setHostCenters((prev) =>
+        prev.length === positions.length && prev.every((p, i) => p === positions[i]) ? prev : positions,
+      )
     }
 
     measure()
@@ -136,7 +129,7 @@ export default function CallFlow({ items, timeZone, onClickMessage, onShowOtlpEv
             style={{ width: `max(100%, ${innerWidth}px)` }}
           >
             <div className="flow-grid-overlay">
-              {gridLines.map((px, i) => (
+              {hostCenters.map((px, i) => (
                 <div
                   key={hosts[i]?.key || i}
                   className="grid-line"
@@ -157,7 +150,7 @@ export default function CallFlow({ items, timeZone, onClickMessage, onShowOtlpEv
                     item={item}
                     isSimplify={filters.isSimplify}
                     isAbsoluteTime={filters.isAbsoluteTime}
-                    singleHost={hosts.length === 1}
+                    hostCenters={hostCenters}
                     onClickItem={onClickMessage}
                     expandedKey={expandedItemKey}
                     setExpandedKey={setExpandedItemKey}

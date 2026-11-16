@@ -63,7 +63,6 @@ export interface FlowItemData {
   payloadType: string
   start: number
   middle: number
-  rightEnd: number
   direction: boolean
   isRadial: boolean
   isLastHost: boolean
@@ -266,7 +265,6 @@ function adoptParentGeometry(parent: FlowItemData, child: FlowItemData): FlowIte
     ...child,
     start: parent.start,
     middle: parent.middle,
-    rightEnd: parent.rightEnd,
     direction: parent.direction,
     isRadial: parent.isRadial,
     isLastHost: parent.isLastHost,
@@ -578,7 +576,6 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
     const start = singleHost ? 0 : Math.min(a, b)
     const middle = Math.abs(a - b) || 1
     const direction = isLastHost || a > b
-    const rightEnd = singleHost ? 0 : hosts.length - 1 - Math.max(a, b)
 
     const arrowStyleSolid = payloadType === 'SIP'
 
@@ -629,7 +626,6 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
       payloadType,
       start,
       middle,
-      rightEnd,
       direction,
       isRadial,
       isLastHost,
@@ -648,3 +644,30 @@ export function buildFlow(items: RawMessage[] | null | undefined, opts: BuildOpt
   return { hosts, flowItems, callIds }
 }
 
+
+/** Loop width (px) for a self-message when there is no neighbouring host to span to. */
+const RADIAL_FALLBACK_PX = 280
+
+/**
+ * Pixel span of a message's arrow segment, derived from the measured host
+ * centres (the same positions the lifelines are drawn at), so arrows always
+ * end on the lifelines whatever the host card widths. Returns null until the
+ * centres needed for this item have been measured.
+ */
+export function flowSegmentPx(
+  item: Pick<FlowItemData, 'start' | 'middle' | 'isRadial' | 'isLastHost'>,
+  hostCenters: readonly number[],
+): { left: number; width: number } | null {
+  let from = item.start
+  let to = item.start + item.middle
+  if (item.isRadial) {
+    // Self-messages loop towards the next host, or the previous one for the last host.
+    from = item.isLastHost ? item.start - 1 : item.start
+    to = from + 1
+  }
+  const left = hostCenters[from]
+  if (left === undefined) return null
+  const right = hostCenters[to] ?? (item.isRadial ? left + RADIAL_FALLBACK_PX : undefined)
+  if (right === undefined) return null
+  return { left, width: right - left }
+}
