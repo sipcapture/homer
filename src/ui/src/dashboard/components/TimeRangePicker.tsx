@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, ChevronDown, Clock } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { Check, ChevronDown, Clock, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import type { CalendarPreset } from '../utils/resolveTimeRange'
 import { useLocale } from '@/components/locale/locale-provider'
+import { canonicalTimeZone, suggestTimeZones, timeZoneLabel } from '@/lib/timezones'
 
 const QUICK_RANGES = [
   { label: 'Last 5 minutes', minutes: 5 },
@@ -30,22 +31,6 @@ const CALENDAR_PRESETS: { label: string; value: CalendarPreset }[] = [
   { label: 'Yesterday', value: 'yesterday' },
   { label: 'This month', value: 'this_month' },
   { label: 'Last month', value: 'last_month' },
-]
-
-const TIMEZONES = [
-  { value: 'local', label: 'Browser (Local)' },
-  { value: 'UTC', label: 'UTC' },
-  { value: 'Europe/London', label: 'Europe/London' },
-  { value: 'Europe/Berlin', label: 'Europe/Berlin' },
-  { value: 'Europe/Moscow', label: 'Europe/Moscow' },
-  { value: 'Europe/Kiev', label: 'Europe/Kiev' },
-  { value: 'America/New_York', label: 'America/New_York' },
-  { value: 'America/Chicago', label: 'America/Chicago' },
-  { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
-  { value: 'Asia/Tokyo', label: 'Asia/Tokyo' },
-  { value: 'Asia/Shanghai', label: 'Asia/Shanghai' },
-  { value: 'Asia/Kolkata', label: 'Asia/Kolkata' },
-  { value: 'Australia/Sydney', label: 'Australia/Sydney' },
 ]
 
 function pad(n) {
@@ -144,6 +129,16 @@ export default function TimeRangePicker({
   const [tab, setTab] = useState('quick')
   const [absFrom, setAbsFrom] = useState('')
   const [absTo, setAbsTo] = useState('')
+  const [tzQuery, setTzQuery] = useState('')
+  // Blank search: common zones only (plus the current one, so the selection stays visible).
+  // Typing: matches from every zone the browser supports.
+  // The saved value may be a legacy or mis-cased name; compare by canonical name.
+  const currentZone = useMemo(() => canonicalTimeZone(timeZone) ?? timeZone, [timeZone])
+  const visibleTimeZones = useMemo(() => {
+    const list = suggestTimeZones(tzQuery)
+    if (!tzQuery.trim() && !list.includes(currentZone)) return [currentZone, ...list]
+    return list
+  }, [tzQuery, currentZone])
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -159,6 +154,7 @@ export default function TimeRangePicker({
     const toDate = timeTo ? new Date(timeTo) : new Date()
     setAbsFrom(formatForInput(fromDate, timeZone))
     setAbsTo(formatForInput(toDate, timeZone))
+    setTzQuery('')
     setOpen((prev) => !prev)
   }, [timeFrom, timeTo, timeZone])
 
@@ -328,23 +324,44 @@ export default function TimeRangePicker({
 
             <TabsContent value="timezone" className="mt-3">
               <div className="flex flex-col gap-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    value={tzQuery}
+                    onChange={(e) => setTzQuery(e.target.value)}
+                    placeholder="Search time zones…"
+                    aria-label="Search time zones"
+                    className="h-8 pl-7 text-xs"
+                  />
+                </div>
+                <div className="-mt-1 text-[10px] text-muted-foreground">
+                  {tzQuery.trim()
+                    ? `${visibleTimeZones.length} match${visibleTimeZones.length === 1 ? '' : 'es'}`
+                    : 'Common zones · type to search all'}
+                </div>
                 <ScrollArea className="h-[260px] pr-2">
                   <div className="flex flex-col gap-0.5">
-                    {TIMEZONES.map((tz) => {
-                      const active = timeZone === tz.value
+                    {visibleTimeZones.length === 0 && (
+                      <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                        No time zones match "{tzQuery.trim()}"
+                      </div>
+                    )}
+                    {visibleTimeZones.map((tz) => {
+                      const active = currentZone === tz
                       return (
                         <Button
-                          key={tz.value}
+                          key={tz}
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => onTimeZoneChange(tz.value)}
+                          onClick={() => onTimeZoneChange(tz)}
                           className={cn(
                             'w-full justify-between gap-2 text-xs',
                             active && 'bg-muted text-foreground',
                           )}
                         >
-                          <span className="truncate">{tz.label}</span>
+                          <span className="truncate">{timeZoneLabel(tz)}</span>
                           {active && <Check className="h-3.5 w-3.5" />}
                         </Button>
                       )
@@ -352,7 +369,7 @@ export default function TimeRangePicker({
                   </div>
                 </ScrollArea>
                 <div className="border-t border-border pt-2 text-[11px] text-muted-foreground">
-                  Current: <strong className="text-foreground">{timeZone === 'local' ? 'Browser' : timeZone}</strong>
+                  Current: <strong className="text-foreground">{timeZoneLabel(currentZone)}</strong>
                 </div>
               </div>
             </TabsContent>

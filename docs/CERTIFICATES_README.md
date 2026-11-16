@@ -57,7 +57,7 @@ After generating certificates, configure homer-core:
 
 ## Mutual TLS (mTLS)
 
-For mutual TLS testing, set `MutualTLS: true` in the configuration. Clients will need to provide a valid client certificate signed by the CA.
+For mutual TLS testing, set `MutualTLS: true` and `CaCert` to the CA that signs client certificates. Clients will need to provide a valid client certificate signed by that CA. If `MutualTLS` is true and `CaCert` is empty, the receiver does not start.
 
 ## Testing TLS Connection
 

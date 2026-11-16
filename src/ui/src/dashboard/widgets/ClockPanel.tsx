@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Globe, Plus, Settings2, X } from 'lucide-react'
+import { Globe, Plus, Search, Settings2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,32 +12,11 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { useLocale } from '@/components/locale/locale-provider'
+import { canonicalTimeZone, suggestTimeZones, timeZoneLabel } from '@/lib/timezones'
 
 const MAX_ZONES = 8
-
-/** Popular IANA zones + browser local pseudo-zone */
-const PRESET_TIMEZONES = [
-  'local',
-  'UTC',
-  'Europe/London',
-  'Europe/Berlin',
-  'Europe/Paris',
-  'Europe/Moscow',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Sao_Paulo',
-  'Asia/Dubai',
-  'Asia/Kolkata',
-  'Asia/Shanghai',
-  'Asia/Tokyo',
-  'Asia/Seoul',
-  'Australia/Sydney',
-  'Pacific/Auckland',
-] as const
 
 export interface ClockPanelConfig {
   /** @deprecated use timeZones */
@@ -51,33 +30,23 @@ interface ClockPanelProps {
   onConfigChange?: (cfg: ClockPanelConfig) => void
 }
 
-function isValidTimeZone(id: string): boolean {
-  const z = id.trim()
-  if (!z || z === 'local') return true
-  try {
-    Intl.DateTimeFormat(undefined, { timeZone: z }).format()
-    return true
-  } catch {
-    return false
-  }
-}
-
 function normalizeZones(config?: ClockPanelConfig): string[] {
   const raw = config?.timeZones
   if (Array.isArray(raw) && raw.length > 0) {
     const seen = new Set<string>()
     const out: string[] = []
     for (const z of raw) {
-      const t = typeof z === 'string' ? z.trim() : ''
-      if (!t || seen.has(t) || !isValidTimeZone(t)) continue
+      // Saved configs may hold legacy or mis-cased names (Asia/Calcutta, europe/berlin).
+      const t = typeof z === 'string' ? canonicalTimeZone(z) : null
+      if (!t || seen.has(t)) continue
       seen.add(t)
       out.push(t)
       if (out.length >= MAX_ZONES) break
     }
     if (out.length) return out
   }
-  const legacy = config?.timeZone?.trim()
-  if (legacy && isValidTimeZone(legacy)) return [legacy === '' ? 'local' : legacy]
+  const legacy = config?.timeZone ? canonicalTimeZone(config.timeZone) : null
+  if (legacy) return [legacy]
   return ['local']
 }
 
@@ -100,7 +69,7 @@ function formatClock(time: Date, timeZone: string, locale: string | undefined) {
   return {
     time: new Intl.DateTimeFormat(locale, opts).format(time),
     date: new Intl.DateTimeFormat(locale, dateOpts).format(time),
-    label: timeZone === 'local' ? 'Local' : timeZone,
+    label: timeZoneLabel(timeZone),
   }
 }
 
@@ -108,7 +77,7 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
   const { resolved: locale } = useLocale()
   const [now, setNow] = useState(() => new Date())
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [customTz, setCustomTz] = useState('')
+  const [tzQuery, setTzQuery] = useState('')
 
   const zones = useMemo(() => normalizeZones(config), [config])
 
@@ -130,17 +99,30 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
     handleZonesChange(zones.filter(x => x !== z))
   }
 
-  const addPreset = (z: string) => {
-    if (zones.includes(z) || zones.length >= MAX_ZONES) return
-    handleZonesChange([...zones, z])
+  const atLimit = zones.length >= MAX_ZONES
+  const query = tzQuery.trim()
+
+  // Empty query: the short list of common zones. Typing: search every zone.
+  const suggestions = useMemo(() => {
+    return suggestTimeZones(query).filter(z => !zones.includes(z))
+  }, [query, zones])
+
+  // A valid IANA name that is not in the list (e.g. Etc/GMT+3) can still be added.
+  // Compare by canonical name so "europe/berlin" or "Asia/Calcutta" never duplicate a clock.
+  const typedZone = query ? canonicalTimeZone(query) : null
+  const exactTyped =
+    typedZone && !zones.includes(typedZone) && !suggestions.includes(typedZone) ? typedZone : null
+
+  const addZone = (z: string) => {
+    const zone = canonicalTimeZone(z)
+    if (!zone || zones.includes(zone) || atLimit) return
+    handleZonesChange([...zones, zone])
+    setTzQuery('')
   }
 
-  const addCustom = () => {
-    const z = customTz.trim()
-    if (!z || zones.includes(z) || zones.length >= MAX_ZONES) return
-    if (!isValidTimeZone(z)) return
-    handleZonesChange([...zones, z])
-    setCustomTz('')
+  const addFromQuery = () => {
+    if (exactTyped) addZone(exactTyped)
+    else if (suggestions.length > 0) addZone(suggestions[0])
   }
 
   const count = zones.length
@@ -150,8 +132,6 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
       : count === 2
         ? 'grid-cols-2'
         : 'grid-cols-2 sm:grid-cols-3'
-
-  const presetsToAdd = PRESET_TIMEZONES.filter(z => !zones.includes(z))
 
   return (
     <div className="relative flex h-full min-h-0 flex-col p-2 text-foreground">
@@ -170,7 +150,7 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
                   Time zones
                 </DialogTitle>
                 <DialogDescription className="text-xs">
-                  Up to {MAX_ZONES} clocks. Use IANA names (e.g. Europe/Berlin) or Local for this browser.
+                  Up to {MAX_ZONES} clocks. Pick a common zone, or type to search all IANA time zones.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-3 py-2">
@@ -180,7 +160,7 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
                       key={z}
                       className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-0.5 font-mono text-[11px]"
                     >
-                      {z === 'local' ? 'Local' : z}
+                      {timeZoneLabel(z)}
                       <button
                         type="button"
                         className="rounded p-0.5 hover:bg-muted"
@@ -193,45 +173,74 @@ export default function ClockPanel({ config, onConfigChange }: ClockPanelProps) 
                     </span>
                   ))}
                 </div>
-                {presetsToAdd.length > 0 && (
-                  <div className="grid gap-1">
-                    <Label className="text-[11px] text-muted-foreground">Add preset</Label>
-                    <Select onValueChange={v => { addPreset(v) }}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Choose timezone…" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-64">
-                        {presetsToAdd.map(z => (
-                          <SelectItem key={z} value={z} className="text-xs font-mono">
-                            {z === 'local' ? 'Local (browser)' : z}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
                 <div className="grid gap-1">
-                  <Label htmlFor="clock-custom-tz" className="text-[11px] text-muted-foreground">
-                    Custom IANA
+                  <Label htmlFor="clock-tz-search" className="text-[11px] text-muted-foreground">
+                    Add time zone
                   </Label>
-                  <div className="flex gap-1">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      id="clock-custom-tz"
-                      value={customTz}
-                      onChange={e => setCustomTz(e.target.value)}
-                      placeholder="e.g. Africa/Cairo"
-                      className="h-8 font-mono text-xs"
+                      id="clock-tz-search"
+                      type="search"
+                      value={tzQuery}
+                      onChange={e => setTzQuery(e.target.value)}
+                      placeholder="Search, e.g. sao paulo"
+                      className="h-8 pl-7 font-mono text-xs"
+                      disabled={atLimit}
                       onKeyDown={e => {
                         if (e.key === 'Enter') {
                           e.preventDefault()
-                          addCustom()
+                          addFromQuery()
                         }
                       }}
                     />
-                    <Button type="button" size="sm" className="h-8 shrink-0 px-2" onClick={addCustom} disabled={zones.length >= MAX_ZONES}>
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
                   </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {atLimit
+                      ? `Limit of ${MAX_ZONES} clocks reached. Remove one to add another.`
+                      : typedZone && zones.includes(typedZone)
+                        ? `${timeZoneLabel(typedZone)} is already added`
+                        : exactTyped
+                        ? 'Not in the list, but a valid IANA name · Enter adds it as typed'
+                        : query
+                        ? `${suggestions.length} match${suggestions.length === 1 ? '' : 'es'} · Enter adds the first`
+                        : 'Common zones · type to search all'}
+                  </div>
+                  {!atLimit && (
+                    <ScrollArea className="h-40 rounded-md border border-border">
+                      <div className="flex flex-col gap-0.5 p-1">
+                        {exactTyped && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 justify-start gap-1.5 font-mono text-xs"
+                            onClick={() => addZone(exactTyped)}
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add "{exactTyped}"
+                          </Button>
+                        )}
+                        {suggestions.map(z => (
+                          <Button
+                            key={z}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 justify-start font-mono text-xs"
+                            onClick={() => addZone(z)}
+                          >
+                            {timeZoneLabel(z)}
+                          </Button>
+                        ))}
+                        {!exactTyped && suggestions.length === 0 && (
+                          <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                            {query ? `No time zones match "${query}"` : 'All common zones added. Type to search.'}
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  )}
                 </div>
               </div>
               <DialogFooter>

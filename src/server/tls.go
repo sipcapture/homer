@@ -42,10 +42,10 @@ const (
 // tlsServer implements gnet.EventHandler for high-performance TLS server
 type tlsServer struct {
 	gnet.BuiltinEventEngine
-	hepInput   *HEPInput
-	eng        gnet.Engine
-	multicore  bool
-	serverAddr string
+	hepInput    *HEPInput
+	eng         gnet.Engine
+	multicore   bool
+	serverAddr  string
 	tlsConfig   *gtls.Config
 	recvMetrics ingestReceiveMetrics
 	// Per-connection batch buffer for efficient packet batching
@@ -425,6 +425,10 @@ func loadTLSConfig(tlsSettings *TLSSettings) (*gtls.Config, error) {
 
 		config.ClientCAs = caCertPool
 		config.ClientAuth = gtls.RequireAndVerifyClientCert
+	} else if tlsSettings.MutualTLS && tlsSettings.CaCert == "" {
+		// Fail closed. An empty cacert used to skip this block and leave
+		// ClientAuth at NoClientCert (GHSA-2v9j-m2v3-x9qr).
+		return nil, fmt.Errorf("Mutual TLS is enabled but CA certificate (cacert) is not provided")
 	}
 
 	// TLS optimizations for performance
