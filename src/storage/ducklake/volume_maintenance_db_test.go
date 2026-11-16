@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sipcapture/homer-core/src/internal/maintenancelock"
 	logger "github.com/sipcapture/homer-core/src/utils/logging"
 )
 
@@ -180,7 +181,7 @@ func TestFileCleanupDBRemovesScheduledFiles(t *testing.T) {
 		}
 	}
 	stmts := volumeMaintenanceSQL(cold.LakeName, 0)
-	tsm.runFileCleanup(db, cold, nil, stmts[1], stmts[2], record)
+	tsm.runFileCleanup(maintenancelock.DB{Raw: db}, cold, nil, stmts[1], stmts[2], record)
 	if stepErr != nil {
 		t.Fatal(stepErr)
 	}

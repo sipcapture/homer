@@ -149,6 +149,12 @@ Environment overrides are `HOMER_NODE_LOCAL_SECRETS_DIR` and
 `/data/.homer_node_auth_token` and JWT secret into that directory to preserve
 authentication. DSNs are never treated as filesystem directories.
 
+For [stateless deployment](STATELESS_DEPLOYMENT.md), explicitly configure the
+required authentication tokens and use S3 or Azure data paths. PostgreSQL-backed
+catalogs alone do not make a deployment stateless; the local data paths shown in
+this guide are supported only outside stateless mode.
+
+
 ## Troubleshooting
 
 | Symptom | What to check |
@@ -190,4 +196,5 @@ SQLite-specific maintenance guards. PostgreSQL integration cases skip when
 ## Further reading
 
 - [Configure PostgreSQL-backed settings](POSTGRES_SETTINGS.md)
+- [Stateless deployment and horizontal scaling](STATELESS_DEPLOYMENT.md)
 - [DuckLake catalog connection options](https://ducklake.select/docs/stable/duckdb/usage/connecting)

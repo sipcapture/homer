@@ -60,7 +60,9 @@ func isRetriableCatalogError(err error) bool {
 // execWithRetry runs db.Exec with exponential backoff on retriable catalog errors.
 // The lock callback, when non-nil, is held only around Exec (not during backoff).
 func execWithRetry(
-	db *sql.DB,
+	db interface {
+		Exec(string, ...any) (sql.Result, error)
+	},
 	maxAttempts int,
 	baseBackoff time.Duration,
 	locker CatalogLocker,
@@ -73,7 +75,9 @@ func execWithRetry(
 // execWithRetryOp is execWithRetry with a caller label for the retry log line.
 func execWithRetryOp(
 	op string,
-	db *sql.DB,
+	db interface {
+		Exec(string, ...any) (sql.Result, error)
+	},
 	maxAttempts int,
 	baseBackoff time.Duration,
 	locker CatalogLocker,
