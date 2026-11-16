@@ -19,17 +19,18 @@ const homerNodeAuthTokenFileName = ".homer_node_auth_token"
 
 // Shipped placeholders from the official Compose files and example configs.
 // They are public, so they must not sign or authenticate anything
-// (GHSA-9crr-mrfj-hjxr, incomplete fix of GHSA-rqcc-94gv-wjm9).
+// (GHSA-9crr-mrfj-hjxr and GHSA-j74q-m2gx-fx2f, incomplete fixes of GHSA-rqcc-94gv-wjm9).
 const (
-	shippedJWTSecretPlaceholder = "change-this-to-a-secure-random-string-in-production"
-	shippedAuthTokenPlaceholder = "your-secret-token-here"
+	shippedJWTSecretPlaceholder        = "change-this-to-a-secure-random-string-in-production"
+	shippedExampleJWTSecretPlaceholder = "change-me-in-production"
+	shippedAuthTokenPlaceholder        = "your-secret-token-here"
 )
 
 // IsShippedPlaceholderSecret reports whether value is one of the public
 // placeholders Homer used to ship in Compose and example configs.
 func IsShippedPlaceholderSecret(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case shippedJWTSecretPlaceholder, shippedAuthTokenPlaceholder:
+	case shippedJWTSecretPlaceholder, shippedExampleJWTSecretPlaceholder, shippedAuthTokenPlaceholder:
 		return true
 	default:
 		return false

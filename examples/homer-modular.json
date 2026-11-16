@@ -154,7 +154,7 @@
       "catalog_refresh_interval_sec": 30
     },
     "jwt": {
-      "secret": "change-me-in-production",
+      "secret": "",
       "expire_hours": 24
     },
     "auth": { "type": "internal" },

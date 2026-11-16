@@ -95,9 +95,20 @@ func TestResolveCoordinatorJWTSecret_PersistAndReload(t *testing.T) {
 }
 
 func TestResolveCoordinatorJWTSecret_PlaceholderIsGenerated(t *testing.T) {
+	for _, placeholder := range []string{
+		"change-this-to-a-secure-random-string-in-production",
+		"change-me-in-production",
+	} {
+		t.Run(placeholder, func(t *testing.T) {
+			testPlaceholderJWTSecretIsGenerated(t, placeholder)
+		})
+	}
+}
+
+func testPlaceholderJWTSecretIsGenerated(t *testing.T, placeholder string) {
+	t.Helper()
 	dir := t.TempDir()
 	settings := filepath.Join(dir, "settings.duckdb")
-	const placeholder = "change-this-to-a-secure-random-string-in-production"
 
 	secret1, auto1, file1, err := ResolveCoordinatorJWTSecret(placeholder, settings, "", "sqlite")
 	if err != nil {
