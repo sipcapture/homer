@@ -127,3 +127,23 @@ describe('FlowItem geometry', () => {
     expect(segment.style.flex).toBe('0 0 401px')
   })
 })
+
+describe('FlowItem self-message loops', () => {
+  const radial = (o: Partial<FlowItemData>) => makeItem(false, { isRadial: true, middle: 1, ...o })
+
+  it('pins the port badges to the loop on the last host', () => {
+    const { container } = render(
+      <FlowItem item={radial({ start: 2, isLastHost: true, direction: true })} isSimplify={false}
+        isAbsoluteTime={false} hostCenters={[85, 509, 910]} />,
+    )
+    expect(container.querySelector('.radial-port-labels')?.classList.contains('end')).toBe(true)
+  })
+
+  it('keeps the badges left-aligned on other hosts', () => {
+    const { container } = render(
+      <FlowItem item={radial({ start: 1 })} isSimplify={false}
+        isAbsoluteTime={false} hostCenters={[85, 509, 910]} />,
+    )
+    expect(container.querySelector('.radial-port-labels')?.classList.contains('end')).toBe(false)
+  })
+})

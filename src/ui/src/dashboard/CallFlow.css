@@ -705,6 +705,14 @@
   margin-top: 2px;
 }
 
+/* Last-host loop sits at the segment's right edge, so the badges must too.
+   A block with width:auto would take the free space and zero margin-left:auto. */
+.radial-port-labels.end {
+  width: max-content;
+  margin-left: auto;
+  gap: 4px;
+}
+
 .radial-port-labels .radial-port-src,
 .radial-port-labels .radial-port-dst {
   padding: 1px 6px;

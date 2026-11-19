@@ -97,7 +97,7 @@ export function FlowItem({
               )}
 
               {item.isRadial ? (
-                <div className="radial-port-labels">
+                <div className={`radial-port-labels${item.isLastHost ? ' end' : ''}`}>
                   <span className="radial-port-src">{item.srcPort || ''}</span>
                   <span className="radial-port-dst">{item.dstPort || ''}</span>
                 </div>
