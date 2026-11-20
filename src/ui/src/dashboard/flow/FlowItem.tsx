@@ -1,10 +1,13 @@
+import type { CSSProperties } from 'react'
 import type { FlowItemData } from './flow-data'
+import { flowSegmentPx } from './flow-data'
 
 interface FlowItemProps {
   item: FlowItemData
   isSimplify: boolean
   isAbsoluteTime: boolean
-  singleHost?: boolean
+  /** Measured host centres (px from the left edge of the flow), one per host. */
+  hostCenters?: readonly number[]
   onClickItem?: (item: FlowItemData) => void
   expandedKey?: string | null
   setExpandedKey?: (key: string | null) => void
@@ -15,7 +18,7 @@ export function FlowItem({
   item,
   isSimplify,
   isAbsoluteTime,
-  singleHost,
+  hostCenters,
   onClickItem,
   expandedKey,
   setExpandedKey,
@@ -26,21 +29,27 @@ export function FlowItem({
   const canToggleSubItems = hasSubItems && typeof setExpandedKey === 'function'
   const showSubItems = canToggleSubItems && expandedKey === itemKey
 
-  const flexStart = item.start || 0.0000001
-  const flexMiddle = item.middle || 0.0000001
-  const flexRight = item.isRadial
-    ? Math.max(0.0000001, item.rightEnd - (item.isLastHost ? 0 : 1))
-    : item.rightEnd || 0.0000001
+  // Until host centres are measured the segment just fills the row; the
+  // layout effect in CallFlow measures before the first paint.
+  const segment = hostCenters ? flowSegmentPx(item, hostCenters) : null
+  // With one host the message is only the loop, so the row's tint, tab, border
+  // and hover sit on the loop (.single-host) while the container stays full width.
+  const loop = hostCenters?.length === 1 ? segment : null
+  // A single-host row is itself sized to the loop, so its track just fills it.
+  const trackSegment = loop ? null : segment
+  const loopStyle = loop
+    ? ({ '--loop-left': `${loop.left}px`, '--loop-width': `${loop.width}px` } as CSSProperties)
+    : undefined
 
   const arrowColor = item.callidColors.arrowColor
   const radialDottedClass = item.arrowStyleSolid ? '' : ' dotted'
-  const containerClass = `item-flow-packet-container${singleHost ? ' single-host' : ''}${
+  const containerClass = `item-flow-packet-container${loop ? ' single-host' : ''}${
     hasSubItems ? ' consolidated-parent' : ''
   }${isSubItem ? ' consolidated-subitem' : ''}`
 
   return (
     <>
-      <div className={containerClass}>
+      <div className={containerClass} style={loopStyle}>
         <div className="bg-color-polygon" style={{ backgroundColor: item.callidColors.color }} />
         <div className="bg-color-tab" style={{ backgroundColor: item.callidColors.tabColor }} />
         <div
@@ -48,11 +57,11 @@ export function FlowItem({
           onClick={() => onClickItem?.(item)}
         >
           <div className="item-flow-track">
-            <div style={{ flex: flexStart }} />
+            <div style={{ flex: `0 0 ${trackSegment?.left ?? 0}px` }} />
             <div
               className="item-flow-segment"
               style={{
-                flex: flexMiddle,
+                flex: trackSegment ? `0 0 ${trackSegment.width}px` : '1 1 0%',
                 textAlign: item.direction ? 'right' : 'left',
               }}
             >
@@ -97,7 +106,7 @@ export function FlowItem({
               )}
 
               {item.isRadial ? (
-                <div className="radial-port-labels">
+                <div className={`radial-port-labels${item.isLastHost ? ' end' : ''}`}>
                   <span className="radial-port-src">{item.srcPort || ''}</span>
                   <span className="radial-port-dst">{item.dstPort || ''}</span>
                 </div>
@@ -117,7 +126,6 @@ export function FlowItem({
               )}
               {isSimplify && <div className="call-text-date">{item.diffStr}</div>}
             </div>
-            <div style={{ flex: flexRight }} />
           </div>
         </div>
       </div>
@@ -128,7 +136,7 @@ export function FlowItem({
               item={subItem}
               isSimplify={isSimplify}
               isAbsoluteTime={isAbsoluteTime}
-              singleHost={singleHost}
+              hostCenters={hostCenters}
               onClickItem={onClickItem}
               expandedKey={expandedKey}
               setExpandedKey={setExpandedKey}
