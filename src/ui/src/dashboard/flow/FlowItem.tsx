@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { FlowItemData } from './flow-data'
 import { flowSegmentPx } from './flow-data'
 
@@ -31,16 +32,24 @@ export function FlowItem({
   // Until host centres are measured the segment just fills the row; the
   // layout effect in CallFlow measures before the first paint.
   const segment = hostCenters ? flowSegmentPx(item, hostCenters) : null
+  // With one host the message is only the loop, so the row's tint, tab, border
+  // and hover sit on the loop (.single-host) while the container stays full width.
+  const loop = hostCenters?.length === 1 ? segment : null
+  // A single-host row is itself sized to the loop, so its track just fills it.
+  const trackSegment = loop ? null : segment
+  const loopStyle = loop
+    ? ({ '--loop-left': `${loop.left}px`, '--loop-width': `${loop.width}px` } as CSSProperties)
+    : undefined
 
   const arrowColor = item.callidColors.arrowColor
   const radialDottedClass = item.arrowStyleSolid ? '' : ' dotted'
-  const containerClass = `item-flow-packet-container${hasSubItems ? ' consolidated-parent' : ''}${
-    isSubItem ? ' consolidated-subitem' : ''
-  }`
+  const containerClass = `item-flow-packet-container${loop ? ' single-host' : ''}${
+    hasSubItems ? ' consolidated-parent' : ''
+  }${isSubItem ? ' consolidated-subitem' : ''}`
 
   return (
     <>
-      <div className={containerClass}>
+      <div className={containerClass} style={loopStyle}>
         <div className="bg-color-polygon" style={{ backgroundColor: item.callidColors.color }} />
         <div className="bg-color-tab" style={{ backgroundColor: item.callidColors.tabColor }} />
         <div
@@ -48,11 +57,11 @@ export function FlowItem({
           onClick={() => onClickItem?.(item)}
         >
           <div className="item-flow-track">
-            <div style={{ flex: `0 0 ${segment?.left ?? 0}px` }} />
+            <div style={{ flex: `0 0 ${trackSegment?.left ?? 0}px` }} />
             <div
               className="item-flow-segment"
               style={{
-                flex: segment ? `0 0 ${segment.width}px` : '1 1 0',
+                flex: trackSegment ? `0 0 ${trackSegment.width}px` : '1 1 0%',
                 textAlign: item.direction ? 'right' : 'left',
               }}
             >

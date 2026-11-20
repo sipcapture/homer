@@ -147,3 +147,29 @@ describe('FlowItem self-message loops', () => {
     expect(container.querySelector('.radial-port-labels')?.classList.contains('end')).toBe(false)
   })
 })
+
+describe('FlowItem single host', () => {
+  const loop = makeItem(false, { isRadial: true, start: 0, middle: 1 })
+
+  it('sizes the row to the loop so tint, tab, border and hover stay on it', () => {
+    const { container } = render(
+      <FlowItem item={loop} isSimplify={false} isAbsoluteTime={false} hostCenters={[300]} />,
+    )
+    const row = container.querySelector<HTMLElement>('.item-flow-packet-container')!
+    expect(row.classList.contains('single-host')).toBe(true)
+    expect(row.style.getPropertyValue('--loop-left')).toBe('300px')
+    expect(row.style.getPropertyValue('--loop-width')).toBe('280px')
+    // The row itself is offset, so the track fills it instead of re-applying the offset.
+    expect(container.querySelector<HTMLElement>('.item-flow-track > div:first-child')!.style.flex).toBe('0 0 0px')
+    expect(container.querySelector<HTMLElement>('.item-flow-segment')!.style.flex).toBe('1 1 0%')
+  })
+
+  it('does not apply to calls with several hosts', () => {
+    const { container } = render(
+      <FlowItem item={{ ...loop, start: 1 }} isSimplify={false} isAbsoluteTime={false} hostCenters={[85, 509, 910]} />,
+    )
+    const row = container.querySelector<HTMLElement>('.item-flow-packet-container')!
+    expect(row.classList.contains('single-host')).toBe(false)
+    expect(row.style.getPropertyValue('--loop-left')).toBe('')
+  })
+})

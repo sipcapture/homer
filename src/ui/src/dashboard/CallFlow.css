@@ -473,6 +473,26 @@
   pointer-events: none;
 }
 
+/* One host: the message is only the loop, so keep the tint, tab, border and
+   hover on it. The container stays full width; FlowItem sets --loop-left and
+   --loop-width from the measured host centre. */
+.item-flow-packet-container.single-host .bg-color-polygon {
+  left: var(--loop-left);
+  right: auto;
+  width: var(--loop-width);
+}
+
+.item-flow-packet-container.single-host .bg-color-tab {
+  left: var(--loop-left);
+}
+
+.item-flow-packet-container.single-host .item-flow-packet {
+  margin-left: var(--loop-left);
+  width: var(--loop-width);
+  /* No arrow has to end on a lifeline here, so keep the text clear of the tab. */
+  padding-inline: 6px;
+}
+
 .item-flow-packet {
   position: relative;
   z-index: 1;
